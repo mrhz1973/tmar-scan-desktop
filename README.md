@@ -59,6 +59,7 @@ La base sorgente verificata per questo piano dichiara **ScanRuler 0.9.4** in [pa
 | Aggiornamenti e rollback | Pianificati | Compilazione e test automatizzati, pacchetti versionati, canali stabile/rapido e aggiornamento in un momento sicuro. |
 | Risorse e selezione del backend | Pianificate | Monitoraggio, budget RAM e memoria GPU, concorrenza controllata e percorso CPU. |
 | Calcolo GPU su Windows e Mac | Studio successivo | Valutazione WebGPU e moduli CUDA/Metal dove il beneficio sia dimostrato. |
+| Analisi a zebra delle superfici | Pianificata | Verifica visiva del risultato di reverse engineering: superfici e raccordi, bande regolabili e immagini per il report, a complemento del confronto quantitativo CAD/mesh. |
 | Personalizzazioni e contributi | Pianificati | Estensioni modulari, modifiche tracciate e test per conservarne il comportamento negli aggiornamenti. |
 
 L'ordine di lavoro è: **contenitore desktop → persistenza e recupero → pausa/ripresa → aggiornamenti verificati → ottimizzazioni misurate**. Alcune attività possono procedere insieme, ma la velocità non deve precedere l'affidabilità. Non sono fissate date di consegna in questo README.
@@ -109,6 +110,17 @@ Preferiamo funzioni nel contenitore desktop e plugin separati quando i punti di 
 Una nuova versione upstream non dovrà cancellare una personalizzazione per riuscire a installarsi. Se introduce un conflitto o cambia un'interfaccia, la distribuzione di quel candidato verrà bloccata finché l'integrazione non sarà verificata. L'automazione riduce la manutenzione manuale degli utenti, non elimina ogni lavoro di manutenzione del progetto.
 
 Le correzioni generali potranno essere proposte anche al progetto originale, secondo le sue regole di contribuzione. Il fork non implica che tali modifiche siano accettate o supportate da CNC Kitchen.
+
+## Analisi a zebra — da implementare
+
+**Aggiunta alla roadmap il 1° novembre 2026. Stato: pianificata, non implementata.** Obiettivo: introdurre una modalità di analisi a zebra per ispezionare visivamente la qualità delle superfici ricostruite e dei loro raccordi, aiutando a individuare ondulazioni e discontinuità indesiderate prima della consegna del risultato.
+
+- [ ] Visualizzazione a zebra sui corpi e sulle superfici CAD, con attivazione/disattivazione e selezione delle parti da esaminare.
+- [ ] Orientamento e densità delle bande regolabili, per osservare il risultato da più direzioni.
+- [ ] Acquisizione di viste con parametri riproducibili per il report di verifica e per la revisione da parte dell'agente AI.
+- [ ] Collaudo su superfici di riferimento con raccordi continui, discontinuità note e spigoli intenzionali, verificando anche gli effetti della tessellazione e delle normali visualizzate su Windows e macOS.
+
+La zebra dovrà affiancare, non sostituire, il confronto quantitativo CAD/mesh e i controlli dimensionali e topologici. Una visualizzazione regolare non sarà considerata da sola una certificazione della continuità geometrica o della conformità al pezzo reale; gli spigoli intenzionali dovranno essere distinti dai difetti da correggere.
 
 ## Qualità, sicurezza e dati personali
 
