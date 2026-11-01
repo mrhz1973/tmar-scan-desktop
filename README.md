@@ -10,7 +10,7 @@ An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/
 
 **Documentation language:** English is the primary language of this README. Italian localization of the application and documentation is planned for a later stage; it is not available yet.
 
-[Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
+[Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Deviation notes](#notes-directly-in-deviation) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
 
 ## Why this fork exists
 
@@ -64,6 +64,7 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Zebra surface analysis plugin | Planned | A dedicated, community-editable plugin for visual inspection of surfaces and joins, adjustable stripes and report images, complementing quantitative CAD/mesh comparison. |
 | Model-tree multi-selection and bulk-actions plugin | Planned | Consistent Ctrl/Cmd, Shift and Select All behavior across relevant feature, body and construction-element lists, with collective visibility and supported actions. Reuse existing upstream capabilities. |
 | Quick-note access and navigation plugin | Planned | A directly accessible Note action and a shortcut configurable in Settings: activate, click a point on the object, write and save. Double-click an existing note row or use its target button to locate and highlight its position on the model. Reuse the existing note system. |
+| Notes directly in Deviation | Planned | Extend the same quick-notes plugin to annotate discrepancies directly on the surface-deviation map, without leaving the comparison view; share notes with Reverse engineer and the connected agent. |
 | Collapsible Features and Notes panels | Planned | Independently collapse/expand long panels, retain their state and selection, and configure layout preferences in Settings. |
 | Per-workspace labeling and annotation visibility plugin | Planned | Settings-based display controls, including hiding note text and markers in Mesh Tools without deleting notes or changing their availability to a connected agent. |
 | Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
@@ -188,6 +189,22 @@ The [upstream documentation](README.upstream.md#when-your-part-does-not-come-out
 - [ ] Keep notes accessible through the existing agent-note mechanism when the user has explicitly connected an agent. Creating a local note must not automatically enable an agent connection or upload data.
 - [ ] Test placement on supported scan/CAD targets, cancel, focus handling, shortcut conflicts, save/reopen and target transformations on Windows and macOS.
 
+### Notes directly in Deviation
+
+**Added to the roadmap on November 1, 2026. Status: planned, not implemented as a TMAR extension.** Users should be able to document a mismatch while inspecting the **Deviation / surface-deviation comparison view**, without leaving it to create a note in Reverse engineer.
+
+**Requested flow: inspect the deviation map → activate Note → click the mismatching point on the surface → write the observation or correction → save, staying in Deviation.** Extend the same `tmar-quick-notes` plugin and shared note records; do not create a separate Deviation-only annotation system.
+
+- [ ] Expose the Note button, configured shortcut and note list directly in Deviation, reusing existing host note capabilities wherever available. Keep the comparison map and working view active while creating or editing a note.
+- [ ] Anchor the note to the actual picked scan or reference/CAD target and its model-space location, not only screen pixels. Identify which target the user annotated, respect current alignment/transforms and flag broken references rather than silently moving a note after a rebuild or replacement.
+- [ ] Share the same note ID, text, anchor and completion state with Reverse engineer and other supported workspaces. Notes must survive save/reopen and remain available through the existing note mechanism to an explicitly connected agent, without duplication or automatic agent connection.
+- [ ] Apply the existing planned Go to note behavior: double-click the row or use its target button to locate the discrepancy. Preserve per-workspace label visibility, temporarily showing only the active note when annotations are hidden.
+- [ ] Where the host exposes a valid local deviation reading, allow comparison context to be attached: value and units, tolerance if set, compared targets and relevant comparison revision. Treat this as a captured observation; after alignment changes, rebuilding or recomputation, mark outdated context and require explicit refresh rather than presenting it as a current measurement. Missing readings must remain unavailable, never inferred from map colors. Recording this context must not block writing a plain note.
+- [ ] Keep note placement separate from ordinary map reading/pinning. Arm it explicitly, preserve existing measurement pins and restore normal map interaction after Save, Cancel or Escape. Adding, editing or resolving a note must not change geometry, alignment, tolerances or deviation results; resolving a note does not certify that the discrepancy was corrected.
+- [ ] Test creation/editing without leaving Deviation, the shared note list, Go to note, hidden labels, map-picking conflicts, transformed or missing targets, comparison refresh and project save/reopen on Windows and macOS.
+
+**Acceptance example:** find a mismatch in the deviation map, place a note on that location and save it without switching workspaces. Open Reverse engineer and locate the same note using its target button; return to Deviation and reopen the saved project with the note intact and no duplicate. These are planned tests, not results already achieved.
+
 ### Locate an existing note on the model
 
 **Added to the roadmap on November 1, 2026. Status: planned, not implemented.** With 30–40 or more notes, selecting a list entry should not leave the user searching the whole part for its marker. Extend the same `tmar-quick-notes` plugin with a **Go to note** command, reusing any existing host camera/annotation navigation rather than creating another note system.
@@ -225,13 +242,13 @@ Collapsing a panel changes its layout only. It must not hide the corresponding g
 
 ### Labeling and annotation visibility in each workspace
 
-- [ ] Provide **Settings → Display → Labels and annotations**, with a global default and clearly indicated per-workspace overrides for each applicable workspace, explicitly including **Mesh Tools**, not only Reverse engineer. Include a direct workspace toggle for quick show/hide access.
+- [ ] Provide **Settings → Display → Labels and annotations**, with a global default and clearly indicated per-workspace overrides for each applicable workspace, explicitly including **Deviation and Mesh Tools**, not only Reverse engineer. Include a direct workspace toggle for quick show/hide access.
 - [ ] Offer a master **Show labels and annotations** control, plus separate categories for note text, note markers/leader lines, element/body/feature names and measurement labels where those categories exist. This controls viewport overlays, not the names used to identify rows in the model tree.
 - [ ] Provide a **Hide notes in this workspace** action that hides note text, markers and leader lines together. Hidden note overlays must not intercept clicks or show leftover hover labels, so mesh selection and editing remain unobstructed.
 - [ ] Persist the per-workspace choices and restore them on workspace switches and restart. For example, notes may stay visible in Reverse engineer while being hidden in Mesh Tools; changing one workspace must not silently change another's override.
 - [ ] Treat all these switches as display-only: do not delete notes, alter geometry, suppress features or change note access through the existing connected-agent mechanism. Hidden notes must still be saved with the project.
 - [ ] When explicitly placing, editing or locating a note while annotations are hidden, show only the necessary temporary placement/edit/focus feedback. Restore the saved display policy on Save, Cancel or leaving note focus without silently enabling all annotations; Go to note must not change the saved preference.
-- [ ] Test many features and notes, panel collapse/reopen, draft retention, selection, label categories, hidden-overlay picking, AI-created items, workspace round trips including Mesh Tools, preference persistence, and Windows/macOS keyboard behavior. Verify that disabling the plugin leaves the host usable and does not remove annotation data.
+- [ ] Test many features and notes, panel collapse/reopen, draft retention, selection, label categories, hidden-overlay picking, AI-created items, workspace round trips including Deviation and Mesh Tools, preference persistence, and Windows/macOS keyboard behavior. Verify that disabling the plugin leaves the host usable and does not remove annotation data.
 
 **Acceptance example:** collapse Features and Notes, hide annotations in Mesh Tools, edit/select the mesh without note overlays obstructing it, and return to Reverse engineer with its independent display preferences and all note data intact. This is a planned regression scenario, not a test already passed.
 
@@ -249,7 +266,7 @@ Existing developer documentation retains its original language unless explicitly
 
 ## Quality, security and personal data
 
-Before qualifying a desktop release, provide evidence for opening, saving, reopening, STEP export, pause/resume and crash recovery on the declared platforms. Test updates against existing projects and pre-migration snapshots as well.
+Before qualifying a desktop release, provide evidence for opening, saving, reopening, STEP export,pause/resume and crash recovery on the declared platforms. Test updates against existing projects and pre-migration snapshots as well.
 
 Geometry changes require tests with declared data, tolerances and results: solid validity, coverage and deviations such as RMS, P95 and maximum where relevant. Comparing CAD with a scan does not by itself certify the real part's accuracy. Tolerances are contextual, not a universal number imposed by this fork.
 
