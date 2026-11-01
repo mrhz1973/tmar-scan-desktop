@@ -7,7 +7,21 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
-### TMAR web extensions (prototype)
+### TMAR documentation - 2026-11-02
+
+- Synchronize the main README, plugin catalog, plugin READMEs and development
+  references with the web features already merged by PR #1 at `496fe2e`.
+- Separate implemented scan-side notes/body STL UI from remaining shortcuts,
+  navigation, display controls, desktop packaging and platform qualification.
+- Record the isolated Zebra contributor handoff; no Zebra runtime is added.
+- Documentation-only change: no new runtime test results, version bump,
+  deployment or installer are implied.
+
+### TMAR web extensions (merged source; no packaged release)
+
+Integrated by [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1)
+at `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`. The entries below describe
+implemented web functionality; desktop features remain planned.
 
 - Add a modular body-STL export panel in Reverse engineer: visible or selected
   CAD solids, adjustable chord, explicit millimetres and no source scan.
@@ -20,6 +34,8 @@ saves carry the same number as `appVersion`. How a release is cut is in
 - This does not deliver a desktop application, a hosted TMAR site or the
   remaining quick-note/navigation/display roadmap features.
 
+
+### Upstream entries
 
 - **Contributors are credited** (2026-11-01). Each publish to this repository now
   names the people whose work it brings as co-authors, starting with Jozkah and

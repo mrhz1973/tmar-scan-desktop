@@ -1,5 +1,14 @@
 # Development
 
+> **TMAR fork status, November 2, 2026:** body STL UI and scan-side Deviation notes
+> are implemented in `main` as build-time plugins; no desktop shell is required.
+> Start with the [current web instructions](../README.md#how-to-try-it-today),
+> [plugin catalog](../plugins/README.md) and [validation record](tmar-web-validation.md).
+> The release/deployment recipes below are inherited from upstream; they do not
+> mean this fork has a hosted deployment, an automatic updater or desktop installers.
+> Use an isolated branch/worktree for changes. Zebra work follows the
+> [coordination handoff](tmar-zebra-handoff.md).
+
 ```bash
 npm install
 npm --prefix mcp ci # the agent server's dependencies: its tests and the agent browser checks

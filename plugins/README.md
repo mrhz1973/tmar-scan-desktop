@@ -1,16 +1,22 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Plugins
 
-Workspaces that sit beside the app rather than in `src/`, under the same
-licence. A build stands with any of them or none, and may carry others that are
-not in this repository.
+Workspaces and extensions that sit beside the app rather than in `src/`, under the same
+licence. Independent plugins can be omitted from a build; extensions with an explicit
+dependency must be included or omitted together with that dependency. In particular,
+the TMAR extensions below require the `reverse` source. A build may also contain
+other plugins. These are build-time modules, not hot-installable packages.
 
-| Plugin | What it adds |
-|---|---|
-| [reverse/](reverse/) | The Reverse engineer workspace — scan to solid STEP body |
-| [mesh-tools/](mesh-tools/) | The Mesh Tools workspace — clean up and reduce a scan |
-| [tmar-body-export/](tmar-body-export/) | TMAR web UI for exporting reconstructed CAD solids as STL; depends on Reverse engineer |
-| [tmar-quick-notes/](tmar-quick-notes/) | TMAR shared scan-side notes directly in Deviation; depends on Reverse engineer |
+| Plugin | Status in this fork | What it adds |
+| --- | --- | --- |
+| [reverse/](reverse/) | Inherited | The Reverse engineer workspace and existing CAD/note/export backends. |
+| [mesh-tools/](mesh-tools/) | Inherited | Tools to clean up and reduce a scan. |
+| [tmar-body-export/](tmar-body-export/) | Implemented in `main` | Web controls for CAD-body STL export; requires Reverse engineer. |
+| [tmar-quick-notes/](tmar-quick-notes/) | Implemented in `main`, scan-side scope | Shared notes directly in the single Deviation viewport; requires Reverse engineer. |
+
+The two TMAR extensions were integrated in [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`. See the [validation record](../docs/tmar-web-validation.md) for tested scope and limitations. Plugin sources, documentation and tests are available; no desktop release or runtime plugin manager is implied.
+
+**Zebra remains a separate assigned work item.** Its planned directory is `plugins/tmar-zebra/`; consult the [coordination handoff](../docs/tmar-zebra-handoff.md) before integrating changes. This catalog does not claim Zebra is implemented.
 
 ## The rules
 
