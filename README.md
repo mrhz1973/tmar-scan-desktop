@@ -5,12 +5,34 @@
 
 An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/ScanRuler), maintained at [mrhz1973/tmar-scan-desktop](https://github.com/mrhz1973/tmar-scan-desktop). This is not an official CNC Kitchen distribution.
 
-> **Status as of November 1, 2026: initial design and documentation.**
-> This repository contains the ScanRuler source baseline and the plan described below. **No installable TMAR desktop release is available yet.** Versioned desktop saves, AI workflow pause/resume, TMAR updates, additional plugins and CUDA/Metal acceleration are goals to implement and validate, not delivered features.
+> **Status as of November 1, 2026: desktop planning and initial web-plugin prototypes.**
+> This repository contains the ScanRuler source baseline and the plan described below. **No installable TMAR desktop release is available yet.** Versioned desktop saves, AI workflow pause/resume, TMAR updates and CUDA/Metal acceleration remain goals. The web-source prototypes below do not constitute a desktop release.
 
 **Documentation language:** English is the primary language of this README. Italian localization of the application and documentation is planned for a later stage; it is not available yet.
 
 [Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Deviation notes](#notes-directly-in-deviation) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
+
+## Web extensions available in this source branch
+
+Two modular prototypes can run in the existing web application, **without the
+desktop shell**:
+
+| Extension | Implemented scope |
+| --- | --- |
+| [CAD body STL export](plugins/tmar-body-export/README.md) | Export visible or explicitly selected CAD solid bodies, with adjustable chord tolerance. Reuses the upstream STL backend; does not export the source scan. Existing STEP export remains. |
+| [Notes in Deviation](plugins/tmar-quick-notes/README.md) | Add shared notes on the scan-side comparison map without leaving Deviation; reuse the existing list, IDs and project persistence. |
+
+Build/run instructions are in each plugin README and under [How to try it
+today](#how-to-try-it-today). Publishing source on GitHub does **not** change
+`scanruler.com` or automatically deploy a hosted fork. The web build must include the documented plugin directories; no TMAR
+desktop installer is implied. [Validation results](docs/tmar-web-validation.md) distinguish the tested
+Windows/Chrome scope from untested platforms and the full upstream suite.
+
+The initial note adapter follows upstream's **Settings → Agents** visibility
+switch and never enables it automatically. It supports the visible scan-side
+map, not split view, reference-only placement, deformation animation or alignment picking.
+Generic reference-side notes, measurement context, Go to note, custom shortcuts
+and display-management plugins remain planned.
 
 ## Why this fork exists
 
@@ -64,7 +86,8 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Zebra surface analysis plugin | Planned | A dedicated, community-editable plugin for visual inspection of surfaces and joins, adjustable stripes and report images, complementing quantitative CAD/mesh comparison. |
 | Model-tree multi-selection and bulk-actions plugin | Planned | Consistent Ctrl/Cmd, Shift and Select All behavior across relevant feature, body and construction-element lists, with collective visibility and supported actions. Reuse existing upstream capabilities. |
 | Quick-note access and navigation plugin | Planned | A directly accessible Note action and a shortcut configurable in Settings: activate, click a point on the object, write and save. Double-click an existing note row or use its target button to locate and highlight its position on the model. Reuse the existing note system. |
-| Notes directly in Deviation | Planned | Extend the same quick-notes plugin to annotate discrepancies directly on the surface-deviation map, without leaving the comparison view; share notes with Reverse engineer and the connected agent. |
+| Notes directly in Deviation | Web prototype, partial roadmap | Scan-side placement and the shared existing note list are implemented; reference-side anchoring and comparison metadata remain planned. See the plugin README. |
+| CAD body STL export UI | Web prototype | Export visible or selected solid bodies through the existing backend, with adjustable chord. The source scan is excluded; STEP remains available. |
 | Collapsible Features and Notes panels | Planned | Independently collapse/expand long panels, retain their state and selection, and configure layout preferences in Settings. |
 | Per-workspace labeling and annotation visibility plugin | Planned | Settings-based display controls, including hiding note text and markers in Mesh Tools without deleting notes or changing their availability to a connected agent. |
 | Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
@@ -180,7 +203,7 @@ The initial priority is reliable selection and collective visibility. More invas
 
 The [upstream documentation](README.upstream.md#when-your-part-does-not-come-out-right) already describes a Note action followed by clicking a point and entering feedback under Notes for the agent. This extension should reuse that data model and workflow, improving quick access and usability rather than creating a duplicate annotation system.
 
-**Proposed organization:** `plugins/tmar-quick-notes/`, with source, a dedicated README and tests. The directory is not created yet. Any required integration with the existing note editor, picking, persistence and MCP should use explicit host interfaces or minimal documented hooks.
+**Implementation:** [`plugins/tmar-quick-notes/`](plugins/tmar-quick-notes/README.md) contains the first Deviation scan-side adapter, documentation and tests. Other quick-note features below remain planned. Integration reuses the existing editor, picking, persistence and command model through documented hooks.
 
 - [ ] Expose Note directly in an appropriate toolbar and through a shortcut configurable in Settings, with conflict feedback and a reset-to-default option, without stealing keystrokes while typing or overriding an active editor unsafely.
 - [ ] Show an armed placement mode and target feedback. Clicking the object places a marker and opens a focused text editor; a miss must not create an arbitrary note.
@@ -191,7 +214,7 @@ The [upstream documentation](README.upstream.md#when-your-part-does-not-come-out
 
 ### Notes directly in Deviation
 
-**Added to the roadmap on November 1, 2026. Status: planned, not implemented as a TMAR extension.** Users should be able to document a mismatch while inspecting the **Deviation / surface-deviation comparison view**, without leaving it to create a note in Reverse engineer.
+**Added to the roadmap on November 1, 2026. Status: initial scan-side web implementation; the full checklist below is not yet complete.** Users can document a mismatch on the scan-side **Deviation** view without switching to Reverse engineer. The shared note IDs, text, anchors and save/load are reused; reference-side picking and captured comparison metadata remain future work. See [the implementation and its limits](plugins/tmar-quick-notes/README.md).
 
 **Requested flow: inspect the deviation map → activate Note → click the mismatching point on the surface → write the observation or correction → save, staying in Deviation.** Extend the same `tmar-quick-notes` plugin and shared note records; do not create a separate Deviation-only annotation system.
 

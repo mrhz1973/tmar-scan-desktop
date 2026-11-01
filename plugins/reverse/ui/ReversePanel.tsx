@@ -39,6 +39,7 @@ import { ExtrudeEditor } from './ExtrudeEditor'
 import { RevolveEditor } from './RevolveEditor'
 import { FeatureEditor } from './FeatureEditor'
 import { NoteList } from './NoteList'
+import { PluginPanelExtensions } from '../../../src/plugins/panelExtensions'
 import { fittedOf, useFitMarks } from '../app/reFitMarks'
 
 /** The coordinate planes' rows in the body list, in CAD's order: XY, XZ, YZ. */
@@ -563,6 +564,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
       {/* What the person wants of the part, pinned on it for the agent — while
           the agent connection is on. */}
       <NoteList />
+      <PluginPanelExtensions slot="reverse.export" />
 
       {/* A body leaves the tool whether or not a scan stood behind it; only the
           comparison needs one. */}

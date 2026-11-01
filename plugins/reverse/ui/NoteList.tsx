@@ -197,7 +197,7 @@ function NoteBox({ note, at }: { note: Note; at: { x: number; y: number } }) {
   )
 }
 
-export function NoteList() {
+export function NoteList({ placementBlocked = null }: { placementBlocked?: string | null } = {}) {
   const on = useNotesOn()
   const notes = useNotes((s) => s.notes)
   const placing = useNotes((s) => s.placing)
@@ -238,8 +238,8 @@ export function NoteList() {
           className={'withicon' + (placing ? ' on' : '')}
           data-test="note-add"
           aria-pressed={placing}
-          disabled={!somewhere || editorOpen}
-          title={!somewhere ? 'Load a scan or build a body first — a note is pinned on the part' : editorOpen ? 'Finish what is open first' : placing ? 'Click the part where the note goes — or here, or Escape, to stop' : 'Pin a note for the agent on the part: click where it goes next'}
+          disabled={!somewhere || editorOpen || Boolean(placementBlocked)}
+          title={placementBlocked ?? (!somewhere ? 'Load a scan or build a body first — a note is pinned on the part' : editorOpen ? 'Finish what is open first' : placing ? 'Click the part where the note goes — or here, or Escape, to stop' : 'Pin a note for the agent on the part: click where it goes next')}
           onClick={() => {
             if (placing) n().setPlacing(false)
             else {

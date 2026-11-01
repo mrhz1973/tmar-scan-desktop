@@ -22,6 +22,7 @@ import { reEditorOpen, useReverse } from '../state/reStore'
 import { notePinsOf } from '../viewer/notePins'
 import { reSceneOf } from '../viewer/reScene'
 import { reverseSession } from './reSession'
+import { noteWorkspace } from './noteWorkspaces'
 
 /** What the status line says while the Note key is in hand. */
 export const NOTE_PLACING = 'Click the part where the note goes — a face, an edge or a corner of a body, or the scan. Escape stops.'
@@ -98,7 +99,8 @@ export function pinNoteOnItems(items: readonly PickedItem[], screen: { x: number
 /** Keep the pins with the notes, and the Note key with the workspace. */
 export function useNotePins(sceneRef: RefObject<SceneManager | null>): void {
   const on = useNotesOn()
-  const onReverse = useShell((s) => s.workspace === 'reverse')
+  const workspace = useShell((s) => s.workspace)
+  const supported = workspace === 'reverse' || noteWorkspace(workspace) !== undefined
   const notes = useNotes((s) => s.notes)
   const editing = useNotes((s) => s.editing?.id ?? null)
   const placing = useNotes((s) => s.placing)
@@ -139,8 +141,8 @@ export function useNotePins(sceneRef: RefObject<SceneManager | null>): void {
 
   useEffect(() => {
     const scene = sceneRef.current
-    if (scene) notePinsOf(scene).setInteractive(!editorOpen && onReverse)
-  }, [sceneRef, editorOpen, onReverse])
+    if (scene) notePinsOf(scene).setInteractive(!editorOpen && supported)
+  }, [sceneRef, editorOpen, supported])
 
   useEffect(() => {
     const scene = sceneRef.current
@@ -151,18 +153,22 @@ export function useNotePins(sceneRef: RefObject<SceneManager | null>): void {
     const scene = sceneRef.current
     if (!scene) return
     notePinsOf(scene).onPinClick = (id, x, y) => useNotes.getState().edit({ id, at: { x, y } })
-    notePinsOf(scene).onPlaceClick = (x, y) => pinNoteAt(scene, x, y)
+    notePinsOf(scene).onPlaceClick = (x, y) => {
+      const workspace = useShell.getState().workspace
+      if (workspace === 'reverse') pinNoteAt(scene, x, y)
+      else noteWorkspace(workspace)?.place(scene, x, y)
+    }
   }, [sceneRef])
 
   // The Note key is let go — and a note's box shut — as an editor opens, as
   // the connection is switched off, or as the workspace is left.
   useEffect(() => {
-    if (editorOpen || !shown || !onReverse) {
+    if (editorOpen || !shown || !supported) {
       const n = useNotes.getState()
       if (n.placing) n.setPlacing(false)
       if (n.editing) n.closeEditor()
     }
-  }, [editorOpen, shown, onReverse])
+  }, [editorOpen, shown, supported])
 
   // While it is in hand the cursor is a crosshair over the part, whatever it
   // is over, and the status line says what to do.

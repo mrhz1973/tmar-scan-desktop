@@ -7,6 +7,20 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR web extensions (prototype)
+
+- Add a modular body-STL export panel in Reverse engineer: visible or selected
+  CAD solids, adjustable chord, explicit millimetres and no source scan.
+  Reuses the existing `reverse.export.stl` backend; STEP is unchanged.
+- Add shared scan-side notes directly in Deviation, preserving the comparison
+  view and existing note IDs/project persistence. Unsupported reference-side
+  placement and conflicting interaction modes are explicitly guarded.
+- Add generic panel slots and an optional reverse-note workspace adapter,
+  plugin documentation, unit tests and a synthetic browser regression.
+- This does not deliver a desktop application, a hosted TMAR site or the
+  remaining quick-note/navigation/display roadmap features.
+
+
 - **Contributors are credited** (2026-11-01). Each publish to this repository now
   names the people whose work it brings as co-authors, starting with Jozkah and
   Starzrng. CONTRIBUTING.md says how it works.

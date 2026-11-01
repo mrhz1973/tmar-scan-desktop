@@ -6,6 +6,7 @@
 // below the two is the same, because the map they produce is the same map.
 
 import { useShallow } from 'zustand/react/shallow'
+import { PluginPanelExtensions } from '../plugins/panelExtensions'
 import { MIN_LOCAL_POINTS } from '../core/deviation/align'
 import { MAX_DEFLECTION_SCALE, MIN_DEFLECTION_SCALE } from '../core/deviation/deflection'
 import { DEFAULT_MAP_FACING_DEG } from '../core/deviation/deviation'
@@ -826,6 +827,8 @@ export function DeviationPanel({
           />
         </>
       )}
+
+      <PluginPanelExtensions slot="deviation.extra" />
 
       {scanName && (
         <div className={'tailrow' + (d.marking ? ' muted' : '')}>
