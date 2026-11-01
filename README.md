@@ -1,397 +1,165 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/scanruler-logo-horizontal-on-dark.svg" />
-  <img src="docs/brand/scanruler-logo-horizontal.svg" alt="ScanRuler by CNC Kitchen" width="420" />
-</picture>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+# TMAR Scan Desktop
 
-# ScanRuler by CNC Kitchen
+**Un progetto desktop open source, derivato da ScanRuler, per lavorare su scansioni 3D con più controllo sui salvataggi, sulla continuità delle sessioni e sugli aggiornamenti.**
 
-**Use it live at <https://scanruler.com/>** — nothing to install.
+Fork indipendente di [ScanRuler di CNC Kitchen](https://github.com/CNCKitchen/ScanRuler), mantenuto in [mrhz1973/tmar-scan-desktop](https://github.com/mrhz1973/tmar-scan-desktop). Non è una distribuzione ufficiale di CNC Kitchen.
 
-> **Open source under the AGPL, with commercial licenses available.** Want to
-> build ScanRuler into closed-source software, or host a modified version
-> without publishing its source? Write to <stefan@cnckitchen.com>, see
-> [COMMERCIAL.md](COMMERCIAL.md).
+> **Stato al 1° novembre 2026: progettazione e documentazione iniziale.**
+> Il repository contiene la base sorgente di ScanRuler e il piano descritto qui. **Non è ancora disponibile una release desktop TMAR installabile.** Salvataggi desktop versionati, pausa/ripresa del lavoro AI, aggiornamenti TMAR e accelerazione CUDA/Metal sono obiettivi da implementare e collaudare, non funzioni già consegnate.
 
-Check a 3D scan against what it should have been, entirely in your browser:
-fit spheres, cylinders and planes to the scan and measure between them, paint
-its deviation from the CAD part, map its wall thickness, or measure a flatbed
-scan the way a measuring microscope would. You can also model the scan into a
-solid STEP body and clean up or reduce the mesh.
+[Stato e roadmap](#stato-e-roadmap) · [Vantaggi e limiti](#perché-unapplicazione-desktop) · [Aggiornamenti](#aggiornamenti-senza-compilazioni-manuali) · [Come provarlo oggi](#come-provarlo-oggi) · [Documentazione originale](README.upstream.md)
 
-**Everything runs locally.** Your files are processed in your browser and
-never leave your computer, unless you connect an [AI agent](#agents).
+## Perché nasce questo fork
 
-![The 3D Measure workspace: a scan of a ball bar with a sphere fitted to each ball and the centre distance between them](docs/images/measure.png)
+L'obiettivo è rendere più pratiche le sessioni lunghe di reverse engineering: salvare il lavoro in modo affidabile, interromperlo consapevolmente e riprenderlo senza ricostruire da zero lo stato operativo. Vogliamo inoltre seguire gli aggiornamenti frequenti di ScanRuler senza chiedere all'utente di compilare il programma o mantenere manualmente un fork.
 
-- [What it does](#what-it-does)
-- [Getting started](#getting-started)
-- [Files in and out](#files-in-and-out)
-- [Good to know](#good-to-know)
-- [Agents](#agents)
-- [Automatic reverse engineering](#automatic-reverse-engineering)
-- [Development](#development)
-- [License](#license)
+La direzione scelta è **un'applicazione per Windows e macOS con un contenitore desktop separato dal pacchetto web di ScanRuler**, più servizi per progetti, aggiornamenti e integrazione AI. Le personalizzazioni devono restare il più possibile modulari, così da poter continuare a beneficiare del progetto originale.
 
-The full reference, with every option and how each measurement is computed,
-is the [manual](docs/manual.md), and for the two modelling and mesh workspaces
-[Reverse engineer](plugins/reverse/README.md) and
-[Mesh Tools](plugins/mesh-tools/README.md).
+Il progetto nasce per uso personale e condivisione con la comunità. Il codice delle modifiche sarà pubblico e, quando disponibili, le release dovranno includere pacchetti già compilati: non soltanto sorgenti destinati agli sviluppatori.
 
-## What it does
+## Questa repository fa per te?
 
-All workspaces work on the same loaded scan.
-
-### 3D Measure
-
-Click a feature on the scan and get a fitted **sphere, cylinder, cone,
-torus, plane or circle**: a Gaussian best fit with its σ and form error,
-with the surface around your click picked automatically. You can also mark
-the surface by hand with a brush, a window or a lasso. Build **points, lines
-and planes** from the fits, then add the **distance and angle dimensions** you
-need between them, the way GOM Inspect or PC-DMIS does it. Each dimension
-can be held to a nominal ± tolerance, and **GD&T** checks flatness,
-parallelism, perpendicularity, coaxiality and the rest.
-
-- **Align the part** with a guided 3-2-1 datum alignment, an **Auto-align**
-  read off the scan's own faces, or its **symmetry plane**.
-- **Cut a section** across any element and measure the cut on the 2D
-  sheet. A **shadow** section gives the part's widest outline instead, as
-  lines and arcs with clearance all round, for drawing a bin, a foam cutout
-  or a pocket.
-- **Export STEP** of what you measured as analytic geometry (faces, solid
-  cylinders and balls, the section curves, the shadow as a solid), ready to
-  build on in CAD.
-
-![A shadow section of a bracket: its outline projected onto the XY plane and extruded through the part as a block](docs/images/shadow.png)
-
-### Deviation
-
-Load the nominal part as a mesh or as a **STEP file** straight from CAD,
-press **Align automatically**, and the scan is best-fitted onto it and
-painted with the signed deviation. Hover for a reading, click to pin one.
-If the scan carries a fixture, spray or supports that pull the fit off,
-**align by picking points** or run a **local fine fit** on the surface you
-mark. **Find volume errors** lists whole regions of extra or missing
-material, such as a boss that was never modelled or a pocket that was never
-cut. **Animate the deformation** plays the map as exaggerated motion, like
-an FE deformed-shape plot. Instead of a reference model, the map can also be
-measured against **one fitted element**: is this face flat, is this bore
-round?
-
-![The Deviation workspace: a bracket scan best-fitted onto its CAD part and coloured by signed deviation, with the scale and statistics beside it](docs/images/deviation.png)
-
-### Wall thickness
-
-Load one file and press **Measure wall thickness**. There is no reference and
-no alignment: a ray (or a sphere) is cast across the material from every
-point, and the thin walls light up red.
-
-![The Wall thickness workspace: a scanned hood coloured by its wall thickness, thin walls red and thick ones blue, with a histogram beside the scale](docs/images/thickness.png)
-
-### 2D Measure
-
-Drop in a **flatbed scan** of a flat part (PNG or JPEG) or pick a
-**section** cut through the 3D scan. Edges are detected to subpixel
-accuracy. Fit **points, lines, circles, arcs and splines** to them with a
-click, a box or picked points, dimension between them, and export the sheet
-at true scale as **SVG, DXF or CSV**. A flatbed image stays flagged
-**UNCALIBRATED** until you calibrate it against something of known size on
-the glass. Its scale can be saved as a scanner profile.
-
-![The 2D Measure workspace: a section through the bracket scan with three edge-fitted lines, two fitted holes and the dimensions between them](docs/images/section.png)
-
-### Reverse engineer
-
-**Reverse engineer** turns the scan into a **solid body** in a STEP file that
-CAD opens as a part, not just datums. Sketch on a section through the scan:
-**Fit all chains** reads the slice as lines and arcs, and constraints and
-dimensions hold it. Then **extrude** or **revolve** it, and add **fillets,
-chamfers, shells, holes, threads, drafts, mirrors, patterns, lofts and
-sweeps**. Freeform parts are modelled from **surfaces fitted to the scan**,
-or a network of B-spline patches drawn over it. **Compare in Deviation**
-checks the bodies against the scan. No scan is needed to model: on a blank
-stage it works like a small parametric CAD tool.
-
-![The Reverse engineer workspace: a Joy-Con modelled as a solid body over its scan, with the feature tools in the panel](docs/images/reverse-engineer.png)
-
-### Mesh Tools
-
-**Mesh Tools** works on the mesh itself:
-- **Clean it up**: remove islands, delete marked surface, flip normals, cut
-  at a plane, fill holes, smooth, shrink or expand, booleans with measured
-  cylinders or modelled bodies, shell or hollow.
-- **Edited copy**: every edit lands on a copy of the scan, which you can
-  measure against the original before every workspace takes it into use.
-- **Reduce mesh** makes a light mesh for CAD, held within a tolerance of the
-  scan.
-- A modelled replacement piece can be cut to fit the break of a broken part.
-
-![The Mesh Tools workspace: the bracket scan with its holes filled, the edited copy coloured by its distance from the scan and the new patches shown grey](docs/images/mesh.png)
-
-## Getting started
-
-1. **Open a scan**: drag it anywhere into the window, or press **Load**.
-   An STL has no units, so you are asked what it is in.
-2. In **3D Measure**, press **Sphere**, **Cylinder** or **Plane** and click
-   that feature on the scan. The fit previews in grey; press **Create** (or
-   `Enter`, or the middle mouse button). If the feature is broken into
-   patches, click each one.
-3. Press **New dimension**, choose the type and pick the two elements.
-   **Copy summary** puts every result on the clipboard.
-4. Everything stays editable: the **✎** key on any row reopens it, and
-   **Undo / Redo** (`Ctrl+Z`, `Ctrl+Shift+Z`) work across all workspaces.
-5. **Save** writes the whole session to one `.scanruler` project file.
-
-New here? An amber ring points to the control to press next and retires once
-you have used a workspace twice. You can switch it off under **⚙ Settings**.
-**⚙ Settings → Units** shows and takes lengths in millimetres or inches;
-files, projects and agent answers stay in millimetres.
-
-## Files in and out
-
-| | Formats |
+| Esigenza | Scelta consigliata oggi |
 | --- | --- |
-| **Scan** | STL, PLY, OBJ (with its `.mtl` and texture, in colour), 3MF, STEP |
-| **Reference part** | STL, PLY, OBJ, 3MF, STEP (tessellated in the browser by [meshStep](https://github.com/CNCKitchen/meshStep)) |
-| **Flatbed image** | PNG, JPEG (the file's dpi is read as a working scale) |
-| **Project** | `.scanruler`: a plain zip of the input files and `project.json` |
-| **Elements** | STEP (AP214) as analytic geometry: solids and faces, or construction surfaces |
-| **Scan** | STL or 3MF mesh; PLY or XYZ point cloud with normals, in the pose it is aligned to |
-| **2D sheet** | SVG and DXF at 1:1, CSV of elements and dimensions |
-| **Reports** | Plain text to the clipboard (*Copy summary*, *Copy report*) |
+| Usare subito ScanRuler senza installare nulla | Usa il [progetto originale](https://scanruler.com/) e la sua documentazione. |
+| Seguire o contribuire a una versione desktop con gestione persistente dei lavori | Questa repository descrive il progetto e ospiterà le implementazioni. |
+| Avere subito un installer TMAR stabile per Windows o Mac | Non è ancora disponibile. Attendi una release esplicitamente qualificata. |
+| Ottenere subito un'accelerazione CUDA o Metal | Non è implementata: è una fase successiva, subordinata ai benchmark. |
+| Modificare il codice e sperimentare | La base sorgente è disponibile; le istruzioni di sviluppo sono sotto. |
 
-## Good to know
+## Perché un'applicazione desktop
 
-- **Navigation**: left-drag rotates about the point under the cursor,
-  right-drag pans, the wheel zooms. Number keys give the standard views
-  (`0` iso, `1` top, `3` front …). The button above the axis gizmo fits the
-  part back into view. **⚙ Settings → Mouse controls** switches to the mouse
-  scheme of your CAD tool. A 3Dconnexion **SpaceMouse** works in Chrome and
-  Edge, and touch screens work too.
-- **View bar** (bottom left): show or hide the scan, reference and elements,
-  make them transparent, show the mesh or the back faces. **Section** cuts
-  everything open at a plane to look inside.
-- **Recovery**: work is checkpointed in your browser every few seconds, and
-  a later visit offers to restore it. Use **Save** for a portable copy.
-- **Open from a link**: `https://scanruler.com/?open=<url-of-a-file>` opens
-  any file the hosting server allows the app to read (CORS), and
-  `&workspace=deviation` picks where to land.
-- **Accuracy**: on a real structured-light scan of a ball bar, the centre
-  distance agrees with GOM Inspect to its last digit (148.639 mm against
-  148.64 mm). A scan displaced at random comes back to within 0.9 µm of
-  its fitted pose.
+**Si tratta dei vantaggi che intendiamo realizzare**, non di un confronto prestazionale già dimostrato.
 
-## Agents
+| Obiettivo desktop | Vantaggio atteso | Limite da considerare |
+| --- | --- | --- |
+| Finestra dedicata | Separare il lavoro CAD dal browser usato per navigazione e chat | Una finestra desktop può comunque bloccarsi: servono salvataggi e recupero verificati. |
+| Progetti su disco e snapshot | Individuare i file, conservare revisioni e recuperare l'ultimo stato valido | I backup vanno verificati; un autosalvataggio non elimina ogni possibile perdita. |
+| Pausa e ripresa operative | Ripartire dall'ultima operazione completata e dal piano di lavoro salvato | Non equivale a congelare qualsiasi calcolo nel punto esatto in cui si trova. |
+| Aggiornamenti gestiti | Ricevere pacchetti verificati senza compilazioni manuali | Le modifiche upstream incompatibili possono ritardare una release TMAR. |
+| Windows e macOS | Usare lo stesso flusso di lavoro e progetti portabili | Percorsi locali, dipendenze e compatibilità devono essere verificati su entrambe le piattaforme. |
+| Controllo delle risorse | Rendere visibili consumi, budget e attività di calcolo | Più memoria o una GPU non rendono automaticamente più veloce ogni operazione. |
 
-An AI agent on your computer can drive the ScanRuler tab you have open:
-Claude Code, Codex, Claude Desktop, Cursor or anything else that speaks the
-[Model Context Protocol](https://modelcontextprotocol.io). For example: *"Open
-ballbar.stl, fit both spheres, measure the centre distance and give me the
-report."* It works the panels step by step in front of you, and every step
-can be undone. It can also
-[model a scan into a solid](#automatic-reverse-engineering) in Reverse
-engineer and clean up a scan in Mesh Tools.
+ScanRuler originale **elabora già localmente** le scansioni, salva progetti `.scanruler` e dispone di recupero nel browser e integrazione MCP: queste non sono invenzioni del fork. Il nostro obiettivo è aggiungere gestione desktop e continuità operativa intorno a quelle capacità. La documentazione ereditata è conservata in [README.upstream.md](README.upstream.md).
 
-You need [Node.js](https://nodejs.org/) 22 or newer and Chrome, Edge or
-Firefox. Add the helper to your agent once:
+La soluzione prevista usa Electron come contenitore: rimane un motore web incorporato nell'applicazione, non una riscrittura completa del CAD in codice nativo. Vanno considerati installazione, spazio su disco, memoria del contenitore e manutenzione di sicurezza. **Il passaggio al desktop non garantisce di per sé maggiore velocità, precisione geometrica o privacy.**
 
-```bash
-claude mcp add --scope user scanruler -- npx -y scanruler-mcp@latest   # Claude Code
-codex mcp add scanruler -- npx -y scanruler-mcp@latest                 # Codex
-```
+## Stato e roadmap
 
-For Claude Desktop, Cursor and others, add `"command": "npx", "args": ["-y",
-"scanruler-mcp@latest"]` to their MCP settings. Then say *"Connect to
-ScanRuler"*. It opens the app paired with the agent. The first time, ScanRuler
-warns you what connecting means for your data (below) and connects only once
-you accept; then the browser asks whether the site may reach *apps and services
-on this device*; click **Allow**. After that, ask for what you want measured,
-naming files by their full path.
+La base sorgente verificata per questo piano dichiara **ScanRuler 0.9.4** in [package.json](package.json), al commit upstream [`5c1f2f9`](https://github.com/CNCKitchen/ScanRuler/commit/5c1f2f96b7ac336d5c2bad64148ae19790b0443c). Questo numero identifica la base ereditata, non una release desktop TMAR.
 
-**With an agent connected, your data no longer stays on your computer.** The
-helper runs on your own machine and the tab talks to it on `127.0.0.1`, so
-ScanRuler itself sends nothing anywhere. But what the agent reads (measurements,
-reports, pictures of the part, file names, notes and any file it opens itself)
-is processed by the agent and goes to its model's provider, unless the model
-runs on your computer. Setup per agent, troubleshooting and every option are in
-[mcp/README.md](mcp/README.md).
+| Area | Stato | Risultato previsto |
+| --- | --- | --- |
+| Fork pubblico e presentazione del progetto | Disponibili | Provenienza, obiettivi e limiti leggibili prima di scegliere il progetto. |
+| Funzioni web di ScanRuler | Presenti nel sorgente ereditato | Misurazione, confronto, reverse engineering, strumenti mesh, progetti e MCP; nessuna nuova qualifica desktop implicita. |
+| Applicazione desktop | Pianificata | Pacchetti per Windows x64 e macOS Apple Silicon, con requisiti dichiarati e test sulle piattaforme supportate. |
+| Salvataggi e recupero su disco | Pianificati | Salvataggio esplicito, autosave configurabile, snapshot e ripristino verificato. |
+| Pausa e ripresa del lavoro AI | Pianificate | Checkpoint persistenti, stato delle operazioni e ricostruzione del contesto operativo. |
+| Aggiornamenti e rollback | Pianificati | Compilazione e test automatizzati, pacchetti versionati, canali stabile/rapido e aggiornamento in un momento sicuro. |
+| Risorse e selezione del backend | Pianificate | Monitoraggio, budget RAM e memoria GPU, concorrenza controllata e percorso CPU. |
+| Calcolo GPU su Windows e Mac | Studio successivo | Valutazione WebGPU e moduli CUDA/Metal dove il beneficio sia dimostrato. |
+| Personalizzazioni e contributi | Pianificati | Estensioni modulari, modifiche tracciate e test per conservarne il comportamento negli aggiornamenti. |
 
-## Automatic reverse engineering
+L'ordine di lavoro è: **contenitore desktop → persistenza e recupero → pausa/ripresa → aggiornamenti verificati → ottimizzazioni misurate**. Alcune attività possono procedere insieme, ma la velocità non deve precedere l'affidabilità. Non sono fissate date di consegna in questo README.
 
-An AI agent can drive Reverse engineer from start to finish: give it a scan
-and it hands back a solid STEP body, an editable project and a report of how
-well the two agree. Connect an agent [as above](#agents) and
-ask, for example: *"Reverse engineer C:\parts\bracket.stl into a solid STEP.
-Ask me what you need to know before you start."*
+## Salvataggi, pausa e ripresa
 
-Expect a long working session rather than a button. ScanRuler measures and
-builds; your agent, on your own model subscription, makes the decisions.
+Il progetto dovrà poter essere salvato su disco con snapshot periodici e prima delle operazioni critiche. Le scritture dovranno evitare di sostituire l'ultima copia valida con un salvataggio incompleto e gestire errori come disco pieno o chiusura improvvisa.
 
-### How it works
+Per un lavoro AI, non basta salvare il modello: occorre conservare anche obiettivo, requisiti, note, operazioni completate, attività ancora da svolgere, controlli eseguiti e versioni dei componenti. La ripresa dovrà verificare lo stato reale del progetto prima di impartire altri comandi, evitando duplicazioni.
 
-The app serves the agent a guide for the job, so the instructions always match
-the build in the tab. Following it, the agent:
+**La prima pausa prevista è tra operazioni sicure.** Un calcolo geometrico già avviato potrà dover terminare oppure essere annullato e ripetuto dall'ultimo checkpoint. Non promettiamo la ripresa arbitraria di un'operazione CAD dal suo punto interno di interruzione.
 
-1. **Checks the scan**: open rims, noise, faces that should be parallel but
-   are not. Then it looks at the part from every side and lists its regions
-   and features.
-2. **Classifies the part.** How it was made sets the tolerance, from about
-   ±0.02 mm for a machined face to ±0.5 mm for a sand casting, and never finer
-   than three times the scan's noise. The part type sets how to build it. The
-   guide knows plates, turned, machined and sheet-metal parts, shelled and
-   faceted housings, moulded housings with keys, castings with machined
-   features, smooth solid castings, rotationally patterned parts such as fans,
-   volutes, and freeform shells and surfaces.
-3. **Asks you once**, in the chat, before the first feature: its defaults
-   (one continuous body, lettering left off and so on) and its approach. It
-   also sets a target: by default 90 % of the scan within tolerance on
-   analytic parts, 85 % on castings and mouldings, 75 % on freeform shapes.
-4. **Builds the way a designer would**: aligned to the faces the part mates
-   on, sketches fitted to sections through the scan, relations the design
-   means held as constraints, and round numbers where the measurement allows.
-5. **Loops on the deviation.** After each group of features it reads the
-   deviation map and the volume error, works on the worst place and measures
-   again.
-6. **Hands over** a STEP file, a `.scanruler` project with every feature
-   editable, deviation pictures and a report marking each feature as measured,
-   partly supported or inferred. The run ends when the target is met and every
-   listed region is built or named as skipped, or when you accept less.
-   Otherwise the agent is told to say "not done".
+Il checkpoint del progetto non conserva automaticamente una conversazione o la memoria interna di un modello AI. Non elimina inoltre limiti del servizio AI, interruzioni di rete o necessità di avviare una nuova sessione dell'agente. Queste condizioni devono essere rilevate e gestite esplicitamente.
 
-### Where it reaches its limits
+Portabilità fra Windows e Mac non significa sincronizzazione cloud automatica: il trasferimento dei progetti e i riferimenti ai file esterni richiederanno una procedura verificata. Non vogliamo consentire modifiche concorrenti non coordinate allo stesso progetto.
 
-Four real runs, on different builds of the app, so examples and not a
-benchmark. The fan, the rumble pak and the scooter cover also took notes from
-a person along the way.
+## Aggiornamenti senza compilazioni manuali
 
-| Part | Part type | Scan within tolerance | RMS |
-| --- | --- | --- | --- |
-| Die-cast fan wheel | Rotationally patterned | 96.3 % within ±0.3 mm | 0.117 mm |
-| Moulded rumble pak | Moulded housing | 86.1 % within ±0.2 mm | 0.173 mm |
-| Die-cast mirror holder | Smooth solid casting | 72.5 % within ±0.2 mm, reported as "not done" | 0.387 mm |
-| Scooter head cover | Freeform thin shell | 68.9 % within ±0.4 mm (outer skin about 81 %) | 0.85 mm |
+**Architettura approvata, ancora da implementare:**
 
-- **The numbers compare the model with the scan, not with the real part.** A
-  high share says the surfaces are close. It does not say a bore has the right
-  nominal or that the part will fit. Check the dimensions that matter yourself.
-- **Freeform is the weakest case.** Grips, blades, fairings and organic shapes
-  come out as a skin of patches fitted to the scan, not as a designer's
-  parametric model.
-- **It cannot model what the scan does not show**: deep pockets, whether a hole
-  goes through, the inside of an assembly wrapped into one skin. It infers
-  those, and the report says where.
-- **A poor scan limits everything.** Nothing is trustworthy finer than about
-  three times the scan's noise, and a warped or tilted scan can read as the
-  shape of the part.
-- **Design intent is a judgement.** Round numbers, symmetry and relations are
-  the agent's choices, and they can be wrong.
-- **Some features will not build.** Rounds are a common failure, and getting
-  one to build can mean rebuilding what lies under it.
-- **Agents cut corners.** Results differ from run to run and from model to
-  model. An agent can skip a step of the guide or sum up too kindly, so read
-  the report's numbers and look at the maps.
-- **It costs time and tokens.** The fan wheel took 106 minutes and 284 tool
-  calls. A run like that can use up a good part of your agent's usage limit.
+1. **Contenitore desktop:** installazione iniziale per ciascuna piattaforma e aggiornamenti indipendenti, compresi quelli necessari per la sicurezza.
+2. **Pacchetto web ScanRuler:** versione locale scaricabile separatamente, senza ricreare l'intero installer a ogni modifica upstream.
+3. **Servizi e moduli nativi:** componenti MCP, gestione dei progetti ed eventuali backend GPU versionati e verificati insieme al pacchetto web.
+4. **Pipeline GitHub:** rilevazione delle release upstream, integrazione delle personalizzazioni, compilazione, test e pubblicazione dei soli candidati approvati.
 
-### When your part does not come out right
+Anche con più release upstream nello stesso giorno, l'utente non dovrà seguirle una per una. La pipeline potrà consolidare gli aggiornamenti sull'ultima versione candidata; il canale **stabile** privilegerà versioni consolidate, quello **rapido** renderà disponibili prima le versioni che superano i controlli. Non è prevista una garanzia di aggiornamento istantaneo.
 
-Work down this list, cheapest first:
+Un aggiornamento dovrà essere scaricato e verificato senza sostituire i componenti usati da un lavoro in corso. L'attivazione avverrà a progetto salvato, con controllo di compatibilità fra applicazione, MCP, moduli e schema del progetto. Pacchetti e manifest dovranno avere verifiche di autenticità e integrità, non provenire da download arbitrari.
 
-1. **Look at the scan.** Ask the agent what its scan check found. Rescan if the
-   scan is warped or tilted. Mesh Tools can remove islands and fill holes.
-2. **Tell it what the scan cannot**: what the part is, how it was made, what it
-   mates with and which dimensions matter. Correct the part type if it chose
-   the wrong one: *"This is a sand-cast pump housing at ±0.5 mm, build it as a
-   volute. The bearing seat is machined."*
-3. **Say how such parts are designed**: what the form grows from, and which
-   features share lines and planes. A pump housing modelled from the scan's
-   shapes was withdrawn twice; the third, based on how such pumps are designed,
-   stood.
-4. **Point at the problem on the part.** With the agent connection on
-   (**⚙ Settings → Agents**), the Reverse engineer panel has **Notes for the
-   agent**: press **Note**, click the place and say what is wrong. Fixing place
-   by place usually beats starting over.
-5. **Take over by hand.** Everything the agent built is an ordinary feature you
-   can edit, suppress or undo.
-6. **Keep what worked.** Your own first message or agent instructions
-   (`CLAUDE.md`, `AGENTS.md`) go on top of the guide the app serves on every
-   run: your part types, your tolerances, your order of work.
+**Se l'aggiornamento non supera i controlli, resta in uso l'ultima versione verificata.** I progetti potranno mantenere fissata la versione utilizzata. Prima di una migrazione si conserverà una copia: il rollback dell'applicazione non garantisce che un progetto già migrato sia leggibile da una versione precedente.
 
-### Help improve the guide
+L'obiettivo è lavorare offline con i componenti già installati. Download degli aggiornamenti e servizi AI remoti richiederanno comunque la rete. Non sarà necessario possedere un fork personale per usare i futuri pacchetti pubblici.
 
-Most of the guide was written from runs that went wrong, so a part that fails
-is useful to us. Open a
-[feature request](https://github.com/CNCKitchen/scanruler/issues/new?template=feature_request.yml),
-and we write what it teaches into the guide, as a refinement or a new part
-type. It helps to include:
+## GPU e memoria: ottimizzare solo dove serve
 
-- what the part is, how it was made and how you would have modelled it
-- the report and deviation pictures, and where the run went wrong
-- the scan or the `.scanruler` project, if you are allowed to share it. Issues
-  are public, so a similar part you can share works too.
-- a trace of the run, written when the helper is started with
-  `--trace <dir> --trace-args`. It holds your file paths, so read it first.
+La GPU per visualizzare una scena e la GPU per eseguire calcoli geometrici sono due aspetti diversi. Non prevediamo un pulsante che trasformi automaticamente tutto il CAD in calcolo GPU.
 
-Pull requests are welcome too: the measuring guides in
-[src/commands/guides/](src/commands/guides/), the Reverse engineer guides in
-[plugins/reverse/guides/](plugins/reverse/guides/), and the code underneath.
-They need the CLA, see [CONTRIBUTING.md](CONTRIBUTING.md).
+La fase prestazionale partirà da misure riproducibili sui colli di bottiglia. I primi candidati da valutare sono distanze, mappe di deviazione, ricerca dei punti vicini e alcune fasi di allineamento. Valuteremo WebGPU per operazioni condivisibili fra piattaforme e backend dedicati **CUDA su Windows con NVIDIA** e **Metal su macOS Apple Silicon**, mantenendo un percorso CPU quando il backend GPU non è disponibile o non conviene.
 
-## Development
+I budget RAM e memoria GPU dovranno guidare cache, dimensione dei lotti e concorrenza. Non saranno una promessa di riserva fisica esclusiva né un limite assoluto automaticamente applicabile all'intero processo. La gestione della memoria sul Mac dovrà essere qualificata specificamente, senza trattarla come una copia delle impostazioni di una GPU dedicata Windows.
+
+Un'ottimizzazione sarà accettata solo dopo aver misurato **tempo complessivo, consumo di memoria, correttezza del risultato e comportamento in caso di errore**. Non sono disponibili benchmark TMAR che dimostrino accelerazioni; non vengono promessi moltiplicatori di velocità o miglioramenti automatici della precisione.
+
+## Personalizzazioni senza perdere gli aggiornamenti
+
+Preferiamo funzioni nel contenitore desktop e plugin separati quando i punti di estensione lo permettono. Le modifiche al nucleo di ScanRuler resteranno possibili, ma dovranno essere circoscritte, documentate e coperte da test. Riferimento: [architettura dei plugin upstream](plugins/README.md).
+
+Una nuova versione upstream non dovrà cancellare una personalizzazione per riuscire a installarsi. Se introduce un conflitto o cambia un'interfaccia, la distribuzione di quel candidato verrà bloccata finché l'integrazione non sarà verificata. L'automazione riduce la manutenzione manuale degli utenti, non elimina ogni lavoro di manutenzione del progetto.
+
+Le correzioni generali potranno essere proposte anche al progetto originale, secondo le sue regole di contribuzione. Il fork non implica che tali modifiche siano accettate o supportate da CNC Kitchen.
+
+## Qualità, sicurezza e dati personali
+
+Prima di qualificare una release desktop dovranno essere disponibili prove di apertura, salvataggio, riapertura, esportazione STEP, pausa/ripresa e recupero dopo un arresto sulle piattaforme dichiarate. Gli aggiornamenti dovranno essere provati anche con progetti esistenti e snapshot precedenti alle migrazioni.
+
+Per le modifiche geometriche, i test dovranno dichiarare dati, tolleranze e risultati: validità dei solidi, copertura e scarti come RMS, P95 e massimo dove pertinenti. Confrontare il CAD con una scansione non certifica da solo l'esattezza del pezzo reale. Le tolleranze dipendono dal caso e non sono un numero universale imposto dal fork.
+
+Le pipeline pubbliche dovranno usare dati sintetici o campioni condivisibili. **Scansioni private, fotografie, credenziali, token, percorsi personali e log non anonimizzati non devono essere pubblicati nel repository o negli artefatti di test.**
+
+L'applicazione desktop non rende locale un servizio AI remoto: quanto l'agente legge può essere trasmesso al suo fornitore. La connessione agli agenti dovrà essere esplicita e controllata; account, modelli e relativi costi restano separati dall'applicazione. Vedere anche le [avvertenze upstream sugli agenti](README.upstream.md#agents).
+
+## Come provarlo oggi
+
+**Per l'uso immediato:** usa [ScanRuler originale](https://scanruler.com/). Questo fork non ha ancora installer desktop TMAR pubblicati.
+
+**Per sviluppatori:** il codice ereditato è ancora un progetto web. Con Node.js 22 o successivo, secondo [package.json](package.json):
 
 ```bash
-npm install
-npm --prefix mcp ci # the agent server's dependencies: its tests and the agent browser checks
-npm run dev       # local dev server
-npm test          # unit tests, plus acceptance tests on the local scans if present
-npm run build     # type-check + production build to dist/
-npm run e2e:ci    # browser tests on generated fixtures; run after building
+git clone https://github.com/mrhz1973/tmar-scan-desktop.git
+cd tmar-scan-desktop
+npm ci
+npm run dev
 ```
 
-The app is a static Vite + React + three.js build, with heavy geometry in a
-Web Worker. Tests, the browser checks, releases and deployment are described
-in [docs/development.md](docs/development.md). Reverse engineer and Mesh Tools
-are plugins, in [plugins/](plugins/README.md).
-`node scripts/readme-shots.mjs` and `node plugins/readme-shots.mjs` retake the
-pictures above.
+Questo avvia l'ambiente di sviluppo web, **non** una versione desktop. I comandi ereditati `npm test`, `npm run build` e `npm run e2e:ci` sono descritti nella [documentazione di sviluppo](docs/development.md); alcuni test richiedono fixture o prerequisiti aggiuntivi. L'aggiornamento iniziale del README non costituisce un collaudo del runtime.
 
-## Roadmap
+Quando saranno disponibili, i pacchetti TMAR saranno pubblicati nelle [release di questa repository](https://github.com/mrhz1973/tmar-scan-desktop/releases), con versione della base upstream, piattaforme collaudate, istruzioni, limitazioni note e sorgente corrispondente. Le procedure di firma e distribuzione per Windows/macOS sono ancora da predisporre; il supporto a Mac Intel o altre piattaforme non è dichiarato in questa fase.
 
-- Minimum-zone, minimum-circumscribed and maximum-inscribed fits
-- Slots as elements, in 3D and on the 2D sheet; rectangles in 2D
-- GD&T position and runout
-- Point clouds (PLY with no faces) as scans
-- The coloured deviation map exported, and carried onto sections
+## Contribuire e consultare le fonti
 
-## License
+Proposte e pull request sono benvenute. Per una modifica, descrivere il problema concreto, il risultato desiderato, l'effetto sugli aggiornamenti upstream e i test necessari. Per miglioramenti prestazionali, includere hardware, dati condivisibili, tempi e verifica della correttezza.
 
-**AGPL-3.0-only**, see [LICENSE](LICENSE). Free to use, modify, self-host
-and redistribute. If you distribute it or offer it over a network (and a
-browser app on a web server counts), your version's complete source must be
-available under the same terms.
+La documentazione operativa del fork dovrà restare allineata alle release: una funzione passerà da **pianificata** a **disponibile** soltanto con implementazione e verifica documentate. Le istruzioni e i workflow già presenti in [CONTRIBUTING.md](CONTRIBUTING.md) sono ereditati dall'upstream; le eventuali differenze di processo TMAR dovranno essere rese esplicite prima di utilizzarle per nuovi contributi.
 
-Want it inside closed-source software, or hosted without publishing your
-changes? **Commercial exceptions are available**, see
-[COMMERCIAL.md](COMMERCIAL.md). Contributions require the CLA in
-[CONTRIBUTING.md](CONTRIBUTING.md), which also sets the dependency license
-policy: no third-party copyleft in the app, enforced in CI by
-[license-check.yml](.github/workflows/license-check.yml). The STEP importer
-[meshStep](https://github.com/CNCKitchen/meshStep) is AGPL and is allowed
-only because it is ours too, so a commercial exception for this app covers
-it as well. The one third-party exception is Reverse engineer's CAD kernel,
-[Open CASCADE Technology](https://dev.opencascade.org/) (LGPL-2.1 with the Open
-CASCADE exception): it is loaded as a separate, replaceable file, not linked,
-and keeps its own license.
+| Riferimento | Contenuto |
+| --- | --- |
+| [README.upstream.md](README.upstream.md) | Copia integrale del README originale presente alla base `5c1f2f9`, conservata per attribuzione e documentazione; non è un elenco di nuove funzioni TMAR. |
+| [docs/manual.md](docs/manual.md) | Manuale delle funzioni ereditate. |
+| [mcp/README.md](mcp/README.md) | Connessione e strumenti MCP upstream. |
+| [plugins/README.md](plugins/README.md) | Punti di estensione del progetto originale. |
+| [docs/development.md](docs/development.md) | Sviluppo e test della base web. |
+| [CHANGELOG.md](CHANGELOG.md) | Cronologia ereditata del software; non prova la disponibilità delle funzionalità desktop pianificate qui. |
 
-scanruler.com also carries a workspace in beta that is not in this repository
-and not under this license.
+## Licenza e riconoscimenti
 
-The bundled fonts are under SIL OFL 1.1 (license files in
-[public/fonts/](public/fonts/)). The colour maps other than jet are the tables
-of [viridisLite](https://github.com/sjmgarnier/viridisLite), MIT, © 2015 Simon
-Garnier; the notice is in
-[src/core/field/colormapData.ts](src/core/field/colormapData.ts). The project
-name and the CNC Kitchen name and logo are trademarks and not covered by the
-code license.
+Il codice derivato da ScanRuler resta sotto **AGPL-3.0-only**, vedere [LICENSE](LICENSE). Vanno conservati attribuzioni, avvisi e licenze delle dipendenze. Il progetto originario è di **CNC Kitchen / Stefan Hermann e dei suoi contributori**; TMAR Scan Desktop è un'iniziativa indipendente.
 
-By [CNC Kitchen](https://www.cnckitchen.com).
+Le future distribuzioni TMAR dovranno rendere disponibile il sorgente corrispondente e rispettare gli obblighi delle dipendenze, compresi gli eventuali componenti GPU. Le licenze commerciali descritte in [COMMERCIAL.md](COMMERCIAL.md) riguardano il titolare del progetto originale: non sono un'offerta commerciale di TMAR. La finalità personale e comunitaria di questo fork non introduce restrizioni aggiuntive alla licenza.
+
+Nome e marchi di CNC Kitchen/ScanRuler non vengono presentati come marchi del fork. La copia della documentazione originale viene mantenuta per provenienza e riferimento; la distribuzione desktop dovrà avere un'identità distinta.
+
+---
+
+**Principio del progetto:** preservare il lavoro prima di accelerarlo; automatizzare gli aggiornamenti senza interromperlo; pubblicare soltanto vantaggi dimostrati, distinguendoli sempre dagli obiettivi futuri.
