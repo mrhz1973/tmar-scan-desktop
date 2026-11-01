@@ -9,6 +9,8 @@ not in this repository.
 |---|---|
 | [reverse/](reverse/) | The Reverse engineer workspace — scan to solid STEP body |
 | [mesh-tools/](mesh-tools/) | The Mesh Tools workspace — clean up and reduce a scan |
+| [tmar-body-export/](tmar-body-export/) | TMAR web UI for exporting reconstructed CAD solids as STL; depends on Reverse engineer |
+| [tmar-quick-notes/](tmar-quick-notes/) | TMAR shared scan-side notes directly in Deviation; depends on Reverse engineer |
 
 ## The rules
 
@@ -72,3 +74,16 @@ registrations calls `plugin.install()` first — see
 ## Licence
 
 AGPL-3.0-only, like the app; see [../LICENSE](../LICENSE).
+
+## TMAR host additions
+
+`src/plugins/panelExtensions.tsx` offers static, build-time panel slots. Register
+an ID, slot and React component during plugin installation. The current slots
+are `deviation.extra` and `reverse.export`. The host renders nothing when a slot
+has no contribution. Duplicate IDs are refused; the registration returns cleanup
+for tests. This is not a hot-loading or sandboxing interface.
+
+The reverse plugin also exposes `app/noteWorkspaces.ts` for explicit workspace
+placement adapters. An adapter cannot replace Reverse engineer or another
+registered workspace. Each dependent plugin must document its picking and
+coordinate assumptions and retain the shared note model.
