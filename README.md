@@ -59,8 +59,8 @@ La base sorgente verificata per questo piano dichiara **ScanRuler 0.9.4** in [pa
 | Aggiornamenti e rollback | Pianificati | Compilazione e test automatizzati, pacchetti versionati, canali stabile/rapido e aggiornamento in un momento sicuro. |
 | Risorse e selezione del backend | Pianificate | Monitoraggio, budget RAM e memoria GPU, concorrenza controllata e percorso CPU. |
 | Calcolo GPU su Windows e Mac | Studio successivo | Valutazione WebGPU e moduli CUDA/Metal dove il beneficio sia dimostrato. |
-| Analisi a zebra delle superfici | Pianificata | Verifica visiva del risultato di reverse engineering: superfici e raccordi, bande regolabili e immagini per il report, a complemento del confronto quantitativo CAD/mesh. |
-| Personalizzazioni e contributi | Pianificati | Estensioni modulari, modifiche tracciate e test per conservarne il comportamento negli aggiornamenti. |
+| Analisi a zebra delle superfici (plugin) | Pianificata | Plugin dedicato e modificabile dalla comunità: verifica visiva di superfici e raccordi, bande regolabili e immagini per il report, a complemento del confronto quantitativo CAD/mesh. |
+| Personalizzazioni e contributi | Pianificati | Nuove estensioni organizzate in plugin con sorgenti, README e test dedicati; dipendenze esplicite e verifiche di compatibilità con gli aggiornamenti. |
 
 L'ordine di lavoro è: **contenitore desktop → persistenza e recupero → pausa/ripresa → aggiornamenti verificati → ottimizzazioni misurate**. Alcune attività possono procedere insieme, ma la velocità non deve precedere l'affidabilità. Non sono fissate date di consegna in questo README.
 
@@ -105,16 +105,33 @@ Un'ottimizzazione sarà accettata solo dopo aver misurato **tempo complessivo, c
 
 ## Personalizzazioni senza perdere gli aggiornamenti
 
-Preferiamo funzioni nel contenitore desktop e plugin separati quando i punti di estensione lo permettono. Le modifiche al nucleo di ScanRuler resteranno possibili, ma dovranno essere circoscritte, documentate e coperte da test. Riferimento: [architettura dei plugin upstream](plugins/README.md).
+**Le nuove funzionalità aggiuntive TMAR, a partire dall'analisi a zebra, saranno progettate come plugin separati e modificabili dalla comunità**, non come aggiunte disperse nel nucleo dell'applicazione. Usiamo i punti di estensione già disponibili e manteniamo i servizi propri del contenitore desktop in moduli separati. Le modifiche al nucleo di ScanRuler resteranno possibili quando necessarie, ma dovranno essere minime, motivate, documentate e coperte da test. Riferimento: [architettura dei plugin upstream](plugins/README.md).
+
+### Requisiti dei plugin TMAR
+
+Ogni nuova estensione dovrà rendere semplice capire dove intervenire e come verificare una modifica:
+
+| Requisito | Risultato atteso |
+| --- | --- |
+| Sorgenti in una cartella dedicata `plugins/<id>/` | Logica, interfaccia e risorse del plugin individuabili senza cercare modifiche sparse nel core; registrazione tramite i punti di estensione upstream. |
+| README proprio | Scopo, struttura dei sorgenti, istruzioni di sviluppo e test, configurazione, esempi e limiti noti. |
+| Interfacce e dipendenze esplicite | Accessi all'applicazione e agli altri plugin documentati; versioni supportate e compatibilità verificabili, evitando accoppiamenti non dichiarati. |
+| Test dedicati e casi riproducibili | Un contributore può modificare il plugin, verificare il comportamento e proporre una pull request circoscritta. |
+| Abilitazione opzionale e stato separato | Il resto dell'applicazione resta utilizzabile senza il plugin; preferenze e dati eventualmente salvati hanno nomi distinti e una strategia di compatibilità. |
+
+Il modello iniziale segue i plugin inclusi nella compilazione dell'applicazione, descritti dalla documentazione upstream: **cartella separata non significa automaticamente installazione a caldo di un pacchetto esterno**. Chi modifica i sorgenti dovrà ricompilare e verificare il bundle interessato; l'obiettivo della pipeline TMAR resta distribuire agli utenti finali pacchetti già compilati. Un eventuale gestore di plugin installabili e aggiornabili separatamente richiederà un progetto specifico per compatibilità, autenticità e sicurezza e non è dichiarato disponibile.
 
 Una nuova versione upstream non dovrà cancellare una personalizzazione per riuscire a installarsi. Se introduce un conflitto o cambia un'interfaccia, la distribuzione di quel candidato verrà bloccata finché l'integrazione non sarà verificata. L'automazione riduce la manutenzione manuale degli utenti, non elimina ogni lavoro di manutenzione del progetto.
 
 Le correzioni generali potranno essere proposte anche al progetto originale, secondo le sue regole di contribuzione. Il fork non implica che tali modifiche siano accettate o supportate da CNC Kitchen.
 
-## Analisi a zebra — da implementare
+## Analisi a zebra — plugin da implementare
 
 **Aggiunta alla roadmap il 1° novembre 2026. Stato: pianificata, non implementata.** Obiettivo: introdurre una modalità di analisi a zebra per ispezionare visivamente la qualità delle superfici ricostruite e dei loro raccordi, aiutando a individuare ondulazioni e discontinuità indesiderate prima della consegna del risultato.
 
+**Organizzazione prevista:** plugin `tmar-zebra` nella cartella `plugins/tmar-zebra/`, con sorgenti, `plugin.ts`, `README.md` e test dedicati. La cartella e l'implementazione non sono ancora presenti. I contributori potranno perfezionare visualizzazione, controlli e verifiche intervenendo sul plugin; le integrazioni necessarie con i corpi CAD e il viewport dovranno essere esplicite e documentate.
+
+- [ ] Realizzare il plugin separato, documentarne le interfacce e verificare che l'applicazione funzioni anche senza abilitarlo.
 - [ ] Visualizzazione a zebra sui corpi e sulle superfici CAD, con attivazione/disattivazione e selezione delle parti da esaminare.
 - [ ] Orientamento e densità delle bande regolabili, per osservare il risultato da più direzioni.
 - [ ] Acquisizione di viste con parametri riproducibili per il report di verifica e per la revisione da parte dell'agente AI.
