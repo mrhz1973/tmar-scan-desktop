@@ -10,7 +10,7 @@ An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/
 
 **Documentation language:** English is the primary language of this README. Italian localization of the application and documentation is planned for a later stage; it is not available yet.
 
-[Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
+[Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
 
 ## Why this fork exists
 
@@ -63,7 +63,9 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | GPU computation on Windows and Mac | Later investigation | Evaluate WebGPU and CUDA/Metal modules where a benefit can be demonstrated. |
 | Zebra surface analysis plugin | Planned | A dedicated, community-editable plugin for visual inspection of surfaces and joins, adjustable stripes and report images, complementing quantitative CAD/mesh comparison. |
 | Model-tree multi-selection and bulk-actions plugin | Planned | Consistent Ctrl/Cmd, Shift and Select All behavior across relevant feature, body and construction-element lists, with collective visibility and supported actions. Reuse existing upstream capabilities. |
-| Quick-note access plugin | Planned | A directly accessible Note action and configurable shortcut: activate, click a point on the object, write and save the annotation. Reuse the existing note system. |
+| Quick-note access plugin | Planned | A directly accessible Note action and a shortcut configurable in Settings: activate, click a point on the object, write and save the annotation. Reuse the existing note system. |
+| Collapsible Features and Notes panels | Planned | Independently collapse/expand long panels, retain their state and selection, and configure layout preferences in Settings. |
+| Per-workspace labeling and annotation visibility plugin | Planned | Settings-based display controls, including hiding note text and markers in Mesh Tools without deleting notes or changing their availability to a connected agent. |
 | Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
 | Customizations and contributions | Planned | New extensions organized as plugins with dedicated source, README and tests; explicit dependencies and update-compatibility checks. |
 
@@ -173,18 +175,45 @@ The initial priority is reliable selection and collective visibility. More invas
 
 **Added to the roadmap on November 1, 2026. Status: planned, not implemented as a TMAR extension.** Make it easy to attach an observation or correction to a specific location without repeatedly searching through panels.
 
-**Requested flow: activate Note → click the target point on the object → write the annotation → save.** Provide a directly accessible Note button and a configurable keyboard shortcut. The exact default binding must be chosen after checking existing shortcuts on Windows and macOS; no key is assigned by this document.
+**Requested flow: activate Note → click the target point on the object → write the annotation → save.** Provide a directly accessible Note button and a keyboard shortcut configurable in **Settings** (proposed group: **Shortcuts**). The exact default binding must be chosen after checking existing shortcuts on Windows and macOS; no key is assigned by this document.
 
 The [upstream documentation](README.upstream.md#when-your-part-does-not-come-out-right) already describes a Note action followed by clicking a point and entering feedback under Notes for the agent. This extension should reuse that data model and workflow, improving quick access and usability rather than creating a duplicate annotation system.
 
 **Proposed organization:** `plugins/tmar-quick-notes/`, with source, a dedicated README and tests. The directory is not created yet. Any required integration with the existing note editor, picking, persistence and MCP should use explicit host interfaces or minimal documented hooks.
 
-- [ ] Expose Note directly in an appropriate toolbar and through a configurable shortcut, without stealing keystrokes while typing or overriding an active editor unsafely.
+- [ ] Expose Note directly in an appropriate toolbar and through a shortcut configurable in Settings, with conflict feedback and a reset-to-default option, without stealing keystrokes while typing or overriding an active editor unsafely.
 - [ ] Show an armed placement mode and target feedback. Clicking the object places a marker and opens a focused text editor; a miss must not create an arbitrary note.
 - [ ] Support explicit Save and Cancel, and Escape to leave placement mode without an empty annotation. Restore normal model navigation afterward.
 - [ ] Preserve the note text and location through project save/load. Record suitable object references and model-space coordinates; if rebuilding or changing the target invalidates the association, flag it instead of silently moving the note elsewhere.
 - [ ] Keep notes accessible through the existing agent-note mechanism when the user has explicitly connected an agent. Creating a local note must not automatically enable an agent connection or upload data.
 - [ ] Test placement on supported scan/CAD targets, cancel, focus handling, shortcut conflicts, save/reopen and target transformations on Windows and macOS.
+
+## Settings, collapsible panels and per-workspace labels
+
+**Added to the roadmap on November 1, 2026. Status: planned, not implemented as a TMAR extension.** Settings should provide a central place for shortcut, panel-layout and labeling preferences. The concrete problem reported by the user is that notes remain visually intrusive in Mesh Tools, while long Features and Notes lists consume too much panel space.
+
+**Proposed organization:** a `tmar-display-controls` plugin under `plugins/tmar-display-controls/`, with a dedicated README and tests, integrated with `tmar-model-tree` and `tmar-quick-notes` through explicit host interfaces. This directory is not created yet. Audit and reuse existing display preferences first; add only minimal, documented hooks where the original Settings, panels or viewport do not expose the required controls. The proposed Settings group names below are design labels, not currently available menus.
+
+### Independently collapsible Features and Notes panels
+
+- [ ] Provide an accessible expand/collapse control in each panel header; Features and Notes must be independently collapsible, with a visible title and item count when collapsed.
+- [ ] Keep preferences in **Settings → Layout**, remembering each panel's expanded/collapsed state per workspace across workspace switches and application restarts, with a reset-to-default option.
+- [ ] Preserve list selection, scroll position and unsaved note drafts when collapsing and reopening. Do not silently commit or discard an active edit; handle focus explicitly and keep keyboard navigation usable.
+- [ ] New features or notes created by an AI must not force a collapsed panel open or steal focus; update the count or show an unobtrusive indicator instead.
+
+Collapsing a panel changes its layout only. It must not hide the corresponding geometry, suppress features, remove notes or implicitly change viewport annotation visibility.
+
+### Labeling and annotation visibility in each workspace
+
+- [ ] Provide **Settings → Display → Labels and annotations**, with a global default and clearly indicated per-workspace overrides for each applicable workspace, explicitly including **Mesh Tools**, not only Reverse engineer. Include a direct workspace toggle for quick show/hide access.
+- [ ] Offer a master **Show labels and annotations** control, plus separate categories for note text, note markers/leader lines, element/body/feature names and measurement labels where those categories exist. This controls viewport overlays, not the names used to identify rows in the model tree.
+- [ ] Provide a **Hide notes in this workspace** action that hides note text, markers and leader lines together. Hidden note overlays must not intercept clicks or show leftover hover labels, so mesh selection and editing remain unobstructed.
+- [ ] Persist the per-workspace choices and restore them on workspace switches and restart. For example, notes may stay visible in Reverse engineer while being hidden in Mesh Tools; changing one workspace must not silently change another's override.
+- [ ] Treat all these switches as display-only: do not delete notes, alter geometry, suppress features or change note access through the existing connected-agent mechanism. Hidden notes must still be saved with the project.
+- [ ] When explicitly placing or editing a note while annotations are hidden, show only the necessary temporary placement/edit feedback; restore the saved display preference on Save or Cancel without silently enabling all annotations.
+- [ ] Test many features and notes, panel collapse/reopen, draft retention, selection, label categories, hidden-overlay picking, AI-created items, workspace round trips including Mesh Tools, preference persistence, and Windows/macOS keyboard behavior. Verify that disabling the plugin leaves the host usable and does not remove annotation data.
+
+**Acceptance example:** collapse Features and Notes, hide annotations in Mesh Tools, edit/select the mesh without note overlays obstructing it, and return to Reverse engineer with its independent display preferences and all note data intact. This is a planned regression scenario, not a test already passed.
 
 ## Languages and future Italian localization
 
