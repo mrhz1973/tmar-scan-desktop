@@ -1,159 +1,218 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # TMAR Scan Desktop
 
-**Un progetto desktop open source, derivato da ScanRuler, per lavorare su scansioni 3D con più controllo sui salvataggi, sulla continuità delle sessioni e sugli aggiornamenti.**
+**An open-source desktop project derived from ScanRuler, aiming to provide better control over project saves, session continuity and updates when working with 3D scans.**
 
-Fork indipendente di [ScanRuler di CNC Kitchen](https://github.com/CNCKitchen/ScanRuler), mantenuto in [mrhz1973/tmar-scan-desktop](https://github.com/mrhz1973/tmar-scan-desktop). Non è una distribuzione ufficiale di CNC Kitchen.
+An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/ScanRuler), maintained at [mrhz1973/tmar-scan-desktop](https://github.com/mrhz1973/tmar-scan-desktop). This is not an official CNC Kitchen distribution.
 
-> **Stato al 1° novembre 2026: progettazione e documentazione iniziale.**
-> Il repository contiene la base sorgente di ScanRuler e il piano descritto qui. **Non è ancora disponibile una release desktop TMAR installabile.** Salvataggi desktop versionati, pausa/ripresa del lavoro AI, aggiornamenti TMAR e accelerazione CUDA/Metal sono obiettivi da implementare e collaudare, non funzioni già consegnate.
+> **Status as of November 1, 2026: initial design and documentation.**
+> This repository contains the ScanRuler source baseline and the plan described below. **No installable TMAR desktop release is available yet.** Versioned desktop saves, AI workflow pause/resume, TMAR updates, additional plugins and CUDA/Metal acceleration are goals to implement and validate, not delivered features.
 
-[Stato e roadmap](#stato-e-roadmap) · [Vantaggi e limiti](#perché-unapplicazione-desktop) · [Aggiornamenti](#aggiornamenti-senza-compilazioni-manuali) · [Come provarlo oggi](#come-provarlo-oggi) · [Documentazione originale](README.upstream.md)
+**Documentation language:** English is the primary language of this README. Italian localization of the application and documentation is planned for a later stage; it is not available yet.
 
-## Perché nasce questo fork
+[Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
 
-L'obiettivo è rendere più pratiche le sessioni lunghe di reverse engineering: salvare il lavoro in modo affidabile, interromperlo consapevolmente e riprenderlo senza ricostruire da zero lo stato operativo. Vogliamo inoltre seguire gli aggiornamenti frequenti di ScanRuler senza chiedere all'utente di compilare il programma o mantenere manualmente un fork.
+## Why this fork exists
 
-La direzione scelta è **un'applicazione per Windows e macOS con un contenitore desktop separato dal pacchetto web di ScanRuler**, più servizi per progetti, aggiornamenti e integrazione AI. Le personalizzazioni devono restare il più possibile modulari, così da poter continuare a beneficiare del progetto originale.
+The goal is to make long reverse-engineering sessions more practical: save work reliably, pause deliberately and resume without reconstructing the operational state from scratch. We also want to follow ScanRuler's frequent updates without requiring users to compile the application or maintain a fork manually.
 
-Il progetto nasce per uso personale e condivisione con la comunità. Il codice delle modifiche sarà pubblico e, quando disponibili, le release dovranno includere pacchetti già compilati: non soltanto sorgenti destinati agli sviluppatori.
+The chosen direction is **a Windows and macOS application with a desktop shell separate from the ScanRuler web bundle**, together with project-management, update and AI-integration services. Customizations should remain modular wherever possible, so the project can continue benefiting from upstream development.
 
-## Questa repository fa per te?
+This project is intended for personal use and community sharing. Modification sources will be public, and future releases should include prebuilt packages, not only source code intended for developers.
 
-| Esigenza | Scelta consigliata oggi |
+## Is this repository right for you?
+
+| Your need | Recommended choice today |
 | --- | --- |
-| Usare subito ScanRuler senza installare nulla | Usa il [progetto originale](https://scanruler.com/) e la sua documentazione. |
-| Seguire o contribuire a una versione desktop con gestione persistente dei lavori | Questa repository descrive il progetto e ospiterà le implementazioni. |
-| Avere subito un installer TMAR stabile per Windows o Mac | Non è ancora disponibile. Attendi una release esplicitamente qualificata. |
-| Ottenere subito un'accelerazione CUDA o Metal | Non è implementata: è una fase successiva, subordinata ai benchmark. |
-| Modificare il codice e sperimentare | La base sorgente è disponibile; le istruzioni di sviluppo sono sotto. |
+| Use ScanRuler immediately without installing anything | Use the [original application](https://scanruler.com/) and its documentation. |
+| Follow or contribute to a desktop edition with persistent workflow management | This repository describes the project and will host its implementations. |
+| Install a stable TMAR application on Windows or Mac today | No installer is available yet. Wait for an explicitly qualified release. |
+| Obtain CUDA or Metal acceleration immediately | Not implemented: this is a later phase, subject to benchmarks. |
+| Modify the code and experiment | The source baseline is available; development instructions appear below. |
 
-## Perché un'applicazione desktop
+## Why a desktop application
 
-**Si tratta dei vantaggi che intendiamo realizzare**, non di un confronto prestazionale già dimostrato.
+**These are benefits we intend to deliver**, not results of an already completed performance comparison.
 
-| Obiettivo desktop | Vantaggio atteso | Limite da considerare |
+| Desktop goal | Expected benefit | Limitation to consider |
 | --- | --- | --- |
-| Finestra dedicata | Separare il lavoro CAD dal browser usato per navigazione e chat | Una finestra desktop può comunque bloccarsi: servono salvataggi e recupero verificati. |
-| Progetti su disco e snapshot | Individuare i file, conservare revisioni e recuperare l'ultimo stato valido | I backup vanno verificati; un autosalvataggio non elimina ogni possibile perdita. |
-| Pausa e ripresa operative | Ripartire dall'ultima operazione completata e dal piano di lavoro salvato | Non equivale a congelare qualsiasi calcolo nel punto esatto in cui si trova. |
-| Aggiornamenti gestiti | Ricevere pacchetti verificati senza compilazioni manuali | Le modifiche upstream incompatibili possono ritardare una release TMAR. |
-| Windows e macOS | Usare lo stesso flusso di lavoro e progetti portabili | Percorsi locali, dipendenze e compatibilità devono essere verificati su entrambe le piattaforme. |
-| Controllo delle risorse | Rendere visibili consumi, budget e attività di calcolo | Più memoria o una GPU non rendono automaticamente più veloce ogni operazione. |
+| Dedicated window | Separate CAD work from the browser used for browsing and chat | A desktop window can still crash: verified saving and recovery are necessary. |
+| Projects and snapshots on disk | Locate files, retain revisions and recover the last valid state | Backups need testing; autosave cannot prevent every possible loss. |
+| Operational pause and resume | Continue from the last completed operation and saved work plan | This does not freeze any arbitrary calculation at its exact internal execution point. |
+| Managed updates | Receive verified packages without manual compilation | Incompatible upstream changes may delay a TMAR release. |
+| Windows and macOS | Share a workflow and portable project files | Local paths, dependencies and compatibility require validation on both platforms. |
+| Resource controls | Make consumption, budgets and compute activity visible | More memory or a GPU does not automatically accelerate every operation. |
 
-ScanRuler originale **elabora già localmente** le scansioni, salva progetti `.scanruler` e dispone di recupero nel browser e integrazione MCP: queste non sono invenzioni del fork. Il nostro obiettivo è aggiungere gestione desktop e continuità operativa intorno a quelle capacità. La documentazione ereditata è conservata in [README.upstream.md](README.upstream.md).
+Original ScanRuler **already processes scans locally**, saves `.scanruler` projects, and provides browser recovery and MCP integration. These are not inventions of this fork. Our goal is to add desktop management and operational continuity around those capabilities. Inherited documentation is preserved in [README.upstream.md](README.upstream.md).
 
-La soluzione prevista usa Electron come contenitore: rimane un motore web incorporato nell'applicazione, non una riscrittura completa del CAD in codice nativo. Vanno considerati installazione, spazio su disco, memoria del contenitore e manutenzione di sicurezza. **Il passaggio al desktop non garantisce di per sé maggiore velocità, precisione geometrica o privacy.**
+The planned shell uses Electron: it remains a web engine embedded in an application, not a complete native rewrite of the CAD system. Installation, disk space, shell memory use and security maintenance are trade-offs. **Moving to desktop does not by itself guarantee better speed, geometric accuracy or privacy.**
 
-## Stato e roadmap
+## Status and roadmap
 
-La base sorgente verificata per questo piano dichiara **ScanRuler 0.9.4** in [package.json](package.json), al commit upstream [`5c1f2f9`](https://github.com/CNCKitchen/ScanRuler/commit/5c1f2f96b7ac336d5c2bad64148ae19790b0443c). Questo numero identifica la base ereditata, non una release desktop TMAR.
+The source baseline verified for this plan declares **ScanRuler 0.9.4** in [package.json](package.json), at upstream commit [`5c1f2f9`](https://github.com/CNCKitchen/ScanRuler/commit/5c1f2f96b7ac336d5c2bad64148ae19790b0443c). This identifies the inherited baseline, not a TMAR desktop release.
 
-| Area | Stato | Risultato previsto |
+| Area | Status | Intended outcome |
 | --- | --- | --- |
-| Fork pubblico e presentazione del progetto | Disponibili | Provenienza, obiettivi e limiti leggibili prima di scegliere il progetto. |
-| Funzioni web di ScanRuler | Presenti nel sorgente ereditato | Misurazione, confronto, reverse engineering, strumenti mesh, progetti e MCP; nessuna nuova qualifica desktop implicita. |
-| Applicazione desktop | Pianificata | Pacchetti per Windows x64 e macOS Apple Silicon, con requisiti dichiarati e test sulle piattaforme supportate. |
-| Salvataggi e recupero su disco | Pianificati | Salvataggio esplicito, autosave configurabile, snapshot e ripristino verificato. |
-| Pausa e ripresa del lavoro AI | Pianificate | Checkpoint persistenti, stato delle operazioni e ricostruzione del contesto operativo. |
-| Aggiornamenti e rollback | Pianificati | Compilazione e test automatizzati, pacchetti versionati, canali stabile/rapido e aggiornamento in un momento sicuro. |
-| Risorse e selezione del backend | Pianificate | Monitoraggio, budget RAM e memoria GPU, concorrenza controllata e percorso CPU. |
-| Calcolo GPU su Windows e Mac | Studio successivo | Valutazione WebGPU e moduli CUDA/Metal dove il beneficio sia dimostrato. |
-| Analisi a zebra delle superfici (plugin) | Pianificata | Plugin dedicato e modificabile dalla comunità: verifica visiva di superfici e raccordi, bande regolabili e immagini per il report, a complemento del confronto quantitativo CAD/mesh. |
-| Personalizzazioni e contributi | Pianificati | Nuove estensioni organizzate in plugin con sorgenti, README e test dedicati; dipendenze esplicite e verifiche di compatibilità con gli aggiornamenti. |
+| Public fork and English project overview | Available | Provenance, goals and limitations are visible before choosing the project. |
+| ScanRuler web capabilities | Present in inherited source | Measurement, comparison, reverse engineering, mesh tools, projects and MCP; no new desktop qualification is implied. |
+| Desktop application | Planned | Windows x64 and macOS Apple Silicon packages, with declared requirements and platform testing. |
+| Disk saves and recovery | Planned | Explicit saves, configurable autosave, snapshots and verified restoration. |
+| AI workflow pause and resume | Planned | Persistent checkpoints, operation state and reconstruction of operational context. |
+| Updates and rollback | Planned | Automated builds and tests, versioned packages, stable/fast channels and safe activation. |
+| Resources and backend selection | Planned | Monitoring, RAM/GPU-memory budgets, controlled concurrency and a CPU execution path. |
+| GPU computation on Windows and Mac | Later investigation | Evaluate WebGPU and CUDA/Metal modules where a benefit can be demonstrated. |
+| Zebra surface analysis plugin | Planned | A dedicated, community-editable plugin for visual inspection of surfaces and joins, adjustable stripes and report images, complementing quantitative CAD/mesh comparison. |
+| Model-tree multi-selection and bulk-actions plugin | Planned | Consistent Ctrl/Cmd, Shift and Select All behavior across relevant feature, body and construction-element lists, with collective visibility and supported actions. Reuse existing upstream capabilities. |
+| Quick-note access plugin | Planned | A directly accessible Note action and configurable shortcut: activate, click a point on the object, write and save the annotation. Reuse the existing note system. |
+| Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
+| Customizations and contributions | Planned | New extensions organized as plugins with dedicated source, README and tests; explicit dependencies and update-compatibility checks. |
 
-L'ordine di lavoro è: **contenitore desktop → persistenza e recupero → pausa/ripresa → aggiornamenti verificati → ottimizzazioni misurate**. Alcune attività possono procedere insieme, ma la velocità non deve precedere l'affidabilità. Non sono fissate date di consegna in questo README.
+The development order is **desktop shell → persistence and recovery → pause/resume → verified updates → measured optimization**. Usability plugins may be developed alongside these foundations. Some tasks can proceed in parallel, but speed must not come before reliability. This README does not set delivery dates.
 
-## Salvataggi, pausa e ripresa
+## Saves, pause and resume
 
-Il progetto dovrà poter essere salvato su disco con snapshot periodici e prima delle operazioni critiche. Le scritture dovranno evitare di sostituire l'ultima copia valida con un salvataggio incompleto e gestire errori come disco pieno o chiusura improvvisa.
+Projects should support disk saves with periodic snapshots and checkpoints before critical operations. Writes must avoid replacing the last valid copy with an incomplete save and must handle failures such as a full disk or an unexpected shutdown.
 
-Per un lavoro AI, non basta salvare il modello: occorre conservare anche obiettivo, requisiti, note, operazioni completate, attività ancora da svolgere, controlli eseguiti e versioni dei componenti. La ripresa dovrà verificare lo stato reale del progetto prima di impartire altri comandi, evitando duplicazioni.
+Saving an AI workflow requires more than the model: its goal, requirements, notes, completed operations, outstanding work, performed checks and component versions must also be retained. Resuming must verify the project's actual state before issuing further commands, avoiding duplicate operations.
 
-**La prima pausa prevista è tra operazioni sicure.** Un calcolo geometrico già avviato potrà dover terminare oppure essere annullato e ripetuto dall'ultimo checkpoint. Non promettiamo la ripresa arbitraria di un'operazione CAD dal suo punto interno di interruzione.
+**The initial pause mechanism will stop between safe operations.** A running geometric calculation may need to finish, or be cancelled and repeated from the last checkpoint. Arbitrary resumption at an internal instruction of a CAD operation is not promised.
 
-Il checkpoint del progetto non conserva automaticamente una conversazione o la memoria interna di un modello AI. Non elimina inoltre limiti del servizio AI, interruzioni di rete o necessità di avviare una nuova sessione dell'agente. Queste condizioni devono essere rilevate e gestite esplicitamente.
+A project checkpoint does not automatically preserve a conversation or an AI model's internal memory. It does not remove AI-service limits, network interruptions or the need to start a new agent session. These conditions must be detected and handled explicitly.
 
-Portabilità fra Windows e Mac non significa sincronizzazione cloud automatica: il trasferimento dei progetti e i riferimenti ai file esterni richiederanno una procedura verificata. Non vogliamo consentire modifiche concorrenti non coordinate allo stesso progetto.
+Windows/Mac portability does not mean automatic cloud synchronization: project transfer and external-file references need a verified procedure. Uncoordinated concurrent edits to the same project should not be allowed.
 
-## Aggiornamenti senza compilazioni manuali
+## Updates without manual builds
 
-**Architettura approvata, ancora da implementare:**
+**Approved architecture, not yet implemented:**
 
-1. **Contenitore desktop:** installazione iniziale per ciascuna piattaforma e aggiornamenti indipendenti, compresi quelli necessari per la sicurezza.
-2. **Pacchetto web ScanRuler:** versione locale scaricabile separatamente, senza ricreare l'intero installer a ogni modifica upstream.
-3. **Servizi e moduli nativi:** componenti MCP, gestione dei progetti ed eventuali backend GPU versionati e verificati insieme al pacchetto web.
-4. **Pipeline GitHub:** rilevazione delle release upstream, integrazione delle personalizzazioni, compilazione, test e pubblicazione dei soli candidati approvati.
+1. **Desktop shell:** an initial installation for each platform and independent updates, including security maintenance.
+2. **ScanRuler web bundle:** a separately downloadable local version, without rebuilding the entire installer for every upstream change.
+3. **Services and native modules:** MCP components, project management and possible GPU backends, versioned and checked together with the web bundle.
+4. **GitHub pipeline:** detect upstream releases, integrate customizations, build, test and publish only approved candidates.
 
-Anche con più release upstream nello stesso giorno, l'utente non dovrà seguirle una per una. La pipeline potrà consolidare gli aggiornamenti sull'ultima versione candidata; il canale **stabile** privilegerà versioni consolidate, quello **rapido** renderà disponibili prima le versioni che superano i controlli. Non è prevista una garanzia di aggiornamento istantaneo.
+Even with several upstream releases in one day, users should not have to follow each one manually. The pipeline may consolidate updates onto the latest candidate. The **stable** channel should favor consolidated versions; the **fast** channel should make versions available sooner after checks pass. Instant upstream-update availability is not guaranteed.
 
-Un aggiornamento dovrà essere scaricato e verificato senza sostituire i componenti usati da un lavoro in corso. L'attivazione avverrà a progetto salvato, con controllo di compatibilità fra applicazione, MCP, moduli e schema del progetto. Pacchetti e manifest dovranno avere verifiche di autenticità e integrità, non provenire da download arbitrari.
+An update must be downloaded and verified without replacing components used by an active job. Activation should happen with the project saved and compatibility checked across the application, MCP, modules and project schema. Packages and manifests must have authenticity and integrity checks rather than come from arbitrary downloads.
 
-**Se l'aggiornamento non supera i controlli, resta in uso l'ultima versione verificata.** I progetti potranno mantenere fissata la versione utilizzata. Prima di una migrazione si conserverà una copia: il rollback dell'applicazione non garantisce che un progetto già migrato sia leggibile da una versione precedente.
+**If an update fails checks, the last verified version stays in use.** Projects may pin their working version. Preserve a copy before migration: rolling back the application does not guarantee that an already migrated project will open in an older version.
 
-L'obiettivo è lavorare offline con i componenti già installati. Download degli aggiornamenti e servizi AI remoti richiederanno comunque la rete. Non sarà necessario possedere un fork personale per usare i futuri pacchetti pubblici.
+The goal is offline work with installed components. Update downloads and remote AI services still require connectivity. Users will not need their own fork to use future public packages.
 
-## GPU e memoria: ottimizzare solo dove serve
+## GPU and memory: optimize where it helps
 
-La GPU per visualizzare una scena e la GPU per eseguire calcoli geometrici sono due aspetti diversi. Non prevediamo un pulsante che trasformi automaticamente tutto il CAD in calcolo GPU.
+Using the GPU to display a scene and using it for geometric computation are different things. There is no planned switch that automatically turns the entire CAD system into GPU code.
 
-La fase prestazionale partirà da misure riproducibili sui colli di bottiglia. I primi candidati da valutare sono distanze, mappe di deviazione, ricerca dei punti vicini e alcune fasi di allineamento. Valuteremo WebGPU per operazioni condivisibili fra piattaforme e backend dedicati **CUDA su Windows con NVIDIA** e **Metal su macOS Apple Silicon**, mantenendo un percorso CPU quando il backend GPU non è disponibile o non conviene.
+Performance work will begin with reproducible bottleneck measurements. Initial candidates include distance calculations, deviation maps, nearest-point searches and parts of alignment. We will evaluate WebGPU for cross-platform operations and dedicated **CUDA backends on Windows with NVIDIA** and **Metal backends on macOS Apple Silicon**, retaining a CPU path when a GPU backend is unavailable or not beneficial.
 
-I budget RAM e memoria GPU dovranno guidare cache, dimensione dei lotti e concorrenza. Non saranno una promessa di riserva fisica esclusiva né un limite assoluto automaticamente applicabile all'intero processo. La gestione della memoria sul Mac dovrà essere qualificata specificamente, senza trattarla come una copia delle impostazioni di una GPU dedicata Windows.
+RAM and GPU-memory budgets should guide caches, batch sizes and concurrency. They are not promises of exclusive physical allocation or an automatically enforced hard limit on the entire application. Mac memory management requires its own qualification rather than a copy of settings intended for a discrete Windows GPU.
 
-Un'ottimizzazione sarà accettata solo dopo aver misurato **tempo complessivo, consumo di memoria, correttezza del risultato e comportamento in caso di errore**. Non sono disponibili benchmark TMAR che dimostrino accelerazioni; non vengono promessi moltiplicatori di velocità o miglioramenti automatici della precisione.
+An optimization will be accepted only after measuring **end-to-end time, memory use, result correctness and failure behavior**. No TMAR benchmarks demonstrating acceleration are available yet. No speed multipliers or automatic accuracy improvements are promised.
 
-## Personalizzazioni senza perdere gli aggiornamenti
+## Customization without losing updates
 
-**Le nuove funzionalità aggiuntive TMAR, a partire dall'analisi a zebra, saranno progettate come plugin separati e modificabili dalla comunità**, non come aggiunte disperse nel nucleo dell'applicazione. Usiamo i punti di estensione già disponibili e manteniamo i servizi propri del contenitore desktop in moduli separati. Le modifiche al nucleo di ScanRuler resteranno possibili quando necessarie, ma dovranno essere minime, motivate, documentate e coperte da test. Riferimento: [architettura dei plugin upstream](plugins/README.md).
+**New TMAR features, starting with zebra analysis, will be designed as separate, community-editable plugins**, rather than changes scattered throughout the application core. Use existing extension points and keep desktop-shell services in separate modules. Core changes remain possible when required, but must be minimal, justified, documented and covered by tests. See the [upstream plugin architecture](plugins/README.md).
 
-### Requisiti dei plugin TMAR
+### TMAR plugin requirements
 
-Ogni nuova estensione dovrà rendere semplice capire dove intervenire e come verificare una modifica:
+Each extension should make it easy to identify where a change belongs and how to verify it:
 
-| Requisito | Risultato atteso |
+| Requirement | Expected outcome |
 | --- | --- |
-| Sorgenti in una cartella dedicata `plugins/<id>/` | Logica, interfaccia e risorse del plugin individuabili senza cercare modifiche sparse nel core; registrazione tramite i punti di estensione upstream. |
-| README proprio | Scopo, struttura dei sorgenti, istruzioni di sviluppo e test, configurazione, esempi e limiti noti. |
-| Interfacce e dipendenze esplicite | Accessi all'applicazione e agli altri plugin documentati; versioni supportate e compatibilità verificabili, evitando accoppiamenti non dichiarati. |
-| Test dedicati e casi riproducibili | Un contributore può modificare il plugin, verificare il comportamento e proporre una pull request circoscritta. |
-| Abilitazione opzionale e stato separato | Il resto dell'applicazione resta utilizzabile senza il plugin; preferenze e dati eventualmente salvati hanno nomi distinti e una strategia di compatibilità. |
+| Dedicated source directory under `plugins/<id>/` | Find plugin logic, UI and resources without searching for scattered core modifications; register through upstream extension points. |
+| A README for the plugin | Explain purpose, source layout, development and test instructions, configuration, examples and known limitations. |
+| Explicit interfaces and dependencies | Document access to the host and other plugins, supported versions and compatibility; avoid undeclared coupling. |
+| Dedicated tests and reproducible cases | Contributors can modify a plugin, verify its behavior and submit a focused pull request. |
+| Optional activation and separate state | The rest of the application remains usable without the plugin; saved preferences/data have distinct namespaces and a compatibility strategy. |
 
-Il modello iniziale segue i plugin inclusi nella compilazione dell'applicazione, descritti dalla documentazione upstream: **cartella separata non significa automaticamente installazione a caldo di un pacchetto esterno**. Chi modifica i sorgenti dovrà ricompilare e verificare il bundle interessato; l'obiettivo della pipeline TMAR resta distribuire agli utenti finali pacchetti già compilati. Un eventuale gestore di plugin installabili e aggiornabili separatamente richiederà un progetto specifico per compatibilità, autenticità e sicurezza e non è dichiarato disponibile.
+The initial model follows upstream plugins included at build time: **a separate directory does not automatically mean hot installation of an external package**. Source changes require rebuilding and testing the affected bundle; the TMAR pipeline should provide prebuilt packages to end users. A manager for independently installable/updatable plugins would need a separate compatibility, authenticity and security design and is not available.
 
-Una nuova versione upstream non dovrà cancellare una personalizzazione per riuscire a installarsi. Se introduce un conflitto o cambia un'interfaccia, la distribuzione di quel candidato verrà bloccata finché l'integrazione non sarà verificata. L'automazione riduce la manutenzione manuale degli utenti, non elimina ogni lavoro di manutenzione del progetto.
+A new upstream version must not erase a customization just to install successfully. If it introduces a conflict or changes an interface, distribution of that candidate must stop until integration is verified. Automation reduces users' manual maintenance; it does not eliminate all project-maintenance work.
 
-Le correzioni generali potranno essere proposte anche al progetto originale, secondo le sue regole di contribuzione. Il fork non implica che tali modifiche siano accettate o supportate da CNC Kitchen.
+General fixes may also be proposed upstream under its contribution rules. A fork does not imply that CNC Kitchen accepts or supports those changes.
 
-## Analisi a zebra — plugin da implementare
+## Zebra analysis — planned plugin
 
-**Aggiunta alla roadmap il 1° novembre 2026. Stato: pianificata, non implementata.** Obiettivo: introdurre una modalità di analisi a zebra per ispezionare visivamente la qualità delle superfici ricostruite e dei loro raccordi, aiutando a individuare ondulazioni e discontinuità indesiderate prima della consegna del risultato.
+**Added to the roadmap on November 1, 2026. Status: planned, not implemented.** Introduce a zebra-analysis mode to visually inspect reconstructed surfaces and their joins, helping identify unwanted waviness and discontinuities before delivery.
 
-**Organizzazione prevista:** plugin `tmar-zebra` nella cartella `plugins/tmar-zebra/`, con sorgenti, `plugin.ts`, `README.md` e test dedicati. La cartella e l'implementazione non sono ancora presenti. I contributori potranno perfezionare visualizzazione, controlli e verifiche intervenendo sul plugin; le integrazioni necessarie con i corpi CAD e il viewport dovranno essere esplicite e documentate.
+**Proposed organization:** a `tmar-zebra` plugin under `plugins/tmar-zebra/`, with source, `plugin.ts`, `README.md` and dedicated tests. The directory and implementation do not exist yet. Contributors should be able to improve visualization, controls and checks within the plugin; CAD-body and viewport integration must be explicit and documented.
 
-- [ ] Realizzare il plugin separato, documentarne le interfacce e verificare che l'applicazione funzioni anche senza abilitarlo.
-- [ ] Visualizzazione a zebra sui corpi e sulle superfici CAD, con attivazione/disattivazione e selezione delle parti da esaminare.
-- [ ] Orientamento e densità delle bande regolabili, per osservare il risultato da più direzioni.
-- [ ] Acquisizione di viste con parametri riproducibili per il report di verifica e per la revisione da parte dell'agente AI.
-- [ ] Collaudo su superfici di riferimento con raccordi continui, discontinuità note e spigoli intenzionali, verificando anche gli effetti della tessellazione e delle normali visualizzate su Windows e macOS.
+- [ ] Implement the separate plugin, document its interfaces and verify that the application still works without it enabled.
+- [ ] Display zebra stripes on selected CAD bodies and surfaces, with an on/off control.
+- [ ] Provide adjustable stripe orientation and density to inspect from different directions.
+- [ ] Capture views with reproducible parameters for verification reports and AI review.
+- [ ] Test reference surfaces with smooth joins, known discontinuities and intentional sharp edges; check tessellation and displayed-normal effects on Windows and macOS.
 
-La zebra dovrà affiancare, non sostituire, il confronto quantitativo CAD/mesh e i controlli dimensionali e topologici. Una visualizzazione regolare non sarà considerata da sola una certificazione della continuità geometrica o della conformità al pezzo reale; gli spigoli intenzionali dovranno essere distinti dai difetti da correggere.
+Zebra analysis must complement, not replace, quantitative CAD/mesh comparison and dimensional/topological checks. A regular-looking display is not by itself proof of geometric continuity or agreement with the real part. Intentional sharp edges must be distinguished from defects.
 
-## Qualità, sicurezza e dati personali
+## Model-tree multi-selection and bulk actions
 
-Prima di qualificare una release desktop dovranno essere disponibili prove di apertura, salvataggio, riapertura, esportazione STEP, pausa/ripresa e recupero dopo un arresto sulle piattaforme dichiarate. Gli aggiornamenti dovranno essere provati anche con progetti esistenti e snapshot precedenti alle migrazioni.
+**Added to the roadmap on November 1, 2026. Status: planned, not implemented as a TMAR extension.** AI-assisted modeling can produce very long lists of features and construction elements. Selecting and hiding each row individually must not be the only practical way to manage them.
 
-Per le modifiche geometriche, i test dovranno dichiarare dati, tolleranze e risultati: validità dei solidi, copertura e scarti come RMS, P95 e massimo dove pertinenti. Confrontare il CAD con una scansione non certifica da solo l'esattezza del pezzo reale. Le tolleranze dipendono dal caso e non sono un numero universale imposto dal fork.
+The [upstream Reverse engineer documentation](plugins/reverse/README.md) already describes Ctrl/Shift multi-selection for the body list. First audit and reuse that behavior; this item is about extending and making it consistent across the relevant feature, body and construction-element lists, not claiming that multi-selection is absent everywhere.
 
-Le pipeline pubbliche dovranno usare dati sintetici o campioni condivisibili. **Scansioni private, fotografie, credenziali, token, percorsi personali e log non anonimizzati non devono essere pubblicati nel repository o negli artefatti di test.**
+**Proposed organization:** `plugins/tmar-model-tree/`, with a documented adapter to the host's selection, visibility and history mechanisms. The directory is not created yet. Where existing extension points cannot reach an original list, add minimal documented hooks rather than a competing selection state or scattered core changes.
 
-L'applicazione desktop non rende locale un servizio AI remoto: quanto l'agente legge può essere trasmesso al suo fornitore. La connessione agli agenti dovrà essere esplicita e controllata; account, modelli e relativi costi restano separati dall'applicazione. Vedere anche le [avvertenze upstream sugli agenti](README.upstream.md#agents).
+| Interaction | Required behavior |
+| --- | --- |
+| Click a row | Select that row and show clear selection feedback. |
+| Ctrl+click on Windows / Cmd+click on macOS | Add or remove individual, non-adjacent rows from the selection. |
+| Shift+click | Select the contiguous range from an anchor row to the clicked row, including rows reached by scrolling. |
+| Ctrl+A on Windows / Cmd+A on macOS | Select all eligible entries in the focused list's current scope, not merely the rows currently rendered on screen. |
+| Escape / Clear selection | Clear the selection without changing the geometry or visibility. |
 
-## Come provarlo oggi
+- [ ] Provide explicit Select All, Clear Selection and selected-count controls, plus keyboard access that does not hijack text fields or other panels.
+- [ ] Apply **Show selected**, **Hide selected** and **Isolate selected** to the entire selection, with a way to restore the visibility state from before isolation. Mixed visibility must resolve to the requested state, not blindly toggle each item.
+- [ ] Allow other supported actions, such as grouping or suppression where appropriate, only after checking the selected item types and dependencies. Hiding is not suppression or deletion. Destructive actions require a separate dependency preview and confirmation.
+- [ ] Clearly define filtered-list and collapsed-group scope. Use stable item IDs; adding new rows during AI work must not silently add them to an existing selection or redirect an action.
+- [ ] Route grouped changes through the host's history, aim for one undoable action, and avoid rebuilding the entire model once per selected row. Respect active-operation guards and report unsupported items or failures explicitly.
+- [ ] Test long and mixed lists, scrolling, range selection, filtering, mixed visibility, undo/redo, AI-created rows and both platform keyboard conventions. Publish measured responsiveness before claiming scalability.
 
-**Per l'uso immediato:** usa [ScanRuler originale](https://scanruler.com/). Questo fork non ha ancora installer desktop TMAR pubblicati.
+The initial priority is reliable selection and collective visibility. More invasive batch operations should follow only when their dependency and recovery semantics are verified.
 
-**Per sviluppatori:** il codice ereditato è ancora un progetto web. Con Node.js 22 o successivo, secondo [package.json](package.json):
+## Quick notes on the model
+
+**Added to the roadmap on November 1, 2026. Status: planned, not implemented as a TMAR extension.** Make it easy to attach an observation or correction to a specific location without repeatedly searching through panels.
+
+**Requested flow: activate Note → click the target point on the object → write the annotation → save.** Provide a directly accessible Note button and a configurable keyboard shortcut. The exact default binding must be chosen after checking existing shortcuts on Windows and macOS; no key is assigned by this document.
+
+The [upstream documentation](README.upstream.md#when-your-part-does-not-come-out-right) already describes a Note action followed by clicking a point and entering feedback under Notes for the agent. This extension should reuse that data model and workflow, improving quick access and usability rather than creating a duplicate annotation system.
+
+**Proposed organization:** `plugins/tmar-quick-notes/`, with source, a dedicated README and tests. The directory is not created yet. Any required integration with the existing note editor, picking, persistence and MCP should use explicit host interfaces or minimal documented hooks.
+
+- [ ] Expose Note directly in an appropriate toolbar and through a configurable shortcut, without stealing keystrokes while typing or overriding an active editor unsafely.
+- [ ] Show an armed placement mode and target feedback. Clicking the object places a marker and opens a focused text editor; a miss must not create an arbitrary note.
+- [ ] Support explicit Save and Cancel, and Escape to leave placement mode without an empty annotation. Restore normal model navigation afterward.
+- [ ] Preserve the note text and location through project save/load. Record suitable object references and model-space coordinates; if rebuilding or changing the target invalidates the association, flag it instead of silently moving the note elsewhere.
+- [ ] Keep notes accessible through the existing agent-note mechanism when the user has explicitly connected an agent. Creating a local note must not automatically enable an agent connection or upload data.
+- [ ] Test placement on supported scan/CAD targets, cancel, focus handling, shortcut conflicts, save/reopen and target transformations on Windows and macOS.
+
+## Languages and future Italian localization
+
+**English README now; Italian application and documentation localization later.** Localization is a planned addition, not a second fork or a separate CAD implementation.
+
+- [ ] Extract user-facing strings into translation resources with stable keys, including labels, tooltips, errors and plugin UI; use English as the fallback.
+- [ ] Add an Italian language resource and an in-app language selector, remembering the preference.
+- [ ] Let each plugin own its translation resources through a shared localization contract, so contributors can improve wording without changing geometric code.
+- [ ] Provide maintained Italian documentation, including a future `README.it.md` linked to the primary English README once it exists.
+- [ ] Test longer translated labels, numeric presentation and platform shortcuts. Changing language must not change model units, stored numeric values, object IDs or MCP command identifiers.
+
+Existing developer documentation retains its original language unless explicitly translated. Neither Italian UI support nor a translated README is declared delivered by this roadmap.
+
+## Quality, security and personal data
+
+Before qualifying a desktop release, provide evidence for opening, saving, reopening, STEP export, pause/resume and crash recovery on the declared platforms. Test updates against existing projects and pre-migration snapshots as well.
+
+Geometry changes require tests with declared data, tolerances and results: solid validity, coverage and deviations such as RMS, P95 and maximum where relevant. Comparing CAD with a scan does not by itself certify the real part's accuracy. Tolerances are contextual, not a universal number imposed by this fork.
+
+Public pipelines must use synthetic or shareable fixtures. **Private scans, photographs, credentials, tokens, personal paths and non-anonymized logs must not be published in the repository or test artifacts.**
+
+A desktop application does not make a remote AI service local: what an agent reads may be transmitted to its provider. Agent connections must be explicit and controlled; accounts, models and their costs remain separate from the application. See the [upstream agent privacy warning](README.upstream.md#agents).
+
+## How to try it today
+
+**For immediate use:** use [original ScanRuler](https://scanruler.com/). This fork has no published TMAR desktop installers yet.
+
+**For developers:** the inherited code remains a web project. With Node.js 22 or later, as specified in [package.json](package.json):
 
 ```bash
 git clone https://github.com/mrhz1973/tmar-scan-desktop.git
@@ -162,33 +221,34 @@ npm ci
 npm run dev
 ```
 
-Questo avvia l'ambiente di sviluppo web, **non** una versione desktop. I comandi ereditati `npm test`, `npm run build` e `npm run e2e:ci` sono descritti nella [documentazione di sviluppo](docs/development.md); alcuni test richiedono fixture o prerequisiti aggiuntivi. L'aggiornamento iniziale del README non costituisce un collaudo del runtime.
+This starts the web development environment, **not** a desktop edition. The inherited `npm test`, `npm run build` and `npm run e2e:ci` commands are described in the [development documentation](docs/development.md); some tests require additional fixtures or prerequisites. Documentation updates do not constitute runtime validation.
 
-Quando saranno disponibili, i pacchetti TMAR saranno pubblicati nelle [release di questa repository](https://github.com/mrhz1973/tmar-scan-desktop/releases), con versione della base upstream, piattaforme collaudate, istruzioni, limitazioni note e sorgente corrispondente. Le procedure di firma e distribuzione per Windows/macOS sono ancora da predisporre; il supporto a Mac Intel o altre piattaforme non è dichiarato in questa fase.
+When available, TMAR packages will appear in [this repository's releases](https://github.com/mrhz1973/tmar-scan-desktop/releases), identifying the upstream baseline, tested platforms, instructions, known limitations and corresponding source. Signing and distribution procedures for Windows/macOS remain to be implemented; Intel Macs and other platforms are not declared supported at this stage.
 
-## Contribuire e consultare le fonti
+## Contributing and references
 
-Proposte e pull request sono benvenute. Per una modifica, descrivere il problema concreto, il risultato desiderato, l'effetto sugli aggiornamenti upstream e i test necessari. Per miglioramenti prestazionali, includere hardware, dati condivisibili, tempi e verifica della correttezza.
+Suggestions and pull requests are welcome. Describe the concrete problem, desired outcome, effect on upstream updates and required tests. For performance improvements, include hardware, shareable data, timings and correctness checks.
 
-La documentazione operativa del fork dovrà restare allineata alle release: una funzione passerà da **pianificata** a **disponibile** soltanto con implementazione e verifica documentate. Le istruzioni e i workflow già presenti in [CONTRIBUTING.md](CONTRIBUTING.md) sono ereditati dall'upstream; le eventuali differenze di processo TMAR dovranno essere rese esplicite prima di utilizzarle per nuovi contributi.
+Fork documentation must track releases: a capability moves from **planned** to **available** only with implementation and documented verification. Instructions and workflows in [CONTRIBUTING.md](CONTRIBUTING.md) are inherited from upstream; differences in the TMAR contribution process must be made explicit before applying them to new contributions.
 
-| Riferimento | Contenuto |
+| Reference | Content |
 | --- | --- |
-| [README.upstream.md](README.upstream.md) | Copia integrale del README originale presente alla base `5c1f2f9`, conservata per attribuzione e documentazione; non è un elenco di nuove funzioni TMAR. |
-| [docs/manual.md](docs/manual.md) | Manuale delle funzioni ereditate. |
-| [mcp/README.md](mcp/README.md) | Connessione e strumenti MCP upstream. |
-| [plugins/README.md](plugins/README.md) | Punti di estensione del progetto originale. |
-| [docs/development.md](docs/development.md) | Sviluppo e test della base web. |
-| [CHANGELOG.md](CHANGELOG.md) | Cronologia ereditata del software; non prova la disponibilità delle funzionalità desktop pianificate qui. |
+| [README.upstream.md](README.upstream.md) | Full copy of the original README at baseline `5c1f2f9`, retained for attribution and documentation; not a list of new TMAR capabilities. |
+| [docs/manual.md](docs/manual.md) | Manual for inherited features. |
+| [mcp/README.md](mcp/README.md) | Upstream MCP connection and tools. |
+| [plugins/README.md](plugins/README.md) | Original project extension points. |
+| [plugins/reverse/README.md](plugins/reverse/README.md) | Inherited Reverse engineer behavior, including existing body-list selection. |
+| [docs/development.md](docs/development.md) | Web-baseline development and testing. |
+| [CHANGELOG.md](CHANGELOG.md) | Inherited software history; not evidence that the desktop features planned here are available. |
 
-## Licenza e riconoscimenti
+## License and acknowledgements
 
-Il codice derivato da ScanRuler resta sotto **AGPL-3.0-only**, vedere [LICENSE](LICENSE). Vanno conservati attribuzioni, avvisi e licenze delle dipendenze. Il progetto originario è di **CNC Kitchen / Stefan Hermann e dei suoi contributori**; TMAR Scan Desktop è un'iniziativa indipendente.
+Code derived from ScanRuler remains under **AGPL-3.0-only**; see [LICENSE](LICENSE). Preserve attribution, notices and dependency licenses. The original project is by **CNC Kitchen / Stefan Hermann and its contributors**; TMAR Scan Desktop is an independent initiative.
 
-Le future distribuzioni TMAR dovranno rendere disponibile il sorgente corrispondente e rispettare gli obblighi delle dipendenze, compresi gli eventuali componenti GPU. Le licenze commerciali descritte in [COMMERCIAL.md](COMMERCIAL.md) riguardano il titolare del progetto originale: non sono un'offerta commerciale di TMAR. La finalità personale e comunitaria di questo fork non introduce restrizioni aggiuntive alla licenza.
+Future TMAR distributions must make their corresponding source available and comply with dependency obligations, including any GPU components. Commercial licenses described in [COMMERCIAL.md](COMMERCIAL.md) concern the original project's rights holder; they are not a TMAR commercial offering. The personal/community purpose of this fork adds no restrictions to the license.
 
-Nome e marchi di CNC Kitchen/ScanRuler non vengono presentati come marchi del fork. La copia della documentazione originale viene mantenuta per provenienza e riferimento; la distribuzione desktop dovrà avere un'identità distinta.
+CNC Kitchen/ScanRuler names and trademarks are not presented as this fork's branding. Original documentation is retained for provenance and reference; the desktop distribution must have its own identity.
 
 ---
 
-**Principio del progetto:** preservare il lavoro prima di accelerarlo; automatizzare gli aggiornamenti senza interromperlo; pubblicare soltanto vantaggi dimostrati, distinguendoli sempre dagli obiettivi futuri.
+**Project principle:** preserve work before accelerating it; automate updates without interrupting it; publish only demonstrated benefits, always distinguishing them from future goals.
