@@ -266,7 +266,7 @@ Existing developer documentation retains its original language unless explicitly
 
 ## Quality, security and personal data
 
-Before qualifying a desktop release, provide evidence for opening, saving, reopening, STEP export,pause/resume and crash recovery on the declared platforms. Test updates against existing projects and pre-migration snapshots as well.
+Before qualifying a desktop release, provide evidence for opening, saving, reopening, STEP export, pause/resume and crash recovery on the declared platforms. Test updates against existing projects and pre-migration snapshots as well.
 
 Geometry changes require tests with declared data, tolerances and results: solid validity, coverage and deviations such as RMS, P95 and maximum where relevant. Comparing CAD with a scan does not by itself certify the real part's accuracy. Tolerances are contextual, not a universal number imposed by this fork.
 
