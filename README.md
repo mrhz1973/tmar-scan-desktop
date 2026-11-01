@@ -63,7 +63,7 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | GPU computation on Windows and Mac | Later investigation | Evaluate WebGPU and CUDA/Metal modules where a benefit can be demonstrated. |
 | Zebra surface analysis plugin | Planned | A dedicated, community-editable plugin for visual inspection of surfaces and joins, adjustable stripes and report images, complementing quantitative CAD/mesh comparison. |
 | Model-tree multi-selection and bulk-actions plugin | Planned | Consistent Ctrl/Cmd, Shift and Select All behavior across relevant feature, body and construction-element lists, with collective visibility and supported actions. Reuse existing upstream capabilities. |
-| Quick-note access plugin | Planned | A directly accessible Note action and a shortcut configurable in Settings: activate, click a point on the object, write and save the annotation. Reuse the existing note system. |
+| Quick-note access and navigation plugin | Planned | A directly accessible Note action and a shortcut configurable in Settings: activate, click a point on the object, write and save. Double-click an existing note row or use its target button to locate and highlight its position on the model. Reuse the existing note system. |
 | Collapsible Features and Notes panels | Planned | Independently collapse/expand long panels, retain their state and selection, and configure layout preferences in Settings. |
 | Per-workspace labeling and annotation visibility plugin | Planned | Settings-based display controls, including hiding note text and markers in Mesh Tools without deleting notes or changing their availability to a connected agent. |
 | Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
@@ -188,6 +188,26 @@ The [upstream documentation](README.upstream.md#when-your-part-does-not-come-out
 - [ ] Keep notes accessible through the existing agent-note mechanism when the user has explicitly connected an agent. Creating a local note must not automatically enable an agent connection or upload data.
 - [ ] Test placement on supported scan/CAD targets, cancel, focus handling, shortcut conflicts, save/reopen and target transformations on Windows and macOS.
 
+### Locate an existing note on the model
+
+**Added to the roadmap on November 1, 2026. Status: planned, not implemented.** With 30–40 or more notes, selecting a list entry should not leave the user searching the whole part for its marker. Extend the same `tmar-quick-notes` plugin with a **Go to note** command, reusing any existing host camera/annotation navigation rather than creating another note system.
+
+| Interaction | Required behavior |
+| --- | --- |
+| Single-click the note row | Select and highlight the entry without automatically moving the camera. |
+| Double-click the note row | Run Go to note: frame the annotated location and highlight its marker on the model. |
+| Click the row's target/crosshair button | Run the same Go to note command with one click; place this distinct button beside the existing X and green check controls, without changing their meanings. |
+
+- [ ] Give the target button a recognizable crosshair/target icon, a **Go to note** tooltip and an accessible name; make it keyboard-operable. Do not rely on color alone to explain the action.
+- [ ] Center the view on the note's actual anchor and use an appropriate local zoom, retaining enough surrounding geometry to understand where it is. Orient the view when reliable target information allows it. Move the camera, never the model or the note's coordinates.
+- [ ] Highlight the matching marker and list entry so the selected note remains identifiable among neighboring annotations. If workspace annotations are hidden, show only this note's temporary focus feedback, not all notes, and leave the saved labeling preferences unchanged.
+- [ ] Preserve the pre-navigation camera pose and provide **Return to previous view**. Clear temporary focus feedback when leaving note focus or selecting another note; restore the normal workspace display policy without deleting or resolving any note.
+- [ ] Resolve the saved anchor using the current target transform and stable references. If the target is missing or the association is invalid, explain that the note cannot be located rather than jumping to a guessed point or the origin. If geometry is hidden, clipped or occluded, identify that condition and offer an explicit, reversible reveal action where supported; do not silently change global visibility or section settings.
+- [ ] Keep navigation separate from editing, resolving and deleting: clicking X/check, typing, selecting text in an editor or double-clicking those controls must not trigger Go to note. Do not discard an unsaved note draft or change note status as a side effect of camera navigation.
+- [ ] Test both entry points with at least 40 notes, long/scrolled lists, neighboring anchors, hidden annotations in Mesh Tools, transformed targets, save/reopen, missing references and Windows/macOS input. Verify that locating a note leaves geometry, annotation text/status and saved display preferences unchanged.
+
+**Acceptance example:** in a project with 40 notes, double-click one row or click its target button; the corresponding location is framed and its marker is clearly highlighted. Return to the previous view without changing the note's completion state. Repeat with Mesh Tools annotations hidden and confirm that unrelated labels remain hidden. These are planned tests, not results already achieved.
+
 ## Settings, collapsible panels and per-workspace labels
 
 **Added to the roadmap on November 1, 2026. Status: planned, not implemented as a TMAR extension.** Settings should provide a central place for shortcut, panel-layout and labeling preferences. The concrete problem reported by the user is that notes remain visually intrusive in Mesh Tools, while long Features and Notes lists consume too much panel space.
@@ -210,7 +230,7 @@ Collapsing a panel changes its layout only. It must not hide the corresponding g
 - [ ] Provide a **Hide notes in this workspace** action that hides note text, markers and leader lines together. Hidden note overlays must not intercept clicks or show leftover hover labels, so mesh selection and editing remain unobstructed.
 - [ ] Persist the per-workspace choices and restore them on workspace switches and restart. For example, notes may stay visible in Reverse engineer while being hidden in Mesh Tools; changing one workspace must not silently change another's override.
 - [ ] Treat all these switches as display-only: do not delete notes, alter geometry, suppress features or change note access through the existing connected-agent mechanism. Hidden notes must still be saved with the project.
-- [ ] When explicitly placing or editing a note while annotations are hidden, show only the necessary temporary placement/edit feedback; restore the saved display preference on Save or Cancel without silently enabling all annotations.
+- [ ] When explicitly placing, editing or locating a note while annotations are hidden, show only the necessary temporary placement/edit/focus feedback. Restore the saved display policy on Save, Cancel or leaving note focus without silently enabling all annotations; Go to note must not change the saved preference.
 - [ ] Test many features and notes, panel collapse/reopen, draft retention, selection, label categories, hidden-overlay picking, AI-created items, workspace round trips including Mesh Tools, preference persistence, and Windows/macOS keyboard behavior. Verify that disabling the plugin leaves the host usable and does not remove annotation data.
 
 **Acceptance example:** collapse Features and Notes, hide annotations in Mesh Tools, edit/select the mesh without note overlays obstructing it, and return to Reverse engineer with its independent display preferences and all note data intact. This is a planned regression scenario, not a test already passed.
