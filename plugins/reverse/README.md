@@ -5,6 +5,20 @@ The Reverse engineer workspace, as a plugin — see [../README.md](../README.md)
 for what a plugin is. What follows is the workspace's chapter of the app's
 documentation.
 
+## TMAR fork additions
+
+In this fork's `main`, [tmar-body-export](../tmar-body-export/README.md) adds
+**CAD body STL** controls beside the existing export area. It calls the
+already existing `reverse.export.stl` backend; body STEP export is unchanged.
+[tmar-quick-notes](../tmar-quick-notes/README.md) exposes the same note records
+in the scan-side Deviation workspace. Neither feature requires the desktop shell.
+
+These additions were integrated via [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1)
+at `496fe2e`. See the [validation record](../../docs/tmar-web-validation.md)
+for checked scope, and the [fork roadmap](../../README.md#status-and-roadmap)
+for what is still planned. The chapter below describes the inherited workspace;
+it is not a claim that all planned TMAR extensions are available.
+
 ## Reverse engineer: from scan to a solid STEP body
 
 The fourth workspace turns the scan into a **solid body** — a closed B-rep in

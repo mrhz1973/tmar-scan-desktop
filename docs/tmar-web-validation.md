@@ -5,6 +5,19 @@ Baseline: `6748a79ebe755c12d212b88a4937be2a1992d80f`, inherited ScanRuler
 0.9.4 plus the fork's roadmap. This record concerns the first source-level web
 plugins, not a desktop release or a hosted deployment.
 
+## Source and documentation provenance
+
+Implementation commit: `da646bdbd46b132382c83d70ec7501515f458aaf`.
+Integration commit on `main`: `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`,
+via [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1).
+The merge timestamp is November 1, 2026 at 23:07 UTC (November 2 at 00:07 in
+Europe/Rome). The inherited package version is still 0.9.4; it is not a TMAR
+release number.
+
+Documentation synchronized on November 2, 2026. The results below belong to
+the original implementation validation run; updating documentation does not
+rerun tests, certify additional platforms or prove a hosted deployment.
+
 ## Tested environment and scope
 
 Windows (`win32`), Node.js `v26.8.1`, Chrome `156.0.8078.74` in an isolated

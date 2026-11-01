@@ -1,6 +1,9 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # TMAR notes in Deviation
 
+> **Implemented and merged into `main` via [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), source revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`.** Scan-side Deviation notes are implemented; the wider quick-notes roadmap is partial.
+> Documentation checked November 2, 2026. This is a web-source feature, not a desktop release. [Recorded validation](../../docs/tmar-web-validation.md) covers Windows/Chrome; macOS and live-provider qualification are pending.
+
 First build-time web implementation of the planned quick-notes extension.
 No desktop shell is required. The rest of the quick-notes roadmap is not
 implicitly implemented by this first increment.
@@ -69,3 +72,7 @@ and closes its server/browser afterward. It stubs the agent socket: it never
 contacts an existing MCP session. It checks note placement, preservation of
 the map, shared notes, Escape, save/reopen, and body STL downloads. It is not
 a live end-to-end test with a remote AI provider. Set `CHROME` if required.
+
+## Roadmap and contribution scope
+
+See the [main roadmap](../../README.md#status-and-roadmap) for outstanding features. Change this plugin in an isolated branch and include its tests and README updates in the pull request. Do not present unrelated planned features as delivered or modify private scans for public fixtures. The validation record describes the implementation run; this documentation synchronization did not rerun those tests.

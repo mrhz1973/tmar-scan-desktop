@@ -1,6 +1,9 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # TMAR CAD body STL export
 
+> **Implemented and merged into `main` via [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), source revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`.** CAD body STL UI is implemented in the web fork.
+> Documentation checked November 2, 2026. This is a web-source feature, not a desktop release. [Recorded validation](../../docs/tmar-web-validation.md) covers Windows/Chrome; macOS and live-provider qualification are pending.
+
 A build-time web plugin. No Electron shell or native installation is required.
 
 ## What it does
@@ -57,3 +60,7 @@ profile. It downloads a selected 40 × 20 × 10 mm CAD block and verifies that t
 STL excludes a differently sized source scan and a second body. `CHROME` can
 specify the browser executable. Browser-test results do not qualify untested
 platforms or arbitrary production models.
+
+## Roadmap and contribution scope
+
+See the [main roadmap](../../README.md#status-and-roadmap) for outstanding features. Change this plugin in an isolated branch and include its tests and README updates in the pull request. Do not present unrelated planned features as delivered or modify private scans for public fixtures. The validation record describes the implementation run; this documentation synchronization did not rerun those tests.
