@@ -13,6 +13,7 @@ other plugins. These are build-time modules, not hot-installable packages.
 | [mesh-tools/](mesh-tools/) | Inherited | Tools to clean up and reduce a scan. |
 | [tmar-body-export/](tmar-body-export/) | Implemented in `main` | One CAD-body export dialog for STEP/STL; requires Reverse engineer. |
 | [tmar-quick-notes/](tmar-quick-notes/) | Implemented in `main`, scan-side scope | Local notes, configurable shortcut, multi-selection and Go to note; scan-side Deviation adapter. |
+| [tmar-cad-edges/](tmar-cad-edges/) | Web implementation; user review open | CAD face boundaries/silhouettes, color and thickness with Zebra; STEP references in single Deviation view. |
 | [tmar-zebra/](tmar-zebra/) | Initial web implementation | Zebra stripes and local pinned observations in Reverse engineer. |
 | [tmar-model-tree/](tmar-model-tree/) | Initial web implementation | Independent feature categories, type-scoped selection/visibility, large collapse headers and preserved chronological history. |
 | [tmar-display-controls/](tmar-display-controls/) | Initial web implementation | Lower-bar Labels, per-workspace note-pin preferences and a resizable left panel. |

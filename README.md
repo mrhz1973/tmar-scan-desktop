@@ -12,6 +12,18 @@ An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/
 
 [Available now](#web-extensions-available-on-main) | [Body STL](#cad-body-stl-export) | [Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Deviation notes](#notes-directly-in-deviation) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
 
+## CAD face edges with Zebra
+
+Use **CAD edges** on the lower bar in Reverse engineer or single-view Surface
+Deviation. **Show CAD edges**, color and 1–6 px thickness are available in the
+linked panel. Editable bodies reuse their topology; STEP references retain face
+boundaries without internal triangle wireframe. Set **Tangent / fillet edges:
+Drawn** for the CAD-body fillet rims. A mesh-only STL cannot supply CAD face topology.
+
+Zebra now also offers the single-view reference target. Notes remain local;
+Deviation insertion is still scan-side. [Usage and limits](plugins/tmar-cad-edges/README.md)
+| [Actual validation](docs/tmar-cad-edges-validation.md). **User review remains open.**
+
 ## Latest: category-scoped feature controls
 
 **Select All / Hide in Sketches no longer acts on the completed body.**
@@ -58,6 +70,7 @@ These are **implemented web-source features**, not just roadmap entries. They ru
 | [Local notes and navigation](plugins/tmar-quick-notes/README.md) | Note button and configurable single-letter shortcut; Ctrl/Cmd/Shift selection; target button/double-click Go to note; previous view; bulk actions. | Deviation placement is scan-side/single-view. CAD-note navigation is in Reverse engineer. No agent connection is required. |
 | [Feature-list selection](plugins/tmar-model-tree/README.md) | Independent categorized Ctrl/Cmd/Shift/Select All, type-scoped Show/Hide, large collapse headers and chronological rollback history. | Not batch feature deletion/suppression or an extension of every construction-element list. Unavailable independent outputs are reported. |
 | [Workspace display controls](plugins/tmar-display-controls/README.md) | **Labels** on the lower 3D bar; separate note-pin visibility and per-workspace browser preferences. | Advanced category controls in Settings and a separate 2D display policy remain planned. |
+| [CAD face edges](plugins/tmar-cad-edges/README.md) | Lower-bar Show CAD edges, color/pixel width, native tangent rims and STEP-reference boundaries, compatible with Zebra. | No triangle wireframe substitute, no reference-side note insertion or split-view claim. |
 | [Zebra](plugins/tmar-zebra/README.md) | Visual analysis of supported scan/CAD targets, adjustable bands and local pinned notes. | Visual aid; not a numerical G1/G2 continuity certificate. Real-part and macOS qualification remain open. |
 
 **Validation:** see [the category validation record](docs/tmar-feature-categories-validation.md) for the latest checks. The [earlier usability record](docs/tmar-usability-validation.md) documents its original revision. The [initial web record](docs/tmar-web-validation.md) remains historical evidence for PR #1; its counts are not a substitute for retesting the new UI. Automated checks use synthetic fixtures and isolated browser profiles; the user-provided screenshot is a separate work-in-progress example, not additional test qualification. No macOS, desktop package, full upstream suite or real-part qualification is claimed.
@@ -127,7 +140,7 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Collapsible Features and Notes panels | Implemented, initial web scope | Independent header controls, browser-remembered state, preserved selection and note draft. Column width is draggable and configurable in Settings; broader layout presets remain future work. |
 | Per-workspace labeling and annotation visibility plugin | Implemented lower-bar controls | Labels and Notes visibility per 3D workspace; no annotation deletion. Advanced Settings categories remain planned. |
 | Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
-| Customizations and contributions | Partial | Five TMAR plugins with English documentation and reusable host hooks. Dynamic package management and automated upstream updates remain planned. |
+| Customizations and contributions | Partial | Six TMAR plugins with English documentation and reusable host hooks. Dynamic package management and automated upstream updates remain planned. |
 
 There are two tracks: **web plugins can be implemented and used now**, independently of the desktop shell; the desktop track remains **shell -> persistence and recovery -> pause/resume -> verified updates -> measured optimization**. Follow-up work includes reference/split-view notes, captured comparison metadata, richer Settings categories, generalized construction-list actions and broader platform/real-part qualification. Tasks can proceed in isolated branches; reliability takes priority over speed. This README does not set delivery dates.
 

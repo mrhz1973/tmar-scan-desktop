@@ -62,6 +62,19 @@ button remains visible but disabled with an explanation; finish the editor to
 resume analysis. The shader/kernel and geometry algorithms are unchanged by
 this discoverability update.
 
+## CAD edges and STEP references
+
+The optional [CAD edges plugin](../tmar-cad-edges/README.md) exposes face/fillet
+borders and silhouettes while Zebra remains active, with color/pixel width.
+The original body Tangent edges setting is reused; triangle mesh mode is separate.
+
+In single-view **Surface Deviation**, Zebra also supports **Reference (STEP / mesh)**.
+STEP supplies face-boundary metadata; a mesh-only reference does not. Hide the scan
+when inspecting the reference alone. Zebra temporarily covers comparison colors:
+turn it off to read the map. Notes in this workspace still attach to a visible scan,
+not the reference. Split view, picking/alignment and deformation animation are guarded.
+[Validation and limits](../../docs/tmar-cad-edges-validation.md).
+
 ## Checks
 
 ```bash
