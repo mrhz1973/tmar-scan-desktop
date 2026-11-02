@@ -47,7 +47,6 @@ export function ZebraPanel() {
         if (!geometry) return null
         return host.partGroup.children.find((item): item is THREE.Mesh => item instanceof THREE.Mesh && item.geometry === geometry) ?? null
       },
-      radius: () => host.modelRadius(),
       invalidate: () => host.invalidate(),
       countChanged: setCount,
     }, currentOptions.current)

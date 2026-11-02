@@ -17,14 +17,23 @@ the `reverse` plugin and the `reverse.analysis` panel extension. With reverse
 disabled, this plugin contributes no controls. A build without this plugin
 leaves the host's analysis slot empty.
 
-The stripes use the displayed mesh's interpolated normals. Coarse tessellation,
+Reflection coordinates are calculated at the displayed mesh's vertices and
+interpolated across each triangle. Coarse tessellation,
 scan noise, missing normals, coincident objects and occlusion can change what is
 visible. The effect is a qualitative visual aid, not a numeric measurement or
 proof of G1/G2 continuity. The comparison map is a different tool. The overlay
 is opaque while enabled; the source object's appearance is unchanged and comes
 back on exit. The reflection formula and pattern derive from the owner's
-SurfaceLab Zebra implementation. Exact parity with any other application has
-not been established.
+SurfaceLab Zebra research. The virtual reflected environment is centred on
+the visible inspected geometry: zooming or panning does not move its bands.
+Camera rotation does. Selected CAD bodies share the visible CAD frame, so
+selecting a subset does not alter the pattern on them.
+
+The November 2 comparison used the same analytical sphere and torus in
+QuickSurface/Revo Design and this layer, checking the blue/grey palette,
+horizontal/vertical bands and zoom behaviour. See the
+[comparison and limits](evidence/2026-11-02/README.md). Exact pixel equality on
+arbitrary meshes, tessellations and graphics hardware is not claimed.
 
 The lower button and panel checkbox share one state. Enabling with a scan but
 no visible CAD body selects the scan automatically. During a CAD editor the
@@ -37,6 +46,7 @@ this discoverability update.
 ```bash
 npx vitest run plugins/tmar-zebra/tests/zebra.test.ts
 node plugins/tmar-zebra/scripts/e2e-zebra.mjs
+node plugins/tmar-zebra/scripts/check-reflection.mjs
 node scripts/check-plugin-boundary.mjs
 node scripts/check-units.mjs
 ```
@@ -44,7 +54,14 @@ node scripts/check-units.mjs
 The browser check uses generated shapes and a fresh, isolated Chrome profile.
 It starts a local server unless an explicit `APP_URL` is supplied; never point
 it at a user's active session because the scenario replaces its test project.
-The check is registered through `ci.json`. Windows/Chrome was exercised; a
+The app check is registered through `ci.json`. `check-reflection.mjs` isolates
+the actual WebGL layer and records camera/frame regressions with screenshots;
+`--before` renders the recorded pre-fix revision for comparison (it must be
+present in the local Git history). `reference-fixtures.mjs` generates the
+small STEP sphere and torus used for manual reference-app checks. Outputs go
+to the ignored `e2e-out/zebra-reference` directory.
+
+Windows/Chrome was exercised; a
 real scanned part, macOS, a full continuity benchmark and live agent services
 remain unqualified. Temporary browser-profile removal can be delayed by
 Windows file locks; the check reports a cleanup warning if this occurs.
