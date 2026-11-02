@@ -1,6 +1,27 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Zebra surface analysis
 
+> **Work in progress - user review ongoing; not final acceptance.**
+> The workflow is usable, but the user is still reviewing the result and is not
+> fully satisfied. The screenshot below is an illustration, not final visual
+> approval, geometric validation or general QS parity.
+
+## Real-part example under review
+
+![Work-in-progress Zebra on Tubo Finale-body.stl, Analyze set to Scan](../../docs/images/zebra-tubo-finale-review-20261102.png)
+
+User-supplied screenshot, November 2, 2026: **Reverse engineer**, imported
+`Tubo Finale-body.stl`, **Analyze: Scan**, Horizontal, stripe-width level 2.
+The displayed target is a mesh, not a CAD BRep proven by its filename.
+[Full example, provenance and limits](../../docs/tmar-zebra-examples.md).
+
+Future work: [split view with local notes](../../docs/tmar-review-backlog.md#zebra-split-002)
+and [additional real-part gallery views](../../docs/tmar-review-backlog.md#zebra-gallery-003).
+The [current result review](../../docs/tmar-review-backlog.md#zebra-review-001)
+remains open. Split-view note placement is not delivered by this documentation.
+
+## Use
+
 In **Reverse engineer**, press **Zebra** in the lower view bar, or open the
 highlighted **Zebra surface analysis** panel and check **Show zebra
 stripes**. Analyze visible CAD bodies, the bodies selected in the body list, or

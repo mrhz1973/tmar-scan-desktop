@@ -60,7 +60,7 @@ These are **implemented web-source features**, not just roadmap entries. They ru
 | [Workspace display controls](plugins/tmar-display-controls/README.md) | **Labels** on the lower 3D bar; separate note-pin visibility and per-workspace browser preferences. | Advanced category controls in Settings and a separate 2D display policy remain planned. |
 | [Zebra](plugins/tmar-zebra/README.md) | Visual analysis of supported scan/CAD targets, adjustable bands and local pinned notes. | Visual aid; not a numerical G1/G2 continuity certificate. Real-part and macOS qualification remain open. |
 
-**Validation:** see [the category validation record](docs/tmar-feature-categories-validation.md) for the latest checks. The [earlier usability record](docs/tmar-usability-validation.md) documents its original revision. The [initial web record](docs/tmar-web-validation.md) remains historical evidence for PR #1; its counts are not a substitute for retesting the new UI. Only synthetic fixtures and isolated browser profiles are used. No macOS, desktop package, full upstream suite or real-part qualification is claimed.
+**Validation:** see [the category validation record](docs/tmar-feature-categories-validation.md) for the latest checks. The [earlier usability record](docs/tmar-usability-validation.md) documents its original revision. The [initial web record](docs/tmar-web-validation.md) remains historical evidence for PR #1; its counts are not a substitute for retesting the new UI. Automated checks use synthetic fixtures and isolated browser profiles; the user-provided screenshot is a separate work-in-progress example, not additional test qualification. No macOS, desktop package, full upstream suite or real-part qualification is claimed.
 
 Use [this fork's web build](#how-to-try-it-today), not `scanruler.com`, to see these controls. Save your active project before opening it in a separate test instance. Existing user sessions are never reloaded by these source changes. No prebuilt desktop package or managed updater is implied.
 
@@ -116,7 +116,10 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Updates and rollback | Planned | Automated builds and tests, versioned packages, stable/fast channels and safe activation. |
 | Resources and backend selection | Planned | Monitoring, RAM/GPU-memory budgets, controlled concurrency and a CPU execution path. |
 | GPU computation on Windows and Mac | Later investigation | Evaluate WebGPU and CUDA/Metal modules where a benefit can be demonstrated. |
-| Zebra surface analysis plugin | Initial web implementation | View-only bands for visible or selected CAD bodies or the scan; notes can be pinned locally. Further continuity fixtures, macOS and real-part validation remain open. |
+| Zebra surface analysis plugin | Implemented; user result review ongoing | View-only bands and local notes. The published example is WIP, not final acceptance; broader qualification remains open. |
+| [Zebra result review](docs/tmar-review-backlog.md#zebra-review-001) | Open | Record remaining feedback and explicit acceptance separately from feature implementation and screenshot publication. |
+| [Split view with Zebra and local notes](docs/tmar-review-backlog.md#zebra-split-002) | Planned | Two-pane review, explicit camera/focus behavior, per-pane labels and shared local note records. |
+| [Real-part example gallery](docs/tmar-review-backlog.md#zebra-gallery-003) | First WIP image published; expansion planned | Additional documented views and before/after examples without claiming final approval or geometric certification. |
 | Model-tree multi-selection and bulk-actions plugin | Implemented, initial feature-list scope | Ctrl/Cmd/Shift/Select All and undoable output visibility. Original body-list selection is retained; broader list coverage and destructive operations remain future work. |
 | Quick-note access and navigation plugin | Implemented, initial web scope | Settings-configurable letter (default N), local Note action, note multi-selection, double-click/target Go to note and Return to previous view. |
 | Notes directly in Deviation | Implemented in web source; scan-side scope | Add/edit/save notes in the single scan-side comparison view; shared IDs and project round trips verified. Reference-side/split-view anchors and comparison metadata remain planned. |
@@ -169,7 +172,7 @@ An optimization will be accepted only after measuring **end-to-end time, memory 
 
 ## Customization without losing updates
 
-**The implemented `tmar-quick-notes` and `tmar-body-export` extensions are separate, community-editable plugins. Future additions, including Zebra, follow the same approach**, rather than scattering their implementation throughout the application core. Use existing extension points and keep desktop-shell services in separate modules. Core changes remain possible when required, but must be minimal, justified, documented and covered by tests. See the [upstream plugin architecture](plugins/README.md).
+**The TMAR extensions, including `tmar-quick-notes`, `tmar-body-export` and `tmar-zebra`, are separate, community-editable plugins. Future additions follow the same approach**, rather than scattering their implementation throughout the application core. Use existing extension points and keep desktop-shell services in separate modules. Core changes remain possible when required, but must be minimal, justified, documented and covered by tests. See the [upstream plugin architecture](plugins/README.md).
 
 ### TMAR plugin requirements
 
@@ -190,6 +193,17 @@ A new upstream version must not erase a customization just to install successful
 General fixes may also be proposed upstream under its contribution rules. A fork does not imply that CNC Kitchen accepts or supports those changes.
 
 ## Zebra analysis — initial web plugin
+
+> **User review ongoing - not final acceptance.** The workflow is usable, but
+> Martino is still reviewing the result and is not fully satisfied. The example
+> below is published as work in progress, not as a final visual or CAD approval.
+
+![Work-in-progress Zebra on the imported Tubo Finale mesh](docs/images/zebra-tubo-finale-review-20261102.png)
+
+`Tubo Finale-body.stl`, **Analyze: Scan**. This illustrates the current overlay
+on an imported mesh, not an editable CAD body being certified. See the
+[example gallery and limits](docs/tmar-zebra-examples.md) and
+[open review / future split-view backlog](docs/tmar-review-backlog.md).
 
 The initial plugin visually inspects displayed surfaces and their joins, helping identify unwanted waviness and discontinuities. It is a browser rendering aid, not a numerical continuity test or desktop release.
 

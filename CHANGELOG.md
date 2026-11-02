@@ -7,6 +7,17 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Zebra example and open review backlog - 2026-11-02
+
+- Publish the explicitly supplied Tubo Finale screenshot unchanged in the main
+  and Zebra READMEs, with a dedicated example page and image provenance.
+- Mark it as work in progress: the user is still reviewing the result and has
+  not given final visual or geometric acceptance.
+- Record open result review, future split view with local notes and gallery
+  expansion in `docs/tmar-review-backlog.md`; GitHub Issues is disabled.
+- Documentation and screenshot only: no runtime, shader, geometry, tests,
+  application preview, repository setting or release changes.
+
 ### TMAR feature categories and selection persistence - 2026-11-02
 
 - Split feature selection into independent sketch/profile, section-sketch,
