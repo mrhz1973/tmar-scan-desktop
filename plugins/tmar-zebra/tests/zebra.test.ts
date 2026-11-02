@@ -16,7 +16,7 @@ describe('zebra display layer', () => {
     const originalDispose = vi.spyOn(sourceMaterial, 'dispose')
     const invalidate = vi.fn(), countChanged = vi.fn()
     const bodies = new Map([[1, first], [2, second]])
-    const layer = new ZebraLayer({ bodies: () => bodies, scan: () => scan, radius: () => 10, invalidate, countChanged }, defaults)
+    const layer = new ZebraLayer({ bodies: () => bodies, scan: () => scan, invalidate, countChanged }, defaults)
     layer.tick()
     expect(first.material).toBe(sourceMaterial)
     expect(first.geometry).toBe(sourceGeometry)
@@ -49,7 +49,7 @@ describe('zebra display layer', () => {
     const original = body(), replacement = body()
     const bodies = new Map([[1, original]])
     const counts: number[] = []
-    const layer = new ZebraLayer({ bodies: () => bodies, scan: () => null, radius: () => 5, invalidate: () => {}, countChanged: (n) => counts.push(n) }, defaults)
+    const layer = new ZebraLayer({ bodies: () => bodies, scan: () => null, invalidate: () => {}, countChanged: (n) => counts.push(n) }, defaults)
     const planes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), 0)]
     original.material.clippingPlanes = planes
     layer.tick()

@@ -17,7 +17,6 @@ export interface ZebraOptions {
 export interface ZebraSources {
   bodies(): ReadonlyMap<number, THREE.Mesh>
   scan(): THREE.Mesh | null
-  radius(): number
   invalidate(): void
   countChanged?(count: number): void
 }
@@ -42,6 +41,13 @@ export class ZebraLayer implements SceneLayer {
   readonly order = 100
   private readonly overlays = new Map<THREE.Mesh, THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>>()
   private readonly distance = { value: 1 }
+  private readonly center = { value: new THREE.Vector3() }
+  private readonly frame = new THREE.Box3()
+  private readonly bounds = new WeakMap<THREE.BufferGeometry, { position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute; version: number; box: THREE.Box3 }>()
+  private readonly worldBounds = new THREE.Box3()
+  private readonly frameCenter = new THREE.Vector3()
+  private readonly frameSize = new THREE.Vector3()
+  private readonly vertex = new THREE.Vector3()
   private readonly texture: THREE.DataTexture
   private options: ZebraOptions
   private count = -1
@@ -79,13 +85,19 @@ export class ZebraLayer implements SceneLayer {
     })
     material.onBeforeCompile = (shader) => {
       shader.uniforms.zebraDistance = this.distance
-      const varyings = 'varying vec3 zebraPosition;\nvarying vec3 zebraNormal;\n'
-      shader.vertexShader = varyings + shader.vertexShader
-      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nzebraPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;\nzebraNormal = normalMatrix * normal;')
-      shader.fragmentShader = `uniform float zebraDistance;\n${varyings}${projection}\n` + shader.fragmentShader
-      shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', '#ifdef USE_MAP\ndiffuseColor *= texture2D(map, zebraUV(zebraPosition, zebraNormal));\n#endif')
+      shader.uniforms.zebraCenter = this.center
+      const varying = 'varying vec2 zebraReflectedUV;\n'
+      // QS generates reflection UVs at the vertices, with a virtual eye
+      // relative to the model centre. Camera pan/dolly must not change that
+      // virtual eye: use only the rotation from viewMatrix here.
+      shader.vertexShader = `uniform float zebraDistance;\nuniform vec3 zebraCenter;\n${varying}${projection}\n` + shader.vertexShader
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+vec3 zebraPosition = mat3(viewMatrix) * ((modelMatrix * vec4(position, 1.0)).xyz - zebraCenter);
+zebraReflectedUV = zebraUV(zebraPosition, normalMatrix * normal);`)
+      shader.fragmentShader = varying + shader.fragmentShader
+      shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', '#ifdef USE_MAP\ndiffuseColor *= texture2D(map, zebraReflectedUV);\n#endif')
     }
-    material.customProgramCacheKey = () => 'tmar-zebra-reflection-v1'
+    material.customProgramCacheKey = () => 'tmar-zebra-reflection-v2'
     const overlay = new THREE.Mesh(parent.geometry as THREE.BufferGeometry, material)
     overlay.name = 'tmar-zebra-overlay'
     overlay.userData.tmarZebra = true
@@ -93,6 +105,43 @@ export class ZebraLayer implements SceneLayer {
     overlay.raycast = () => {} // Selection continues to hit the host object.
     parent.add(overlay)
     return overlay
+  }
+
+  /** Bounds are derived from the inspected geometry, never the camera or the
+   *  scan's radius when looking at CAD. Cache only the local position bounds;
+   *  transformations and visibility remain live. No host buffers are changed. */
+  private updateFrame(meshes: Iterable<THREE.Mesh>): boolean {
+    this.frame.makeEmpty()
+    for (const mesh of meshes) {
+      if (!sourceMaterial(mesh)?.visible) continue
+      let shown = true
+      for (let parent: THREE.Object3D | null = mesh; parent; parent = parent.parent) {
+        if (!parent.visible) { shown = false; break }
+      }
+      if (!shown) continue
+      const geometry = mesh.geometry as THREE.BufferGeometry
+      const position = geometry.getAttribute('position')
+      if (!position) continue
+      const version = position instanceof THREE.InterleavedBufferAttribute ? position.data.version : position.version
+      let cached = this.bounds.get(geometry)
+      if (!cached || cached.position !== position || cached.version !== version) {
+        const box = new THREE.Box3()
+        for (let i = 0; i < position.count; i++) {
+          box.expandByPoint(this.vertex.set(position.getX(i), position.getY(i), position.getZ(i)))
+        }
+        cached = { position, version, box }
+        this.bounds.set(geometry, cached)
+      }
+      mesh.updateWorldMatrix(true, false)
+      this.frame.union(this.worldBounds.copy(cached.box).applyMatrix4(mesh.matrixWorld))
+    }
+    if (this.frame.isEmpty()) return false
+    this.frame.getCenter(this.frameCenter)
+    const distance = Math.max(this.frame.getSize(this.frameSize).length() * 0.6, 1e-6)
+    const changed = !this.center.value.equals(this.frameCenter) || this.distance.value !== distance
+    this.center.value.copy(this.frameCenter)
+    this.distance.value = distance
+    return changed
   }
 
   private sync(): void {
@@ -135,8 +184,9 @@ export class ZebraLayer implements SceneLayer {
         changed = true
       }
     }
-    const radius = Math.max(this.sources.radius() * 1.2, 1e-6)
-    if (this.distance.value !== radius) { this.distance.value = radius; changed = true }
+    // Selecting only some bodies changes which receive stripes, not their
+    // common reflected environment. Hidden bodies never expand the frame.
+    if (this.updateFrame(this.options.target === 'scan' ? wanted : this.sources.bodies().values())) changed = true
     if (this.count !== visible) { this.count = visible; this.sources.countChanged?.(visible) }
     if (changed) this.sources.invalidate()
   }
