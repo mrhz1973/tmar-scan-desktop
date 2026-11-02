@@ -7,6 +7,18 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR STEP-as-Scan edges and build identity - 2026-11-02
+
+- Preserve original CAD face boundaries when STEP is opened in the Scan slot,
+  including Zebra, color/pixel width, clipping and scan-frame alignment.
+- Keep topology metadata across shading resplits/project reopen; discard it
+  for mesh replacements rather than drawing obsolete or internal triangle lines.
+- Explain the actual loaded target and hide body-only tangent options for scans.
+- Show TMAR web source revision beside upstream ScanRuler; expose build timestamp,
+  full revision and modified-source status in Settings. No appVersion/schema bump.
+- Retain local notes, focus and existing body/reference/category/export regressions.
+  See `docs/tmar-step-scan-validation.md`. User visual review remains open.
+
 ### TMAR CAD edges with Zebra — 2026-11-02
 
 - Expose native CAD edges, tangent/fillet borders and silhouettes with a lower-bar

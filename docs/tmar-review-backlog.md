@@ -73,6 +73,8 @@ face boundaries with color and pixel width. Fillet/tangent visibility reuses the
 native body option. No internal triangle-wireframe fallback and no geometry edit.
 
 - [x] Implement independent display switch and adjustable color/thickness.
+- [x] Follow-up: preserve borders for STEP loaded as Scan, reproducing the reported path.
+- [x] Add a separate visible TMAR build revision and detailed build provenance.
 - [x] Retain selection, local notes and project round trips in documented scope.
 - [x] Check the same authorized STEP in the native reference application and target.
 - [ ] Obtain the owner's visual acceptance; do not infer it from automated tests.
