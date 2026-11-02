@@ -11,8 +11,9 @@ every model or a geometric continuity certificate.
 
 Reference application: installed **Revo Design Pro 8.0.123** (QuickSurface
 executable), operated through its native UI. Target: this plugin in
-`mrhz1973/tmar-scan-desktop`, branch `codex/zebra-qs-parity`, based on
-`cc6ea7e733ef840f01791a2d822ef72bf0a5029f`. No host/viewer/kernel/note code was
+`mrhz1973/tmar-scan-desktop`, branch `codex/zebra-qs-parity`, rebased onto
+`f8030e10d5f40632c24b9d4ca517c2e6135b3ae8` (PR #5). The recorded before-image
+baseline is `cc6ea7e733ef840f01791a2d822ef72bf0a5029f`. No host/viewer/kernel/note code was
 changed. Existing SurfaceLab research supplied the reflection equation;
 this increment used no new decompilation.
 
@@ -62,6 +63,11 @@ screenshots are visual evidence rather than a pixel-diff oracle.
 level. The target images come from the actual `ZebraLayer` rendered in WebGL,
 not a mock image or a separately implemented shader.
 
+The recorded target [before the change](before-horizontal.png) and
+[after a dolly with the old layer](before-dolly.png) show the previous
+camera-dependent bands. The current horizontal render above remains unchanged
+under that same dolly, as measured below.
+
 ## Measured regressions and checks
 
 `scripts/check-reflection.mjs` renders at 640 × 640. A pixel is counted as
@@ -91,12 +97,17 @@ second body restores the original pattern exactly (0%). Raw measurements:
 | Plugin unit checks (`node node_modules/vitest/vitest.mjs run plugins/tmar-zebra/tests/zebra.test.ts`) | PASS, 3 tests |
 | Plugin boundary and unit policy | PASS |
 | WebGL reflection/frame check | PASS, no console errors |
-| Full-app `e2e-zebra.mjs` | PASS, all 27 assertions; no console errors |
+| Full-app `e2e-zebra.mjs` on the updated base | PASS, all 32 assertions; no console errors |
 
 The full-app check covered scan/CAD notes without an agent connection, notes
 while Zebra stays visible, source-material preservation, target/visibility
 changes, clipping, CAD-editor and workspace exit, comparison after Zebra,
-project save/reopen, retained notes and a host build without plugins. It ran
+project save/reopen, retained notes and a host build without plugins. After
+rebasing, five further assertions verify the lower button's shared state,
+automatic scan targeting, disabled state during editing, and real note-focus
+rings centred in the viewport for both scan and CAD notes with Zebra active.
+The extended check and TypeScript/production build were rerun because of the
+new integration base; unchanged layer/unit checks were not repeated. It ran
 with Node 26.8.1 and Chrome 156.0.8078.74 on Windows. Windows delayed removal
 of its isolated temporary browser profile; the test reported an `EPERM`
 cleanup warning after all assertions passed.
@@ -104,7 +115,9 @@ cleanup warning after all assertions passed.
 The local npm wrapper initially exited without running the build/test tools;
 the same installed tools were run directly with Node as listed above. The
 browser checks used isolated temporary profiles and locally owned servers,
-not the owner's open sessions.
+not the owner's open sessions. Windows could not launch the isolated browser
+in the restricted execution environment; the authorized normal local test
+run then completed successfully. The owner's ports 17492–17494 were untouched.
 
 ## Limits and handoff
 

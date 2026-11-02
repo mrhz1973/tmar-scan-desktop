@@ -68,6 +68,19 @@ try {
     })
     return page.screenshot({ clip, encoding: 'base64' })
   }
+  const locateNote = async (text) => {
+    const id = await page.evaluate(async (text) => (await import('/plugins/reverse/state/noteStore.ts')).useNotes.getState().notes.find((n) => n.text === text)?.id, text)
+    await page.click(`[data-note-id="${id}"] [data-test=note-locate]`)
+    await page.waitForFunction((id) => {
+      const ring = document.querySelector(`[data-test=note-focus-ring][data-note-id="${id}"]`)
+      const canvas = document.querySelector('.viewport canvas')
+      if (!ring || !canvas) return false
+      const r = ring.getBoundingClientRect(), c = canvas.getBoundingClientRect()
+      return getComputedStyle(ring).display !== 'none' && r.width >= 50 && Math.hypot(r.x + r.width / 2 - c.x - c.width / 2, r.y + r.height / 2 - c.y - c.height / 2) < 3
+    }, {}, id)
+    check(await page.$eval('[data-test=zebra-enabled]', (el) => el.checked) && await page.$eval('[data-test=note-focus-feedback]', (el) => el.textContent.includes('centered')), `${text}: focus ring centers and highlights the note while Zebra stays on`)
+    await page.click('[data-test=note-return-view]')
+  }
 
   await call('scan.open', { bytes: Array.from(sphereStl()), name: 'synthetic-sphere.stl', units: 'mm' })
   await page.click('[data-test=workspace-reverse]')
@@ -75,8 +88,8 @@ try {
   if (await page.$('[data-test=support-card] .sc-x')) await page.click('[data-test=support-card] .sc-x')
   await page.waitForSelector('[data-test=zebra-enabled]')
   check(!(await page.$eval('[data-test=zebra-enabled]', (el) => el.checked)), 'Zebra starts off')
-  await page.click('[data-test=zebra-enabled]')
-  await page.select('[data-test=zebra-target]', 'scan')
+  await page.click('[data-test=zebra-quick-toggle]')
+  check(await page.$eval('[data-test=zebra-enabled]', (el) => el.checked) && await page.$eval('[data-test=zebra-target]', (el) => el.value === 'scan'), 'lower Zebra button enables the panel and automatically targets the sole scan')
   await page.waitForFunction(() => /1 visible object/.test(document.querySelector('[data-test=zebra-status]')?.textContent ?? ''))
   const zebraScan = await shot()
   await page.screenshot({ path: shotPath('tmar-zebra-scan.png') })
@@ -91,6 +104,7 @@ try {
   check(widthDiff > 1, `changing stripe width updates the reflected bands (${widthDiff.toFixed(2)}% of stage pixels)`)
   await page.click('[data-test=zebra-enabled]')
   const normalScan = await shot()
+  check(await page.$eval('[data-test=zebra-quick-toggle]', (el) => el.getAttribute('aria-pressed') === 'false'), 'panel checkbox also switches off the lower Zebra button')
   const scanDiff = await pixelDiff(page, zebraScan, normalScan)
   check(scanDiff > 1, `enabling Zebra visibly changes the scan (${scanDiff.toFixed(2)}% of stage pixels)`)
   await page.click('[data-test=zebra-enabled]')
@@ -116,6 +130,7 @@ try {
     return !usePrefs.getState().agentLink && useNotes.getState().notes.some((n) => n.text === 'Synthetic scan zebra observation' && n.on[0]?.kind === 'scan')
   }), 'a scan note is pinned without enabling an agent')
   check(await page.$eval('[data-test=zebra-enabled]', (el) => el.checked), 'Zebra remains visible while a note is written')
+  await locateNote('Synthetic scan zebra observation')
   await page.evaluate(async () => {
     const { sceneOf } = await import('/src/commands/host.ts')
     const scene = sceneOf(), geometry = scene.scanGeometry()
@@ -178,6 +193,7 @@ try {
     return !usePrefs.getState().agentLink && useNotes.getState().notes.some((n) => n.text === 'Synthetic CAD zebra observation' && ['face', 'edge', 'vertex'].includes(n.on[0]?.kind))
   }), 'a CAD note is pinned through the Zebra overlay without enabling an agent')
   check(await page.$eval('[data-test=zebra-enabled]', (el) => el.checked), 'Zebra remains enabled after pinning a CAD note')
+  await locateNote('Synthetic CAD zebra observation')
   await page.evaluate(async () => {
     // This disposable page must never connect to a real agent while testing
     // what happens to existing notes as the agent setting changes.
@@ -230,6 +246,7 @@ try {
   await page.waitForSelector('[data-test=move-body-editor]')
   await page.waitForFunction(() => window.__zebraOriginal.every(({ mesh }) => !mesh.children.some((c) => c.name === 'tmar-zebra-overlay')))
   check(!(await page.$('[data-test=tmar-zebra]')), 'opening a CAD editor removes the Zebra controls and overlays')
+  check(await page.$eval('[data-test=zebra-quick-toggle]', (el) => el.disabled && el.getAttribute('aria-pressed') === 'false'), 'the lower Zebra button remains visible but disabled during CAD editing')
   // Reverse scrolls the editor into view smoothly; wait for it to stop before clicking.
   await sleep(900)
   await page.click('[data-test=move-body-cancel]')
