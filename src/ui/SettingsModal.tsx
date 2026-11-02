@@ -29,6 +29,7 @@ import {
 } from '../viewer/spaceMouse'
 import { VIEW_THEMES, themeById } from '../viewer/viewThemes'
 import { useDismiss } from './useDismiss'
+import { PluginPanelExtensions } from '../plugins/panelExtensions'
 
 /** The puck's six motions by 3Dconnexion's names, in the order its trainer
  *  walks through them. */
@@ -467,6 +468,7 @@ export function SettingsModal() {
           </small>
         </div>
 
+        <PluginPanelExtensions slot="settings.tools" />
         <h3>Guidance</h3>
         <label className="checkrow settings-check">
           <input

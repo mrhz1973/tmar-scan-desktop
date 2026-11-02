@@ -52,7 +52,7 @@ const rectangleSketch = (plane, frame, a, b) =>
   )
 const stepOut = async (name) => {
   const before = new Set(readdirSync(dir))
-  await click(page, '[data-test=export-body-step]')
+  await (await import('./lib.mjs')).exportBodyStep(page)
   for (let i = 0; i < 150; i++) {
     await sleep(200)
     const file = readdirSync(dir).find((f) => f.endsWith('.step') && !before.has(f))

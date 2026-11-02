@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from 'vitest'
-import { bodyStlResult, DEFAULT_CHORD_MM, exportSelection, validChord } from '../bodyExport'
+import { bodyStlResult, bodyStepResult, DEFAULT_CHORD_MM, exportSelection, validChord } from '../bodyExport'
 
 const bodies = [
   { id: 2, name: 'Visible solid', visible: true, surface: false },
@@ -56,5 +56,19 @@ describe('binary body STL output checks', () => {
     expect(() => bodyStlResult(c)).toThrow(/triangle count or length/)
     const d = result(); new DataView(d.file.bytes.buffer).setUint32(80, 0, true)
     expect(() => bodyStlResult(d)).toThrow(/triangle count or length/)
+  })
+})
+
+describe('the same export UI can write STEP', () => {
+  it('includes sheets for STEP only', () => {
+    expect(exportSelection(bodies, [], empty, 'visible', 'step').ids).toEqual([2, 6])
+    expect(exportSelection(bodies, [], { bodies: [6], folders: [] }, 'selected', 'step').error).toBeNull()
+  })
+  it('validates STEP file output', () => {
+    const file = { name: 'model.step', mimeType: 'model/step', bytes: new TextEncoder().encode('ISO-10303-21;\nHEADER;') }
+    expect(bodyStepResult({ file }).file).toBe(file)
+    expect(() => bodyStepResult(null)).toThrow()
+    expect(() => bodyStepResult({ file: { ...file, bytes: new TextEncoder().encode('wrong') } })).toThrow()
+    expect(() => bodyStepResult({ file: { ...file, name: 'model.stl' } })).toThrow()
   })
 })

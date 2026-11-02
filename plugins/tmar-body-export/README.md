@@ -1,66 +1,44 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# TMAR CAD body STL export
+# TMAR unified CAD body export
 
-> **Implemented and merged into `main` via [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), source revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`.** CAD body STL UI is implemented in the web fork.
-> Documentation checked November 2, 2026. This is a web-source feature, not a desktop release. [Recorded validation](../../docs/tmar-web-validation.md) covers Windows/Chrome; macOS and live-provider qualification are pending.
+One **Export body...** button opens a dialog. Choose **STEP** or **STL**, choose
+visible bodies or explicitly selected body-list items, then press **Save**.
+This is the existing web application; no desktop shell is required.
 
-A build-time web plugin. No Electron shell or native installation is required.
+STEP uses the existing CAD exporter and includes eligible sheets as well as
+solids. STL uses the existing solid-body tessellator, never the source scan or
+the display mesh. The STL-only chord control defaults to 0.02 mm, accepts
+0.0001-1 mm internally, and follows the display units selected in Settings.
+STL has no unit metadata: import it as millimetres. Multiple bodies in one STL
+are not automatically Boolean-unioned. Export is not a printability certificate.
+Keep the project for the feature history and notes; STEP does not retain them.
 
-## What it does
+Explicit selections include component contents, including selected hidden
+bodies. Empty/stale selections and sheets requested as STL are refused; none
+silently becomes export-all. Active edits/builds block export. A model change
+during export rejects the result rather than downloading an ambiguous revision.
 
-Adds **CAD body STL** to Reverse engineer, next to the existing export area.
-Choose **Visible solid bodies** or **Selected body-list items**, set the chord
-tolerance and press **Export body STL**. Body-list selection includes bodies in
-selected components. An empty, stale or surface-containing explicit selection
-is refused; it never silently becomes "export everything".
+## Modularity
 
-The plugin calls the existing `reverse.export.stl` command. It tessellates the
-CAD bodies using the existing Open CASCADE exporter. **It does not export the
-source scan or use the viewport's display mesh.** STEP export is unchanged.
+`plugin.ts` registers `reverse.export`; `BodyStlExport.tsx` is the unified dialog
+(the historical filename is retained); `bodyExport.ts` contains selection and
+output checks. `tests/bodyExport.test.ts` covers both formats. The kernel and
+`reverse.export.step` / `reverse.export.stl` commands are reused, not replaced.
 
-STL coordinates are millimetres. The chord field follows the display units
-chosen in Settings and converts to millimetres for the exporter. Default chord: 0.02 mm; this UI accepts 0.0001–1 mm. STL contains triangles, not a
-parametric model or unit metadata. Import it as millimetres. Several bodies
-share one file but are not automatically Boolean-unioned. Export success is
-not a certificate that the resulting part is manufacturable or watertight.
+The host shows its inherited STEP button when no export contribution is
+registered. Excluding this build-time plugin retains that fallback. This
+plugin depends on `reverse`; no dynamic package manager is provided.
 
-Export is disabled during active edits/builds. If the model changes during an
-export, the result is rejected instead of downloading an ambiguous revision.
+## Verification
 
-## Source and integration
-
-- `plugin.ts`: registers the `reverse.export` panel contribution.
-- `BodyStlExport.tsx`: scope, chord, progress and download UI.
-- `bodyExport.ts`: pure selection rules and binary-file checks.
-- `tests/bodyExport.test.ts`: selection, validation and error scenarios.
-
-Depends on the upstream `reverse` plugin and its body-folder/command interfaces.
-No duplicate CAD kernel, exporter or geometry store is introduced. The host
-integration is the generic `src/plugins/panelExtensions.tsx` registry and one
-slot in `plugins/reverse/ui/ReversePanel.tsx`.
-
-This plugin is included at build time. To omit it, exclude its folder before
-building. `?plugins=none` disables all plugins for host smoke checks; independent
-runtime installation and package updating are not implemented. A build that
-removes the reverse source must also omit this dependent plugin.
-
-## Tests
-
-From the repository root:
+[Validation record](../../docs/tmar-usability-validation.md). Synthetic browser
+checks download actual STEP and STL files of the selected body and verify that
+the STL excludes the differently sized scan and second body. No macOS,
+real-part or desktop qualification is implied.
 
 ```bash
 npx vitest run plugins/tmar-body-export/tests/bodyExport.test.ts tests/exportStl.test.ts
+node plugins/tmar-quick-notes/scripts/e2e-usability.mjs
 node plugins/tmar-quick-notes/scripts/e2e-tmar-web.mjs
 npm run build
-node scripts/check-plugin-boundary.mjs
 ```
-
-The combined browser regression uses synthetic geometry and an isolated Chrome
-profile. It downloads a selected 40 × 20 × 10 mm CAD block and verifies that the
-STL excludes a differently sized source scan and a second body. `CHROME` can
-specify the browser executable. Browser-test results do not qualify untested
-platforms or arbitrary production models.
-
-## Roadmap and contribution scope
-
-See the [main roadmap](../../README.md#status-and-roadmap) for outstanding features. Change this plugin in an isolated branch and include its tests and README updates in the pull request. Do not present unrelated planned features as delivered or modify private scans for public fixtures. The validation record describes the implementation run; this documentation synchronization did not rerun those tests.

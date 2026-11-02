@@ -2533,6 +2533,15 @@ export class SceneManager {
     this.invalidate()
   }
 
+  /** Camera-only bookmark for inspection tools; no model changes. */
+  captureView() {
+    return { ...this.viewport.pose(), ...this.viewport.viewLink().extents() }
+  }
+  restoreView(pose: ReturnType<SceneManager['captureView']>): void {
+    this.viewport.viewLink().setExtents(pose.halfW, pose.halfH)
+    this.viewport.retarget(pose.dir, pose.up, pose.target, pose.zoom)
+    this.invalidate()
+  }
   labelsShown(): boolean {
     return !this.container.classList.contains('nolabels')
   }

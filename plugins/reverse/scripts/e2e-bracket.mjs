@@ -177,8 +177,8 @@ check((await bodyRows()).length === 1, 'the outer skin extrudes to one body')
 check((await page.$('[data-test=feature-shell]:not([disabled])')) !== null && (await page.$('[data-test=feature-fillet]:not([disabled])')) !== null, 'Shell and Fillet are offered on the body')
 
 // ---- export, re-import, measure ----------------------------------------------------
-const exportKey = await page.$('[data-test=export-body-step]:not([disabled])')
-if (exportKey) await exportKey.click()
+const exportKey = await page.$('[data-test=export-body-step]:not([disabled]), [data-test=export-body]:not([disabled])')
+if (exportKey) await (await import('./lib.mjs')).exportBodyStep(page)
 else fail('Export body STEP is not enabled — there is no closed body to write')
 let stepFile = null
 for (let i = 0; i < (exportKey ? 150 : 1) && !stepFile; i++) {

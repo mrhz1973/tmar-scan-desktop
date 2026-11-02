@@ -132,6 +132,7 @@ export class NotePins {
    *  other. */
   private inPlay = true
   private putAway = false
+  private focused: number | null = null
   private removeLayer: () => void
 
   /** A click on a badge: the note's id and where the click was. */
@@ -179,7 +180,7 @@ export class NotePins {
   /** The pins for the notes; `shown` false puts them all away. */
   setPins(items: readonly NotePinItem[], shown: boolean): void {
     this.inPlay = shown
-    this.group.visible = shown && !this.putAway
+    this.group.visible = shown && (!this.putAway || this.focused !== null)
     const keep = new Set(items.map((i) => i.id))
     for (const [id, pin] of this.pins) if (!keep.has(id)) this.drop(pin, id)
     for (const item of items) {
@@ -210,6 +211,8 @@ export class NotePins {
       el.classList.toggle('done', item.done)
       el.classList.toggle('agent', item.agent)
     }
+    if (this.focused !== null && !this.pins.has(this.focused)) this.focused = null
+    this.updateVisibility()
     this.dress()
     this.fade()
     this.host.requestHover()
@@ -221,9 +224,27 @@ export class NotePins {
   setPutAway(away: boolean): void {
     if (this.putAway === away) return
     this.putAway = away
-    this.group.visible = this.inPlay && !away
+    this.updateVisibility()
     this.host.requestHover()
     this.host.invalidate()
+  }
+
+  /** Temporary focus never changes the saved notes/visibility preference. */
+  setFocus(id: number | null): void {
+    this.focused = id
+    this.updateVisibility()
+    this.dress()
+    this.host.requestHover()
+    this.host.invalidate()
+  }
+
+  private updateVisibility(): void {
+    this.group.visible = this.inPlay && (!this.putAway || this.focused !== null)
+    for (const [id, pin] of this.pins) {
+      const visible = !this.putAway || id === this.focused
+      pin.badge.visible = pin.dot.visible = pin.label.visible = visible
+      pin.label.element.classList.toggle('focused', id === this.focused)
+    }
   }
 
   /** Whether the pins are put away. */
@@ -260,7 +281,7 @@ export class NotePins {
   /** The badges drawn for their notes, lit as their notes are lit. */
   private dress(): void {
     for (const [id, pin] of this.pins) {
-      const lit = id === this.lit || id === this.hovered
+      const lit = id === this.lit || id === this.hovered || id === this.focused
       pin.lit = lit
       const look = `${pin.item.done}:${lit}:${pin.item.agent}`
       if (look !== pin.look) {
@@ -307,6 +328,7 @@ export class NotePins {
   private pinAt(clientX: number, clientY: number): number | null {
     let found: number | null = null
     for (const [id, pin] of this.pins) {
+      if (!pin.badge.visible) continue
       const c = this.badgeCentre(pin)
       if (Math.hypot(clientX - c.x, clientY - c.y) <= badgePx(pin) / 2 + PICK_SLACK_PX) found = id
     }

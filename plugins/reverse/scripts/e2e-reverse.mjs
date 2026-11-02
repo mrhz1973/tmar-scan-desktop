@@ -897,7 +897,7 @@ await click(page, '[data-test=toggle-elements]')
 await sleep(200)
 
 // ---- STEP out, meshStep back in ------------------------------------------------------
-await click(page, '[data-test=export-body-step]')
+await (await import('./lib.mjs')).exportBodyStep(page)
 let stepFile = null
 for (let i = 0; i < 100 && !stepFile; i++) {
   await sleep(200)

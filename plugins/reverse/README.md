@@ -7,17 +7,16 @@ documentation.
 
 ## TMAR fork additions
 
-In this fork's `main`, [tmar-body-export](../tmar-body-export/README.md) adds
-**CAD body STL** controls beside the existing export area. It calls the
-already existing `reverse.export.stl` backend; body STEP export is unchanged.
-[tmar-quick-notes](../tmar-quick-notes/README.md) exposes the same note records
-in the scan-side Deviation workspace. Neither feature requires the desktop shell.
+This fork includes [unified STEP/STL body export](../tmar-body-export/README.md),
+[local notes, shortcuts and navigation](../tmar-quick-notes/README.md),
+[feature-list selection](../tmar-model-tree/README.md),
+[workspace labels](../tmar-display-controls/README.md) and
+[Zebra analysis](../tmar-zebra/README.md). These are optional build-time plugins,
+not a desktop release. Existing CAD and project backends are reused.
 
-These additions were integrated via [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1)
-at `496fe2e`. See the [validation record](../../docs/tmar-web-validation.md)
-for checked scope, and the [fork roadmap](../../README.md#status-and-roadmap)
-for what is still planned. The chapter below describes the inherited workspace;
-it is not a claim that all planned TMAR extensions are available.
+The TMAR UI has one Export body dialog and separate note selection, locate and
+edit actions. The chapter below documents inherited behavior; where controls
+differ, the linked TMAR READMEs describe the fork. See [validation](../../docs/tmar-usability-validation.md).
 
 ## Reverse engineer: from scan to a solid STEP body
 

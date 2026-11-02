@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # TMAR Scan Desktop
 
-**An open-source ScanRuler fork with working web plugins for Deviation notes and CAD body STL export, and a planned Windows/macOS desktop application.**
+**An open-source ScanRuler fork with modular Zebra analysis, local notes and navigation, feature multi-selection, workspace labels and unified CAD-body export. A Windows/macOS desktop application is planned separately.**
 
 An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/ScanRuler), maintained at [mrhz1973/tmar-scan-desktop](https://github.com/mrhz1973/tmar-scan-desktop). This is not an official CNC Kitchen distribution.
 
-> **Status as of November 2, 2026: two web plugins implemented and merged into `main`.**
-> **CAD body STL export** and **scan-side notes in Deviation** are available when running this fork, within the scope documented below. They were integrated by [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1) at [`496fe2e`](https://github.com/mrhz1973/tmar-scan-desktop/commit/496fe2eb0fb7a140fa9b8d9707e126030db2b70c). **No installable desktop release or hosted TMAR deployment has been published by this work.** Desktop saves, AI pause/resume, automatic updates and GPU acceleration remain planned.
+> **Status as of November 2, 2026: web-source usability extensions implemented.**
+> This source includes Zebra, local notes with a configurable shortcut and Go to note, feature/note multi-selection, collapsible lists, lower-bar Labels controls and one Export body dialog for STEP/STL. **No installable desktop release is provided.** The original site and already open previews do not update automatically. Desktop recovery, AI pause/resume, managed updates and GPU compute remain separate goals.
 
 **Documentation language:** English is the primary language of this README. Italian localization of the application and documentation is planned for a later stage; it is not available yet.
 
@@ -18,14 +18,15 @@ These are **implemented web-source features**, not just roadmap entries. They ru
 
 | Extension | Available now | Current boundary |
 | --- | --- | --- |
-| [CAD body STL export](plugins/tmar-body-export/README.md) | Export visible solid bodies or explicit body-list selections, including selected components, with a unit-aware chord setting. STEP remains available. | Exports CAD solids, never the source scan. Multiple bodies share a file without a Boolean union; this is not a printability certificate. |
-| [Notes in Deviation](plugins/tmar-quick-notes/README.md) | Place, edit and save notes on the scan-side map without leaving Deviation. The same notes appear in Reverse engineer and survive project save/reopen. | Single viewport, visible scan side. Notes can be opened locally through Zebra; agent connection remains an independent choice. Reference-side and split-view placement remain unsupported. |
+| [Unified CAD body export](plugins/tmar-body-export/README.md) | One **Export body...** button, then STEP/STL, visible/selected body scope and STL chord. | CAD bodies, not the source scan. No automatic Boolean union or manufacturing certificate. |
+| [Local notes and navigation](plugins/tmar-quick-notes/README.md) | Note button and configurable single-letter shortcut; Ctrl/Cmd/Shift selection; target button/double-click Go to note; previous view; bulk actions. | Deviation placement is scan-side/single-view. CAD-note navigation is in Reverse engineer. No agent connection is required. |
+| [Feature-list selection](plugins/tmar-model-tree/README.md) | Single/Ctrl/Cmd/Shift/Select All, bulk Show/Hide of current outputs in one undo step, collapsible Features. | Not batch feature deletion/suppression or an extension of every construction-element list. Unavailable independent outputs are reported. |
+| [Workspace display controls](plugins/tmar-display-controls/README.md) | **Labels** on the lower 3D bar; separate note-pin visibility and per-workspace browser preferences. | Advanced category controls in Settings and a separate 2D display policy remain planned. |
+| [Zebra](plugins/tmar-zebra/README.md) | Visual analysis of supported scan/CAD targets, adjustable bands and local pinned notes. | Visual aid; not a numerical G1/G2 continuity certificate. Real-part and macOS qualification remain open. |
 
-**Recorded validation:** 36 targeted unit tests, 15 combined TMAR browser assertions and 9 upstream production-bundle assertions passed on Windows/Chrome. TypeScript/Vite build, plugin-boundary and display-unit checks passed. See the [validation record](docs/tmar-web-validation.md) for the tested source, environment and reproduction commands. These are the implementation run's recorded results, not a claim that this documentation update reran them. macOS, the complete upstream suite and a live AI-provider connection remain unqualified.
+**Validation:** see [the usability validation record](docs/tmar-usability-validation.md) for this increment's exact tests and limitations. The [initial web record](docs/tmar-web-validation.md) remains historical evidence for PR #1; its counts are not a substitute for retesting the new UI. Only synthetic fixtures and isolated browser profiles are used. No macOS, desktop package, full upstream suite or real-part qualification is claimed.
 
-Use [the fork's web build](#how-to-try-it-today) to see the new controls. Publishing source on GitHub does **not** update `scanruler.com` or reload an already open session. Prebuilt desktop packages and a managed update service are not available yet.
-
-The two capabilities above were integrated in PR #1. This source also includes an initial [Zebra analysis plugin](plugins/tmar-zebra/README.md), developed separately under the [coordination handoff](docs/tmar-zebra-handoff.md). Go to note, configurable shortcuts, collapsible panels, per-workspace label preferences and Italian localization remain separate work items. The Zebra change is a web-source increment, not a desktop release.
+Use [this fork's web build](#how-to-try-it-today), not `scanruler.com`, to see these controls. Save your active project before opening it in a separate test instance. Existing user sessions are never reloaded by these source changes. No prebuilt desktop package or managed updater is implied.
 
 ## Why this fork exists
 
@@ -44,7 +45,7 @@ This project is intended for personal use and community sharing. Modification so
 | Follow or contribute to a desktop edition with persistent workflow management | The web plugins are already in `main`; the desktop application remains planned. |
 | Install a stable TMAR application on Windows or Mac today | No installer is available yet. Wait for an explicitly qualified release. |
 | Obtain CUDA or Metal acceleration immediately | Not implemented: this is a later phase, subject to benchmarks. |
-| Modify a TMAR extension | Both implemented plugins have dedicated source, English README files and tests. |
+| Modify a TMAR extension | The TMAR plugins have dedicated source, English README files and tests. |
 
 ## Why a desktop application
 
@@ -67,7 +68,7 @@ The planned shell uses Electron: it remains a web engine embedded in an applicat
 
 The source baseline verified for this plan declares **ScanRuler 0.9.4** in [package.json](package.json), at upstream commit [`5c1f2f9`](https://github.com/CNCKitchen/ScanRuler/commit/5c1f2f96b7ac336d5c2bad64148ae19790b0443c). This identifies the inherited baseline, not a TMAR desktop release.
 
-**Status key:** **Implemented in web source** means code is merged and the documented checks exist; it does not mean a desktop installer or hosted deployment exists. **Partial** identifies delivered subfeatures with remaining work. **Planned/assigned** is not an availability claim. The source-level integration reference is `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`; documentation updates do not change the inherited package version.
+**Status key:** **Implemented in web source** means code is merged and the documented checks exist; it does not mean a desktop installer or hosted deployment exists. **Partial** identifies delivered subfeatures with remaining work. **Planned/assigned** is not an availability claim. PR #1 introduced the first web extensions; PR #3 integrated Zebra at `0b26d51`. This usability increment builds on that baseline. The inherited package version is not a TMAR release identifier; consult the tested commit and validation record.
 
 | Area | Status | Intended outcome |
 | --- | --- | --- |
@@ -80,16 +81,16 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Resources and backend selection | Planned | Monitoring, RAM/GPU-memory budgets, controlled concurrency and a CPU execution path. |
 | GPU computation on Windows and Mac | Later investigation | Evaluate WebGPU and CUDA/Metal modules where a benefit can be demonstrated. |
 | Zebra surface analysis plugin | Initial web implementation | View-only bands for visible or selected CAD bodies or the scan; notes can be pinned locally. Further continuity fixtures, macOS and real-part validation remain open. |
-| Model-tree multi-selection and bulk-actions plugin | Planned | Consistent Ctrl/Cmd, Shift and Select All behavior across relevant feature, body and construction-element lists, with collective visibility and supported actions. Reuse existing upstream capabilities. |
-| Quick-note access and navigation plugin | Partial | The Deviation Note button and shared list are implemented in `tmar-quick-notes`. Configurable shortcuts, Go to note and previous-view navigation remain planned. |
+| Model-tree multi-selection and bulk-actions plugin | Implemented, initial feature-list scope | Ctrl/Cmd/Shift/Select All and undoable output visibility. Original body-list selection is retained; broader list coverage and destructive operations remain future work. |
+| Quick-note access and navigation plugin | Implemented, initial web scope | Settings-configurable letter (default N), local Note action, note multi-selection, double-click/target Go to note and Return to previous view. |
 | Notes directly in Deviation | Implemented in web source; scan-side scope | Add/edit/save notes in the single scan-side comparison view; shared IDs and project round trips verified. Reference-side/split-view anchors and comparison metadata remain planned. |
-| CAD body STL export UI | Implemented in web source | Export visible or explicitly selected solid bodies through the existing backend, with adjustable chord. The source scan is excluded; STEP remains available. |
-| Collapsible Features and Notes panels | Planned | Independently collapse/expand long panels, retain their state and selection, and configure layout preferences in Settings. |
-| Per-workspace labeling and annotation visibility plugin | Planned | Settings-based display controls, including hiding note text and markers in Mesh Tools without deleting notes or changing their availability to a connected agent. |
+| CAD body export UI | Implemented in web source | One Export body dialog chooses STEP or STL and visible/selected CAD bodies; adjustable STL chord, no source scan. |
+| Collapsible Features and Notes panels | Implemented, initial web scope | Independent header controls, browser-remembered state, preserved selection and note draft. Centralized Layout preferences remain future work. |
+| Per-workspace labeling and annotation visibility plugin | Implemented lower-bar controls | Labels and Notes visibility per 3D workspace; no annotation deletion. Advanced Settings categories remain planned. |
 | Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
-| Customizations and contributions | Partial | Three dedicated TMAR plugins are in this source, with English documentation, tests and generic panel hooks. A runtime plugin/package manager and automated update pipeline remain planned. |
+| Customizations and contributions | Partial | Five TMAR plugins with English documentation and reusable host hooks. Dynamic package management and automated upstream updates remain planned. |
 
-There are two tracks: **web plugins can be implemented and used now**, independently of the desktop shell; the desktop track remains **shell -> persistence and recovery -> pause/resume -> verified updates -> measured optimization**. Follow-up work includes reference/split-view notes, note navigation and shortcuts, display controls, Zebra and broader qualification. Tasks can proceed in isolated branches; reliability takes priority over speed. This README does not set delivery dates.
+There are two tracks: **web plugins can be implemented and used now**, independently of the desktop shell; the desktop track remains **shell -> persistence and recovery -> pause/resume -> verified updates -> measured optimization**. Follow-up work includes reference/split-view notes, captured comparison metadata, richer Settings categories, generalized construction-list actions and broader platform/real-part qualification. Tasks can proceed in isolated branches; reliability takes priority over speed. This README does not set delivery dates.
 
 ## Saves, pause and resume
 
@@ -168,131 +169,79 @@ Zebra analysis must complement, not replace, quantitative CAD/mesh comparison an
 
 ## Model-tree multi-selection and bulk actions
 
-**Added to the roadmap on November 1, 2026. Status: planned, not implemented as a TMAR extension.** AI-assisted modeling can produce very long lists of features and construction elements. Selecting and hiding each row individually must not be the only practical way to manage them.
+**Implemented in `tmar-model-tree`, initial feature-list scope.** Click selects a row; Ctrl/Cmd toggles non-adjacent rows; Shift selects the logical range including scrolled rows. Select All or focused Ctrl/Cmd+A covers the whole list. Escape/Clear removes selection. New AI-created rows do not silently join an existing selection.
 
-The [upstream Reverse engineer documentation](plugins/reverse/README.md) already describes Ctrl/Shift multi-selection for the body list. First audit and reuse that behavior; this item is about extending and making it consistent across the relevant feature, body and construction-element lists, not claiming that multi-selection is absent everywhere.
+Show/Hide affects selected sketches and actual current body outputs, deduplicated and grouped into one undo step. It does not suppress or delete features. A consumed, suppressed or rolled-back feature may have no independent displayed output: it is skipped explicitly, not guessed. The inherited body list keeps its existing multi-selection.
 
-**Proposed organization:** `plugins/tmar-model-tree/`, with a documented adapter to the host's selection, visibility and history mechanisms. The directory is not created yet. Where existing extension points cannot reach an original list, add minimal documented hooks rather than a competing selection state or scattered core changes.
+- [x] Feature selection, selected count and bulk output visibility.
+- [x] One-step visibility undo without rebuilding the model per row.
+- [x] Independently collapsible feature list, preserving selection.
+- [ ] Extend the same contract to every relevant construction-element list, filtering and collapsed groups.
+- [ ] Qualify dependency-safe destructive batch operations separately; these are not delivered here.
 
-| Interaction | Required behavior |
-| --- | --- |
-| Click a row | Select that row and show clear selection feedback. |
-| Ctrl+click on Windows / Cmd+click on macOS | Add or remove individual, non-adjacent rows from the selection. |
-| Shift+click | Select the contiguous range from an anchor row to the clicked row, including rows reached by scrolling. |
-| Ctrl+A on Windows / Cmd+A on macOS | Select all eligible entries in the focused list's current scope, not merely the rows currently rendered on screen. |
-| Escape / Clear selection | Clear the selection without changing the geometry or visibility. |
-
-- [ ] Provide explicit Select All, Clear Selection and selected-count controls, plus keyboard access that does not hijack text fields or other panels.
-- [ ] Apply **Show selected**, **Hide selected** and **Isolate selected** to the entire selection, with a way to restore the visibility state from before isolation. Mixed visibility must resolve to the requested state, not blindly toggle each item.
-- [ ] Allow other supported actions, such as grouping or suppression where appropriate, only after checking the selected item types and dependencies. Hiding is not suppression or deletion. Destructive actions require a separate dependency preview and confirmation.
-- [ ] Clearly define filtered-list and collapsed-group scope. Use stable item IDs; adding new rows during AI work must not silently add them to an existing selection or redirect an action.
-- [ ] Route grouped changes through the host's history, aim for one undoable action, and avoid rebuilding the entire model once per selected row. Respect active-operation guards and report unsupported items or failures explicitly.
-- [ ] Test long and mixed lists, scrolling, range selection, filtering, mixed visibility, undo/redo, AI-created rows and both platform keyboard conventions. Publish measured responsiveness before claiming scalability.
-
-The initial priority is reliable selection and collective visibility. More invasive batch operations should follow only when their dependency and recovery semantics are verified.
+See [source, behavior and tests](plugins/tmar-model-tree/README.md).
 
 ## CAD body STL export
 
-**Implemented in web source and merged into `main`; documentation checked November 2, 2026.** The [tmar-body-export plugin](plugins/tmar-body-export/README.md) adds **CAD body STL** near the Reverse engineer export controls. It exposes the existing `reverse.export.stl` backend in the UI; it is not a second CAD kernel or scan exporter. Existing body STEP export is unchanged.
+**The body exporter now has one entry point: Export body...** Choose STEP or STL in the dialog, then visible bodies or an explicit body-list selection, and Save. The historical section title remains for existing links.
 
-Choose **Visible solid bodies** or **Selected body-list items**, set **Chord tolerance**, then press **Export body STL**. Explicit selection includes bodies in selected components; an empty/stale selection or one containing a sheet is refused instead of silently exporting everything. The selected scope may intentionally include a hidden solid.
+STEP retains CAD geometry (including supported sheets); STL triangulates solid CAD bodies through the existing kernel backend. Neither option exports the source scan. The chord field is shown only for STL and follows Settings display units; the file coordinates remain millimetres. Selected components expand to their bodies; empty/stale selections never become export-all. Multiple STL bodies are not automatically Boolean-unioned.
 
-- [x] Export reconstructed CAD solid bodies rather than the source scan or viewport display mesh.
-- [x] Offer visible/selected scope and a chord field following Settings display units; default 0.02 mm, accepted range 0.0001-1 mm in this UI.
-- [x] Reuse the existing exporter and check the returned binary STL length and triangle count before downloading it.
-- [x] Block export during active edits/builds and reject a result when the checked model revision changes during export.
-- [x] Verify an actual selected-body download with synthetic geometry: a 40 x 20 x 10 mm body, excluding the larger scan and the second CAD body. See the [validation record](docs/tmar-web-validation.md).
-
-STL coordinates are written in millimetres; STL carries no unit metadata, so import it as millimetres. Several bodies share one file but are not automatically Boolean-unioned. Keep STEP or the project for editable CAD. Chord controls tessellation, not the accuracy of the reconstructed part; export success does not certify watertightness or manufacturability. macOS and arbitrary production parts are not qualified by the recorded tests.
+The host's original STEP key is the fallback when no export extension is installed. See [the plugin README](plugins/tmar-body-export/README.md) for scope, validation and limitations.
 
 ## Quick notes on the model
 
-**Partial implementation, updated November 2, 2026.** The [tmar-quick-notes plugin](plugins/tmar-quick-notes/README.md) exists with source, documentation and tests. Its first delivered capability is the shared Note action/list in the scan-side Deviation workspace. A general toolbar shortcut and navigation to a note are not implemented yet.
+**Implemented in `tmar-quick-notes`: local note access, selection and navigation.** No Zebra or agent-connection prerequisite is needed. The existing note data, editor and project records are reused.
 
-The [upstream note workflow](README.upstream.md#when-your-part-does-not-come-out-right) already supplies the note records, editor and agent commands. The extension reuses them instead of introducing a second annotation database.
+**Note -> click the actual surface -> write -> Save.** The Note action is available in the list and on the lower viewport bar. **Settings > Shortcuts > Add note** selects one unmodified A-Z letter or Disabled; the default is **N**, with Reset. Typing, dialogs and active CAD editors retain their keys. Arbitrary modifier combinations are not offered in this first binding UI.
 
-| Capability | Current state |
-| --- | --- |
-| Note button and list in scan-side Deviation | Implemented; single viewport and visible scan required. |
-| Click the surface, enter text, keep the note | Implemented using the existing editor; Escape cancels placement. |
-| Shared note IDs/text/position and project save/reopen | Implemented; targeted browser round trip recorded. |
-| Existing connected-agent note interface | Reused, not replaced; live AI-provider/MCP qualification remains pending. The plugin does not enable a connection automatically. |
-| Configurable shortcut in Settings | Planned; no default key assigned yet. |
-| Double-click/target button to Go to note | Planned; see the navigation requirements below. |
-| Reference-side/split-view placement and captured deviation values | Planned; not implied by scan-side support. |
-| Per-workspace annotation preferences and collapsible panels | Planned; the current implementation retains upstream behavior. |
+Single-click selects without opening the editor. Ctrl/Cmd adds or removes notes; Shift selects a range; Select All/focused Ctrl/Cmd+A selects the full list. Delete selected requires confirmation and removes only those records; it is not undoable. Mark handled/Reopen applies only to selected notes and preserves imported provenance. Handling a note does not certify a geometry correction.
 
-**Remaining quick-access requirements:** provide a directly accessible toolbar action and a shortcut configurable in **Settings > Shortcuts**, with conflict feedback and reset to default. Choose the default key only after checking Windows/macOS bindings; do not steal keystrokes from text fields or an active editor. Preserve explicit Save/Cancel behavior, focused editing, normal navigation after completion, and safe cancellation without empty annotations. Record suitable object references and report an invalid association after a rebuild rather than silently moving a note elsewhere. These general improvements are not implied by reusing the existing scan-side editor.
+The pencil opens editing/answering; the target button locates; the check and X keep separate meanings. Collapsing Notes keeps the editor mounted and does not save or discard its draft. Notes are saved with the project, while row selections and focus are session-only.
+
+An explicitly connected agent can use the existing note API. Creating or locating local notes never enables an agent, changes credentials or automatically authorizes imported note text. See [the plugin README](plugins/tmar-quick-notes/README.md).
 
 ### Notes directly in Deviation
 
-**Implemented for the visible scan-side, single Deviation viewport.** Inspect the comparison map, press **Note**, click the scan surface, write the observation and keep it, without switching to Reverse engineer.
+**Implemented for the visible scan-side, single Deviation viewport.** Inspect the map, activate Note, click a mismatch, write and save without switching workspace. The same ID, text, anchor and handled state appear in Reverse engineer and survive project save/reopen.
 
-**Delivered and checked within the recorded scope:**
+Placement does not recompute the map or create a measurement pin. Busy operations, surface marking, deformation animation, alignment picking, hidden scans and clipped/missing picks are guarded. Stop those modes before writing a note.
 
-- [x] Expose the existing Note button, note list and editor directly in Deviation while retaining the working comparison view.
-- [x] Store the actual scan-surface hit in the part frame; do not anchor to screen pixels or apply a display alignment twice.
-- [x] Reuse the same note records in Reverse engineer and Deviation. The browser test preserves the note ID, text and position through save/reopen without duplication.
-- [x] Keep placement distinct from map reading/pinning: the synthetic test leaves the map revision and measurement-pin count unchanged, and Escape cancels placement.
-- [x] Explicitly guard reference-side/split-view placement, hidden scans, busy operations, alignment picking, surface marking, deformation animation, empty space and clipped hits. Some guards are unit-tested; see the evidence record for the exact test levels.
+- [x] Local Note/list, configured shortcut, selection and Go to note in the supported view.
+- [x] Shared records and project persistence; no automatic agent connection.
+- [ ] Generic reference/CAD-side and split-view placement.
+- [ ] Optional captured deviation value, tolerance, target/revision and explicit stale-context refresh. Missing readings must never be inferred from colors.
+- [ ] Native macOS and real-part qualification.
 
-Notes can be made locally using Zebra's **Add note on the part** action; existing saved notes remain accessible without an agent connection. They also appear in Deviation when its existing placement guards allow it. The application never enables an agent connection on the user's behalf; independent per-workspace visibility overrides remain planned.
-
-**Still to implement or qualify:**
-
-- [ ] Add reference/CAD-side and split-view anchoring with explicit target identity, transforms and stale-reference handling; never silently turn a reference hit into a scan note.
-- [ ] Add the configurable Settings shortcut, Go to note and temporary single-note focus feedback while labels are hidden.
-- [ ] Attach valid comparison context when available: deviation value and units, tolerance, compared targets and comparison revision. Keep it as a captured observation and mark it stale after relevant changes; never infer numeric values from map colors. Plain notes must remain possible without this metadata.
-- [ ] Qualify target replacement/rebuild behavior, shared completion state and editing across additional workflows, macOS and a live explicitly connected agent. Resolving a note must not be treated as proof that the geometry was corrected.
-
-**Recorded scenario:** place and save a note in Deviation, observe the same record in Reverse engineer, then save and reopen the project with its ID, text and position intact. **Future extension of that scenario:** use a target button to locate the note on reference geometry and validate independent label preferences. The future portion has not passed a test yet.
+See [the implementation limits](plugins/tmar-quick-notes/README.md).
 
 ### Locate an existing note on the model
 
-**Added to the roadmap on November 1, 2026. Status: planned, not implemented.** With 30–40 or more notes, selecting a list entry should not leave the user searching the whole part for its marker. Extend the same `tmar-quick-notes` plugin with a **Go to note** command, reusing any existing host camera/annotation navigation rather than creating another note system.
+**Implemented: double-click a note row or use its crosshair/target button (Go to note).** The camera frames the saved anchor with surrounding geometry; the corresponding row and marker are highlighted. **Return to previous view** restores the prior target, orientation, zoom and framing. No geometry, note position, text or handled state is changed.
 
-| Interaction | Required behavior |
-| --- | --- |
-| Single-click the note row | Select and highlight the entry without automatically moving the camera. |
-| Double-click the note row | Run Go to note: frame the annotated location and highlight its marker on the model. |
-| Click the row's target/crosshair button | Run the same Go to note command with one click; place this distinct button beside the existing X and green check controls, without changing their meanings. |
+Single-click remains selection; the pencil is editing. With labels or pins hidden, only the focused note is temporarily revealed without modifying saved visibility preferences. Changing workspace or the focused record clears that temporary focus.
 
-- [ ] Give the target button a recognizable crosshair/target icon, a **Go to note** tooltip and an accessible name; make it keyboard-operable. Do not rely on color alone to explain the action.
-- [ ] Center the view on the note's actual anchor and use an appropriate local zoom, retaining enough surrounding geometry to understand where it is. Orient the view when reliable target information allows it. Move the camera, never the model or the note's coordinates.
-- [ ] Highlight the matching marker and list entry so the selected note remains identifiable among neighboring annotations. If workspace annotations are hidden, show only this note's temporary focus feedback, not all notes, and leave the saved labeling preferences unchanged.
-- [ ] Preserve the pre-navigation camera pose and provide **Return to previous view**. Clear temporary focus feedback when leaving note focus or selecting another note; restore the normal workspace display policy without deleting or resolving any note.
-- [ ] Resolve the saved anchor using the current target transform and stable references. If the target is missing or the association is invalid, explain that the note cannot be located rather than jumping to a guessed point or the origin. If geometry is hidden, clipped or occluded, identify that condition and offer an explicit, reversible reveal action where supported; do not silently change global visibility or section settings.
-- [ ] Keep navigation separate from editing, resolving and deleting: clicking X/check, typing, selecting text in an editor or double-clicking those controls must not trigger Go to note. Do not discard an unsaved note draft or change note status as a side effect of camera navigation.
-- [ ] Test both entry points with at least 40 notes, long/scrolled lists, neighboring anchors, hidden annotations in Mesh Tools, transformed targets, save/reopen, missing references and Windows/macOS input. Verify that locating a note leaves geometry, annotation text/status and saved display preferences unchanged.
+Missing, hidden, clipped or unresolved targets produce an explanation rather than a guessed jump. CAD-body notes are located in Reverse engineer, validating their saved face/edge and anchor. A target changed by rebuilding may require manual review. Automatic occlusion-aware orientation, reversible geometry reveal and generalized remapping remain future work.
 
-**Acceptance example:** in a project with 40 notes, double-click one row or click its target button; the corresponding location is framed and its marker is clearly highlighted. Return to the previous view without changing the note's completion state. Repeat with Mesh Tools annotations hidden and confirm that unrelated labels remain hidden. These are planned tests, not results already achieved.
+The synthetic browser regression exercises 40 notes, long ranges, both navigation entry points, hidden labels, camera return, unchanged drafts and save/reopen. Its exact results are in [the validation record](docs/tmar-usability-validation.md).
 
 ## Settings, collapsible panels and per-workspace labels
 
-**Added to the roadmap on November 1, 2026. Status: planned, not implemented as a TMAR extension.** Settings should provide a central place for shortcut, panel-layout and labeling preferences. The concrete problem reported by the user is that notes remain visually intrusive in Mesh Tools, while long Features and Notes lists consume too much panel space.
-
-**Proposed organization:** a `tmar-display-controls` plugin under `plugins/tmar-display-controls/`, with a dedicated README and tests, integrated with `tmar-model-tree` and `tmar-quick-notes` through explicit host interfaces. This directory is not created yet. Audit and reuse existing display preferences first; add only minimal, documented hooks where the original Settings, panels or viewport do not expose the required controls. The proposed Settings group names below are design labels, not currently available menus.
+**Implemented initial web controls:** Note key binding in Settings; independent Features/Notes collapse controls; lower-bar Labels and Notes visibility. The complete advanced Settings design remains a roadmap item.
 
 ### Independently collapsible Features and Notes panels
 
-- [ ] Provide an accessible expand/collapse control in each panel header; Features and Notes must be independently collapsible, with a visible title and item count when collapsed.
-- [ ] Keep preferences in **Settings → Layout**, remembering each panel's expanded/collapsed state per workspace across workspace switches and application restarts, with a reset-to-default option.
-- [ ] Preserve list selection, scroll position and unsaved note drafts when collapsing and reopening. Do not silently commit or discard an active edit; handle focus explicitly and keep keyboard navigation usable.
-- [ ] New features or notes created by an AI must not force a collapsed panel open or steal focus; update the count or show an unobtrusive indicator instead.
+Each list has its own header control and item count. Collapsing retains selection and keeps any note draft mounted. New AI-created rows do not force a list open. Expanded/collapsed state is remembered in this browser. Collapsing changes layout only, not geometry or pin visibility.
 
-Collapsing a panel changes its layout only. It must not hide the corresponding geometry, suppress features, remove notes or implicitly change viewport annotation visibility.
+A centralized **Settings > Layout** group, workspace-specific collapse preferences and reset-all are not yet implemented.
 
 ### Labeling and annotation visibility in each workspace
 
-- [ ] Provide **Settings → Display → Labels and annotations**, with a global default and clearly indicated per-workspace overrides for each applicable workspace, explicitly including **Deviation and Mesh Tools**, not only Reverse engineer. Include a direct workspace toggle for quick show/hide access.
-- [ ] Offer a master **Show labels and annotations** control, plus separate categories for note text, note markers/leader lines, element/body/feature names and measurement labels where those categories exist. This controls viewport overlays, not the names used to identify rows in the model tree.
-- [ ] Provide a **Hide notes in this workspace** action that hides note text, markers and leader lines together. Hidden note overlays must not intercept clicks or show leftover hover labels, so mesh selection and editing remain unobstructed.
-- [ ] Persist the per-workspace choices and restore them on workspace switches and restart. For example, notes may stay visible in Reverse engineer while being hidden in Mesh Tools; changing one workspace must not silently change another's override.
-- [ ] Treat all these switches as display-only: do not delete notes, alter geometry, suppress features or change note access through the existing connected-agent mechanism. Hidden notes must still be saved with the project.
-- [ ] When explicitly placing, editing or locating a note while annotations are hidden, show only the necessary temporary placement/edit/focus feedback. Restore the saved display policy on Save, Cancel or leaving note focus without silently enabling all annotations; Go to note must not change the saved preference.
-- [ ] Test many features and notes, panel collapse/reopen, draft retention, selection, label categories, hidden-overlay picking, AI-created items, workspace round trips including Deviation and Mesh Tools, preference persistence, and Windows/macOS keyboard behavior. Verify that disabling the plugin leaves the host usable and does not remove annotation data.
+The **Labels** key on the lower 3D view bar shows/hides text in Reverse engineer, Deviation, Mesh Tools and other supported 3D views. **Notes** controls note markers and their text separately. Reverse retains its existing Notes key; other 3D workspaces receive one while notes exist.
 
-**Acceptance example:** collapse Features and Notes, hide annotations in Mesh Tools, edit/select the mesh without note overlays obstructing it, and return to Reverse engineer with its independent display preferences and all note data intact. This is a planned regression scenario, not a test already passed.
+The display plugin remembers label/pin preferences per workspace and browser. Hiding does not delete notes or change their availability to an explicitly connected agent. Hidden pin markers do not intercept clicks. Creating/editing a note can reveal its pins, consistent with the host; Go to note uses a temporary focus instead.
+
+Advanced **Settings > Display** category controls, a global reset and a separate 2D annotation policy remain planned. See [display source and tests](plugins/tmar-display-controls/README.md).
 
 ## Languages and future Italian localization
 
@@ -332,7 +281,7 @@ npm run dev -- --host 127.0.0.1 --port 5197 --strictPort
 
 Open the local address printed by Vite. This explicit port avoids silently selecting an unknown port; choose another unused port if it is occupied. Use a separate browser tab/profile for testing and save active projects before intentionally reloading or replacing their app version. These commands do not update an already running upstream session.
 
-In the fork, open **Reverse engineer > CAD body STL** for solid-body export, or **Reverse engineer > Zebra surface analysis** for Zebra and local notes. Available notes also appear in Deviation for scan-side placement. Connecting an agent is optional and retains its existing privacy warning. See each plugin's README for exact steps and restrictions.
+In the fork, use **Reverse engineer > Export body...** and choose STEP or STL. **Note** is available locally in Reverse engineer and scan-side Deviation; its shortcut is in **Settings > Shortcuts** (default N). Double-click a note row or its target icon to locate it. Use Ctrl/Cmd/Shift for list selection and the lower **Labels** control for text visibility. **Reverse engineer > Zebra surface analysis** retains the integrated Zebra tool. Connecting an agent is optional and retains its privacy warning. See each plugin's README for restrictions.
 
 For an existing clone, preserve any local changes and check its branch before updating; do not reset or overwrite an active worktree to follow these instructions. A production web bundle can be built with `npm run build` and served locally with `npm run preview`. This is still a web application, not a desktop package or public deployment.
 

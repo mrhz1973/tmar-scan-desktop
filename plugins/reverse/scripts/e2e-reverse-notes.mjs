@@ -279,7 +279,7 @@ try {
   await page.evaluate(() => [...document.querySelectorAll('[data-test=note-row]')].find((e) => e.classList.contains('agent'))?.scrollIntoView({ block: 'center' }))
   await sleep(150)
   const askAt = await page.evaluate(() => {
-    const r = [...document.querySelectorAll('[data-test=note-row]')].find((e) => e.classList.contains('agent'))?.querySelector('[data-test=note-open]')?.getBoundingClientRect()
+    const r = [...document.querySelectorAll('[data-test=note-row]')].find((e) => e.classList.contains('agent'))?.querySelector('[data-test=note-edit], [data-test=note-open]')?.getBoundingClientRect()
     return r ? [r.left + r.width / 2, r.top + r.height / 2] : null
   })
   if (askAt) await page.mouse.click(askAt[0], askAt[1])
@@ -364,7 +364,7 @@ try {
   check((await labelsShown()) === pinCount, 'the key brings them back')
   await page.click('[data-test=toggle-notes]')
   await sleep(200)
-  await page.click('[data-test=note-open]')
+  await page.click('[data-test=note-edit], [data-test=note-open]')
   await sleep(300)
   check((await labelsShown()) === pinCount, 'and so does opening a note')
   await page.keyboard.press('Escape')

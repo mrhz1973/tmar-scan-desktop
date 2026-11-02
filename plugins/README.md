@@ -11,9 +11,11 @@ other plugins. These are build-time modules, not hot-installable packages.
 | --- | --- | --- |
 | [reverse/](reverse/) | Inherited | The Reverse engineer workspace and existing CAD/note/export backends. |
 | [mesh-tools/](mesh-tools/) | Inherited | Tools to clean up and reduce a scan. |
-| [tmar-body-export/](tmar-body-export/) | Implemented in `main` | Web controls for CAD-body STL export; requires Reverse engineer. |
-| [tmar-quick-notes/](tmar-quick-notes/) | Implemented in `main`, scan-side scope | Shared notes directly in the single Deviation viewport; requires Reverse engineer. |
+| [tmar-body-export/](tmar-body-export/) | Implemented in `main` | One CAD-body export dialog for STEP/STL; requires Reverse engineer. |
+| [tmar-quick-notes/](tmar-quick-notes/) | Implemented in `main`, scan-side scope | Local notes, configurable shortcut, multi-selection and Go to note; scan-side Deviation adapter. |
 | [tmar-zebra/](tmar-zebra/) | Initial web implementation | Zebra stripes and local pinned observations in Reverse engineer. |
+| [tmar-model-tree/](tmar-model-tree/) | Initial web implementation | Feature selection, bulk output visibility and collapse. |
+| [tmar-display-controls/](tmar-display-controls/) | Initial web implementation | Lower-bar Labels and per-workspace note-pin preferences. |
 
 The two TMAR extensions were integrated in [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`. See the [validation record](../docs/tmar-web-validation.md) for tested scope and limitations. Plugin sources, documentation and tests are available; no desktop release or runtime plugin manager is implied.
 
@@ -94,3 +96,15 @@ The reverse plugin also exposes `app/noteWorkspaces.ts` for explicit workspace
 placement adapters. An adapter cannot replace Reverse engineer or another
 registered workspace. Each dependent plugin must document its picking and
 coordinate assumptions and retain the shared note model.
+
+## TMAR usability hooks
+
+`settings.tools` and `view.tools` are generic panel slots. The host never names
+a TMAR plugin. Reverse engineer's optional `app/listExtensions.tsx` provides
+note-list replacement and feature-list/row wrappers with inherited fallbacks.
+`SceneManager.captureView/restoreView` bookmarks only the camera; NotePins can
+show one temporary focused pin without changing its saved visibility switch.
+The ID-based selection helper is `src/plugins/listSelection.ts`.
+
+The export plugin takes over the export panel; with no export contribution,
+the inherited STEP button remains. See [the current validation record](../docs/tmar-usability-validation.md).

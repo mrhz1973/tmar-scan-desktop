@@ -1,78 +1,67 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# TMAR notes in Deviation
+# TMAR local notes, selection and navigation
 
-> **Implemented and merged into `main` via [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), source revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`.** Scan-side Deviation notes are implemented; the wider quick-notes roadmap is partial.
-> Documentation checked November 2, 2026. This is a web-source feature, not a desktop release. [Recorded validation](../../docs/tmar-web-validation.md) covers Windows/Chrome; macOS and live-provider qualification are pending.
-
-First build-time web implementation of the planned quick-notes extension.
-No desktop shell is required. The rest of the quick-notes roadmap is not
-implicitly implemented by this first increment.
+Web-source extension; no desktop shell or agent connection is required.
+Uses the existing Reverse engineer notes, IDs, editor, pins, project persistence
+and imported-note provenance. It never turns on an agent or changes its credentials.
 
 ## Use
 
-In **Deviation**, the existing notes panel is now available.
-Activate **Note**, click a point on the visible **scan-side** comparison map,
-write the observation and keep it. The map and workspace remain active. The
-same record, ID, text and position appear in Reverse engineer and are stored
-in the existing `.scanruler` project's `reverseNotes` section. Escape cancels
-placement. Normal deviation reading/pinning resumes when placement ends.
+- **Note** on the view bar or in the list arms placement. Click the scan or CAD
+  body in Reverse engineer; in Deviation use the visible scan-side single view.
+- **Settings > Shortcuts > Add note** selects one unmodified A-Z letter or
+  Disabled; default **N**, with Reset. Typing, dialogs, active CAD editors and
+  conflicting operations keep their keys. Key combinations are not offered yet.
+- Single-click selects a row. Ctrl/Cmd toggles separate rows; Shift selects a
+  range. Select all or Ctrl/Cmd+A in the focused list selects its full contents.
+- Double-click a row or press its target icon for **Go to note**. The camera
+  frames the saved anchor; **Return to previous view** restores the working view.
+- The pencil edits/answers a note. The check changes its handled state. These
+  controls never trigger camera navigation. Delete selected confirms exactly
+  the selected notes; deletion is not undoable. Bulk handled/reopen preserves
+  imported provenance and does not certify that a discrepancy was repaired.
+- Notes can collapse without unmounting an unsaved editor. Escape cancels the
+  editor or placement; collapsing does not save or discard its draft.
 
-Notes also appear when the person opens local notes through Zebra or a project
-contains saved notes. They can then be used without an agent connection. This
-extension never enables that connection on the user's behalf; the existing
-privacy warning and provider behavior apply when an agent is explicitly enabled.
+When labels or pins are hidden, Go to note temporarily highlights only its
+marker/text. Leaving focus restores the hidden state without changing the
+saved preference. Existing notes survive project save/load; UI selections,
+focus and camera bookmarks are session-only.
 
-## Explicit scope and limitations
+## Current boundaries
 
-- Placement is on the scan in the single main Deviation viewport, using the actual
-  hit coordinates in the part's frame. A display alignment is not applied twice.
-- Reference-side placement is refused with an explanation, rather than
-  incorrectly creating a scan note. Generic reference/CAD-side annotation
-  anchoring and comparison-value metadata remain planned.
-- Exit split view and stop deformation animation, alignment picking or surface marking before
-  placing a note. Busy operations, hidden scans, empty space and clipped-out
-  hits are guarded. Ordinary measurement pins are not replaced.
-- Custom keyboard binding, Go to note, per-workspace label preferences and
-  collapsible panels are separate roadmap items, not delivered here.
-- The inherited note editor, agent command API and project format are reused;
-  this is not another annotation database or a new AI service.
+Reference-only and split-view placement in Deviation remain unsupported, as do
+placement during deformation animation, alignment picking and surface marking.
+CAD-body note navigation requires Reverse engineer. Hidden, clipped, missing or
+unresolved targets are reported, not silently revealed or moved. A changed
+body whose saved anchor no longer lies on the matched face needs review.
+Reference-side notes and captured comparison metadata remain roadmap items.
+
+Browser qualification uses generated geometry on Windows/Chrome, not private
+scans or a live remote AI provider. macOS and desktop packaging remain unqualified.
+See [validation](../../docs/tmar-usability-validation.md).
 
 ## Source and integration
 
-- `plugin.ts`: registers the Deviation panel and placement adapter.
-- `DeviationNotesPanel.tsx`: existing note list, placement guards and Escape.
-- `notePlacement.ts`: explicit mode checks and scan-surface picking.
-- `tests/deviationNotes.test.ts`: guards, coordinates and adapter lifecycle.
-- `scripts/e2e-tmar-web.mjs`: synthetic browser regression shared with the
-  `tmar-body-export` plugin.
+`EnhancedNoteList.tsx` owns selection/actions; `quickAccess.tsx` owns the shortcut
+and settings; `noteFocus.ts` handles guarded camera focus; `notePlacement.ts`
+handles the Deviation adapter. The original NoteCard and store are reused.
 
-The dependency on upstream `reverse` is intentional and documented. The host
-has a generic `deviation.extra` panel slot. Reverse engineer exposes
-`registerNoteWorkspace` in `app/noteWorkspaces.ts` and an optional
-`NoteList.placementBlocked` prop. No core file imports this plugin by name.
-The original reverse-note behavior stays available without this extension.
+The plugin registers `settings.tools`, `view.tools`, `deviation.extra` and the
+optional reverse `listExtensions` adapter. Camera bookmarks and temporary pin
+focus are narrow reusable host hooks. No core import names this plugin.
 
-Plugins are bundled at build time. Exclude this folder to omit the extension;
-`?plugins=none` disables all plugins for a host smoke check. Removing the
-reverse source also requires omitting dependent TMAR plugins. Hot plugin
-installation is not available.
-
-## Tests
+This extension depends on `reverse` and is included at build time. Omit its
+folder to retain the original note-list implementation; `?plugins=none` runs the
+host without plugins. Hot installation is not implemented.
 
 ```bash
-npx vitest run plugins/tmar-quick-notes/tests/deviationNotes.test.ts plugins/reverse/tests/reNotes.test.ts tests/panelExtensions.test.ts
+node plugins/tmar-quick-notes/scripts/e2e-usability.mjs
 node plugins/tmar-quick-notes/scripts/e2e-tmar-web.mjs
 npm run build
 node scripts/check-plugin-boundary.mjs
+node scripts/check-units.mjs
 ```
 
-The browser regression starts its own ephemeral local Vite server unless
-`APP_URL` is supplied, uses a fresh headless Chrome profile and synthetic boxes,
-and closes its server/browser afterward. It stubs the agent socket: it never
-contacts an existing MCP session. It checks note placement, preservation of
-the map, shared notes, Escape, save/reopen, and body STL downloads. It is not
-a live end-to-end test with a remote AI provider. Set `CHROME` if required.
-
-## Roadmap and contribution scope
-
-See the [main roadmap](../../README.md#status-and-roadmap) for outstanding features. Change this plugin in an isolated branch and include its tests and README updates in the pull request. Do not present unrelated planned features as delivered or modify private scans for public fixtures. The validation record describes the implementation run; this documentation synchronization did not rerun those tests.
+The browser scenarios own isolated profiles and ephemeral servers unless
+APP_URL is explicitly supplied. Never point them at an active user session.
