@@ -208,3 +208,12 @@ local server and isolated browser unless APP_URL is provided. It uses generated
 geometry, not a user's scan, and tests multi-selection, note focus/shortcut,
 draft preservation, label preferences and actual STEP/STL downloads. It is also
 listed in the plugin CI manifest. See [the validation record](tmar-usability-validation.md).
+
+## TMAR category-selection qualification
+
+Run `node plugins/tmar-model-tree/scripts/e2e-categories.mjs` to generate and test
+the synthetic multi-category project. After a production build, run
+`node plugins/tmar-model-tree/scripts/e2e-categories-production.mjs`; this consumes
+the generated fixture and uses public compiled controls, no development globals.
+Use isolated profiles and ephemeral servers, never a user's existing tab.
+[Results, commands and limits](tmar-feature-categories-validation.md).

@@ -22,9 +22,11 @@ export function selectRow(current: ListSelection, order: readonly number[], id: 
 }
 export function useListSelection(order: readonly number[], epoch: unknown) {
   const [state, set] = useState<ListSelection>(emptySelection)
-  const importing = useHistory((s) => s.importing)
+  // Save Project uses the import queue too: its busy flag is not a new
+  // document. Reset on committed replacement/Undo/Redo, never a plain save.
+  const revision = useHistory((s) => s.revision)
   const key = order.join(',')
-  useEffect(() => { set(emptySelection()) }, [epoch, importing])
+  useEffect(() => { set(emptySelection()) }, [epoch, revision])
   useEffect(() => {
     const valid = new Set(order)
     set((s) => s.ids.every((id) => valid.has(id)) && (s.anchor === null || valid.has(s.anchor)) ? s :

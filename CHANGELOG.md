@@ -7,6 +7,21 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR feature categories and selection persistence - 2026-11-02
+
+- Split feature selection into independent sketch/profile, section-sketch,
+  surface-operation and solid-operation groups; keep unknown types read-only
+  for bulk visibility and actual Bodies separate.
+- Recheck both category and current output type at the visibility write boundary:
+  hiding sketches cannot hide completed bodies; surface/solid scopes are isolated.
+- Preserve chronological rollback/playback and native feature actions.
+- Keep feature/note selections while saving; clear them only on replacement,
+  history travel or removed IDs, not on any use of the shared import queue.
+- Add category resolver, adapter/action and compiled-UI regression checks.
+  See `docs/tmar-feature-categories-validation.md` for actual results and limits.
+- Include the already integrated PR #6 model-centred Zebra reflection unchanged.
+  No desktop release, live-session reload or hosted deployment is implied.
+
 ### TMAR note focus and panel follow-up — 2026-11-02
 
 - Center valid saved annotation positions even when CAD target validation fails,

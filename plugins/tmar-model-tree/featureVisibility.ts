@@ -4,28 +4,21 @@ import { useStore } from '../../src/state/store'
 import { useCommandActivity } from '../../src/commands/activity'
 import { reEditorOpen, useReverse, type ReState } from '../reverse/state/reStore'
 import type { Feature } from '../reverse/core/features'
+import { FEATURE_CATEGORIES, resolveFeatureTargets, type FeatureCategory } from './featureCategories'
 
-/** Only actual displayed outputs are affected. Hiding never suppresses a feature. */
-export function featureTargets(state: Pick<ReState, 'features' | 'bodies' | 'results'>, ids: readonly number[]) {
-  const wanted = new Set(ids), built = new Set(state.bodies.map((b) => b.id))
-  const sketches: number[] = [], bodies = new Set<number>(), skipped: number[] = []
-  for (const id of wanted) {
-    const feature = state.features.find((f) => f.id === id)
-    if (!feature || feature.suppressed) { skipped.push(id); continue }
-    if (feature.kind === 'sketch') { sketches.push(id); continue }
-    const output = [...(state.results[id]?.bodies ?? []), id].filter((body) => built.has(body))
-    if (!output.length) skipped.push(id)
-    for (const body of output) bodies.add(body)
-  }
-  return { sketches, bodies: [...bodies], skipped }
+/** Legacy diagnostics may omit the category; UI writes always require one. */
+export function featureTargets(state: Pick<ReState, 'features' | 'bodies' | 'results'>, ids: readonly number[], category?: FeatureCategory) {
+  return resolveFeatureTargets(state, ids, category)
 }
-export function setFeatureVisibility(ids: readonly number[], visible: boolean): void {
+export function setFeatureVisibility(ids: readonly number[], visible: boolean, category: FeatureCategory): void {
+  // Runtime guard as well as TypeScript: no accidental global action.
+  if (!FEATURE_CATEGORIES.some((item) => item.id === category) || category === 'other') return
   const s = useReverse.getState()
   if (s.building || reEditorOpen(s) || s.playback || useStore.getState().busy || useCommandActivity.getState().running) return
-  const targets = featureTargets(s, ids)
+  const targets = featureTargets(s, ids, category)
   const sketches = new Set(targets.sketches), bodies = new Set(targets.bodies)
-  if (!sketches.size && !bodies.size) { useStore.getState().setStatus('No displayed output in this selection. Rolled-back, suppressed or consumed features cannot be shown independently.'); return }
-  historyAction(`${visible ? 'Show' : 'Hide'} selected feature outputs`, () => {
+  if (!sketches.size && !bodies.size) { useStore.getState().setStatus('No independent displayed output of this category is selected. Other categories and body visibility are unchanged.'); return }
+  historyAction(`${visible ? 'Show' : 'Hide'} selected ${category} outputs`, () => {
     useReverse.setState((state) => {
       const change = (f: Feature) => sketches.has(f.id) && f.visible !== visible ? { ...f, visible } : f
       const features = state.features.map(change)
@@ -33,12 +26,12 @@ export function setFeatureVisibility(ids: readonly number[], visible: boolean): 
       for (const id of bodies) { if (visible) hidden.delete(id); else hidden.add(id) }
       return {
         features: features.some((f, i) => f !== state.features[i]) ? features : state.features,
-        hiddenBodies: [...hidden],
-        bodies: state.bodies.map((body) => bodies.has(body.id) && body.visible !== visible ? { ...body, visible } : body),
+        hiddenBodies: bodies.size ? [...hidden] : state.hiddenBodies,
+        bodies: bodies.size ? state.bodies.map((body) => bodies.has(body.id) && body.visible !== visible ? { ...body, visible } : body) : state.bodies,
       }
     })
   })
-  useStore.getState().setStatus(`${targets.sketches.length} sketches and ${targets.bodies.length} body outputs ${visible ? 'shown' : 'hidden'}.${targets.skipped.length ? ` ${targets.skipped.length} features have no independent displayed output; unchanged.` : ''}`)
+  useStore.getState().setStatus(`${targets.sketches.length} sketches and ${targets.bodies.length} body outputs ${visible ? 'shown' : 'hidden'} in ${category} only.${targets.skipped.length ? ` ${targets.skipped.length} incompatible or unavailable outputs unchanged.` : ''}`)
 }
 export function registerFeatureVisibilityHistory(): () => void {
   return registerHistory({ sections: [{

@@ -7,6 +7,13 @@ documentation.
 
 ## TMAR fork additions
 
+The TMAR feature list has independent categories. Hiding sketches cannot hide
+completed bodies; surface and solid output scopes are separate. The original
+chronological controls remain in Build history / rollback. Category visibility
+is not suppression. See [model-tree usage](../tmar-model-tree/README.md) and
+[category validation](../../docs/tmar-feature-categories-validation.md).
+
+
 This fork includes [unified STEP/STL body export](../tmar-body-export/README.md),
 [local notes, shortcuts and navigation](../tmar-quick-notes/README.md),
 [feature-list selection](../tmar-model-tree/README.md),

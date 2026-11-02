@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # TMAR Scan Desktop
 
-**An open-source ScanRuler fork with modular Zebra analysis, local notes and navigation, feature multi-selection, workspace labels and unified CAD-body export. A Windows/macOS desktop application is planned separately.**
+**An open-source ScanRuler fork with modular Zebra analysis, local notes and navigation, category-scoped feature multi-selection, workspace labels and unified CAD-body export. A Windows/macOS desktop application is planned separately.**
 
 An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/ScanRuler), maintained at [mrhz1973/tmar-scan-desktop](https://github.com/mrhz1973/tmar-scan-desktop). This is not an official CNC Kitchen distribution.
 
@@ -11,6 +11,24 @@ An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/
 **Documentation language:** English is the primary language of this README. Italian localization of the application and documentation is planned for a later stage; it is not available yet.
 
 [Available now](#web-extensions-available-on-main) | [Body STL](#cad-body-stl-export) | [Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Deviation notes](#notes-directly-in-deviation) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
+
+## Latest: category-scoped feature controls
+
+**Select All / Hide in Sketches no longer acts on the completed body.**
+Features are grouped into **Sketches / profiles**, **Sketches from sections**,
+**Surface operations**, **Solid-body operations** and **Other features** when
+present. Every group has its own large collapse header and selection; known
+categories have type-scoped visibility buttons. The native **Bodies** list remains separate; **Build history / rollback**
+retains the original chronological controls.
+
+Save Project preserves active feature/note selections. Replacing a project or
+Undo/Redo clears transient selections. No geometry or project format is changed.
+The model-centred Zebra improvement already integrated by PR #6 is included
+unchanged, with its lower-bar button and local notes. Existing previews do not
+update when the source changes.
+
+See [category validation](docs/tmar-feature-categories-validation.md) for the
+Windows/Chrome checks and limits. This remains a web build, not a desktop release.
 
 ## Latest usability follow-up
 
@@ -38,11 +56,11 @@ These are **implemented web-source features**, not just roadmap entries. They ru
 | --- | --- | --- |
 | [Unified CAD body export](plugins/tmar-body-export/README.md) | One **Export body...** button, then STEP/STL, visible/selected body scope and STL chord. | CAD bodies, not the source scan. No automatic Boolean union or manufacturing certificate. |
 | [Local notes and navigation](plugins/tmar-quick-notes/README.md) | Note button and configurable single-letter shortcut; Ctrl/Cmd/Shift selection; target button/double-click Go to note; previous view; bulk actions. | Deviation placement is scan-side/single-view. CAD-note navigation is in Reverse engineer. No agent connection is required. |
-| [Feature-list selection](plugins/tmar-model-tree/README.md) | Single/Ctrl/Cmd/Shift/Select All, bulk Show/Hide of current outputs in one undo step, collapsible Features. | Not batch feature deletion/suppression or an extension of every construction-element list. Unavailable independent outputs are reported. |
+| [Feature-list selection](plugins/tmar-model-tree/README.md) | Independent categorized Ctrl/Cmd/Shift/Select All, type-scoped Show/Hide, large collapse headers and chronological rollback history. | Not batch feature deletion/suppression or an extension of every construction-element list. Unavailable independent outputs are reported. |
 | [Workspace display controls](plugins/tmar-display-controls/README.md) | **Labels** on the lower 3D bar; separate note-pin visibility and per-workspace browser preferences. | Advanced category controls in Settings and a separate 2D display policy remain planned. |
 | [Zebra](plugins/tmar-zebra/README.md) | Visual analysis of supported scan/CAD targets, adjustable bands and local pinned notes. | Visual aid; not a numerical G1/G2 continuity certificate. Real-part and macOS qualification remain open. |
 
-**Validation:** see [the usability validation record](docs/tmar-usability-validation.md) for this increment's exact tests and limitations. The [initial web record](docs/tmar-web-validation.md) remains historical evidence for PR #1; its counts are not a substitute for retesting the new UI. Only synthetic fixtures and isolated browser profiles are used. No macOS, desktop package, full upstream suite or real-part qualification is claimed.
+**Validation:** see [the category validation record](docs/tmar-feature-categories-validation.md) for the latest checks. The [earlier usability record](docs/tmar-usability-validation.md) documents its original revision. The [initial web record](docs/tmar-web-validation.md) remains historical evidence for PR #1; its counts are not a substitute for retesting the new UI. Only synthetic fixtures and isolated browser profiles are used. No macOS, desktop package, full upstream suite or real-part qualification is claimed.
 
 Use [this fork's web build](#how-to-try-it-today), not `scanruler.com`, to see these controls. Save your active project before opening it in a separate test instance. Existing user sessions are never reloaded by these source changes. No prebuilt desktop package or managed updater is implied.
 
@@ -187,17 +205,35 @@ Zebra analysis must complement, not replace, quantitative CAD/mesh comparison an
 
 ## Model-tree multi-selection and bulk actions
 
-**Implemented in `tmar-model-tree`, initial feature-list scope.** Click selects a row; Ctrl/Cmd toggles non-adjacent rows; Shift selects the logical range including scrolled rows. Select All or focused Ctrl/Cmd+A covers the whole list. Escape/Clear removes selection. New AI-created rows do not silently join an existing selection.
+**Implemented in `tmar-model-tree`: separate category lists, not a mixed global
+Select All.** Sketches / profiles, section-based sketches, surface operations,
+solid-body operations and unclassified feature types are grouped independently.
+Click selects; Ctrl/Cmd toggles rows; Shift and focused Ctrl/Cmd+A are limited to
+that category, including off-screen rows. New AI-created rows are not implicitly
+added to the selection. Each group and the complete Features area can collapse.
 
-Show/Hide affects selected sketches and actual current body outputs, deduplicated and grouped into one undo step. It does not suppress or delete features. A consumed, suppressed or rolled-back feature may have no independent displayed output: it is skipped explicitly, not guessed. The inherited body list keeps its existing multi-selection.
+**Sketch Hide keeps all bodies. Surface Hide keeps solids. Solid-operation Hide
+keeps surfaces and sketches.** The action rechecks membership and current output
+type before changing visibility; stale, suppressed and incompatible outputs are
+reported. Shared output body IDs are deduplicated. It is one Undo step, not feature
+suppression, deletion or a change to the CAD build order. The separate Bodies list
+controls actual body/component selection, including the scope used by Zebra and
+CAD export.
 
-- [x] Feature selection, selected count and bulk output visibility.
-- [x] One-step visibility undo without rebuilding the model per row.
-- [x] Independently collapsible feature list, preserving selection.
-- [ ] Extend the same contract to every relevant construction-element list, filtering and collapsed groups.
-- [ ] Qualify dependency-safe destructive batch operations separately; these are not delivered here.
+**Build history / rollback** keeps native chronological diagnostics and controls;
+playback follows that chronology, not category order. Native row edit, delete and
+suppression buttons remain explicit actions. Right-click history menus stay in
+the original chronological area. Save Project keeps current feature/note selections;
+project replacement and Undo/Redo clear them. UI selections are not saved in the
+project. Category collapse preferences remain local to this browser.
 
-See [source, behavior and tests](plugins/tmar-model-tree/README.md).
+These groups classify feature records. They do not add saved face selections,
+classify every measured construction element or change source-section visibility.
+Dependency-safe destructive batch operations and broader construction-element
+lists remain future work.
+
+See [plugin usage](plugins/tmar-model-tree/README.md) and
+[the category validation](docs/tmar-feature-categories-validation.md).
 
 ## CAD body STL export
 
