@@ -80,6 +80,9 @@ export function SmoothTool({
         <MarkTools escapeNote="The marking stays after Smooth so it can be applied again. Clear removes it; switching marking tools or changing mesh topology can invalidate it." onClear={onClear} />
       )}
 
+      <p className="hint" data-test="smooth-scope-summary" role="status">{regional
+        ? `Marked region only: ${marked.toLocaleString('en-US')} selected vertices. Unselected vertices will not move.`
+        : 'Whole part: this will smooth the entire working mesh. Choose Marked region for a local edit.'}</p>
       <PluginPanelExtensions slot="mesh.smooth.controls" />
 
       <NumberField
@@ -130,7 +133,7 @@ export function SmoothTool({
         ) : regional ? (
           'Smooth the marked region'
         ) : (
-          'Smooth'
+          'Smooth whole part'
         )}
       </button>
       {regional && marked === 0 && (

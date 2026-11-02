@@ -10,6 +10,7 @@
 // quietly holds the mouse hostage in one workspace but not the other is worse
 // than either behaviour on its own.
 
+import { useEffect, useState } from 'react'
 import { brushRange, useMark, type MarkGesture } from '../state/markStore'
 import { useStore } from '../state/store'
 import { Icon, type IconName } from './icons'
@@ -88,6 +89,20 @@ export function MarkTools({
   onClear: () => void
 }) {
   const m = useMark()
+  const [shiftHeld, setShiftHeld] = useState(false)
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Shift') return
+      if (e.type === 'keyup') { setShiftHeld(false); return }
+      if ((e.target as HTMLElement | null)?.closest?.('input,textarea,select,[contenteditable="true"],[role="dialog"]')) return
+      if (useMark.getState().gesture !== null) setShiftHeld(true)
+    }
+    const clear = () => setShiftHeld(false)
+    window.addEventListener('keydown', key); window.addEventListener('keyup', key); window.addEventListener('blur', clear)
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('keyup', key); window.removeEventListener('blur', clear) }
+  }, [])
+  const navigating = shiftHeld && m.gesture !== null
+  const activeGesture = navigating ? null : m.gesture
   const modelSize = useStore((s) => s.modelSize)
   const brush = brushRange(modelSize)
   const len = useLength()
@@ -98,9 +113,9 @@ export function MarkTools({
         {GESTURES.map((g) => (
           <button
             key={g.id ?? 'navigate'}
-            className={m.gesture === g.id ? 'withicon on' : 'withicon'}
+            className={activeGesture === g.id ? 'withicon on' : 'withicon'}
             data-test={`mark-${g.id ?? 'navigate'}`}
-            aria-pressed={m.gesture === g.id}
+            aria-pressed={activeGesture === g.id}
             title={g.title}
             // Clicking the live gesture again hands the camera back — the same
             // key that armed it disarms it.
@@ -111,10 +126,10 @@ export function MarkTools({
           </button>
         ))}
       </div>
-      <p className="hint">
-        {m.gesture === null
+      <p className="hint" data-test="mark-navigation-hint" data-shift-held={navigating}>
+        {navigating ? `Shift: temporary Navigate. Release Shift to return to ${m.gesture}. ` : m.gesture === null
           ? 'Marking is off — the camera has both drags back.'
-          : 'Left-drag marks, right-drag rubs out.'}
+          : 'Left-drag marks, right-drag rubs out. Hold Shift for normal left/right mouse navigation; release to resume this marking tool.'}
         <InfoDot title="Marking tools" testId="mark-help">
           <p>
             <b>Window</b> marks every triangle inside a dragged rectangle. <b>Brush</b> paints with a

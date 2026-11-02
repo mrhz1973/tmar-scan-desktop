@@ -68,6 +68,7 @@ export class OrthoNavigator {
   private action: NavAction | null = null
   /** Last seen `buttons` bitmask, so a chord change can be spotted. */
   private mask = 0
+  private modifiers = 0
   private last: { x: number; y: number } | null = null
   /** Drag-zoom keeps zooming toward where the gesture started. */
   private zoomAnchor: { x: number; y: number } | null = null
@@ -237,9 +238,8 @@ export class OrthoNavigator {
       this.bindings = [...base.filter((b) => !(claimed.includes(b.buttons) && !b.ctrl && !b.alt)), ...planarExtra]
       return
     }
-    const moved = base.map((b) =>
-      claimed.includes(b.buttons) && !b.shift && !b.ctrl && !b.alt ? { ...b, shift: true } : b,
-    )
+    const plain = (b: NavBinding) => claimed.includes(b.buttons) && !b.shift && !b.ctrl && !b.alt
+    const moved = [...base.filter(plain).map(b => ({ ...b, shift: true })), ...base.filter(b => !plain(b))]
     // A scheme that already used Shift with that button now has two bindings
     // for the same chord (Rhino's Shift+right pan behind its right-drag orbit,
     // say). First match wins, which puts the gesture that was plain — the one
@@ -355,9 +355,11 @@ export class OrthoNavigator {
    *  the chorded case) before being routed. */
   private syncButtons(e: PointerEvent): void {
     const mask = e.buttons & 7
-    if (mask === this.mask) return
+    const modifiers = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0)
+    if (mask === this.mask && modifiers === this.modifiers) return
     const prev = this.mask
     this.mask = mask
+    this.modifiers = modifiers
     // CATIA tick-zoom: a second button quickly CLICKED (rather than held, which
     // orbits) while middle stays down flips the rest of the drag from pan to
     // zoom.
@@ -415,7 +417,8 @@ export class OrthoNavigator {
     if (e.pointerType === 'touch') return this.touchMove(e)
     // Chorded button changes (a second button pressed or released mid-drag)
     // arrive as pointermove — catch them by the mask changing under a gesture.
-    if (this.mask && (e.buttons & 7) !== this.mask) {
+    const modifiers = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0)
+    if (this.mask && ((e.buttons & 7) !== this.mask || modifiers !== this.modifiers)) {
       this.syncButtons(e)
       return
     }

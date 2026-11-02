@@ -170,6 +170,7 @@ export class SurfaceMarking {
    *  the bare surface, so they are the theme's to choose, not the marking's. */
   private accents: ViewTheme['accents'] = DEFAULT_THEME.accents
   private painting = false
+  private shiftNavigating = false
   private paintLast: { x: number; y: number } | null = null
   /** The opening dab of a touch stroke, held back until the finger proves it
    *  meant to mark — see handlePointerDown. */
@@ -243,6 +244,9 @@ export class SurfaceMarking {
     document.addEventListener('pointermove', this.onPaintMove)
     document.addEventListener('pointerup', this.onPaintUp)
     document.addEventListener('pointercancel', this.onPaintUp)
+    document.addEventListener('keydown', this.onNavigationKey)
+    document.addEventListener('keyup', this.onNavigationKey)
+    window.addEventListener('blur', this.onNavigationBlur)
   }
 
   /** Whether the brush is armed at all — footprint updates hang off this. */
@@ -638,8 +642,27 @@ export class SurfaceMarking {
     return rightButton ? !alt : this.paint.erase !== alt
   }
 
+  private setShiftNavigation(on: boolean): void {
+    if (this.shiftNavigating === on) return
+    if (on) { this.drainStroke(); this.endGesture() }
+    this.shiftNavigating = on
+    if (on) this.brushRing.visible = false
+    this.ctx.requestHover()
+    this.ctx.invalidate()
+  }
+  private onNavigationKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Shift') return
+    if (e.type === 'keyup') { this.setShiftNavigation(false); return }
+    const target = e.target as HTMLElement | null
+    if (target?.closest?.('input,textarea,select,[contenteditable="true"],[role="dialog"]')) return
+    if (this.gestureArmed()) this.setShiftNavigation(true)
+  }
+  private onNavigationBlur = (): void => { this.setShiftNavigation(false); this.endGesture() }
+
   private onPaintMove = (e: PointerEvent): void => {
     if (!this.paint || this.gestureOf(this.paint) === null) return
+    this.setShiftNavigation(e.shiftKey)
+    if (e.shiftKey) return
     if (this.marquee) {
       this.extendMarquee(e.clientX, e.clientY)
       return
@@ -742,7 +765,7 @@ export class SurfaceMarking {
     // change is just the ring going away.
     this.ctx.invalidate()
     const mesh = this.ctx.mesh()
-    if (!this.paint || this.gestureOf(this.paint) !== 'brush' || !at || !mesh?.visible) {
+    if (!this.paint || this.shiftNavigating || this.gestureOf(this.paint) !== 'brush' || !at || !mesh?.visible) {
       this.brushRing.visible = false
       return
     }
@@ -809,6 +832,9 @@ export class SurfaceMarking {
     document.removeEventListener('pointermove', this.onPaintMove)
     document.removeEventListener('pointerup', this.onPaintUp)
     document.removeEventListener('pointercancel', this.onPaintUp)
+    document.removeEventListener('keydown', this.onNavigationKey)
+    document.removeEventListener('keyup', this.onNavigationKey)
+    window.removeEventListener('blur', this.onNavigationBlur)
     this.brushRing.geometry.dispose()
     this.brushRingMaterial.dispose()
     this.marqueeSvg.remove()
