@@ -12,6 +12,8 @@ other plugins. These are build-time modules, not hot-installable packages.
 | --- | --- | --- |
 | [reverse/](reverse/) | Inherited | The Reverse engineer workspace and existing CAD/note/export backends. |
 | [mesh-tools/](mesh-tools/) | Inherited | Tools to clean up and reduce a scan. |
+| [tmar-mesh-review/](tmar-mesh-review/) | Web implementation; user review open | Mesh Tools notes and Zebra on displayed scan/edited/reduced previews; reuses existing note/analysis plugins. |
+| [tmar-smooth-controls/](tmar-smooth-controls/) | Web implementation; user review open | Smooth intensity slider; Mesh Tools retains the selected region between successful Smooth applications. |
 | [tmar-body-export/](tmar-body-export/) | Implemented in `main` | One CAD-body export dialog for STEP/STL; requires Reverse engineer. |
 | [tmar-quick-notes/](tmar-quick-notes/) | Implemented in `main`, scan-side scope | Local notes, configurable shortcut, multi-selection and Go to note; scan-side Deviation adapter. |
 | [tmar-build-info/](tmar-build-info/) | Web implementation | Visible TMAR source revision and build provenance, independent of the upstream version. |

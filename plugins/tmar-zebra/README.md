@@ -99,3 +99,10 @@ Windows/Chrome was exercised; a
 real scanned part, macOS, a full continuity benchmark and live agent services
 remain unqualified. Temporary browser-profile removal can be delayed by
 Windows file locks; the check reports a cleanup warning if this occurs.
+
+## Mesh Tools inspection
+
+`tmar-mesh-review` reuses this panel and renderer for the actual scan, edited
+copy or reduced preview. Missing reduced-mesh normals are derived on an owned,
+flat display copy only. Source meshes and exports are unchanged. Numerical
+deviation remains separate. See [Mesh Tools](../tmar-mesh-review/README.md).

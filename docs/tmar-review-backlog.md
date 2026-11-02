@@ -82,3 +82,20 @@ native body option. No internal triangle-wireframe fallback and no geometry edit
 
 [Usage](../plugins/tmar-cad-edges/README.md) | [Validation](tmar-cad-edges-validation.md).
 This does not close ZEBRA-REVIEW-001 or implement ZEBRA-SPLIT-002.
+
+## MESH-REVIEW-005
+
+**Mesh Tools notes and Zebra — implemented; user review OPEN.** Shared local
+notes and displayed-mesh analysis are available. No agent requirement or automatic
+preview adoption. Uncommitted preview note targets and split view remain separate.
+
+## SMOOTH-REPEAT-006
+
+**Repeatable regional Smooth and intensity — implemented; user review OPEN.**
+A successful application retains the marked region via vertex mapping. The
+0–100% slider is independent from patch size, sharp-edge protection and the
+per-application movement limit. Settings survive project reopening. Named
+selection-set storage across sessions and large-mesh qualification remain open.
+
+[Validation](tmar-mesh-review-validation.md). These items do not close overall
+Zebra/result acceptance and do not publish a release.
