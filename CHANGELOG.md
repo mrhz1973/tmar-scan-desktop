@@ -7,6 +7,17 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Dark default and screenshot gallery - 2026-11-03
+
+- Start with Dark independently of the operating system, including first paint
+  and unavailable/invalid preference storage. Preserve explicit saved choices.
+- Keep Light and System available in Settings and clarify the default.
+- Move the authorized original Zebra screenshot to the top of README and add
+  twelve clickable thumbnails, eleven new synthetic UI captures, detailed
+  captions, provenance and a repeatable capture script.
+- Keep real-project/visual acceptance open. No geometry, kernel, dependencies,
+  project schema, previous preview or desktop release changes.
+
 ### TMAR regional Smooth and held-Shift navigation - 2026-11-02
 
 - Snapshot marked-region intent and vertex IDs; reject empty/stale regional requests

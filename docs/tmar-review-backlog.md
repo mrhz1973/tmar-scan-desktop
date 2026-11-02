@@ -112,3 +112,18 @@ unwanted reset to Navigate. Do not mark the user's real-file report resolved
 solely because these tests pass. No named selection storage is implied.
 
 [Validation and reproduction limits](tmar-smooth-brush-validation.md).
+
+## UI-DARK-008
+
+**Dark default implemented; user review OPEN.** New sessions start Dark from
+first paint rather than following the OS. Explicit saved Light/Dark/System
+preferences remain honored; invalid/unavailable storage defaults to Dark.
+No automatic changes to existing running previews.
+
+## DOCS-GALLERY-009
+
+**README hero and thumbnail gallery published; user review OPEN.** Original
+owner-approved Zebra image unchanged at the top; twelve clickable thumbnails,
+including eleven actual synthetic UI examples. Full captions and source hashes
+are recorded in [the gallery](tmar-ui-gallery.md). Broader real-part validation,
+existing unresolved Smooth reports and overall visual acceptance remain open.

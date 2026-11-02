@@ -209,8 +209,8 @@ export function SettingsModal() {
             ))}
           </div>
           <small>
-            Light or dark chassis. <b>System</b> follows the operating system's setting, and
-            changes with it.
+            <b>Dark</b> is the default. Your explicit choice is remembered in this browser.
+            <b> System</b> follows the operating system only when selected.
           </small>
         </div>
         <div className="setting">
