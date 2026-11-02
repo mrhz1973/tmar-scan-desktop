@@ -20,6 +20,8 @@ export interface ZebraSources {
   reference?(): THREE.Mesh | null
   invalidate(): void
   countChanged?(count: number): void
+  /** Mesh inspection only: derive flat per-triangle normals on an owned copy. */
+  deriveMissingNormals?: boolean
 }
 
 const projection = `
@@ -41,6 +43,7 @@ function sourceMaterial(mesh: THREE.Mesh): THREE.Material | null {
 export class ZebraLayer implements SceneLayer {
   readonly order = 100
   private readonly overlays = new Map<THREE.Mesh, THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>>()
+  private readonly geometryOf = new WeakMap<THREE.Mesh, { source: THREE.BufferGeometry; position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute; version: number; index: THREE.BufferAttribute | null; indexVersion: number; owned: boolean }>()
   private readonly distance = { value: 1 }
   private readonly center = { value: new THREE.Vector3() }
   private readonly frame = new THREE.Box3()
@@ -101,7 +104,17 @@ zebraReflectedUV = zebraUV(zebraPosition, normalMatrix * normal);`)
       shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', '#ifdef USE_MAP\ndiffuseColor *= texture2D(map, zebraReflectedUV);\n#endif')
     }
     material.customProgramCacheKey = () => 'tmar-zebra-reflection-v2'
-    const overlay = new THREE.Mesh(parent.geometry as THREE.BufferGeometry, material)
+    const source = parent.geometry as THREE.BufferGeometry
+    const owned = !source.getAttribute('normal')
+    // Reduced meshes are flat-shaded and may carry no normals. Derive them on
+    // unshared, per-triangle display buffers; never smooth the actual mesh.
+    const geometry = owned ? (source.index ? source.toNonIndexed() : source.clone()) : source
+    if (owned) geometry.computeVertexNormals()
+    const overlay = new THREE.Mesh(geometry, material)
+    const position = source.getAttribute('position')
+    this.geometryOf.set(overlay, { source, position,
+      version: position instanceof THREE.InterleavedBufferAttribute ? position.data.version : position.version,
+      index: source.index, indexVersion: source.index?.version ?? 0, owned })
     overlay.name = 'tmar-zebra-overlay'
     overlay.userData.tmarZebra = true
     overlay.renderOrder = parent.renderOrder + 1
@@ -147,6 +160,12 @@ zebraReflectedUV = zebraUV(zebraPosition, normalMatrix * normal);`)
     return changed
   }
 
+  private dropOverlay(overlay: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>): void {
+    overlay.removeFromParent(); overlay.material.dispose()
+    if (this.geometryOf.get(overlay)?.owned) overlay.geometry.dispose()
+    this.geometryOf.delete(overlay)
+  }
+
   private sync(): void {
     if (this.disposed) return
     const wanted = new Set<THREE.Mesh>()
@@ -161,15 +180,18 @@ zebraReflectedUV = zebraUV(zebraPosition, normalMatrix * normal);`)
     }
     let changed = false
     for (const [parent, overlay] of this.overlays) {
-      if (wanted.has(parent) && parent.geometry === overlay.geometry) continue
-      overlay.removeFromParent()
-      overlay.material.dispose()
+      const held = this.geometryOf.get(overlay), pos = parent.geometry.getAttribute('position')
+      const version = pos instanceof THREE.InterleavedBufferAttribute ? pos.data.version : pos?.version
+      const same = held && parent.geometry === held.source && (!held.owned ||
+        (pos === held.position && version === held.version && parent.geometry.index === held.index && (parent.geometry.index?.version ?? 0) === held.indexVersion))
+      if (wanted.has(parent) && same) continue
+      this.dropOverlay(overlay)
       this.overlays.delete(parent)
       changed = true
     }
     let visible = 0
     for (const parent of wanted) {
-      if (!parent.geometry.getAttribute('normal')) continue
+      if (!parent.geometry.getAttribute('position') || (!parent.geometry.getAttribute('normal') && !this.sources.deriveMissingNormals)) continue
       let overlay = this.overlays.get(parent)
       if (!overlay) {
         overlay = this.makeOverlay(parent)
@@ -199,7 +221,7 @@ zebraReflectedUV = zebraUV(zebraPosition, normalMatrix * normal);`)
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    for (const overlay of this.overlays.values()) { overlay.removeFromParent(); overlay.material.dispose() }
+    for (const overlay of this.overlays.values()) this.dropOverlay(overlay)
     this.overlays.clear()
     this.texture.dispose()
     this.sources.invalidate()

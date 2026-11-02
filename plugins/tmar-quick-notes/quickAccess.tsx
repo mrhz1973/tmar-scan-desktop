@@ -8,6 +8,7 @@ import { useCommandActivity } from '../../src/commands/activity'
 import { reEditorOpen, useReverse } from '../reverse/state/reStore'
 import { useNotes } from '../reverse/state/noteStore'
 import { KeyIcon } from '../reverse/ui/reIcons'
+import { noteWorkspace } from '../reverse/app/noteWorkspaces'
 import { placementBlockNow } from './notePlacement'
 import { clearNoteFocus, useNoteFocus } from './noteFocus'
 
@@ -26,10 +27,12 @@ export const useNoteShortcut = create<{ key: string; setKey: (key: string) => vo
 }))
 export function canArmNote(): string | null {
   const workspace = useShell.getState().workspace, re = useReverse.getState(), model = useStore.getState()
-  if (workspace !== 'reverse' && workspace !== 'deviation') return 'Open Reverse engineer or Deviation to add a note.'
+  if (workspace !== 'reverse' && !noteWorkspace(workspace)) return 'Open a workspace with local notes to add a note.'
   if (useNotes.getState().editing) return 'Save or cancel the open note first.'
   if (model.busy || useCommandActivity.getState().running || re.building || reEditorOpen(re) || re.playback) return 'Finish the current operation or editor first.'
   if (workspace === 'deviation') return placementBlockNow()
+  const blocked = noteWorkspace(workspace)?.placementBlocked?.()
+  if (blocked) return blocked
   if (!model.fileName && !re.bodies.length) return 'Load a scan or build a body first.'
   return null
 }
@@ -54,7 +57,7 @@ export function NoteShortcutSettings() {
         {'abcdefghijklmnopqrstuvwxyz'.split('').map((letter) => <option key={letter} value={letter}>{letter.toUpperCase()}</option>)}
       </select>
     </label>
-    <p className="hint">One unmodified letter in Reverse engineer or Deviation. Inactive while typing, in dialogs or while a CAD editor is open. Does not enable an agent connection.</p>
+    <p className="hint">One unmodified letter in workspaces with local notes (including Mesh Tools when installed). Inactive while typing, in dialogs or while a CAD editor is open. Does not enable an agent connection.</p>
     <button data-test="note-shortcut-reset" onClick={() => setKey('n')}>Reset to N</button>
   </section>
 }
@@ -62,7 +65,7 @@ export function QuickNoteButton() {
   const workspace = useShell((s) => s.workspace)
   const placing = useNotes((s) => s.placing)
   const key = useNoteShortcut((s) => s.key)
-  if (workspace !== 'reverse' && workspace !== 'deviation') return null
+  if (workspace !== 'reverse' && !noteWorkspace(workspace)) return null
   return <div className="keys"><button data-test="quick-note" aria-pressed={placing}
     className={placing ? 'on' : undefined} title={`Add a local note${key ? ` (${key.toUpperCase()})` : ''}`} onClick={armNote}>
     <KeyIcon name="note" size={16} />Note

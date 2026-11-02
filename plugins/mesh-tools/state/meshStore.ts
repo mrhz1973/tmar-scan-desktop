@@ -79,6 +79,8 @@ export type ScanEdit =
   | { kind: 'fill'; maxSize: number; mode: FillMode; holes: number; triangles: number }
   | {
       kind: 'smooth'
+      /** Intensity used for this application, 0..1; old records imply 1. */
+      strength?: number
       /** Bumps smaller than this across smoothed out, mm, and no point moved
        *  further than the limit; the furthest any went. */
       size: number
@@ -131,7 +133,7 @@ export type ScanEdit =
 export const MESH_SETTINGS = [
   'tolerance', 'toleranceAuto', 'maxTriangles', 'pieceSize', 'pieceSizeAuto', 'cutRef', 'cutOffset', 'cutOffsetAuto', 'cutKeep',
   'cutCap', 'holeSize', 'holeSizeAuto', 'fillMode', 'smoothScope', 'smoothSize', 'smoothSizeAuto', 'smoothLimit', 'smoothLimitAuto',
-  'smoothEdges', 'offsetScope', 'offsetDirection', 'offsetDistance', 'boolOp', 'boolSolids', 'trimSolid', 'trimOffset', 'trimDepth',
+  'smoothEdges', 'smoothStrength', 'offsetScope', 'offsetDirection', 'offsetDistance', 'boolOp', 'boolSolids', 'trimSolid', 'trimOffset', 'trimDepth',
   'trimFlip', 'shellThickness', 'shellThicknessAuto', 'shellSide',
 ] as const
 
@@ -291,6 +293,7 @@ interface MeshState {
   smoothLimit: number
   smoothLimitAuto: boolean
   smoothEdges: boolean
+  smoothStrength: number
 
   // ---- Shrink / expand -------------------------------------------------------------
   offsetScope: SmoothScope
@@ -410,6 +413,7 @@ interface MeshState {
   setSmoothSize: (v: number) => void
   setSmoothLimit: (v: number) => void
   setSmoothEdges: (on: boolean) => void
+  setSmoothStrength: (value: number) => void
   setOffsetScope: (scope: SmoothScope) => void
   setOffsetDirection: (direction: OffsetDirection) => void
   setOffsetDistance: (v: number) => void
@@ -510,6 +514,7 @@ export const useMeshTools = create<MeshState>()((set) => ({
   smoothLimit: 0.2,
   smoothLimitAuto: true,
   smoothEdges: true,
+  smoothStrength: 1,
 
   offsetScope: 'all',
   offsetDirection: 'expand',
@@ -602,6 +607,10 @@ export const useMeshTools = create<MeshState>()((set) => ({
   setSmoothLimit: (v) => set({ smoothLimit: Math.max(1e-4, v), smoothLimitAuto: false }),
 
   setSmoothEdges: (smoothEdges) => set({ smoothEdges }),
+
+  setSmoothStrength: (value) => {
+    if (Number.isFinite(value)) set({ smoothStrength: Math.max(0, Math.min(1, value)) })
+  },
 
   setOffsetScope: (offsetScope) => set({ offsetScope }),
 
@@ -738,7 +747,7 @@ export function scanEditText(e: ScanEdit, units: DisplayUnits = 'mm'): string {
     case 'fill':
       return `Filled ${count(e.holes)} hole${e.holes === 1 ? '' : 's'} under ${len(e.maxSize)}${e.mode === 'flat' ? ', flat' : ''}`
     case 'smooth':
-      return `Smoothed bumps under ${len(e.size)}${e.region ? ' in a marked region' : ''}, within ${len(e.limit)}`
+      return `Smoothed bumps under ${len(e.size)}${e.region ? ' in a marked region' : ''}, within ${len(e.limit)}${e.strength !== undefined && e.strength !== 1 ? ` at ${Math.round(e.strength * 100)}% intensity` : ''}`
     case 'boolean':
       return e.op === 'subtract' ? `Took ${e.solid} out` : e.op === 'add' ? `Added ${e.solid}` : `Kept what ${e.solid} shares`
     case 'offset':

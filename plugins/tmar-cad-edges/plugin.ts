@@ -8,6 +8,7 @@ const plugin: ScanRulerPlugin = {
   install(){
     if(!plugins().some(p=>p.id==='reverse'))return
     registerPanelExtension({id:'tmar-cad-edges.reverse',slot:'reverse.analysis',component:CadEdgePanel,order:20})
+    registerPanelExtension({id:'tmar-cad-edges.mesh',slot:'mesh.analysis',component:CadEdgePanel,order:20})
     registerPanelExtension({id:'tmar-cad-edges.deviation',slot:'deviation.extra',component:CadEdgePanel,order:20})
     registerPanelExtension({id:'tmar-cad-edges.quick',slot:'view.tools',component:CadEdgeButton,order:35})
   },

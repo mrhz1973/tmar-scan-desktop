@@ -2,9 +2,14 @@
 // Optional note-placement adapters for other workspaces. Installed once before
 // React mounts. Reverse engineer keeps its original behavior without adapters.
 import type { SceneManager } from '../../../src/viewer/SceneManager'
+import type { Note } from '../core/notes'
 
 export interface NoteWorkspace {
   workspace: string
+  /** Guards run again when the shortcut/click occurs, not only on render. */
+  placementBlocked?(): string | null
+  focusProblem?(note: Note, scene: SceneManager): string | null
+  focusWarning?(note: Note, scene: SceneManager): string | null
   place(scene: SceneManager, x: number, y: number): void
 }
 const adapters = new Map<string, NoteWorkspace>()
