@@ -1,4 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
+> **Resolved on November 2, 2026.** The tunnel was restored and this draft gate
+> was completed. See [the final validation](tmar-feature-categories-validation.md).
+> The original preparation/blocked-state record below is retained as history.
+
 # Category-scoped feature selection — draft handoff
 
 Date: November 2, 2026. Base: `742d91d98b693735be2bafb36ff37b66bfa294c6`.

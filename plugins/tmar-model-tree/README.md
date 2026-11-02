@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # TMAR categorized feature selection
 
-**Branch status: implementation draft; application build and browser validation
-are still required. Not a published preview or desktop release.** The baseline
-is `742d91d98b693735be2bafb36ff37b66bfa294c6`, including the integrated Zebra
-reflection improvement from PR #6. No Zebra source is changed by this work.
+**Web implementation qualified on Windows/Chrome with synthetic fixtures.**
+The baseline is `742d91d`, including the integrated Zebra reflection improvement
+from PR #6. Zebra source is unchanged. No native desktop release or real-scan /
+macOS qualification is implied.
 
 ## Categories, not one mixed Select All
 
@@ -54,23 +54,34 @@ category order never changes build order. Playback opens the chronological
 view. Category grouping and collapse preferences are browser UI state, not new
 geometry or a project-format change.
 
-## Validation and next gate
+## Validation and reproduction
 
-The dependency-free classification/target tests were executed: **26 passed**.
-The pure helper passed strict TypeScript checking. Changed TypeScript/TSX files
-were syntax-transpiled only; this is not a full application type check/build.
-The new adapter Vitest tests and all browser regressions are **NOT RUN**.
-See [the integration handoff](../../docs/tmar-feature-categories-handoff.md).
+Final local checks: **26 resolver checks, 75 targeted unit tests and 260
+application-browser assertions**, plus separate WebGL reflection comparisons.
+TypeScript and the production build passed. See the
+[validation record](../../docs/tmar-feature-categories-validation.md), including
+failed intermediate attempts, exact source revision and platform limitations.
 
 ```sh
 node --experimental-strip-types --test plugins/tmar-model-tree/scripts/check-categories.mjs
 npx vitest run plugins/tmar-model-tree/tests tests/listSelection.test.ts
 npm run build
+node plugins/tmar-model-tree/scripts/e2e-categories.mjs
+node plugins/tmar-model-tree/scripts/e2e-categories-production.mjs
 node scripts/check-plugin-boundary.mjs
 node scripts/check-units.mjs
 ```
 
-Before integration, update the old mixed-list selection assertions in the
-usability browser test to category-scoped selectors, retaining its geometry,
-Undo, export and note assertions. Then run the full targeted browser regressions
-including Zebra and production note focus. Do not reload a live user session.
+The first browser script generates its own synthetic `.scanruler` fixture in
+ignored `e2e-out/`; the production script consumes that file and starts `dist/`
+with a fresh profile. Neither opens a personal browser tab. The first scenario
+is registered in `ci.json`. Hosted CI was not used to claim these local results.
+
+Save Project keeps category and note selections: it shares an import queue, but
+is not a project replacement. Reopening a project (even the same filename) and
+Undo/Redo still clear transient selections. The generic selection helper listens
+to the committed history revision rather than the import queue's busy flag.
+
+Native context menus remain in **Build history / rollback**. Grouped rows retain
+their original edit, delete, suppress/restore and sketch-eye buttons. Category
+Show/Hide never substitutes for suppression.

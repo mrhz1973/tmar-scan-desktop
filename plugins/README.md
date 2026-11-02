@@ -14,7 +14,7 @@ other plugins. These are build-time modules, not hot-installable packages.
 | [tmar-body-export/](tmar-body-export/) | Implemented in `main` | One CAD-body export dialog for STEP/STL; requires Reverse engineer. |
 | [tmar-quick-notes/](tmar-quick-notes/) | Implemented in `main`, scan-side scope | Local notes, configurable shortcut, multi-selection and Go to note; scan-side Deviation adapter. |
 | [tmar-zebra/](tmar-zebra/) | Initial web implementation | Zebra stripes and local pinned observations in Reverse engineer. |
-| [tmar-model-tree/](tmar-model-tree/) | Initial web implementation | Feature selection, bulk output visibility and collapse. |
+| [tmar-model-tree/](tmar-model-tree/) | Initial web implementation | Independent feature categories, type-scoped selection/visibility, large collapse headers and preserved chronological history. |
 | [tmar-display-controls/](tmar-display-controls/) | Initial web implementation | Lower-bar Labels, per-workspace note-pin preferences and a resizable left panel. |
 
 The two TMAR extensions were integrated in [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`. See the [validation record](../docs/tmar-web-validation.md) for tested scope and limitations. Plugin sources, documentation and tests are available; no desktop release or runtime plugin manager is implied.
@@ -110,3 +110,11 @@ The ID-based selection helper is `src/plugins/listSelection.ts`.
 
 The export plugin takes over the export panel; with no export contribution,
 the inherited STEP button remains. See [the current validation record](../docs/tmar-usability-validation.md).
+
+## Category-selection follow-up
+
+The model-tree plugin now separates sketches, section sketches, surface operations
+and solid-body operations. Unknown kinds cannot hide bodies. The original
+chronological list is retained; no CAD build order is changed. See
+[category validation](../docs/tmar-feature-categories-validation.md) for tests,
+including actual compiled UI, save/reopen and unchanged integrated Zebra.
