@@ -13,10 +13,11 @@ other plugins. These are build-time modules, not hot-installable packages.
 | [mesh-tools/](mesh-tools/) | Inherited | Tools to clean up and reduce a scan. |
 | [tmar-body-export/](tmar-body-export/) | Implemented in `main` | Web controls for CAD-body STL export; requires Reverse engineer. |
 | [tmar-quick-notes/](tmar-quick-notes/) | Implemented in `main`, scan-side scope | Shared notes directly in the single Deviation viewport; requires Reverse engineer. |
+| [tmar-zebra/](tmar-zebra/) | Initial web implementation | Zebra stripes and local pinned observations in Reverse engineer. |
 
 The two TMAR extensions were integrated in [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`. See the [validation record](../docs/tmar-web-validation.md) for tested scope and limitations. Plugin sources, documentation and tests are available; no desktop release or runtime plugin manager is implied.
 
-**Zebra remains a separate assigned work item.** Its planned directory is `plugins/tmar-zebra/`; consult the [coordination handoff](../docs/tmar-zebra-handoff.md) before integrating changes. This catalog does not claim Zebra is implemented.
+The initial [Zebra plugin](tmar-zebra/README.md) is developed separately under the [coordination handoff](../docs/tmar-zebra-handoff.md). It adds view-only analysis and local pinned notes; review, real-part validation and platform qualification remain separate from the source change.
 
 ## The rules
 

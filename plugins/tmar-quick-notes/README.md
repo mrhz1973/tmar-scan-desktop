@@ -10,17 +10,17 @@ implicitly implemented by this first increment.
 
 ## Use
 
-In **Deviation**, the existing **Notes for the agent** panel is now available.
+In **Deviation**, the existing notes panel is now available.
 Activate **Note**, click a point on the visible **scan-side** comparison map,
 write the observation and keep it. The map and workspace remain active. The
 same record, ID, text and position appear in Reverse engineer and are stored
 in the existing `.scanruler` project's `reverseNotes` section. Escape cancels
 placement. Normal deviation reading/pinning resumes when placement ends.
 
-This first implementation follows upstream's note visibility under
-**Settings → Agents**. It never enables that setting or connects an agent on
-the user's behalf. The existing privacy warning and provider behavior apply.
-An independent local-only annotation mode remains future work.
+Notes also appear when the person opens local notes through Zebra or a project
+contains saved notes. They can then be used without an agent connection. This
+extension never enables that connection on the user's behalf; the existing
+privacy warning and provider behavior apply when an agent is explicitly enabled.
 
 ## Explicit scope and limitations
 

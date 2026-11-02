@@ -22,7 +22,7 @@
 // one saved with the notes and one without: each opened brings its own. A
 // click on a pin's badge opens its note; Escape puts the Note key down; the
 // view bar's Notes key puts the pins away and a note opened brings them back; the
-// connection switched off in Settings takes the list and the pins away.
+// connection switched off in Settings leaves saved notes locally available.
 //
 // Prereqs: dev server running (npm run dev), Chrome, and the server's
 // dependencies (npm --prefix mcp ci).
@@ -390,8 +390,9 @@ try {
   await page.click('[data-test=toggle-agent-link]')
   await page.click('[data-test=settings-close]')
   await sleep(300)
-  const hidden = await re(() => ({ list: !!document.querySelector('[data-test=note-list]'), labels: [...document.querySelectorAll('[data-test=note-label]')].filter((e) => e.style.display !== 'none').length }))
-  check(!hidden.list && hidden.labels === 0, `the connection off takes the list and the pins away: ${JSON.stringify(hidden)}`)
+  const local = await re(() => ({ list: !!document.querySelector('[data-test=note-list]'), labels: [...document.querySelectorAll('[data-test=note-label]')].filter((e) => e.style.display !== 'none').length }))
+  check(local.list && local.labels > 0, `the connection off keeps the local list and pins available: ${JSON.stringify(local)}`)
+  check(await page.evaluate(async () => !(await import('/src/state/prefsStore.ts')).usePrefs.getState().agentLink), 'local notes do not reactivate the connection')
   check((await notes()).length === 5, 'the notes are kept')
   await page.screenshot({ path: shotPath('notes-4-off.png') })
 } catch (e) {

@@ -176,12 +176,11 @@ const plugin: ScanRulerPlugin = {
           if (scene) reSceneOf(scene).setSketchesShown(on)
         },
       },
-      // The pins are drawn in every workspace while the agent connection is
-      // on; put away, the notes stay as they are.
+      // Pins can be drawn for local notes or an agent; put away, the notes stay.
       {
         key: 'notes',
         description: 'the pins of the notes on the part (put away, the notes stay)',
-        applies: () => usePrefs.getState().agentLink,
+        applies: () => usePrefs.getState().agentLink || useNotes.getState().localNotesVisible || useNotes.getState().notes.length > 0,
         shown: () => useNotes.getState().pinsShown,
         show: (on) => useNotes.getState().setPinsShown(on),
       },

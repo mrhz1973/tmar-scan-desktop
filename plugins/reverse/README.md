@@ -1034,9 +1034,10 @@ client).
 
 ### Notes for the agent
 
-What the person wants of the part, said where it is to be done. While the
-agent connection is switched on (Settings → Agents — `prefs.agentLink`;
-the tool is not there otherwise), the panel has **Notes for the agent**:
+Notes describe the part where an observation is made. The panel is available
+when notes are opened locally through Zebra, when a project already has notes,
+or when the optional agent connection is switched on (Settings → Agents).
+Local use does not enable an agent connection. In the panel,
 the **Note** key, then a click on the part — a face, an edge or a corner of
 a body, or the scan — pins a note there, and a box by the pin takes the
 sentence (Enter keeps it, or a middle click anywhere — pressed and let go

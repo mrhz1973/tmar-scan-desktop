@@ -19,13 +19,13 @@ These are **implemented web-source features**, not just roadmap entries. They ru
 | Extension | Available now | Current boundary |
 | --- | --- | --- |
 | [CAD body STL export](plugins/tmar-body-export/README.md) | Export visible solid bodies or explicit body-list selections, including selected components, with a unit-aware chord setting. STEP remains available. | Exports CAD solids, never the source scan. Multiple bodies share a file without a Boolean union; this is not a printability certificate. |
-| [Notes in Deviation](plugins/tmar-quick-notes/README.md) | Place, edit and save notes on the scan-side map without leaving Deviation. The same notes appear in Reverse engineer and survive project save/reopen. | Single viewport, visible scan side, using the existing **Settings > Agents** visibility switch. Reference-side and split-view placement remain unsupported. |
+| [Notes in Deviation](plugins/tmar-quick-notes/README.md) | Place, edit and save notes on the scan-side map without leaving Deviation. The same notes appear in Reverse engineer and survive project save/reopen. | Single viewport, visible scan side. Notes can be opened locally through Zebra; agent connection remains an independent choice. Reference-side and split-view placement remain unsupported. |
 
 **Recorded validation:** 36 targeted unit tests, 15 combined TMAR browser assertions and 9 upstream production-bundle assertions passed on Windows/Chrome. TypeScript/Vite build, plugin-boundary and display-unit checks passed. See the [validation record](docs/tmar-web-validation.md) for the tested source, environment and reproduction commands. These are the implementation run's recorded results, not a claim that this documentation update reran them. macOS, the complete upstream suite and a live AI-provider connection remain unqualified.
 
 Use [the fork's web build](#how-to-try-it-today) to see the new controls. Publishing source on GitHub does **not** update `scanruler.com` or reload an already open session. Prebuilt desktop packages and a managed update service are not available yet.
 
-Only the two capabilities above are delivered in this increment. Go to note, configurable shortcuts, Zebra, collapsible panels, per-workspace label preferences and Italian localization remain separate work items. Zebra has a [coordinated contributor handoff](docs/tmar-zebra-handoff.md); it is not implemented by this documentation update.
+The two capabilities above were integrated in PR #1. This source also includes an initial [Zebra analysis plugin](plugins/tmar-zebra/README.md), developed separately under the [coordination handoff](docs/tmar-zebra-handoff.md). Go to note, configurable shortcuts, collapsible panels, per-workspace label preferences and Italian localization remain separate work items. The Zebra change is a web-source increment, not a desktop release.
 
 ## Why this fork exists
 
@@ -79,7 +79,7 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Updates and rollback | Planned | Automated builds and tests, versioned packages, stable/fast channels and safe activation. |
 | Resources and backend selection | Planned | Monitoring, RAM/GPU-memory budgets, controlled concurrency and a CPU execution path. |
 | GPU computation on Windows and Mac | Later investigation | Evaluate WebGPU and CUDA/Metal modules where a benefit can be demonstrated. |
-| Zebra surface analysis plugin | Planned; assigned to a separate contributor | Dedicated plugin development is coordinated in [the Zebra handoff](docs/tmar-zebra-handoff.md). No Zebra runtime is delivered yet; retain the visual-quality requirements below. |
+| Zebra surface analysis plugin | Initial web implementation | View-only bands for visible or selected CAD bodies or the scan; notes can be pinned locally. Further continuity fixtures, macOS and real-part validation remain open. |
 | Model-tree multi-selection and bulk-actions plugin | Planned | Consistent Ctrl/Cmd, Shift and Select All behavior across relevant feature, body and construction-element lists, with collective visibility and supported actions. Reuse existing upstream capabilities. |
 | Quick-note access and navigation plugin | Partial | The Deviation Note button and shared list are implemented in `tmar-quick-notes`. Configurable shortcuts, Go to note and previous-view navigation remain planned. |
 | Notes directly in Deviation | Implemented in web source; scan-side scope | Add/edit/save notes in the single scan-side comparison view; shared IDs and project round trips verified. Reference-side/split-view anchors and comparison metadata remain planned. |
@@ -87,7 +87,7 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Collapsible Features and Notes panels | Planned | Independently collapse/expand long panels, retain their state and selection, and configure layout preferences in Settings. |
 | Per-workspace labeling and annotation visibility plugin | Planned | Settings-based display controls, including hiding note text and markers in Mesh Tools without deleting notes or changing their availability to a connected agent. |
 | Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
-| Customizations and contributions | Partial | Two dedicated TMAR plugins, English README files, tests and generic panel hooks are present. A runtime plugin/package manager and automated update pipeline remain planned. |
+| Customizations and contributions | Partial | Three dedicated TMAR plugins are in this source, with English documentation, tests and generic panel hooks. A runtime plugin/package manager and automated update pipeline remain planned. |
 
 There are two tracks: **web plugins can be implemented and used now**, independently of the desktop shell; the desktop track remains **shell -> persistence and recovery -> pause/resume -> verified updates -> measured optimization**. Follow-up work includes reference/split-view notes, note navigation and shortcuts, display controls, Zebra and broader qualification. Tasks can proceed in isolated branches; reliability takes priority over speed. This README does not set delivery dates.
 
@@ -152,15 +152,15 @@ A new upstream version must not erase a customization just to install successful
 
 General fixes may also be proposed upstream under its contribution rules. A fork does not imply that CNC Kitchen accepts or supports those changes.
 
-## Zebra analysis — planned plugin
+## Zebra analysis — initial web plugin
 
-**Added to the roadmap on November 1, 2026. Status: planned, not implemented.** Introduce a zebra-analysis mode to visually inspect reconstructed surfaces and their joins, helping identify unwanted waviness and discontinuities before delivery.
+The initial plugin visually inspects displayed surfaces and their joins, helping identify unwanted waviness and discontinuities. It is a browser rendering aid, not a numerical continuity test or desktop release.
 
-**Proposed organization:** a `tmar-zebra` plugin under `plugins/tmar-zebra/`, with source, `plugin.ts`, `README.md` and dedicated tests. It is assigned to a separate contributor using an isolated branch, as recorded in [the coordination handoff](docs/tmar-zebra-handoff.md). No Zebra implementation is included in the verified baseline. Contributors should be able to improve visualization, controls and checks within the plugin; CAD-body and viewport integration must be explicit and documented.
+The [tmar-zebra plugin](plugins/tmar-zebra/README.md) uses a removable display layer and an independent analysis slot in Reverse engineer. It supports local pinned notes while active, without enabling an agent connection. The [coordination handoff](docs/tmar-zebra-handoff.md) records its integration boundaries.
 
-- [ ] Implement the separate plugin, document its interfaces and verify that the application still works without it enabled.
-- [ ] Display zebra stripes on selected CAD bodies and surfaces, with an on/off control.
-- [ ] Provide adjustable stripe orientation and density to inspect from different directions.
+- [x] Implement the separate plugin and document its interfaces; the host was smoke-tested with plugins disabled.
+- [x] Display zebra stripes on visible or selected CAD bodies, or the scan, with an on/off control.
+- [x] Provide adjustable stripe orientation, width and color.
 - [ ] Capture views with reproducible parameters for verification reports and AI review.
 - [ ] Test reference surfaces with smooth joins, known discontinuities and intentional sharp edges; check tessellation and displayed-normal effects on Windows and macOS.
 
@@ -236,7 +236,7 @@ The [upstream note workflow](README.upstream.md#when-your-part-does-not-come-out
 - [x] Keep placement distinct from map reading/pinning: the synthetic test leaves the map revision and measurement-pin count unchanged, and Escape cancels placement.
 - [x] Explicitly guard reference-side/split-view placement, hidden scans, busy operations, alignment picking, surface marking, deformation animation, empty space and clipped hits. Some guards are unit-tested; see the evidence record for the exact test levels.
 
-The initial adapter follows **Settings > Agents** for note visibility. It never enables that switch or connects an agent on the user's behalf. A new local-only note mode is not delivered. Creating or editing a note currently retains the inherited visibility behavior; independent workspace overrides remain planned.
+Notes can be made locally using Zebra's **Add note on the part** action; existing saved notes remain accessible without an agent connection. They also appear in Deviation when its existing placement guards allow it. The application never enables an agent connection on the user's behalf; independent per-workspace visibility overrides remain planned.
 
 **Still to implement or qualify:**
 
@@ -332,7 +332,7 @@ npm run dev -- --host 127.0.0.1 --port 5197 --strictPort
 
 Open the local address printed by Vite. This explicit port avoids silently selecting an unknown port; choose another unused port if it is occupied. Use a separate browser tab/profile for testing and save active projects before intentionally reloading or replacing their app version. These commands do not update an already running upstream session.
 
-In the fork, open **Reverse engineer > CAD body STL** for solid-body export, or **Deviation > Notes for the agent** for scan-side notes. The latter follows the existing **Settings > Agents** control and its privacy warning. See each plugin's README for exact steps and restrictions.
+In the fork, open **Reverse engineer > CAD body STL** for solid-body export, or **Reverse engineer > Zebra surface analysis** for Zebra and local notes. Available notes also appear in Deviation for scan-side placement. Connecting an agent is optional and retains its existing privacy warning. See each plugin's README for exact steps and restrictions.
 
 For an existing clone, preserve any local changes and check its branch before updating; do not reset or overwrite an active worktree to follow these instructions. A production web bundle can be built with `npm run build` and served locally with `npm run preview`. This is still a web application, not a desktop package or public deployment.
 
