@@ -73,3 +73,10 @@ node scripts/check-units.mjs
 
 The browser scenarios own isolated profiles and ephemeral servers unless
 APP_URL is explicitly supplied. Never point them at an active user session.
+
+## Mesh Tools adapter
+
+With `tmar-mesh-review` installed, the same Note shortcut, records, multi-selection,
+local editor, navigation and storage are available in Mesh Tools. New notes
+attach to the scan in use; active edit tools and unsupported preview targets
+are guarded. See [Mesh Tools notes](../tmar-mesh-review/README.md).

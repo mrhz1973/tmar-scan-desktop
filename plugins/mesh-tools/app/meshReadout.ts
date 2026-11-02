@@ -35,7 +35,7 @@ function settingsOut(m: MeshState = useMeshTools.getState()) {
     removeIslands: { size: m.pieceSize },
     cut: { plane: cutPlaneOut(m.cutRef), offset: m.cutOffsetAuto ? null : m.cutOffset, keep: m.cutKeep, cap: m.cutCap },
     fillHoles: { size: m.holeSize, patch: m.fillMode },
-    smooth: { size: m.smoothSize, limit: m.smoothLimit, keepEdges: m.smoothEdges, scope: m.smoothScope },
+    smooth: { size: m.smoothSize, limit: m.smoothLimit, keepEdges: m.smoothEdges, scope: m.smoothScope, strength: m.smoothStrength },
     offset: { direction: m.offsetDirection, distance: m.offsetDistance, scope: m.offsetScope },
     boolean: { op: m.boolOp, solids: m.boolSolids },
     shell: { thickness: m.shellThickness, side: m.shellSide },

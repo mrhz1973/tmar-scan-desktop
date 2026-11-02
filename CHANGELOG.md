@@ -7,6 +7,17 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Mesh Tools review and Smooth controls - 2026-11-02
+
+- Add optional Mesh Tools notes/Zebra integration, with shared local note records,
+  focus/highlight and an explicit distinction between the scan and working previews.
+- Inspect edited/reduced meshes without adopting them or altering source buffers.
+- Retain a marked region through a successful Smooth result's exact vertex map.
+- Add optional 0–100% Smooth intensity, persisted settings and edit records;
+  preserve legacy full strength and explain cumulative per-application movement.
+- Recheck the original mesh-edit flow, existing TMAR regressions and compiled UI.
+  User visual acceptance, macOS and large-mesh qualification remain open.
+
 ### TMAR STEP-as-Scan edges and build identity - 2026-11-02
 
 - Preserve original CAD face boundaries when STEP is opened in the Scan slot,

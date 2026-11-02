@@ -12,6 +12,7 @@ import { reverseSession, meshDiagonal } from '../reverse/app/reSession'
 import { nearestOnMesh, type Note } from '../reverse/core/notes'
 import { matchEdge, matchFace, matchTolerance } from '../reverse/core/topo'
 import { notePinsOf } from '../reverse/viewer/notePins'
+import { noteWorkspace } from '../reverse/app/noteWorkspaces'
 
 export const useNoteFocus = create<{ id: number | null; canReturn: boolean; message: string; warning: boolean }>(() => ({ id: null, canReturn: false, message: '', warning: false }))
 let previous: { scene: SceneManager; pose: ReturnType<SceneManager['captureView']> } | null = null
@@ -23,6 +24,8 @@ export function focusProblem(note: Note, _scene: SceneManager): string | null {
   if (useNotes.getState().editing) return 'Save or cancel the open note before locating another note.'
   if (!Array.isArray(note.at) || note.at.length !== 3 || !note.at.every(Number.isFinite)) return 'This note has no valid model-space anchor.'
   if (workspace === 'flat') return 'Open a 3D workspace to locate this note.'
+  const adapterProblem = noteWorkspace(workspace)?.focusProblem?.(note, _scene)
+  if (adapterProblem) return adapterProblem
   const d = useDeviation.getState()
   if (workspace === 'deviation' && (d.picking || d.animate || d.split || d.alignStatus === 'running')) return 'Use a still, single Deviation viewport before locating a note.'
   return null
@@ -31,6 +34,8 @@ export function focusProblem(note: Note, _scene: SceneManager): string | null {
 /** Diagnostics do not prevent locating the saved marker. No target is guessed or moved. */
 export function focusWarning(note: Note, scene: SceneManager): string | null {
   const re = useReverse.getState(), workspace = useShell.getState().workspace
+  const adapterWarning = noteWorkspace(workspace)?.focusWarning?.(note, scene)
+  if (adapterWarning) return adapterWarning
   const target = note.on[0]
   if (!target) return 'This note has no target record; only its saved coordinates are available.'
   if (target.kind === 'scan') {

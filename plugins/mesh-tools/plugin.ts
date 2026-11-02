@@ -92,7 +92,7 @@ const plugin: ScanRulerPlugin = {
           store: useMeshTools,
           label: 'Mesh Tools',
           names: ['setTolerance', 'setMaxTriangles', 'setPieceSize', 'setCutRef', 'setCutOffset', 'setCutKeep', 'setCutCap',
-            'setHoleSize', 'setFillMode', 'setSmoothScope', 'setSmoothSize', 'setSmoothLimit', 'setSmoothEdges', 'setOffsetScope',
+            'setHoleSize', 'setFillMode', 'setSmoothScope', 'setSmoothSize', 'setSmoothLimit', 'setSmoothEdges', 'setSmoothStrength', 'setOffsetScope',
             'setOffsetDirection', 'setOffsetDistance', 'setBoolOp', 'toggleBoolSolid', 'setBoolSolids', 'setTrimSolid', 'toggleTrimSolid',
             'setTrimOffset', 'setTrimDepth', 'setTrimFlip', 'setShellThickness', 'setShellSide'],
         },

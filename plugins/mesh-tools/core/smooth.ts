@@ -51,6 +51,8 @@ export interface SmoothSettings {
   limit: number
   /** Fit each side of a sharp edge on its own, and leave the edge itself. */
   keepEdges: boolean
+  /** Share of the full bounded displacement, 0..1. Absent means 1 (legacy). */
+  strength?: number
   /** Smooth only these vertices — a region marked by hand — fading out
    *  towards its edge; absent, the whole mesh. */
   region?: Uint32Array | null
@@ -135,6 +137,8 @@ export function smoothMesh(
   onProgress?: (text: string) => void,
 ): EditedMesh & { report: SmoothReport } {
   const { size, limit, keepEdges } = settings
+  const strength = settings.strength ?? 1
+  if (!Number.isFinite(strength) || strength < 0 || strength > 1) throw new Error('Smoothing intensity must be between 0 and 1.')
   if (!(size > 0)) throw new Error('The size must be more than zero.')
   if (!(limit > 0)) throw new Error('The limit must be more than zero.')
 
@@ -326,6 +330,10 @@ export function smoothMesh(
     next = swap
   }
 
+  // Convex blend with this invocation's input: strength cannot exceed the
+  // bounded full displacement. Repeating Smooth is cumulative across invocations.
+  if (strength !== 1) for (let i = 0; i < cur.length; i++) cur[i] = positions[i] + strength * (cur[i] - positions[i])
+
   let moved = 0
   let heldCount = 0
   let maxMove = 0
@@ -350,7 +358,7 @@ export function smoothMesh(
   return {
     ...edited,
     report: {
-      settings: { size, limit, keepEdges },
+      settings: { size, limit, keepEdges, ...(settings.strength !== undefined ? { strength } : {}) },
       region: region ? region.length : null,
       moved,
       held: heldCount,
