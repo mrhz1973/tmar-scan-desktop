@@ -10,8 +10,10 @@
 - **Status: work in progress; user review ongoing, not final visual or geometric acceptance.**
 - The screenshot includes the application's existing branding; no third-party endorsement is implied. Existing notices and the [repository license](../../LICENSE) are unchanged.
 
-Only this explicitly supplied screenshot is included. No source model, private
-project, credentials or other screenshots are included in this publication.
+The original November 2 publication contained only this explicitly supplied
+screenshot. On November 3, the [UI gallery](../tmar-ui-gallery.md) adds eleven
+synthetic UI captures and twelve thumbnails under [ui/](ui/README.md). No private
+source model, live project or credentials are published. The hero remains unchanged.
 
 See [example and limitations](../tmar-zebra-examples.md) and the
 [review backlog](../tmar-review-backlog.md).

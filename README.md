@@ -3,9 +3,43 @@
 
 **An open-source ScanRuler fork with modular Zebra analysis, local notes and navigation, category-scoped feature multi-selection, workspace labels and unified CAD-body export. A Windows/macOS desktop application is planned separately.**
 
+[![Zebra inspection on the imported Tubo Finale mesh — user review ongoing](docs/images/zebra-tubo-finale-review-20261102.png)](docs/images/zebra-tubo-finale-review-20261102.png)
+
+*Martino's original Zebra screenshot, published unchanged. The file is an imported STL shown as Scan, not a CAD continuity certificate. **Work in progress — user review ongoing; not final acceptance.***
+
+## Screenshot overview
+
+**Click any thumbnail to open the full-size image.** The eleven new UI screenshots
+use generated demo geometry in the actual app, with the Dark interface; the real-part
+Zebra example above is separately owner-supplied. They illustrate available controls,
+not approval of the reconstructed geometry. [Full gallery and captions](docs/tmar-ui-gallery.md).
+
+| Zebra on a real part | CAD edges with Zebra | STEP reference inspection |
+| --- | --- | --- |
+| [![Zebra on a real part](docs/images/ui/thumb-zebra-real-part.png)](docs/images/zebra-tubo-finale-review-20261102.png) | [![CAD edges with Zebra](docs/images/ui/thumb-cad-edges-zebra.png)](docs/images/ui/cad-edges-zebra.png) | [![STEP reference inspection](docs/images/ui/thumb-step-reference-zebra.png)](docs/images/ui/step-reference-zebra.png) |
+
+| Category-scoped feature selection | Local notes and Go to note | Workspace label controls |
+| --- | --- | --- |
+| [![Category-scoped feature selection](docs/images/ui/thumb-feature-categories.png)](docs/images/ui/feature-categories.png) | [![Local notes and Go to note](docs/images/ui/thumb-notes-focus.png)](docs/images/ui/notes-focus.png) | [![Workspace label controls](docs/images/ui/thumb-label-controls.png)](docs/images/ui/label-controls.png) |
+
+| One STEP/STL export dialog | Mesh Tools Zebra inspection | Repeatable regional Smooth |
+| --- | --- | --- |
+| [![One STEP/STL export dialog](docs/images/ui/thumb-unified-export.png)](docs/images/ui/unified-export.png) | [![Mesh Tools Zebra inspection](docs/images/ui/thumb-mesh-zebra.png)](docs/images/ui/mesh-zebra.png) | [![Repeatable regional Smooth](docs/images/ui/thumb-regional-smooth.png)](docs/images/ui/regional-smooth.png) |
+
+| Hold Shift to navigate | Dark by default | Review workflow settings |
+| --- | --- | --- |
+| [![Hold Shift to navigate](docs/images/ui/thumb-shift-navigation.png)](docs/images/ui/shift-navigation.png) | [![Dark by default](docs/images/ui/thumb-dark-settings.png)](docs/images/ui/dark-settings.png) | [![Review workflow settings](docs/images/ui/thumb-review-settings.png)](docs/images/ui/review-settings.png) |
+
+## Default appearance
+
+**Dark is the default**, from the first paint, regardless of the operating system's
+light/dark setting. An explicit saved **Light**, **Dark** or **System** choice is
+still respected. Change it in **Settings > Appearance > Interface**. Existing
+previews do not update automatically. [Verification](docs/tmar-dark-gallery-validation.md).
+
 An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/ScanRuler), maintained at [mrhz1973/tmar-scan-desktop](https://github.com/mrhz1973/tmar-scan-desktop). This is not an official CNC Kitchen distribution.
 
-> **Status as of November 2, 2026: web-source usability extensions implemented.**
+> **Status as of November 3, 2026: web-source usability extensions implemented.**
 > This source includes Zebra, local notes with a configurable shortcut and Go to note, feature/note multi-selection, collapsible lists, lower-bar Labels controls and one Export body dialog for STEP/STL. **No installable desktop release is provided.** The original site and already open previews do not update automatically. Desktop recovery, AI pause/resume, managed updates and GPU compute remain separate goals.
 
 **Documentation language:** English is the primary language of this README. Italian localization of the application and documentation is planned for a later stage; it is not available yet.
@@ -177,7 +211,7 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Zebra surface analysis plugin | Implemented; user result review ongoing | View-only bands and local notes. The published example is WIP, not final acceptance; broader qualification remains open. |
 | [Zebra result review](docs/tmar-review-backlog.md#zebra-review-001) | Open | Record remaining feedback and explicit acceptance separately from feature implementation and screenshot publication. |
 | [Split view with Zebra and local notes](docs/tmar-review-backlog.md#zebra-split-002) | Planned | Two-pane review, explicit camera/focus behavior, per-pane labels and shared local note records. |
-| [Real-part example gallery](docs/tmar-review-backlog.md#zebra-gallery-003) | First WIP image published; expansion planned | Additional documented views and before/after examples without claiming final approval or geometric certification. |
+| [UI screenshot gallery](docs/tmar-ui-gallery.md) | Original WIP Zebra hero and eleven synthetic UI examples published | Clickable thumbnails show implemented changes. Broader real-part validation and final visual acceptance remain open. |
 | Model-tree multi-selection and bulk-actions plugin | Implemented, initial feature-list scope | Ctrl/Cmd/Shift/Select All and undoable output visibility. Original body-list selection is retained; broader list coverage and destructive operations remain future work. |
 | Quick-note access and navigation plugin | Implemented, initial web scope | Settings-configurable letter (default N), local Note action, note multi-selection, double-click/target Go to note and Return to previous view. |
 | Notes directly in Deviation | Implemented in web source; scan-side scope | Add/edit/save notes in the single scan-side comparison view; shared IDs and project round trips verified. Reference-side/split-view anchors and comparison metadata remain planned. |
@@ -256,7 +290,7 @@ General fixes may also be proposed upstream under its contribution rules. A fork
 > Martino is still reviewing the result and is not fully satisfied. The example
 > below is published as work in progress, not as a final visual or CAD approval.
 
-![Work-in-progress Zebra on the imported Tubo Finale mesh](docs/images/zebra-tubo-finale-review-20261102.png)
+[View the lead Zebra image and clickable screenshots](#screenshot-overview).
 
 `Tubo Finale-body.stl`, **Analyze: Scan**. This illustrates the current overlay
 on an imported mesh, not an editable CAD body being certified. See the
