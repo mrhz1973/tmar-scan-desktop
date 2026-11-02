@@ -200,3 +200,11 @@ R2 token; `node scripts/e2e-open-link.mjs` tries both forms against a dev
 server (its header says how). The GitHub Actions workflow
 (`.github/workflows/ci.yml`) still runs tests and a build on every push and
 pull request, so a red suite is visible before Cloudflare ships it.
+
+## TMAR usability regression
+
+`node plugins/tmar-quick-notes/scripts/e2e-usability.mjs` starts an ephemeral
+local server and isolated browser unless APP_URL is provided. It uses generated
+geometry, not a user's scan, and tests multi-selection, note focus/shortcut,
+draft preservation, label preferences and actual STEP/STL downloads. It is also
+listed in the plugin CI manifest. See [the validation record](tmar-usability-validation.md).

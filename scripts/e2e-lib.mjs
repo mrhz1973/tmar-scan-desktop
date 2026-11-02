@@ -80,9 +80,11 @@ export async function finish(browser, consoleErrors) {
  *  minimised window hides as a person's would); `agentDataOk: false` leaves the
  *  agent connection's warning unanswered.
  *  Returns { browser, page, consoleErrors }. */
-export async function launchApp({ width = 1500, height = 950, protocolTimeout, url = APP_URL, headless = 'new', agentDataOk = true } = {}) {
+export async function launchApp({ width = 1500, height = 950, protocolTimeout, url = APP_URL, headless = 'new', agentDataOk = true, userDataDir } = {}) {
   const browser = await puppeteer.launch({
     executablePath: CHROME,
+    // Only an explicitly owned test profile; callers must never use a personal profile.
+    ...(userDataDir ? { userDataDir } : {}),
     headless,
     args: [`--window-size=${width},${height}`, '--no-sandbox', ...(process.env.CI ? ['--enable-unsafe-swiftshader'] : [])],
     defaultViewport: { width, height },

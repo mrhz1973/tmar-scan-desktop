@@ -1,0 +1,6 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.tmar-feature-selected > .kv { background: var(--accent-soft); outline: 1px solid var(--accent-d); outline-offset: -1px; }
+[data-test="feature-select-row"] { cursor: pointer; user-select: none; }
+[data-test="feature-select-row"]:focus-visible { outline: 2px solid var(--accent-d); }
+.tmar-feature-tools { flex-wrap: wrap; }
+[data-test="feature-selection"] [hidden] { display: none !important; }

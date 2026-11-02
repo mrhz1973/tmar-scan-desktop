@@ -7,6 +7,21 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR usability - 2026-11-02
+
+- Add local Note access from the viewport and a single-letter binding in Settings.
+- Add note multi-selection, scoped bulk actions, Go to note by double-click or
+  target button, and reversible camera focus with hidden-label handling.
+- Add feature-list Ctrl/Cmd/Shift selection and one-step Show/Hide of current
+  outputs without suppressing geometry; independently collapse Features/Notes.
+- Add lower-bar Labels and per-workspace pin preferences, including Mesh Tools.
+- Replace separate body export buttons with one STEP/STL dialog; keep original
+  STEP fallback when the export plugin is omitted. Reuse both CAD backends.
+- Retain integrated Zebra and local-note/import-provenance behavior. Tests and
+  limitations are recorded in `docs/tmar-usability-validation.md`.
+- Web-source increment only: no desktop package or real-part/macOS qualification.
+
+
 ### TMAR documentation - 2026-11-02
 
 - Synchronize the main README, plugin catalog, plugin READMEs and development

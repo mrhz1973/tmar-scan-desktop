@@ -15,6 +15,7 @@ import { useNotes } from '../state/noteStore'
 import { useReverse, type BodyInfo } from '../state/reStore'
 import { NOTE_PLACING, useNotesOn } from '../app/useNotePins'
 import { KeyIcon } from './reIcons'
+import { noteListExtension, type NoteListProps } from '../app/listExtensions'
 
 const FACE_WORDS: Record<string, string> = { plane: 'flat', cylinder: 'round', cone: 'conical', sphere: 'spherical', torus: 'toroidal' }
 
@@ -42,7 +43,7 @@ const Badge = ({ note }: { note: Note }) => <span className={'notebadge' + (note
 /** The box a note is written in, by where it was opened: Enter or a middle
  *  click keeps the text, Shift+Enter breaks the line, Escape leaves it as
  *  it was — and a note left without a word goes. */
-function NoteCard() {
+export function NoteCard() {
   const editing = useNotes((s) => s.editing)
   const note = useNotes((s) => s.notes.find((n) => n.id === s.editing?.id) ?? null)
   if (!editing || !note) return null
@@ -197,7 +198,11 @@ function NoteBox({ note, at }: { note: Note; at: { x: number; y: number } }) {
   )
 }
 
-export function NoteList({ placementBlocked = null }: { placementBlocked?: string | null } = {}) {
+export function NoteList(props: NoteListProps = {}) {
+  const Extension = noteListExtension()
+  return Extension ? <Extension {...props} /> : <DefaultNoteList {...props} />
+}
+function DefaultNoteList({ placementBlocked = null }: NoteListProps) {
   const on = useNotesOn()
   const agentOn = usePrefs((s) => s.agentLink)
   const notes = useNotes((s) => s.notes)
