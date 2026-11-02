@@ -16,19 +16,19 @@ not approval of the reconstructed geometry. [Full gallery and captions](docs/tma
 
 | Zebra on a real part | CAD edges with Zebra | STEP reference inspection |
 | --- | --- | --- |
-| [![Zebra on a real part](docs/images/ui/thumb-zebra-real-part.png)](docs/images/zebra-tubo-finale-review-20261102.png) | [![CAD edges with Zebra](docs/images/ui/thumb-cad-edges-zebra.png)](docs/images/ui/cad-edges-zebra.png) | [![STEP reference inspection](docs/images/ui/thumb-step-reference-zebra.png)](docs/images/ui/step-reference-zebra.png) |
+| [<img src="docs/images/ui/thumb-zebra-real-part.png" alt="Zebra on a real part" width="260">](docs/images/zebra-tubo-finale-review-20261102.png) | [<img src="docs/images/ui/thumb-cad-edges-zebra.png" alt="CAD edges with Zebra" width="260">](docs/images/ui/cad-edges-zebra.png) | [<img src="docs/images/ui/thumb-step-reference-zebra.png" alt="STEP reference inspection" width="260">](docs/images/ui/step-reference-zebra.png) |
 
 | Category-scoped feature selection | Local notes and Go to note | Workspace label controls |
 | --- | --- | --- |
-| [![Category-scoped feature selection](docs/images/ui/thumb-feature-categories.png)](docs/images/ui/feature-categories.png) | [![Local notes and Go to note](docs/images/ui/thumb-notes-focus.png)](docs/images/ui/notes-focus.png) | [![Workspace label controls](docs/images/ui/thumb-label-controls.png)](docs/images/ui/label-controls.png) |
+| [<img src="docs/images/ui/thumb-feature-categories.png" alt="Category-scoped feature selection" width="260">](docs/images/ui/feature-categories.png) | [<img src="docs/images/ui/thumb-notes-focus.png" alt="Local notes and Go to note" width="260">](docs/images/ui/notes-focus.png) | [<img src="docs/images/ui/thumb-label-controls.png" alt="Workspace label controls" width="260">](docs/images/ui/label-controls.png) |
 
 | One STEP/STL export dialog | Mesh Tools Zebra inspection | Repeatable regional Smooth |
 | --- | --- | --- |
-| [![One STEP/STL export dialog](docs/images/ui/thumb-unified-export.png)](docs/images/ui/unified-export.png) | [![Mesh Tools Zebra inspection](docs/images/ui/thumb-mesh-zebra.png)](docs/images/ui/mesh-zebra.png) | [![Repeatable regional Smooth](docs/images/ui/thumb-regional-smooth.png)](docs/images/ui/regional-smooth.png) |
+| [<img src="docs/images/ui/thumb-unified-export.png" alt="One STEP/STL export dialog" width="260">](docs/images/ui/unified-export.png) | [<img src="docs/images/ui/thumb-mesh-zebra.png" alt="Mesh Tools Zebra inspection" width="260">](docs/images/ui/mesh-zebra.png) | [<img src="docs/images/ui/thumb-regional-smooth.png" alt="Repeatable regional Smooth" width="260">](docs/images/ui/regional-smooth.png) |
 
 | Hold Shift to navigate | Dark by default | Review workflow settings |
 | --- | --- | --- |
-| [![Hold Shift to navigate](docs/images/ui/thumb-shift-navigation.png)](docs/images/ui/shift-navigation.png) | [![Dark by default](docs/images/ui/thumb-dark-settings.png)](docs/images/ui/dark-settings.png) | [![Review workflow settings](docs/images/ui/thumb-review-settings.png)](docs/images/ui/review-settings.png) |
+| [<img src="docs/images/ui/thumb-shift-navigation.png" alt="Hold Shift to navigate" width="260">](docs/images/ui/shift-navigation.png) | [<img src="docs/images/ui/thumb-dark-settings.png" alt="Dark by default" width="260">](docs/images/ui/dark-settings.png) | [<img src="docs/images/ui/thumb-review-settings.png" alt="Review workflow settings" width="260">](docs/images/ui/review-settings.png) |
 
 ## Default appearance
 
