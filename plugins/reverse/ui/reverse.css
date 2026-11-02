@@ -1387,3 +1387,10 @@
   border: 1px solid currentColor;
   opacity: 0.85;
 }
+
+/* A temporary inspection target, not a text label or a saved annotation. */
+.note-focus-ring { width: 54px; height: 54px; box-sizing: border-box; border: 3px solid #ffe35c; border-radius: 50%; outline: 2px solid #171717; box-shadow: 0 0 0 4px #fff9; pointer-events: none !important; }
+.note-focus-ring::before, .note-focus-ring::after { content: ''; position: absolute; background: #ffe35c; box-shadow: 0 0 0 1px #111; }
+.note-focus-ring::before { width: 18px; height: 3px; left: 15px; top: 22px; }
+.note-focus-ring::after { width: 3px; height: 18px; left: 22px; top: 15px; }
+.note-label.focused { border: 2px solid #e8b400; background: #fff7cf; color: #191919; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px #181818; margin-left: 38px; }

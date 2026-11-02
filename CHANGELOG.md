@@ -7,6 +7,18 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR note focus and panel follow-up — 2026-11-02
+
+- Center valid saved annotation positions even when CAD target validation fails,
+  with visible warnings rather than silently refusing the navigation.
+- Add a large viewport target reticle and stored-normal inspection direction;
+  preserve geometry, annotation data, provenance and visibility preferences.
+- Enlarge Features/Notes disclosure controls to full-width labeled headers.
+- Add optional resizable left-panel divider and remembered Settings width.
+- Add a lower-bar Zebra entry and scan-only automatic target choice.
+- Add production-only UI verification without development globals or agent access.
+  See `docs/tmar-note-focus-validation.md`; no desktop release is implied.
+
 ### TMAR usability - 2026-11-02
 
 - Add local Note access from the viewport and a single-letter binding in Settings.

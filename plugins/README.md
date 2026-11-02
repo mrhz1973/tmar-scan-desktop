@@ -15,7 +15,7 @@ other plugins. These are build-time modules, not hot-installable packages.
 | [tmar-quick-notes/](tmar-quick-notes/) | Implemented in `main`, scan-side scope | Local notes, configurable shortcut, multi-selection and Go to note; scan-side Deviation adapter. |
 | [tmar-zebra/](tmar-zebra/) | Initial web implementation | Zebra stripes and local pinned observations in Reverse engineer. |
 | [tmar-model-tree/](tmar-model-tree/) | Initial web implementation | Feature selection, bulk output visibility and collapse. |
-| [tmar-display-controls/](tmar-display-controls/) | Initial web implementation | Lower-bar Labels and per-workspace note-pin preferences. |
+| [tmar-display-controls/](tmar-display-controls/) | Initial web implementation | Lower-bar Labels, per-workspace note-pin preferences and a resizable left panel. |
 
 The two TMAR extensions were integrated in [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`. See the [validation record](../docs/tmar-web-validation.md) for tested scope and limitations. Plugin sources, documentation and tests are available; no desktop release or runtime plugin manager is implied.
 
@@ -88,7 +88,9 @@ AGPL-3.0-only, like the app; see [../LICENSE](../LICENSE).
 
 `src/plugins/panelExtensions.tsx` offers static, build-time panel slots. Register
 an ID, slot and React component during plugin installation. The current slots
-are `deviation.extra` and `reverse.export`. The host renders nothing when a slot
+include `deviation.extra`, `reverse.export`, `reverse.analysis`, `settings.tools`,
+`view.tools` and `workspace.divider`. The divider slot is between the existing
+left panel and stage; it does not wrap or remount the viewport. The host renders nothing when a slot
 has no contribution. Duplicate IDs are refused; the registration returns cleanup
 for tests. This is not a hot-loading or sandboxing interface.
 

@@ -14,7 +14,22 @@ The quick-notes plugin can temporarily focus one hidden note without changing
 these preferences. Advanced per-category Settings controls remain planned;
 this increment provides the requested bottom-bar controls, not a new 2D overlay policy.
 
-`DisplayControls.tsx` owns UI/preferences; `plugin.ts` registers `view.tools`.
+## Resizable left panel
+
+Drag the 12-pixel-wide vertical divider beside the left column. Arrow keys move
+it by 16 px (Shift: 64 px), Home/End use its current bounds, Enter or double-click
+resets to 336 px. Escape cancels a drag. Settings > Panel layout offers the same
+width preference. The 260–720 px range is constrained to retain viewport space.
+Phone-width layouts remain stacked and do not expose this divider.
+
+`PanelResizeHandle.tsx` owns pointer capture and the accessible separator;
+`panelWidth.ts` owns validated width preferences under `tmar.layout.panelWidth.v1`.
+The optional `workspace.divider` slot adds no wrapper around the viewport and
+does not remount the model while resizing. Omitting this plugin restores the
+host layout. See [follow-up checks](../../docs/tmar-note-focus-validation.md).
+
+`DisplayControls.tsx` owns UI/preferences; `plugin.ts` registers `view.tools`,
+`workspace.divider` and `settings.tools`.
 It reuses `showLabels`, `pinsShown` and the viewport's CSS label policy.
 The shared scene synchronization now respects the label switch in all 3D
 workspaces rather than forcing labels on outside 3D Measure.

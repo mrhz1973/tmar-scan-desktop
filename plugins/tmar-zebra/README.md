@@ -1,7 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Zebra surface analysis
 
-In **Reverse engineer**, open **Zebra surface analysis** and check **Show zebra
+In **Reverse engineer**, press **Zebra** in the lower view bar, or open the
+highlighted **Zebra surface analysis** panel and check **Show zebra
 stripes**. Analyze visible CAD bodies, the bodies selected in the body list, or
 the visible scan. Set stripe direction, width and color; rotate the view to
 inspect how bands pass over neighboring surfaces. **Add note on the part** pins
@@ -24,6 +25,12 @@ is opaque while enabled; the source object's appearance is unchanged and comes
 back on exit. The reflection formula and pattern derive from the owner's
 SurfaceLab Zebra implementation. Exact parity with any other application has
 not been established.
+
+The lower button and panel checkbox share one state. Enabling with a scan but
+no visible CAD body selects the scan automatically. During a CAD editor the
+button remains visible but disabled with an explanation; finish the editor to
+resume analysis. The shader/kernel and geometry algorithms are unchanged by
+this discoverability update.
 
 ## Checks
 

@@ -14,7 +14,9 @@ rolled-back feature with no independent displayed output is explicitly skipped;
 use the final body list to control the resulting body. No batch feature deletion
 or construction-element-list extension is implemented by this increment.
 
-Features can be collapsed independently of Notes. The browser remembers that
+Features have a full-width, 40-pixel disclosure header with a large chevron
+and item count, shared with the Notes panel. They collapse independently of
+Notes. The browser remembers that
 choice; rows remain mounted and selection is retained. New features do not
 force a collapsed list open. Advanced filtered/grouped-list scope remains future work.
 

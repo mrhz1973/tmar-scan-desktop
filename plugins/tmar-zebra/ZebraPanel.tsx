@@ -10,10 +10,13 @@ import { useReverse } from '../reverse/state/reStore'
 import { reSceneOf } from '../reverse/viewer/reScene'
 import { ZebraLayer, type ZebraOptions, type ZebraTarget } from './ZebraLayer'
 import type { Orientation } from './pattern'
+import { enableZebra, useZebraUi, ZebraIcon } from './ZebraQuickButton'
+import './zebraControls.css'
 
 export function ZebraPanel() {
-  const [enabled, setEnabled] = useState(false)
-  const [target, setTarget] = useState<ZebraTarget>('visible')
+  const enabled = useZebraUi((s) => s.enabled), target = useZebraUi((s) => s.target)
+  const setTarget = useZebraUi((s) => s.setTarget)
+  useEffect(() => () => useZebraUi.setState({ enabled: false, target: 'visible' }), [])
   const [orientation, setOrientation] = useState<Orientation>('horizontal')
   const [width, setWidth] = useState(3)
   const [color, setColor] = useState('#5388b1')
@@ -57,9 +60,9 @@ export function ZebraPanel() {
   useEffect(() => { layer.current?.setOptions(options) }, [options])
 
   return <section className="group" data-test="tmar-zebra" aria-label="Zebra surface analysis">
-    <div className="sec-head">Zebra surface analysis</div>
+    <div className="sec-head zebra-heading"><ZebraIcon/>Zebra surface analysis</div>
     <label className="field">
-      <span><input data-test="zebra-enabled" type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Show zebra stripes</span>
+      <span><input data-test="zebra-enabled" type="checkbox" checked={enabled} onChange={(e) => enableZebra(e.target.checked)} /> Show zebra stripes</span>
     </label>
     {enabled && <>
       <button className={'block' + (placing ? ' on' : '')} data-test="zebra-add-note" aria-pressed={placing}

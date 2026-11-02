@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { createContext, useContext, useState, type PropsWithChildren } from 'react'
+import { CollapseButton } from '../../src/ui/CollapseButton'
 import { useListSelection } from '../../src/plugins/listSelection'
 import { useStore } from '../../src/state/store'
 import { useCommandActivity } from '../../src/commands/activity'
@@ -23,10 +24,11 @@ export function FeatureSelection({ children }: PropsWithChildren) {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'a') { e.preventDefault(); e.stopPropagation(); selection.all() }
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); selection.clear() }
     }}>
-    <div className="g-label"><button data-test="features-collapse" aria-expanded={!collapsed} onClick={() => {
-      setCollapsed(!collapsed); try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '0' : '1') } catch { /* optional */ }
-    }}>{collapsed ? '▸' : '▾'} Features ({features.length + rolled.length})</button></div>
-    <div hidden={collapsed}>
+    <CollapseButton label="Features" collapsed={collapsed} count={features.length + rolled.length}
+      controls="tmar-features-content" testId="features-collapse" onToggle={() => {
+        setCollapsed(!collapsed); try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '0' : '1') } catch { /* optional */ }
+      }} />
+    <div id="tmar-features-content" hidden={collapsed}>
       <div className="toolrow tmar-feature-tools">
         <button data-test="features-select-all" onClick={selection.all}>Select all</button>
         <button data-test="features-clear" onClick={selection.clear} disabled={!selection.ids.length}>Clear</button>

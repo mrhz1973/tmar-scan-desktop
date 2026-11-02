@@ -1,0 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+[data-test="tmar-zebra"] { border-left: 3px solid var(--accent-d); padding: 10px; border-radius: 5px; background: var(--accent-soft); }
+.zebra-heading { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); }
+[data-test="tmar-zebra"] [data-test="zebra-enabled"] { width: 20px; height: 20px; vertical-align: middle; margin-right: 8px; }
+[data-test="zebra-quick-toggle"] { font-weight: 650; }

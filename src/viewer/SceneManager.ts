@@ -2542,6 +2542,36 @@ export class SceneManager {
     this.viewport.retarget(pose.dir, pose.up, pose.target, pose.zoom)
     this.invalidate()
   }
+  /** Inspect a saved point in the part's frame. A normal faces the marked
+   *  surface towards the camera. This changes only the view, never the part. */
+  focusPoint(at: Vec3, normal?: Vec3): void {
+    this.partGroup.updateWorldMatrix(true, false)
+    const point = new THREE.Vector3(...at).applyMatrix4(this.partGroup.matrixWorld)
+    const pose = this.viewport.pose()
+    const direction = normal?.every(Number.isFinite) ? new THREE.Vector3(...normal) : pose.dir.clone()
+    if (normal && direction.lengthSq() > 1e-12) direction.applyMatrix3(new THREE.Matrix3().getNormalMatrix(this.partGroup.matrixWorld))
+    if (direction.lengthSq() < 1e-12) direction.copy(pose.dir)
+    direction.normalize()
+    const up = pose.up.clone().addScaledVector(direction, -pose.up.dot(direction))
+    if (up.lengthSq() < 1e-8) {
+      up.set(0, 1, 0)
+      if (Math.abs(up.dot(direction)) > 0.95) up.set(1, 0, 0)
+      up.addScaledVector(direction, -up.dot(direction))
+    }
+    up.normalize()
+    const radius = Math.max(0.5, this.layerHost().modelRadius() * 0.09)
+    const box = new THREE.Box3(point.clone().addScalar(-radius), point.clone().addScalar(radius))
+    const place = box.getBoundingSphere(new THREE.Sphere())
+    const clip = new THREE.Sphere(this.clipSphere.center.clone(), this.clipSphere.radius).union(place)
+    const framed = new THREE.Sphere(this.framedClip.center.clone(), this.framedClip.radius).union(place)
+    this.viewport.frameCamera(box, null, { dir: direction, up }, radius * 4)
+    this.clipSphere.center.copy(clip.center)
+    this.clipSphere.radius = clip.radius
+    this.framedClip.center.copy(framed.center)
+    this.framedClip.radius = framed.radius
+    this.invalidate()
+  }
+
   labelsShown(): boolean {
     return !this.container.classList.contains('nolabels')
   }

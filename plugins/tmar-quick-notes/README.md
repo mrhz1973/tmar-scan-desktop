@@ -14,7 +14,9 @@ and imported-note provenance. It never turns on an agent or changes its credenti
   conflicting operations keep their keys. Key combinations are not offered yet.
 - Single-click selects a row. Ctrl/Cmd toggles separate rows; Shift selects a
   range. Select all or Ctrl/Cmd+A in the focused list selects its full contents.
-- Double-click a row or press its target icon for **Go to note**. The camera
+- Double-click a row or press its target icon for **Go to note**. Selection
+  keeps row positions stable: bulk-action controls stay in place and ordinary
+  selection does not remove the previous focus feedback. The camera
   frames the saved anchor; **Return to previous view** restores the working view.
 - The pencil edits/answers a note. The check changes its handled state. These
   controls never trigger camera navigation. Delete selected confirms exactly
@@ -32,14 +34,20 @@ focus and camera bookmarks are session-only.
 
 Reference-only and split-view placement in Deviation remain unsupported, as do
 placement during deformation animation, alignment picking and surface marking.
-CAD-body note navigation requires Reverse engineer. Hidden, clipped, missing or
-unresolved targets are reported, not silently revealed or moved. A changed
-body whose saved anchor no longer lies on the matched face needs review.
+A valid saved marker can be located even if its body is hidden, clipped, missing
+or changed. A visible warning distinguishes saved coordinates from a verified
+current surface. No target is guessed, revealed or moved. The camera faces the
+stored surface normal where present, and a large viewport reticle identifies
+the exact saved point. Invalid coordinates and unsafe editing/operation states
+remain guarded. A changed target still needs review; navigation does not repair it.
 Reference-side notes and captured comparison metadata remain roadmap items.
 
 Browser qualification uses generated geometry on Windows/Chrome, not private
 scans or a live remote AI provider. macOS and desktop packaging remain unqualified.
 See [validation](../../docs/tmar-usability-validation.md).
+
+The full-width Notes header is the collapse/expand control. Current follow-up
+checks are in [note-focus validation](../../docs/tmar-note-focus-validation.md).
 
 ## Source and integration
 

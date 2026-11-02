@@ -94,6 +94,7 @@ import { PICK_MARK_TOOL_STATUS } from './app/deviationWorkspace'
 import { useElementField } from './app/useElementField'
 import { useSceneSync } from './app/useSceneSync'
 import { createSession, type AppSession } from './app/session'
+import { PluginPanelExtensions } from './plugins/panelExtensions'
 import { installCommandHost, type FlatHost, type FlatSheetView, type ProjectHost } from './commands/host'
 import { commandRunning } from './commands/activity'
 import { takePairingLink } from './commands/agentLink'
@@ -1631,6 +1632,7 @@ export default function App() {
             onFindSymmetry={() => void handleFindSymmetry()}
           />
         )}
+        <PluginPanelExtensions slot="workspace.divider" />
         <div className={anySplit ? 'stage split' : 'stage'}>
           {/* The viewport stays mounted behind the picker: unmounting it would
               throw away the mesh and its BVH, and both are expensive. It keeps
