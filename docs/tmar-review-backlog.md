@@ -99,3 +99,16 @@ selection-set storage across sessions and large-mesh qualification remain open.
 
 [Validation](tmar-mesh-review-validation.md). These items do not close overall
 Zebra/result acceptance and do not publish a release.
+
+## SMOOTH-BRUSH-007
+
+**Regional request safeguards, retained gesture and Shift navigation: implemented;
+user/real-project verification OPEN.** Actual pointer tests cover Brush, Window
+and Lasso, two consecutive Smooth applications, preserved IDs/counts and unchanged
+unselected coordinates. Shift temporarily navigates with normal left/right mouse
+functions, without painting or erasing. The baseline synthetic fixture did not
+reproduce reported whole-piece movement/button disable; it did reproduce the
+unwanted reset to Navigate. Do not mark the user's real-file report resolved
+solely because these tests pass. No named selection storage is implied.
+
+[Validation and reproduction limits](tmar-smooth-brush-validation.md).

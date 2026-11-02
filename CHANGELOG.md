@@ -7,6 +7,16 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR regional Smooth and held-Shift navigation - 2026-11-02
+
+- Snapshot marked-region intent and vertex IDs; reject empty/stale regional requests
+  instead of broadening the operation, and label whole-part smoothing explicitly.
+- Preserve the chosen marking tool as well as its exact selection after Smooth.
+- Expose temporary Navigate feedback while Shift is held; keep normal left/right
+  bindings and stop paint when navigation begins in the middle of a stroke.
+- Add real Brush/Window/Lasso UI regressions and strict unselected-vertex checks.
+  The reported whole-part behavior remains unconfirmed on the user's real project.
+
 ### TMAR Mesh Tools review and Smooth controls - 2026-11-02
 
 - Add optional Mesh Tools notes/Zebra integration, with shared local note records,

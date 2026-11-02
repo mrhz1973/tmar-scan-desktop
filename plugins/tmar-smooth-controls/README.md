@@ -6,6 +6,16 @@
 The same region remains selected after each successful application, so the
 button can be pressed again without another brush/window/lasso selection.
 **Clear marking** explicitly removes it. Each mesh edit has its own Undo step.
+Brush, Window or Lasso remains selected after application, not reset to Navigate.
+The action captures the marked vertices and scope at the click; an empty or
+obsolete marking never becomes a whole-part smoothing operation. The regional
+status line says **Marked region only** and its count. For intentional global
+smoothing the button explicitly says **Smooth whole part**.
+
+Hold **Shift** for temporary Navigate, with normal left/right mouse functions
+from the chosen control scheme. Release it to return to the same marking tool.
+The selection is unchanged; a Shift arriving during a stroke stops marking.
+See [the follow-up checks and limits](../../docs/tmar-smooth-brush-validation.md).
 
 The optional **Intensity** slider ranges from **0% to 100%**. Changing it does
 not modify the mesh: the Smooth action applies it. 0% disables the no-op button;

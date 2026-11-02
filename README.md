@@ -12,6 +12,20 @@ An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/
 
 [Available now](#web-extensions-available-on-main) | [Body STL](#cad-body-stl-export) | [Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Deviation notes](#notes-directly-in-deviation) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
 
+## Latest: regional Smooth and Shift navigation
+
+**Marked region only** snapshots the exact selection and never silently falls
+back to the whole object. **Smooth whole part** is separately and explicitly
+labeled. Smooth retains both the selected area and Brush/Window/Lasso so the next
+application needs no extra stroke. Clear marking still removes it deliberately.
+
+Hold **Shift** for temporary Navigate using the current control scheme's normal
+left/right mouse functions. Release it to return to the same selection tool;
+navigation does not add or erase selected surface.
+
+[Checks and unresolved real-project reproduction](docs/tmar-smooth-brush-validation.md).
+User review remains open; this is an updated web build, not a desktop release.
+
 ## Latest: Mesh Tools review and repeatable Smooth
 
 **Mesh Tools** now offers local **Note** and **Zebra** controls, shared note
@@ -104,7 +118,7 @@ These are **implemented web-source features**, not just roadmap entries. They ru
 | [TMAR build identification](plugins/tmar-build-info/README.md) | Visible source revision and build details, distinct from upstream ScanRuler. | Identifies the loaded bundle; no automatic update or desktop release. |
 | [Zebra](plugins/tmar-zebra/README.md) | Visual analysis of supported scan/CAD targets, adjustable bands and local pinned notes. | Visual aid; not a numerical G1/G2 continuity certificate. Real-part and macOS qualification remain open. |
 
-**Validation:** see [the Mesh Tools/Smooth record](docs/tmar-mesh-review-validation.md) for the latest checks, [the STEP-as-Scan follow-up](docs/tmar-step-scan-validation.md) for its tested revision and [the category record](docs/tmar-feature-categories-validation.md) for its original scope. The [earlier usability record](docs/tmar-usability-validation.md) documents its original revision. The [initial web record](docs/tmar-web-validation.md) remains historical evidence for PR #1; its counts are not a substitute for retesting the new UI. Automated checks use synthetic fixtures and isolated browser profiles; the user-provided screenshot is a separate work-in-progress example, not additional test qualification. No macOS, desktop package, full upstream suite or real-part qualification is claimed.
+**Validation:** see [the Brush/Shift follow-up](docs/tmar-smooth-brush-validation.md) for the latest checks and [the Mesh Tools/Smooth record](docs/tmar-mesh-review-validation.md) for its original revision, [the STEP-as-Scan follow-up](docs/tmar-step-scan-validation.md) for its tested revision and [the category record](docs/tmar-feature-categories-validation.md) for its original scope. The [earlier usability record](docs/tmar-usability-validation.md) documents its original revision. The [initial web record](docs/tmar-web-validation.md) remains historical evidence for PR #1; its counts are not a substitute for retesting the new UI. Automated checks use synthetic fixtures and isolated browser profiles; the user-provided screenshot is a separate work-in-progress example, not additional test qualification. No macOS, desktop package, full upstream suite or real-part qualification is claimed.
 
 Use [this fork's web build](#how-to-try-it-today), not `scanruler.com`, to see these controls. Save your active project before opening it in a separate test instance. Existing user sessions are never reloaded by these source changes. No prebuilt desktop package or managed updater is implied.
 
