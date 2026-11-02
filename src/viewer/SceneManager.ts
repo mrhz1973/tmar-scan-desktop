@@ -894,8 +894,9 @@ export class SceneManager {
     wireSlots?: Uint8Array,
     copyOf: Uint32Array = new Uint32Array(0),
     surface: Uint8Array | null = null,
+    cadEdges: Float32Array | null = null,
   ): void {
-    this.prepareMesh(positions, indices, normals, wireSlots, copyOf, surface).commit()
+    this.prepareMesh(positions, indices, normals, wireSlots, copyOf, surface, cadEdges).commit()
   }
 
   /** Allocate and index a replacement before releasing the current mesh.
@@ -908,6 +909,7 @@ export class SceneManager {
     wireSlots?: Uint8Array,
     copyOf: Uint32Array = new Uint32Array(0),
     surface: Uint8Array | null = null,
+    cadEdges: Float32Array | null = null,
   ): { commit(): void; dispose(): void } {
     const geometry = new THREE.BufferGeometry()
     const { colors, paint, tint } = this.layOutScan(
@@ -929,6 +931,9 @@ export class SceneManager {
     const material = new THREE.MeshStandardMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
+      // STEP-as-scan uses the same depth contract as CAD bodies/references:
+      // faces behind display boundaries, Zebra fill between the two.
+      polygonOffset: cadEdges !== null, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
     })
     applyFinish(material, this.theme)
     patchScanShader(material, { backface: this.backface, paintColor: this.uPaintColor, surfaceColor: this.uSurfaceColor, surfaceOwn: this.uSurfaceOwn, deflect: this.uDeflect, wire: this.wire })
@@ -943,6 +948,7 @@ export class SceneManager {
       this.disposeMesh()
       this.setPreview(null)
       this.mesh = mesh
+      if (cadEdges !== null) this.scanCadEdges.set(geometry, cadEdges)
       this.adoptScanLayout(geometry, copyOf)
       this.partGroup.add(this.mesh)
       this.applySlice()
@@ -2130,6 +2136,23 @@ export class SceneManager {
    *  can draw and raycast the same 1.4-million-triangle mesh without a second
    *  copy or a second tree — three.js keeps per-renderer GPU state, so one
    *  geometry can safely appear in two canvases. */
+  private readonly scanCadEdges = new WeakMap<THREE.BufferGeometry, Float32Array>()
+
+  /** Borrow the currently displayed scan; edited mesh previews have no CAD
+   *  topology. The source metadata never becomes exported scan geometry. */
+  scanDisplay(): { mesh: THREE.Mesh; cadEdges: Float32Array | null } | null {
+    return this.mesh ? { mesh: this.mesh, cadEdges: this.scanCadEdges.get(this.mesh.geometry) ?? null } : null
+  }
+
+  private moveScanEdges(geometry: THREE.BufferGeometry, transform: Rigid): void {
+    const edges = this.scanCadEdges.get(geometry)
+    if (!edges) return
+    const moved = edges.slice()
+    rigidApplyToPoints(transform, moved)
+    // New identity makes render layers discard their obsolete line buffers.
+    this.scanCadEdges.set(geometry, moved)
+  }
+
   scanGeometry(): THREE.BufferGeometry | null {
     if (this.editedShown && this.other) return this.other.geometry
     return (this.mesh?.geometry as THREE.BufferGeometry) ?? null
@@ -2320,6 +2343,7 @@ export class SceneManager {
     const geometry = this.mesh.geometry as THREE.BufferGeometry
     const positions = geometry.getAttribute('position') as THREE.BufferAttribute
     const normals = geometry.getAttribute('normal') as THREE.BufferAttribute
+    this.moveScanEdges(geometry, m)
     rigidApplyToPoints(m, positions.array as Float32Array)
     rigidRotateVectors(m, normals.array as Float32Array)
     positions.needsUpdate = true
@@ -2332,6 +2356,7 @@ export class SceneManager {
     // frame, and moves with it.
     if (this.other) {
       const g = this.other.geometry
+      this.moveScanEdges(g, m)
       rigidApplyToPoints(m, g.getAttribute('position').array as Float32Array)
       rigidRotateVectors(m, g.getAttribute('normal').array as Float32Array)
       g.getAttribute('position').needsUpdate = true
@@ -2754,6 +2779,7 @@ export class SceneManager {
     wireSlots: Uint8Array | undefined,
     copyOf: Uint32Array,
     surface: Uint8Array | null = null,
+    cadEdges: Float32Array | null = null,
   ): void {
     if (!this.mesh) return
     // A copy of the scan that went is not a copy of this one.
@@ -2766,6 +2792,11 @@ export class SceneManager {
     for (const layer of this.layers) layer.scanReplaced?.()
     geometry.disposeBoundsTree?.()
     geometry.dispose()
+    this.scanCadEdges.delete(geometry)
+    if (cadEdges !== null) this.scanCadEdges.set(geometry, cadEdges)
+    const material = this.mesh.material as THREE.Material
+    material.polygonOffset = cadEdges !== null
+    material.polygonOffsetFactor = material.polygonOffsetUnits = 1
     const { colors, paint, tint } = this.layOutScan(geometry, positions, indices, normals, wireSlots, copyOf, null, true, surface)
     this.regions.attach(colors, paint, tint, this.scanVertices)
     geometry.computeBoundsTree()

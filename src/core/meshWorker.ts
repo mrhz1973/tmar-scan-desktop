@@ -129,13 +129,15 @@ function postScan(
       ...(colors ? { colors } : {}),
       ...(file?.texture ? { texture: file.texture } : {}),
       ...(file?.step ? { step: file.step } : {}),
+      ...(file?.cadEdges ? { cadEdges: file.cadEdges } : {}),
     },
-    [positions.buffer, indices.buffer, normals.buffer, slots.buffer, copyOf.buffer, ...(colors ? [colors.buffer] : [])],
+    [positions.buffer, indices.buffer, normals.buffer, slots.buffer, copyOf.buffer, ...(colors ? [colors.buffer] : []), ...(file?.cadEdges ? [file.cadEdges.buffer] : [])],
   )
 }
 
 /** What the scan's file said besides its geometry, for the render thread. */
 interface ScanFileFacts {
+  cadEdges?: Float32Array
   colors?: Uint8Array
   texture?: TextureNote
   step?: StepInfo
@@ -162,11 +164,11 @@ function parseByName(name: string, buffer: ArrayBuffer, onProgress: (t: string) 
 /** The scan: a mesh, or a CAD part opened in a scan's place — cut finer
  *  than a reference is (see parsers/step), since it is worked on rather
  *  than measured against. */
-function parseScan(name: string, buffer: ArrayBuffer, onProgress: (t: string) => void, companions?: ObjCompanions): { parsed: ParsedMesh; step?: StepInfo } {
+function parseScan(name: string, buffer: ArrayBuffer, onProgress: (t: string) => void, companions?: ObjCompanions): { parsed: ParsedMesh; step?: StepInfo; cadEdges?: Float32Array } {
   const ext = extensionOf(name)
   if (ext === 'step' || ext === 'stp') {
     const imported = parseSTEP(buffer, onProgress, true)
-    return { parsed: imported.mesh, step: imported.info }
+    return { parsed: imported.mesh, step: imported.info, cadEdges: imported.cadEdges }
   }
   return { parsed: parseByName(name, buffer, onProgress, companions) }
 }
@@ -312,14 +314,18 @@ function handle(msg: Exclude<WorkerRequest, { type: 'align-abort' }>): void {
 
   if (msg.type === 'load') {
     try {
-      const { parsed, step } = parseScan(msg.name, msg.buffer, progress, msg.companions)
+      const { parsed, step, cadEdges } = parseScan(msg.name, msg.buffer, progress, msg.companions)
       scaleToMm(parsed, msg.scale)
+      // Display boundaries follow the same unit conversion and saved datum
+      // pose as this import, without participating in the measured graph.
+      if (cadEdges && msg.scale !== undefined && msg.scale !== 1) for (let i = 0; i < cadEdges.length; i++) cadEdges[i] *= msg.scale
+      if (cadEdges && msg.transform) rigidApplyToPoints(msg.transform, cadEdges)
       const candidate = buildMeshGraph(parsed, progress)
       if (msg.transform) {
         rigidApplyToPoints(msg.transform, candidate.positions)
         rigidRotateVectors(msg.transform, candidate.normals)
       }
-      postScan(msg.requestId, candidate, msg.crease, progress, { colors: parsed.colors, texture: parsed.texture, step })
+      postScan(msg.requestId, candidate, msg.crease, progress, { colors: parsed.colors, texture: parsed.texture, step, cadEdges })
       if (msg.staged) stagedScans.set(msg.requestId, candidate)
       else { graph = candidate; scanSolid = null; scanReplaced() }
     } catch (e) {
