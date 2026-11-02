@@ -27,6 +27,10 @@ interface NotesState {
   /** The pins on the part: put away by the view bar's Notes key, or for a
    *  picture. The notes stay. A note being pinned or opened brings them back. */
   pinsShown: boolean
+  /** Notes explicitly opened by the person, independently of an agent link.
+   *  This is session state; saved notes themselves bring the list back. */
+  localNotesVisible: boolean
+  showLocalNotes: () => void
   setPinsShown: (on: boolean) => void
   setPlacing: (on: boolean) => void
   /** A new note, empty, its box opened at `screen` for the text. Returns
@@ -64,6 +68,8 @@ export const useNotes = create<NotesState>((set, get) => ({
   placing: false,
   editing: null,
   pinsShown: true,
+  localNotesVisible: false,
+  showLocalNotes: () => set({ localNotesVisible: true }),
   setPinsShown: (pinsShown) => set({ pinsShown }),
   setPlacing: (placing) => set({ placing, ...(placing ? { pinsShown: true } : {}) }),
   addNote: (note, screen) => {

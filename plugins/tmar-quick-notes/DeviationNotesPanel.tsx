@@ -46,7 +46,7 @@ export function DeviationNotes() {
   }, [])
 
   if (!enabled) return <div className="group" data-test="tmar-deviation-notes-off">
-    <p className="hint">Notes use the existing Settings → Agents visibility switch. This extension never enables an agent connection automatically.</p>
+    <p className="hint">Notes appear here after opening local notes in Zebra, or when enabled in Settings → Agents. No agent connection is enabled automatically.</p>
   </div>
   return <section data-test="tmar-deviation-notes" aria-label="Notes in Deviation">
     <NoteList placementBlocked={blocked} />

@@ -243,6 +243,9 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
         </p>
       </div>
 
+      {/* Analysis stays near the model and leaves the stage during edits. */}
+      {!editorOpen && <PluginPanelExtensions slot="reverse.analysis" />}
+
       <ParameterList />
 
       {!editorOpen && (
