@@ -237,6 +237,8 @@ export type WorkerResponse =
   | {
       type: 'nominal-loaded'
       requestId: number
+      /** STEP face boundaries for display only; absent for STL/mesh references. */
+      cadEdges?: Float32Array
       positions: Float32Array
       indices: Uint32Array
       normals: Float32Array

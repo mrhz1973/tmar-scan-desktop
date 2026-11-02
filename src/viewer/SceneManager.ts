@@ -2231,6 +2231,15 @@ export class SceneManager {
     return [c.x, c.y, c.z]
   }
 
+  /** Borrow the displayed reference; callers must not mutate or dispose it.
+   * STEP boundaries belong to the original reference even when a map replaces
+   * its shading. No source coordinates are moved to display this metadata. */
+  referenceDisplay(): { mesh: THREE.Mesh; cadEdges: Float32Array | null } | null {
+    if (!this.nominalMesh) return null
+    const mesh = this.referenceMapMesh?.visible ? this.referenceMapMesh : this.nominalMesh
+    return { mesh, cadEdges: (this.nominalMesh.geometry.userData.cadEdges as Float32Array | undefined) ?? null }
+  }
+
   nominalGeometry(): THREE.BufferGeometry | null {
     return (this.nominalMesh?.geometry as THREE.BufferGeometry) ?? null
   }
@@ -2252,6 +2261,7 @@ export class SceneManager {
     indices: Uint32Array,
     normals: Float32Array,
     wireSlots?: Uint8Array,
+    cadEdges?: Float32Array,
   ): { commit(): void; dispose(): void } {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -2265,7 +2275,10 @@ export class SceneManager {
     const material = new THREE.MeshStandardMaterial({
       color: this.theme.nominal,
       side: THREE.DoubleSide,
+      // Same depth contract as CAD bodies: leave space for face boundaries.
+      polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
     })
+    if (cadEdges) geometry.userData.cadEdges = cadEdges
     applyFinish(material, this.theme)
     material.onBeforeCompile = (shader) => {
       spliceBackfaceTint(shader, this.referenceBackface)
@@ -2433,7 +2446,7 @@ export class SceneManager {
       geometry.computeBoundingSphere()
       // Matte, whatever the scheme's finish: a CAD face square to the view
       // takes the whole highlight, and a map is read by its colours.
-      const material = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, roughness: 1, metalness: 0 })
+      const material = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })
       this.referenceMapMesh = new THREE.Mesh(geometry, material)
       this.referenceMapMesh.visible = false
       this.referenceMapMesh.renderOrder = 1

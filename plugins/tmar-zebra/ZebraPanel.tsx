@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { sceneOf } from '../../src/commands/host'
 import { useStore } from '../../src/state/store'
+import { useShell } from '../../src/state/shellStore'
+import { useDeviation } from '../../src/state/deviationStore'
 import { NOTE_PLACING } from '../reverse/app/useNotePins'
 import { bodiesOfPick } from '../reverse/core/bodyFolders'
 import { useNotes } from '../reverse/state/noteStore'
@@ -13,7 +15,15 @@ import type { Orientation } from './pattern'
 import { enableZebra, useZebraUi, ZebraIcon } from './ZebraQuickButton'
 import './zebraControls.css'
 
+export function ZebraDeviationPanel() {
+  const blocked = useDeviation(s=>s.split || s.picking || s.animate || s.alignStatus === 'running')
+  if (blocked) return <p className="hint" data-test="zebra-deviation-blocked">Zebra requires a still, single Deviation viewport. Split-view support remains planned.</p>
+  return <ZebraPanel/>
+}
 export function ZebraPanel() {
+  const workspace = useShell(s=>s.workspace), onDeviation = workspace === 'deviation'
+  const referenceName = useDeviation(s=>s.nominalName), showScan = useDeviation(s=>s.showScan)
+  const editingNote = useNotes(s=>s.editing)
   const enabled = useZebraUi((s) => s.enabled), target = useZebraUi((s) => s.target)
   const setTarget = useZebraUi((s) => s.setTarget)
   useEffect(() => () => useZebraUi.setState({ enabled: false, target: 'visible' }), [])
@@ -41,7 +51,8 @@ export function ZebraPanel() {
     setUnavailable(false)
     const host = scene.layerHost()
     const zebra = new ZebraLayer({
-      bodies: () => reSceneOf(scene).bodyMeshes,
+      bodies: () => onDeviation ? new Map() : reSceneOf(scene).bodyMeshes,
+      reference: () => scene.referenceDisplay()?.mesh ?? null,
       scan: () => {
         const geometry = scene.scanGeometry()
         if (!geometry) return null
@@ -65,8 +76,8 @@ export function ZebraPanel() {
     </label>
     {enabled && <>
       <button className={'block' + (placing ? ' on' : '')} data-test="zebra-add-note" aria-pressed={placing}
-        disabled={busy || (!hasScan && !hasBody)}
-        title="Pin a note on the scan or a CAD body while Zebra is visible; no agent connection is needed"
+        disabled={busy || !!editingNote || (onDeviation ? !hasScan || !showScan : !hasScan && !hasBody)}
+        title={onDeviation ? 'Local notes in Deviation currently attach to the visible scan, not the STEP reference; save an open note first' : 'Pin a note on the scan or a CAD body while Zebra is visible; save an open note first'}
         onClick={() => {
           const notes = useNotes.getState()
           if (notes.placing) { notes.setPlacing(false); return }
@@ -79,9 +90,10 @@ export function ZebraPanel() {
       </button>
       <label className="field"><span>Analyze</span>
         <select data-test="zebra-target" value={target} onChange={(e) => setTarget(e.target.value as ZebraTarget)}>
-          <option value="visible">Visible CAD bodies</option>
-          <option value="selected">Selected CAD bodies</option>
+          {!onDeviation && <option value="visible">Visible CAD bodies</option>}
+          {!onDeviation && <option value="selected">Selected CAD bodies</option>}
           <option value="scan">Scan</option>
+          {onDeviation && <option value="reference" disabled={!referenceName}>Reference (STEP / mesh)</option>}
         </select>
       </label>
       <label className="field"><span>Stripe direction</span>
@@ -100,8 +112,10 @@ export function ZebraPanel() {
         ? 'The 3D view is unavailable.'
         : count > 0 ? `Showing stripes on ${count} visible ${count === 1 ? 'object' : 'objects'}.`
           : target === 'selected' ? 'Select visible CAD bodies in the body list.'
+            : target === 'reference' ? 'Load and show the reference in Surface Deviation. Hide the scan when it covers the reference.'
             : target === 'scan' ? 'Show a scan with surface normals to analyze it.'
               : 'Show a CAD body with surface normals to analyze it.'}</p>
+      {onDeviation && <p className="hint">Zebra temporarily replaces the selected object's shading, not its geometry or measurements. Turn it off to read the comparison colors. Notes remain scan-side in this workspace.</p>}
       <p className="hint">Rotate the view to inspect reflected bands. This is a visual aid, not a numerical continuity measurement. Shading follows the displayed mesh normals.</p>
     </>}
   </section>

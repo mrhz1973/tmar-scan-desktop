@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import type { SceneLayer } from '../../src/viewer/sceneLayers'
 import { PATTERN_SIZE, stripePattern, type Orientation } from './pattern'
 
-export type ZebraTarget = 'visible' | 'selected' | 'scan'
+export type ZebraTarget = 'visible' | 'selected' | 'scan' | 'reference'
 export interface ZebraOptions {
   target: ZebraTarget
   selectedIds: readonly number[]
@@ -17,6 +17,7 @@ export interface ZebraOptions {
 export interface ZebraSources {
   bodies(): ReadonlyMap<number, THREE.Mesh>
   scan(): THREE.Mesh | null
+  reference?(): THREE.Mesh | null
   invalidate(): void
   countChanged?(count: number): void
 }
@@ -80,7 +81,9 @@ export class ZebraLayer implements SceneLayer {
     const material = new THREE.MeshBasicMaterial({
       map: this.texture, color: 0xffffff, side: THREE.FrontSide,
       transparent: true, opacity: 1, depthTest: true, depthWrite: true,
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      polygonOffset: true,
+      polygonOffsetFactor: original?.polygonOffset && original.polygonOffsetFactor > 0 ? original.polygonOffsetFactor * 0.5 : -2,
+      polygonOffsetUnits: original?.polygonOffset && original.polygonOffsetUnits > 0 ? original.polygonOffsetUnits * 0.5 : -2,
       clippingPlanes: original?.clippingPlanes ?? null, toneMapped: false,
     })
     material.onBeforeCompile = (shader) => {
@@ -147,8 +150,8 @@ zebraReflectedUV = zebraUV(zebraPosition, normalMatrix * normal);`)
   private sync(): void {
     if (this.disposed) return
     const wanted = new Set<THREE.Mesh>()
-    if (this.options.target === 'scan') {
-      const scan = this.sources.scan()
+    if (this.options.target === 'scan' || this.options.target === 'reference') {
+      const scan = this.options.target === 'reference' ? this.sources.reference?.() : this.sources.scan()
       if (scan) wanted.add(scan)
     } else {
       const selected = new Set(this.options.selectedIds)
@@ -186,7 +189,7 @@ zebraReflectedUV = zebraUV(zebraPosition, normalMatrix * normal);`)
     }
     // Selecting only some bodies changes which receive stripes, not their
     // common reflected environment. Hidden bodies never expand the frame.
-    if (this.updateFrame(this.options.target === 'scan' ? wanted : this.sources.bodies().values())) changed = true
+    if (this.updateFrame(this.options.target === 'scan' || this.options.target === 'reference' ? wanted : this.sources.bodies().values())) changed = true
     if (this.count !== visible) { this.count = visible; this.sources.countChanged?.(visible) }
     if (changed) this.sources.invalidate()
   }

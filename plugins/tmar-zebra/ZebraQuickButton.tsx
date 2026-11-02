@@ -2,6 +2,7 @@
 import { create } from 'zustand'
 import { useShell } from '../../src/state/shellStore'
 import { useStore } from '../../src/state/store'
+import { useDeviation } from '../../src/state/deviationStore'
 import { reEditorOpen, useReverse } from '../reverse/state/reStore'
 import type { ZebraTarget } from './ZebraLayer'
 
@@ -13,17 +14,24 @@ export function ZebraIcon() {
 }
 export function enableZebra(on: boolean): void {
   const ui = useZebraUi.getState(), re = useReverse.getState()
-  if (on && ui.target === 'visible' && !re.bodies.some((b) => b.visible) && useStore.getState().fileName) ui.setTarget('scan')
+  if (on && useShell.getState().workspace === 'deviation') {
+    const d=useDeviation.getState()
+    if (d.split || d.picking || d.animate || d.alignStatus === 'running') return
+    ui.setTarget(d.source === 'reference' && d.nominalName && d.showNominal ? 'reference' : 'scan')
+  }
+  if (on && useShell.getState().workspace === 'reverse' && ui.target === 'visible' && !re.bodies.some((b) => b.visible) && useStore.getState().fileName) ui.setTarget('scan')
   ui.setEnabled(on)
 }
 export function ZebraQuickButton() {
   const workspace = useShell((s) => s.workspace)
   const enabled = useZebraUi((s) => s.enabled)
-  const editing = useReverse((s) => reEditorOpen(s) || s.building || !!s.playback)
-  if (workspace !== 'reverse') return null
+  const cadEditing = useReverse((s) => reEditorOpen(s) || s.building || !!s.playback)
+  const devBlocked = useDeviation(s => s.split || s.picking || s.animate || s.alignStatus === 'running')
+  const editing = workspace === 'reverse' ? cadEditing : devBlocked
+  if (workspace !== 'reverse' && workspace !== 'deviation') return null
   return <div className="keys"><button data-test="zebra-quick-toggle" className={enabled ? 'on' : undefined}
     aria-pressed={enabled} disabled={editing && !enabled}
-    title={editing ? 'Finish the CAD operation to use Zebra analysis' : enabled ? 'Turn Zebra off' : 'Show Zebra analysis and its stripe controls'}
+    title={editing ? 'Finish the active operation and use a single viewport for Zebra analysis' : enabled ? 'Turn Zebra off' : 'Show Zebra analysis and its stripe controls'}
     onClick={() => {
       enableZebra(!enabled)
       if (!enabled) requestAnimationFrame(() => document.querySelector('[data-test="tmar-zebra"]')?.scrollIntoView({ block: 'nearest' }))

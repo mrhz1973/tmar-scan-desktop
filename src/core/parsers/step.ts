@@ -5,6 +5,7 @@
 // deviation map is the part and how much is the conversion.
 
 import { autoTessellation, estimateStepSize, importStep, type ImportDiagnostics } from 'meshstep'
+import { cadBoundarySegments } from '../geometry/cadBoundaries'
 import { meshGaps, type MeshGap } from '../geometry/openEdges'
 import type { ParsedMesh } from '../types'
 import { decodeWhole } from './text'
@@ -35,6 +36,8 @@ export interface StepInfo {
 export interface StepImport {
   mesh: ParsedMesh
   info: StepInfo
+  /** Renderer-only boundaries, never triangle wireframe or measurement input. */
+  cadEdges?: Float32Array
 }
 
 /** Max edge length, as a fraction of the model's bounding-box diagonal.
@@ -187,5 +190,6 @@ export function parseSTEP(buffer: ArrayBuffer, onProgress?: (text: string) => vo
       indices: result.mesh.indices,
     },
     info: { surfaceDeviation, units: result.units, ...verdict },
+    ...(!asScan ? { cadEdges: cadBoundarySegments(result.mesh.positions, result.mesh.indices, result.faceOfTri) } : {}),
   }
 }

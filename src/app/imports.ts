@@ -96,7 +96,7 @@ export async function prepareNominal(client: MeshWorkerClient, scene: SceneManag
   const source = { name: file.name, bytes: new Uint8Array(buffer.slice(0)), units }
   const { id, mesh } = await client.prepareNominal(file.name, buffer, units)
   try {
-    const view = scene ? scene.prepareNominal(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots) : NO_VIEW
+    const view = scene ? scene.prepareNominal(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots, mesh.cadEdges) : NO_VIEW
     return { id, mesh, source, view }
   } catch (e) {
     await client.discardImport([id])

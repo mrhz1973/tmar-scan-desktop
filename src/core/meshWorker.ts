@@ -177,11 +177,11 @@ function parseNominal(
   name: string,
   buffer: ArrayBuffer,
   onProgress: (t: string) => void,
-): { parsed: ParsedMesh; step?: StepInfo } {
+): { parsed: ParsedMesh; step?: StepInfo; cadEdges?: Float32Array } {
   const ext = extensionOf(name)
   if (ext === 'step' || ext === 'stp') {
     const imported = parseSTEP(buffer, onProgress)
-    return { parsed: imported.mesh, step: imported.info }
+    return { parsed: imported.mesh, step: imported.info, cadEdges: imported.cadEdges }
   }
   if (ext === 'stl' || ext === 'ply' || ext === 'obj' || ext === '3mf') {
     return { parsed: parseByName(name, buffer, onProgress) }
@@ -385,8 +385,9 @@ function handle(msg: Exclude<WorkerRequest, { type: 'align-abort' }>): void {
 
   if (msg.type === 'load-nominal') {
     try {
-      const { parsed, step } = parseNominal(msg.name, msg.buffer, progress)
+      const { parsed, step, cadEdges } = parseNominal(msg.name, msg.buffer, progress)
       scaleToMm(parsed, msg.scale)
+      if (cadEdges && msg.scale !== undefined && msg.scale !== 1) for (let i = 0; i < cadEdges.length; i++) cadEdges[i] *= msg.scale
       // The nominal goes through the same welding as a scan: the pseudonormals
       // that give a signed distance its sign are sums over the faces meeting at
       // a vertex or an edge, and an unwelded triangle soup has no such thing.
@@ -414,9 +415,10 @@ function handle(msg: Exclude<WorkerRequest, { type: 'align-abort' }>): void {
           vertexCount: g.vertexCount,
           triangleCount: g.triangleCount,
           bboxDiagonal: candidate.bboxDiagonal,
+          cadEdges,
           step,
         },
-        [positions.buffer, indices.buffer, normals.buffer, slots.buffer],
+        [positions.buffer, indices.buffer, normals.buffer, slots.buffer, ...(cadEdges ? [cadEdges.buffer] : [])],
       )
       if (msg.staged) stagedNominals.set(msg.requestId, candidate)
       else nominal = candidate
