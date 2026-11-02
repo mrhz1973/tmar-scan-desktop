@@ -3,6 +3,7 @@ import type { ScanRulerPlugin } from '../../src/plugins/api'
 import { registerPanelExtension } from '../../src/plugins/panelExtensions'
 import { plugins } from '../../src/plugins/registry'
 import { ZebraPanel } from './ZebraPanel'
+import { ZebraQuickButton } from './ZebraQuickButton'
 
 const plugin: ScanRulerPlugin = {
   id: 'tmar-zebra',
@@ -10,6 +11,7 @@ const plugin: ScanRulerPlugin = {
   install() {
     if (!plugins().some((p) => p.id === 'reverse')) return
     registerPanelExtension({ id: 'tmar-zebra.analysis', slot: 'reverse.analysis', component: ZebraPanel })
+    registerPanelExtension({ id: 'tmar-zebra.quick', slot: 'view.tools', component: ZebraQuickButton, order: 30 })
   },
 }
 

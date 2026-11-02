@@ -144,9 +144,8 @@ try {
   check(cadView.target.every((v,i) => Math.abs(v-cadAt[i])<1e-6), 'target button locates a verified CAD face anchor')
   await click('[data-test=note-return-view]')
   await page.evaluate(id => window.__re.store.getState().setBodiesVisible([id],false), ids[0])
-  const hiddenBefore = await camera()
   await click(`[data-note-id="${cadId}"] [data-test=note-locate]`)
-  check(JSON.stringify((await camera()).target) === JSON.stringify(hiddenBefore.target) && await page.evaluate(() => /hidden/.test(window.__re.measure.getState().statusText)), 'a hidden CAD target is reported without revealing geometry or moving the camera')
+  check((await camera()).target.every((v,i) => Math.abs(v-cadAt[i])<1e-6) && await page.evaluate(id => !window.__re.store.getState().bodies.find(b=>b.id===id).visible && /hidden/.test(window.__re.measure.getState().statusText), ids[0]), 'a hidden CAD target shows its saved note position with a warning, without revealing geometry')
   await page.evaluate(([body,note]) => { window.__re.store.getState().setBodiesVisible([body],true); window.__reNotes.getState().removeNote(note) }, [ids[0],cadId])
   // Switching workspaces must not lose per-workspace text/pin preferences.
   await click('[data-test=workspace-mesh]')

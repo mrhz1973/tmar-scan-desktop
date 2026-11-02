@@ -133,6 +133,7 @@ export class NotePins {
   private inPlay = true
   private putAway = false
   private focused: number | null = null
+  private focusRing: CSS2DObject
   private removeLayer: () => void
 
   /** A click on a badge: the note's id and where the click was. */
@@ -144,6 +145,13 @@ export class NotePins {
     this.host = scene.layerHost()
     this.group.name = 'note-pins'
     this.host.partGroup.add(this.group)
+    const target = document.createElement('div')
+    target.className = 'note-focus-ring'
+    target.dataset.test = 'note-focus-ring'
+    target.setAttribute('aria-hidden', 'true')
+    this.focusRing = new CSS2DObject(target)
+    this.focusRing.visible = false
+    this.group.add(this.focusRing)
     this.removeLayer = scene.addLayer(this.layer())
   }
 
@@ -171,6 +179,7 @@ export class NotePins {
       tick: () => this.fade(),
       dispose: () => {
         for (const [id, pin] of [...this.pins]) this.drop(pin, id)
+        this.focusRing.element.remove()
         this.host.partGroup.remove(this.group)
         this.dot.dispose()
       },
@@ -206,6 +215,7 @@ export class NotePins {
       pin.item = item
       for (const o of [pin.badge, pin.dot, pin.label]) o.position.set(item.at[0], item.at[1], item.at[2])
       const el = pin.label.element
+      el.dataset.noteId = String(item.id)
       el.textContent = item.text
       el.title = item.text
       el.classList.toggle('done', item.done)
@@ -240,6 +250,12 @@ export class NotePins {
 
   private updateVisibility(): void {
     this.group.visible = this.inPlay && (!this.putAway || this.focused !== null)
+    const focusedPin = this.focused === null ? null : this.pins.get(this.focused)
+    this.focusRing.visible = Boolean(focusedPin)
+    if (focusedPin) {
+      this.focusRing.position.set(...focusedPin.item.at)
+      this.focusRing.element.dataset.noteId = String(focusedPin.item.id)
+    }
     for (const [id, pin] of this.pins) {
       const visible = !this.putAway || id === this.focused
       pin.badge.visible = pin.dot.visible = pin.label.visible = visible

@@ -12,6 +12,24 @@ An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/
 
 [Available now](#web-extensions-available-on-main) | [Body STL](#cad-body-stl-export) | [Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Deviation notes](#notes-directly-in-deviation) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
 
+## Latest usability follow-up
+
+The saved-note target now receives a large, high-contrast viewport reticle and a
+visible navigation message. Hidden or changed CAD references no longer prevent
+locating the **saved annotation coordinates**; warnings distinguish that marker
+from a verified current surface. Valid stored normals turn the view towards the
+annotated surface, without changing geometry or visibility.
+
+**Features** and **Notes** have full-width disclosure headers. Drag the vertical
+divider beside the left column to resize it, or use **Settings > Panel layout**.
+Width is remembered in this browser. In **Reverse engineer**, the lower **Zebra**
+button opens/toggles the analysis without searching through a long feature list.
+With only a scan loaded, it selects the scan automatically.
+
+See [the follow-up validation](docs/tmar-note-focus-validation.md) for actual
+production-build UI checks and limitations. These changes still do not constitute
+a native desktop release.
+
 ## Web extensions available on main
 
 These are **implemented web-source features**, not just roadmap entries. They run in the browser without an Electron shell or native installation.
@@ -85,7 +103,7 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Quick-note access and navigation plugin | Implemented, initial web scope | Settings-configurable letter (default N), local Note action, note multi-selection, double-click/target Go to note and Return to previous view. |
 | Notes directly in Deviation | Implemented in web source; scan-side scope | Add/edit/save notes in the single scan-side comparison view; shared IDs and project round trips verified. Reference-side/split-view anchors and comparison metadata remain planned. |
 | CAD body export UI | Implemented in web source | One Export body dialog chooses STEP or STL and visible/selected CAD bodies; adjustable STL chord, no source scan. |
-| Collapsible Features and Notes panels | Implemented, initial web scope | Independent header controls, browser-remembered state, preserved selection and note draft. Centralized Layout preferences remain future work. |
+| Collapsible Features and Notes panels | Implemented, initial web scope | Independent header controls, browser-remembered state, preserved selection and note draft. Column width is draggable and configurable in Settings; broader layout presets remain future work. |
 | Per-workspace labeling and annotation visibility plugin | Implemented lower-bar controls | Labels and Notes visibility per 3D workspace; no annotation deletion. Advanced Settings categories remain planned. |
 | Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
 | Customizations and contributions | Partial | Five TMAR plugins with English documentation and reusable host hooks. Dynamic package management and automated upstream updates remain planned. |
@@ -221,7 +239,7 @@ See [the implementation limits](plugins/tmar-quick-notes/README.md).
 
 Single-click remains selection; the pencil is editing. With labels or pins hidden, only the focused note is temporarily revealed without modifying saved visibility preferences. Changing workspace or the focused record clears that temporary focus.
 
-Missing, hidden, clipped or unresolved targets produce an explanation rather than a guessed jump. CAD-body notes are located in Reverse engineer, validating their saved face/edge and anchor. A target changed by rebuilding may require manual review. Automatic occlusion-aware orientation, reversible geometry reveal and generalized remapping remain future work.
+A valid saved position remains locatable even when its target is hidden, clipped, removed or changed by rebuilding. Such cases show an explicit warning: the marker is the saved annotation position, not a newly verified surface match. No body is revealed and no anchor is silently remapped. Invalid coordinates, an open editor or conflicting active operations still block navigation with visible feedback. The stored surface normal supplies the viewing direction where available; full occlusion-aware path planning and automatic target remapping remain future work.
 
 The synthetic browser regression exercises 40 notes, long ranges, both navigation entry points, hidden labels, camera return, unchanged drafts and save/reopen. Its exact results are in [the validation record](docs/tmar-usability-validation.md).
 
@@ -233,7 +251,7 @@ The synthetic browser regression exercises 40 notes, long ranges, both navigatio
 
 Each list has its own header control and item count. Collapsing retains selection and keeps any note draft mounted. New AI-created rows do not force a list open. Expanded/collapsed state is remembered in this browser. Collapsing changes layout only, not geometry or pin visibility.
 
-A centralized **Settings > Layout** group, workspace-specific collapse preferences and reset-all are not yet implemented.
+The disclosure header spans the full list width and has a large chevron. **Settings > Panel layout** and the draggable vertical divider control column width (260–720 px, constrained to leave model space). Width persists in this browser. Double-click the divider to reset it; arrow keys resize it. Phone layouts remain stacked. Workspace-specific collapse preferences and a general reset-all remain future work.
 
 ### Labeling and annotation visibility in each workspace
 

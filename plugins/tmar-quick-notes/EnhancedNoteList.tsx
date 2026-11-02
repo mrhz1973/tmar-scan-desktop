@@ -3,6 +3,7 @@ import { useState, type MouseEvent } from 'react'
 import { useListSelection } from '../../src/plugins/listSelection'
 import { useStore } from '../../src/state/store'
 import { usePrefs } from '../../src/state/prefsStore'
+import { CollapseButton } from '../../src/ui/CollapseButton'
 import { Icon } from '../../src/ui/icons'
 import { InfoDot } from '../../src/ui/InfoDot'
 import { useNotes } from '../reverse/state/noteStore'
@@ -24,6 +25,7 @@ export function EnhancedNoteList({ placementBlocked = null }: NoteListProps) {
   const listed = notes.filter((n) => n.text.trim() !== '')
   const selection = useListSelection(listed.map((n) => n.id), part)
   const focused = useNoteFocus((s) => s.id), canReturn = useNoteFocus((s) => s.canReturn)
+  const message = useNoteFocus((s) => s.message), warning = useNoteFocus((s) => s.warning)
   const key = useNoteShortcut((s) => s.key)
   const [collapsed, setCollapsed] = useState(collapsedBefore)
   const blocked = placementBlocked ?? canArmNote()
@@ -65,28 +67,31 @@ export function EnhancedNoteList({ placementBlocked = null }: NoteListProps) {
       if (editing) useNotes.getState().closeEditor()
     }
   }}>
-    <div className="g-label">
-      <button className="x" data-test="notes-collapse" aria-label={collapsed ? 'Expand Notes' : 'Collapse Notes'} aria-expanded={!collapsed} onClick={collapse}>{collapsed ? '▸' : '▾'}</button>
-      <span>{agentOn ? 'Notes for the agent' : 'Notes'} <InfoDot title="Local notes"><p>Single-click selects; Ctrl/Cmd adds or removes a row; Shift selects a range. Double-click or use the target button to locate a note. Use the pencil to edit.</p><p>Notes are saved locally with the project. No agent connection is required or enabled. Imported notes keep their provenance until explicitly edited and saved.</p></InfoDot></span>
-      <b data-test="note-count">{counts || (listed.length ? 'all handled' : '0')}</b><small>{listed.length} total</small>
+    <div className="tmar-notes-heading">
+      <CollapseButton label={agentOn ? 'Notes for the agent' : 'Notes'} collapsed={collapsed} count={listed.length}
+        controls="tmar-notes-content" testId="notes-collapse" onToggle={collapse}/>
+      <InfoDot title="Local notes"><p>Single-click selects; Ctrl/Cmd adds or removes a row; Shift selects a range. Double-click or use the target to center and highlight its saved position. The pencil edits.</p><p>Locating a note never changes geometry, target visibility or imported-note provenance. A warning identifies hidden or changed geometry.</p></InfoDot>
     </div>
-    <div hidden={collapsed}>
+    <div className="tmar-note-summary"><b data-test="note-count">{counts || (listed.length ? 'all handled' : '0')}</b></div>
+    {message && <p role="status" className={'tmar-focus-feedback' + (warning ? ' warn' : '')} data-test="note-focus-feedback">{message}</p>}
+    <div id="tmar-notes-content" hidden={collapsed}>
       <div className="toolrow">
         <button data-test="note-add" aria-pressed={placing} className={placing ? 'on' : undefined} disabled={!placing && !!blocked} title={blocked ?? `Add note${key ? ` (${key.toUpperCase()})` : ''}`} onClick={armNote}>{placing ? 'Click the part…' : 'Note'}</button>
         <button data-test="notes-select-all" onClick={selection.all} disabled={!listed.length}>Select all</button>
         <button data-test="notes-clear-selection" onClick={() => { selection.clear(); clearNoteFocus() }} disabled={!selected.size}>Clear</button>
         <span data-test="notes-selected-count">{selection.ids.length} selected</span>
       </div>
-      {selected.size > 0 && <div className="toolrow">
-        <button data-test="notes-delete-selected" disabled={!!editing} onClick={() => remove(selection.ids)}>Delete selected</button>
-        <button data-test="notes-done-selected" disabled={!!editing} onClick={() => done(true)}>Mark handled</button>
-        <button data-test="notes-open-selected" disabled={!!editing} onClick={() => done(false)}>Reopen</button>
-      </div>}
+      {/* Keep row coordinates stable between the two clicks of a double-click. */}
+      <div className="toolrow">
+        <button data-test="notes-delete-selected" disabled={!!editing || !selected.size} onClick={() => remove(selection.ids)}>Delete selected</button>
+        <button data-test="notes-done-selected" disabled={!!editing || !selected.size} onClick={() => done(true)}>Mark handled</button>
+        <button data-test="notes-open-selected" disabled={!!editing || !selected.size} onClick={() => done(false)}>Reopen</button>
+      </div>
       {canReturn && <button className="block" data-test="note-return-view" onClick={() => clearNoteFocus(true)}>Return to previous view</button>}
       <div role="listbox" aria-label="Notes" aria-multiselectable="true" tabIndex={0}>
         {listed.map((note) => <div key={note.id} data-test="note-row" data-note-id={note.id} role="option" aria-selected={selected.has(note.id)} tabIndex={0}
           className={'noterow' + (selected.has(note.id) ? ' tmar-selected' : '') + (focused === note.id ? ' tmar-focused' : '') + (note.done ? ' done' : '') + (note.by === 'agent' ? ' agent' : '')}
-          onClick={(event) => { if (!(event.target as HTMLElement).closest('.notekeys')) { selection.select(note.id, event); if (focused !== note.id) clearNoteFocus() } }}
+          onClick={(event) => { if (!(event.target as HTMLElement).closest('.notekeys')) selection.select(note.id, event) }}
           onDoubleClick={(event) => { if (!(event.target as HTMLElement).closest('.notekeys') && !event.ctrlKey && !event.metaKey && !event.shiftKey) { event.preventDefault(); goToNote(note.id) } }}
           onKeyDown={(event) => { if (event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); goToNote(note.id) } }}>
           <span className={'notebadge' + (note.by === 'agent' ? ' agent' : '') + (note.done ? ' done' : '')}>{note.id}</span>
