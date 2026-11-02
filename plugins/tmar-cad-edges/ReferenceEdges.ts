@@ -17,11 +17,18 @@ export class ReferenceEdges {
   private edges: Float32Array | null = null
   private geometry: THREE.BufferGeometry | null = null
   private direction: THREE.Vector3 | null = null
+  private positions: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null = null
+  private normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null = null
+  private positionVersion = -1
+  private normalVersion = -1
   private matrix = new THREE.Matrix4()
   private clipping: readonly THREE.Plane[] | null = null
   private disposed = false
-  constructor(private readonly scene: SceneManager) {
-    this.group.name = 'tmar-reference-cad-edges'
+  constructor(private readonly scene: SceneManager,
+    private readonly source: () => { mesh: THREE.Mesh; cadEdges: Float32Array | null } | null = () => scene.referenceDisplay(),
+    name = 'reference',
+  ) {
+    this.group.name = `tmar-${name}-cad-edges`
     this.group.matrixAutoUpdate = false
     scene.layerHost().scene.add(this.group)
   }
@@ -38,7 +45,7 @@ export class ReferenceEdges {
   }
   tick(prefs: EdgePrefs, active: boolean, width: number, height: number): void {
     if (this.disposed) return
-    const source = this.scene.referenceDisplay()
+    const source = this.source()
     if (source?.mesh !== this.mesh || source?.cadEdges !== this.edges || source?.mesh.geometry !== this.geometry) {
       this.outline = this.drop(this.outline); this.silhouette = this.drop(this.silhouette)
       this.mesh = source?.mesh ?? null; this.edges = source?.cadEdges ?? null
@@ -59,7 +66,12 @@ export class ReferenceEdges {
     const changedMatrix = !this.matrix.equals(this.mesh.matrixWorld)
     this.matrix.copy(this.mesh.matrixWorld); this.group.matrix.copy(this.matrix); this.group.matrixWorldNeedsUpdate = true
     const dir = this.scene.layerHost().camera().getWorldDirection(new THREE.Vector3()).transformDirection(this.matrix.clone().invert())
-    if (!changedMatrix && this.direction && this.direction.dot(dir) > 0.999994) return
+    const positions = this.geometry.getAttribute('position'), normals = this.geometry.getAttribute('normal')
+    const version = (a: typeof positions | undefined) => a instanceof THREE.InterleavedBufferAttribute ? a.data.version : a?.version ?? -1
+    const changedGeometry = positions !== this.positions || normals !== this.normals || version(positions) !== this.positionVersion || version(normals) !== this.normalVersion
+    this.positions = positions ?? null; this.normals = normals ?? null
+    this.positionVersion = version(positions); this.normalVersion = version(normals)
+    if (!changedMatrix && !changedGeometry && this.direction && this.direction.dot(dir) > 0.999994) return
     this.direction = dir
     this.silhouette = this.drop(this.silhouette)
     const pos = this.geometry.getAttribute('position'), normal = this.geometry.getAttribute('normal'), index = this.geometry.getIndex()

@@ -81,7 +81,7 @@ export async function prepareScan(client: MeshWorkerClient, scene: SceneManager 
   const source = { name: file.name, bytes: new Uint8Array(buffer.slice(0)), units, ...(extras.length > 0 ? { companions: extras } : {}) }
   const { id, mesh } = await client.prepareScan(file.name, buffer, crease, transform, units, await scanCompanions(file.name, source.bytes, extras))
   try {
-    const view = scene ? scene.prepareMesh(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots, mesh.copyOf, mesh.colors ?? null) : NO_VIEW
+    const view = scene ? scene.prepareMesh(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots, mesh.copyOf, mesh.colors ?? null, mesh.cadEdges ?? null) : NO_VIEW
     return { id, mesh, source, view }
   } catch (e) {
     await client.discardImport([id])

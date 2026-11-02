@@ -92,7 +92,7 @@ export function scanSwap({
     // Without a viewport the part's size is read off the mesh, as an open
     // reads it.
     const scene = sceneRef.current
-    scene?.replaceScan(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots, mesh.copyOf, mesh.colors ?? null)
+    scene?.replaceScan(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots, mesh.copyOf, mesh.colors ?? null, mesh.cadEdges ?? null)
     const bounds = scene ? null : boundsOf(mesh.positions, mesh.vertexCount)
     useStore.setState((s) => ({
       scanColors: Boolean(mesh.colors),

@@ -22,6 +22,20 @@ its fill in front of those lines. A shared depth ordering now keeps the visible
 face boundaries above the Zebra fill while preserving depth-tested hidden lines.
 Disabling Zebra restores shading; disabling CAD edges only hides resting outlines.
 
+## STEP opened as Scan
+
+STEP opened in the main Model slot is now covered too. Leave **Analyze: Scan**
+and enable **Show CAD edges**; color and 1–6 px width apply to the original STEP
+face boundaries and silhouettes. The panel confirms **STEP loaded as Scan**.
+No manual reimport as a CAD body is required. This preserves the STEP boundary
+metadata but does not turn the displayed scan into an editable CAD body.
+
+Boundaries follow the scan alignment and clipping, survive a shading resplit
+and are regenerated on project reopen. Mesh replacements and edited previews do
+not inherit obsolete CAD edges. Original scan data and source files are unchanged.
+Native body-only tangent controls are not shown when no CAD body exists.
+See [the regression record](../../docs/tmar-step-scan-validation.md).
+
 ## STEP reference
 
 Load STEP through the reference slot in Surface Deviation. The importer retains
@@ -38,8 +52,9 @@ the original STEP when a project is reopened, not added to the saved CAD model.
 
 An STL or other mesh-only reference has no CAD face identities. The control
 explains that limitation; it does not invent CAD topology or enable triangle
-wireframe. STEP imported as a *scan*, rather than as a body/reference, is not
-covered by this metadata route. The existing **Mesh** control is separate.
+wireframe. Original STEP loaded as Scan is supported through its preserved
+face metadata; ordinary mesh files cannot supply that metadata. The existing
+**Mesh** control remains separate.
 
 ## Notes, selection and limitations
 

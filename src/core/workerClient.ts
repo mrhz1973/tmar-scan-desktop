@@ -41,6 +41,8 @@ export interface LoadedMesh {
 }
 
 export interface LoadedScan extends LoadedMesh {
+  /** Original STEP face boundaries for display only; absent on mesh files. */
+  cadEdges?: Float32Array
   /** The vertex each appended copy stands in for — see geometry/crease.ts. */
   copyOf: Uint32Array
   crease: CreaseReport

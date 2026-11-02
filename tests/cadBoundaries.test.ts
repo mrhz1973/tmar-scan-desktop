@@ -45,3 +45,25 @@ describe('STEP CAD boundaries, not triangle wireframe', () => {
     expect(length).toBeCloseTo(240,4)
   })
 })
+
+
+describe('STEP opened as Scan keeps its CAD boundaries', () => {
+  it('preserves dense scan tessellation exactly and excludes all face-internal diagonals', () => {
+    const text = cubeStep(20), size = estimateStepSize(text)!, auto = autoTessellation(size.diag)
+    const original = importStep(text, { surfaceDeviation: auto.surfaceDeviation, maxEdge: Math.max(size.diag / 250, auto.maxEdge) })
+    const parsed = parseSTEP(new TextEncoder().encode(text).buffer, undefined, true)
+    expect(parsed.mesh.positions).toEqual(Float32Array.from(original.mesh.positions))
+    expect(parsed.mesh.indices).toEqual(original.mesh.indices)
+    const edges = parsed.cadEdges!, supports = new Set<string>()
+    expect(edges.length).toBeGreaterThan(0)
+    let length = 0
+    for (let i = 0; i < edges.length; i += 6) {
+      const fixed = [0, 1, 2].filter(k => edges[i+k] === edges[i+3+k] && (edges[i+k] === 0 || edges[i+k] === 20))
+      expect(fixed.length).toBe(2)
+      supports.add(fixed.map(k => `${k}:${edges[i+k]}`).join('|'))
+      length += Math.hypot(edges[i]-edges[i+3], edges[i+1]-edges[i+4], edges[i+2]-edges[i+5])
+    }
+    expect(supports.size).toBe(12)
+    expect(length).toBeCloseTo(240, 2)
+  }, 60000)
+})

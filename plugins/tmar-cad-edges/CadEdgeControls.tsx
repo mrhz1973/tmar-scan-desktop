@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect } from 'react'
 import { sceneOf } from '../../src/commands/host'
+import { useStore } from '../../src/state/store'
 import { useShell } from '../../src/state/shellStore'
 import { useDeviation } from '../../src/state/deviationStore'
 import { useReverse } from '../reverse/state/reStore'
@@ -22,22 +23,25 @@ export function CadEdgePanel() {
   const workspace = useShell(s => s.workspace), p = useCadEdges()
   const tangent = useReverse(s => s.tangentEdges)
   const count = useReverse(s => s.bodies.length)
+  const fileName = useStore(s => s.fileName), scanBusy = useStore(s => s.busy)
+  useStore(s => s.triangleCount)
+  const scanTopology = !!fileName && !scanBusy && sceneOf()?.scanDisplay()?.cadEdges != null
   const nominal = useDeviation(s => s.nominalName), busy = useDeviation(s => s.nominalBusy), split = useDeviation(s => s.split)
   if (workspace !== 'reverse' && workspace !== 'deviation') return null
   const reference = workspace === 'deviation'
-  const available = reference ? !!nominal && !busy && sceneOf()?.referenceDisplay()?.cadEdges != null : count > 0
+  const available = reference ? !!nominal && !busy && sceneOf()?.referenceDisplay()?.cadEdges != null : count > 0 || scanTopology
   return <section className="group" id={panelId} data-test="cad-edges-panel" aria-label="CAD edges">
     <div className="sec-head"><EdgeIcon/> CAD edges</div>
     <label className="field"><span><input type="checkbox" data-test="cad-edges-enabled" checked={p.enabled}
       onChange={e => p.update({enabled:e.target.checked})}/> Show CAD edges</span></label>
     <label className="field"><span>Edge color</span><input type="color" data-test="cad-edges-color" value={p.color} onChange={e=>p.update({color:e.target.value})}/></label>
     <label className="field"><span>Thickness · {p.width} px</span><input type="range" data-test="cad-edges-width" min="1" max="6" step="0.5" value={p.width} onChange={e=>p.update({width:Number(e.target.value)})}/></label>
-    {!reference && <label className="field"><span>Tangent / fillet edges</span><select data-test="cad-edges-tangent" value={tangent} onChange={e=>useReverse.getState().setTangentEdges(e.target.value as typeof tangent)}>
+    {!reference && count > 0 && <label className="field"><span>Tangent / fillet edges</span><select data-test="cad-edges-tangent" value={tangent} onChange={e=>useReverse.getState().setTangentEdges(e.target.value as typeof tangent)}>
       <option value="visible">Drawn</option><option value="dimmed">Dimmed</option><option value="removed">Off</option></select></label>}
     <button data-test="cad-edges-reset" onClick={()=>p.update(DEFAULT_EDGES)}>Reset edge style</button>
     <p className="hint" data-test="cad-edges-status">{reference && split ? 'Use a single Deviation viewport for CAD edges. Split-view support remains planned.' : available
-      ? 'Face boundaries and silhouettes, including fillet rims. No internal triangle edges. Selection highlights remain independent.'
-      : reference ? 'Load a STEP reference for CAD face boundaries. Mesh-only references do not contain CAD topology.' : 'Import a STEP body or create a CAD body. An STL shown as Scan has no CAD face topology.'}</p>
+      ? !reference && scanTopology ? 'STEP loaded as Scan: original CAD face boundaries and silhouettes are available. No internal triangle edges.' : 'Face boundaries and silhouettes, including fillet rims. No internal triangle edges. Selection highlights remain independent.'
+      : reference ? 'Load a STEP reference for CAD face boundaries. Mesh-only references do not contain CAD topology.' : 'Load STEP as Scan, import a STEP body or create a CAD body. STL/PLY/OBJ scans do not contain original CAD face topology.'}</p>
   </section>
 }
 export function useCadEdgeDisplay(): void {
@@ -50,12 +54,14 @@ export function useCadEdgeDisplay(): void {
       const scene=sceneOf()
       if(!scene){frame=requestAnimationFrame(install);return}
       const reference = new ReferenceEdges(scene)
+      const scan = new ReferenceEdges(scene, () => scene.scanDisplay(), 'scan')
       const bodies = reSceneOf(scene).bodyPicks
       remove=scene.addLayer({order:120,tick:(width,height)=>{
         const p=useCadEdges.getState(), d=useDeviation.getState()
         bodies.setEdgeDisplay(workspace==='reverse'?{visible:p.enabled,color:p.color,width:p.width}:null)
         reference.tick(p,workspace==='deviation' && !d.split && !d.picking && d.source==='reference',width,height)
-      },dispose:()=>{bodies.setEdgeDisplay(null);reference.dispose()}})
+        scan.tick(p,workspace==='reverse' || (workspace==='deviation' && !d.split && !d.picking && !d.animate),width,height)
+      },dispose:()=>{bodies.setEdgeDisplay(null);reference.dispose();scan.dispose()}})
       scene.layerHost().invalidate()
     }
     if(workspace==='reverse'||workspace==='deviation') install()

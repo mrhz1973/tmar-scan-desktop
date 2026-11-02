@@ -190,6 +190,6 @@ export function parseSTEP(buffer: ArrayBuffer, onProgress?: (text: string) => vo
       indices: result.mesh.indices,
     },
     info: { surfaceDeviation, units: result.units, ...verdict },
-    ...(!asScan ? { cadEdges: cadBoundarySegments(result.mesh.positions, result.mesh.indices, result.faceOfTri) } : {}),
+    cadEdges: cadBoundarySegments(result.mesh.positions, result.mesh.indices, result.faceOfTri),
   }
 }
