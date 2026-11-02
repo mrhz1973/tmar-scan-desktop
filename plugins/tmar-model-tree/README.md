@@ -1,39 +1,76 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# TMAR feature-list multi-selection
+# TMAR categorized feature selection
 
-Adds single-row, Ctrl/Cmd toggle, Shift range, Select all, focused Ctrl/Cmd+A
-and Clear/Escape selection to the Reverse engineer **feature list**. Stable IDs
-are used: AI-created rows do not join a previous selection automatically.
-Built, suppressed and rolled-back rows can be selected. The inherited body-list
-selection remains a separate, existing feature.
+**Branch status: implementation draft; application build and browser validation
+are still required. Not a published preview or desktop release.** The baseline
+is `742d91d98b693735be2bafb36ff37b66bfa294c6`, including the integrated Zebra
+reflection improvement from PR #6. No Zebra source is changed by this work.
 
-**Show / Hide** changes selected sketches and current CAD-body outputs, in one
-undoable history operation. It never suppresses, rebuilds or deletes a feature
-to hide it. Shared body outputs are deduplicated. A consumed, suppressed or
-rolled-back feature with no independent displayed output is explicitly skipped;
-use the final body list to control the resulting body. No batch feature deletion
-or construction-element-list extension is implemented by this increment.
+## Categories, not one mixed Select All
 
-Features have a full-width, 40-pixel disclosure header with a large chevron
-and item count, shared with the Notes panel. They collapse independently of
-Notes. The browser remembers that
-choice; rows remain mounted and selection is retained. New features do not
-force a collapsed list open. Advanced filtered/grouped-list scope remains future work.
+The feature list offers independent collapsible groups:
 
-## Source
+- **Sketches / profiles**: ordinary, fitted and face-based sketches.
+- **Sketches from sections**: sketches whose saved plane refers to a section.
+- **Surface operations**: sheet, fitted-surface and patch-network features.
+- **Solid-body operations**: recognized solid-making/modifying operations.
+- **Other features**: unknown kinds, without bulk visibility permissions.
 
-`FeatureSelection.tsx`: list provider, row adapter and toolbar.
-`featureVisibility.ts`: current-output resolution and history integration.
-`plugin.ts`: registration through `plugins/reverse/app/listExtensions.tsx`.
-The generic ID/range helper is `src/plugins/listSelection.ts`.
+These classify actual feature records, not words in AI-generated names. They
+are not saved surface selections or a new list of every measured construction
+element. The existing **Bodies** list remains the source of actual current
+solid/surface bodies and its own body/component selection. A feature may share
+its current output body with other operations; it is not another body.
 
-Depends on `reverse`; optional at build time. With it omitted, the original
-feature list remains. No duplicate CAD state, kernel or geometry is created.
+Each category owns its Ctrl/Cmd selection, Shift range anchor, Select All,
+Clear, Show selected and Hide selected. Focused Ctrl/Cmd+A selects only that
+category. Collapsing preserves its selection; new features do not join an
+existing selection. No mixed-category Select All/Hide toolbar is exposed.
 
-[Validation](../../docs/tmar-usability-validation.md) uses synthetic Windows/Chrome
-scenarios; native macOS keyboard handling and real large projects remain unqualified.
+## Visibility boundary
 
-```bash
-npx vitest run tests/listSelection.test.ts plugins/tmar-model-tree/tests
-node plugins/tmar-quick-notes/scripts/e2e-usability.mjs
+Sketch actions change only sketch visibility: current bodies, their hidden-ID
+list and the source sections are not changed. Surface actions can change only
+currently available surface outputs. Solid-body operations can change only
+currently available non-surface body outputs. A surface feature that became a
+solid cannot hide that solid through the surface group; use Bodies instead.
+
+The action rechecks category membership and output type, even if callers supply
+stale or mixed IDs. Suppressed, rolled-back, consumed or incompatible outputs
+are skipped and counted. Shared body IDs are deduplicated. Unknown feature
+kinds do not acquire permission to hide bodies. One action remains one history
+step, and no feature is suppressed, deleted, rebuilt or reordered by Show/Hide.
+
+## Preserve native controls and chronology
+
+The generic list adapter exposes only explicitly tagged native feature rows.
+Categories reuse those row components and handlers, rather than duplicating
+CAD state. Missing or duplicate adapters cause a visible fallback to the
+original history instead of dropping rows.
+
+**Build history / rollback** retains the original chronological list, dependency
+controls, diagnostics and rollback/playback machinery. It stays mounted; the
+category order never changes build order. Playback opens the chronological
+view. Category grouping and collapse preferences are browser UI state, not new
+geometry or a project-format change.
+
+## Validation and next gate
+
+The dependency-free classification/target tests were executed: **26 passed**.
+The pure helper passed strict TypeScript checking. Changed TypeScript/TSX files
+were syntax-transpiled only; this is not a full application type check/build.
+The new adapter Vitest tests and all browser regressions are **NOT RUN**.
+See [the integration handoff](../../docs/tmar-feature-categories-handoff.md).
+
+```sh
+node --experimental-strip-types --test plugins/tmar-model-tree/scripts/check-categories.mjs
+npx vitest run plugins/tmar-model-tree/tests tests/listSelection.test.ts
+npm run build
+node scripts/check-plugin-boundary.mjs
+node scripts/check-units.mjs
 ```
+
+Before integration, update the old mixed-list selection assertions in the
+usability browser test to category-scoped selectors, retaining its geometry,
+Undo, export and note assertions. Then run the full targeted browser regressions
+including Zebra and production note focus. Do not reload a live user session.
