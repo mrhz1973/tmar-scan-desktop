@@ -18,7 +18,7 @@ const SURFACE_KINDS = new Set(['sheet', 'surface', 'network'])
 const BODY_KINDS = new Set([
   'extrude', 'revolve', 'fillet', 'chamfer', 'shell', 'hole', 'thread', 'draft',
   'mirror', 'boolean', 'split', 'loft', 'sweep', 'pattern', 'moveBody',
-  'offsetBody', 'extract', 'import', 'trim', 'thicken',
+  'offsetBody', 'extract', 'import', 'trim', 'thicken', 'cutPlane', 'moveFace', 'deleteFace',
 ])
 export function featureCategory(feature: FeatureIdentity): FeatureCategory {
   if (feature.kind === 'sketch') return feature.plane?.kind === 'section' ? 'sections' : 'sketches'

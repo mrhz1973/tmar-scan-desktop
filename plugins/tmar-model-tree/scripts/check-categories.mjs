@@ -28,7 +28,7 @@ test('plain sketches have their own category', () => assert.equal(featureCategor
 test('section-based sketches are separate from ordinary profiles', () => assert.equal(featureCategory(state.features[2]), 'sections'))
 test('fitted scan planes remain sketches, not solid bodies', () => assert.equal(featureCategory(state.features[9]), 'sketches'))
 test('surface, sheet and network operations are explicitly classified', () => ['surface','sheet','network'].forEach(kind=>assert.equal(featureCategory({id:1,kind}), 'surfaces')))
-test('solid operations are explicitly classified', () => ['extrude','revolve','fillet','chamfer','shell','hole','thread','draft','mirror','boolean','split','loft','sweep','pattern','moveBody','offsetBody','extract','import','trim','thicken'].forEach(kind=>assert.equal(featureCategory({id:1,kind}), 'bodies')))
+test('solid operations are explicitly classified', () => ['extrude','revolve','fillet','chamfer','shell','hole','thread','draft','mirror','boolean','split','loft','sweep','pattern','moveBody','offsetBody','extract','import','trim','thicken','cutPlane','moveFace','deleteFace'].forEach(kind=>assert.equal(featureCategory({id:1,kind}), 'bodies')))
 test('unknown feature types fail closed', () => assert.equal(featureCategory({id:7,kind:'futureUnknown'}), 'other'))
 test('classification ignores an AI-assigned misleading name', () => assert.equal(featureCategory({id:1,kind:'sketch',name:'Finished solid body'}), 'sketches'))
 test('category Select All includes only ordinary sketches in original order', () => assert.deepEqual(categoryFeatureIds(state.features,'sketches'), [1,6,10]))
