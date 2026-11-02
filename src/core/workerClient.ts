@@ -53,6 +53,8 @@ export interface LoadedScan extends LoadedMesh {
 }
 
 export interface LoadedNominal extends LoadedMesh {
+  /** Renderer-only STEP face boundaries, in the reference frame. */
+  cadEdges?: Float32Array
   bboxDiagonal: number
   /** How a STEP reference was converted; absent when the file was a mesh. */
   step?: StepInfo

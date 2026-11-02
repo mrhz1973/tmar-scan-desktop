@@ -46,6 +46,9 @@ import { distToSegment2 } from '../../../src/core/flat/vec2'
  *  editor open — everything there is to select: faces, edges and corners. */
 export type BodyPickMode = 'faces' | 'edges' | 'all'
 
+/** Optional display style. Picking and selected-edge highlights stay separate. */
+export interface CadEdgeDisplay { visible: boolean; color: string; width: number }
+
 export interface BodyTopology {
   faces: FaceInfo[]
   edges: EdgeInfo[]
@@ -253,6 +256,7 @@ export class BodyPicks {
   private resolution = new THREE.Vector2(1, 1)
   private clipping: THREE.Plane[] | null = null
   private lineScale = 1
+  private edgeDisplay: CadEdgeDisplay | null = null
 
   constructor(private ctx: BodyPicksContext) {
     ctx.partGroup.add(this.group)
@@ -765,6 +769,15 @@ export class BodyPicks {
     this.rebuildBodyLights()
   }
 
+  /** Display-only override; null restores the inherited style on plugin exit. */
+  setEdgeDisplay(style: CadEdgeDisplay | null): void {
+    const old = this.edgeDisplay
+    if (old === style || (old && style && old.visible === style.visible && old.color === style.color && old.width === style.width)) return
+    this.edgeDisplay = style ? { ...style } : null
+    this.sizeRestLines()
+    this.ctx.invalidate()
+  }
+
   setResolution(width: number, height: number): void {
     if (this.resolution.x === width && this.resolution.y === height) return
     this.resolution.set(width, height)
@@ -851,8 +864,12 @@ export class BodyPicks {
   /** The edges at rest as wide as the line width and what is armed say. */
   private sizeRestLines(): void {
     const width = (this.mode === 'edges' || this.mode === 'all' ? EDGE_WIDTH_ARMED_PX : EDGE_WIDTH_PX) * this.lineScale
-    if (this.edgeMaterial) this.edgeMaterial.linewidth = width
-    if (this.dimmedMaterial) this.dimmedMaterial.linewidth = width
+    for (const material of [this.edgeMaterial, this.dimmedMaterial]) {
+      if (!material) continue
+      material.linewidth = this.edgeDisplay?.width ?? width
+      material.color.set(this.edgeDisplay?.color ?? EDGE_COLOR)
+      material.visible = this.edgeDisplay?.visible ?? true
+    }
   }
 
   /** The edges of every body on show, thin and behind what hides them —

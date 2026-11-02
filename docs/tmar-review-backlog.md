@@ -63,3 +63,20 @@ The initial gallery entry is available, but additional evidence remains open:
 
 No release, installer, hosted application update or restart of a running preview
 is requested or performed by these documentation/backlog entries.
+
+## CAD-EDGES-004
+
+**Show CAD edges with Zebra — implemented in web source; user review OPEN.**
+
+The lower-bar switch and settings expose editable-body edges and STEP-reference
+face boundaries with color and pixel width. Fillet/tangent visibility reuses the
+native body option. No internal triangle-wireframe fallback and no geometry edit.
+
+- [x] Implement independent display switch and adjustable color/thickness.
+- [x] Retain selection, local notes and project round trips in documented scope.
+- [x] Check the same authorized STEP in the native reference application and target.
+- [ ] Obtain the owner's visual acceptance; do not infer it from automated tests.
+- [ ] Extend/qualify other reference, platform and split-view cases separately.
+
+[Usage](../plugins/tmar-cad-edges/README.md) | [Validation](tmar-cad-edges-validation.md).
+This does not close ZEBRA-REVIEW-001 or implement ZEBRA-SPLIT-002.

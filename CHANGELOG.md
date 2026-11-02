@@ -7,6 +7,18 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR CAD edges with Zebra — 2026-11-02
+
+- Expose native CAD edges, tangent/fillet borders and silhouettes with a lower-bar
+  switch and color/1–6 px width controls in a dedicated optional plugin.
+- Correct Zebra fill/edge depth ordering without changing body geometry/picking.
+- Preserve STEP-reference face boundary metadata; never substitute triangle wireframe.
+- Extend Zebra to the single Deviation reference view, retaining scan-side notes
+  and explicit split/alignment/animation guards.
+- Keep the owner's result review open; tests and bounded native comparison are
+  recorded in `docs/tmar-cad-edges-validation.md`. No desktop release implied.
+
+
 ### TMAR Zebra example and open review backlog - 2026-11-02
 
 - Publish the explicitly supplied Tubo Finale screenshot unchanged in the main
