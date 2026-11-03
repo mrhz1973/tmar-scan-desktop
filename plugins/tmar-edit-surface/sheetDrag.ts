@@ -115,14 +115,17 @@ export function bindStripDrag(div:HTMLDivElement,camera:THREE.Camera,getTool:()=
     ;(getTool()?.change ?? d.change)(d.edge,v,final)
   }
   const move=(e:PointerEvent)=>update(e,false), up=(e:PointerEvent)=>update(e,true)
-  const cancel=(e:PointerEvent)=>{if(drag?.id===e.pointerId){
+  const cancelGesture=()=>{
+    if(!drag)return false
     const d=drag;drag=null
-    if(div.hasPointerCapture(e.pointerId))div.releasePointerCapture(e.pointerId)
+    if(div.hasPointerCapture(d.id))div.releasePointerCapture(d.id)
     if(d.direct)d.direct.abort()
     else (getTool()?.change ?? d.change)(-1,[0,0,0],false)
-  }}
+    return true
+  }
+  const cancel=(e:PointerEvent)=>{if(drag?.id===e.pointerId)cancelGesture()}
   div.addEventListener('pointerdown',down,true);div.addEventListener('pointermove',move,true)
   div.addEventListener('pointerup',up,true);div.addEventListener('pointercancel',cancel,true)
-  return ()=>{div.removeEventListener('pointerdown',down,true);div.removeEventListener('pointermove',move,true)
-    div.removeEventListener('pointerup',up,true);div.removeEventListener('pointercancel',cancel,true)}
+  return {cancel:cancelGesture,dispose:()=>{div.removeEventListener('pointerdown',down,true);div.removeEventListener('pointermove',move,true)
+    div.removeEventListener('pointerup',up,true);div.removeEventListener('pointercancel',cancel,true)}}
 }

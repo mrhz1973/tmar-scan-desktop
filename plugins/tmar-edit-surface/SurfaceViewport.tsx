@@ -285,7 +285,6 @@ export function SurfaceViewport(props: Props) {
       drag = null; showSnap(null); showHover(null); controls.enabled = true; div.style.cursor = 'crosshair'
       return true
     }
-    current.current.registerCancel(cancelGesture)
     const cancel = (e: PointerEvent) => {
       cancelGesture()
       if (renderer.domElement.hasPointerCapture(e.pointerId)) renderer.domElement.releasePointerCapture(e.pointerId)
@@ -297,7 +296,8 @@ export function SurfaceViewport(props: Props) {
     renderer.domElement.addEventListener('pointerup', pointerUp, true)
     renderer.domElement.addEventListener('pointercancel', cancel, true)
     renderer.domElement.addEventListener('pointerleave', pointerLeave)
-    const unbindStrip=bindStripDrag(div,camera,()=>current.current.strip,()=>current.current.busy || current.current.stripBlocked(),()=>current.current.directStrip)
+    const stripBinding=bindStripDrag(div,camera,()=>current.current.strip,()=>current.current.busy || current.current.stripBlocked(),()=>current.current.directStrip)
+    current.current.registerCancel(()=>cancelGesture() || stripBinding.cancel())
     const resize = new ResizeObserver(() => { const w = div.clientWidth, h = div.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix() }); resize.observe(div)
     renderer.setAnimationLoop(() => {
       references.children.forEach(o=>{ if (typeof o.userData.isCurrent==='function') o.visible=o.userData.isCurrent() })
@@ -318,9 +318,10 @@ export function SurfaceViewport(props: Props) {
         }
       }
     })
-    return () => { current.current.registerCancel(()=>false); unbindStrip(); resize.disconnect(); renderer.domElement.removeEventListener('pointerleave', pointerLeave); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
+    return () => { current.current.registerCancel(()=>false); stripBinding.dispose(); resize.disconnect(); renderer.domElement.removeEventListener('pointerleave', pointerLeave); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
   }, [])
-  useEffect(() => { setEdgeHandle(null) }, [props.directStrip?.revision])
+  // Clear stale handles before the restored canvas can receive the next click.
+  useLayoutEffect(() => { setEdgeHandle(null) }, [props.directStrip?.revision])
   useEffect(() => {
     const s = sceneRef.current; if (!s || !props.preview) return
     s.body.children.forEach(dispose); s.body.clear()
