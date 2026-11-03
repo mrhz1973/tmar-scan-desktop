@@ -18,6 +18,8 @@ describe('Surface Edit persistent CAD recipe', () => {
       const recipe = JSON.parse(JSON.stringify(await editor.createRecipe(net, 'G1', [12], 'body-qa')))
       expect(recipe.edits).toEqual([{ index: 12, point: net.poles[12] }])
       expect(recipe.preparation).toBe('plane-to-bicubic')
+      expect(recipe.units).toBe('mm')
+      expect(recipe.coordinateFrame).toBe('imported-step')
       editor.clear()
       const reopened = await editor.restoreRecipe(step, recipe, 'body-qa')
       expect(reopened.net).toEqual(net)
@@ -52,12 +54,32 @@ describe('Surface Edit persistent CAD recipe', () => {
       await expect(editor.replayRecipe(step, { ...recipe, lockedPoles: [1599] }, 'body-qa')).rejects.toThrow(/inesistente/)
       const crossing = structuredClone(recipe); crossing.edits[0].point[2] = -50
       await expect(editor.replayRecipe(step, crossing, 'body-qa')).rejects.toThrow(/interseca|attraversa/)
-      expect(() => readRecipe({ ...recipe, version: 2 })).toThrow(/non supportata/)
+      expect(() => readRecipe({ ...recipe, version: 1 })).toThrow(/non supportata/)
+      for (const units of ['m', 'inch', undefined]) expect(() => readRecipe({ ...recipe, units })).toThrow(/non supportata/)
+      for (const coordinateFrame of ['world', 'screen', undefined]) expect(() => readRecipe({ ...recipe, coordinateFrame })).toThrow(/non supportata/)
       expect(() => readRecipe({ ...recipe, edits: [...recipe.edits, ...recipe.edits] })).toThrow(/Poli/)
       expect(() => readRecipe({ ...recipe, lockedPoles: [12, 12] })).toThrow(/Poli/)
       expect(() => readRecipe({ ...recipe, edits: [{ index: 12, point: [NaN, 0, 0] }] })).toThrow(/Poli/)
       expect(() => readRecipe({ ...recipe, source: { ...recipe.source, bodyId: '' } })).toThrow(/non supportata/)
     } finally { editor.dispose() }
+  }, 60000)
+  it('normalizes STEP metres to millimetres and preserves a caller-owned kernel on disposal', async () => {
+    const owner = await SurfaceEditorKernel.load(), k = owner.kernel
+    const box = k.makeBox(2, 3, 1), mmStep = k.exportStep(box)
+    k.release(box)
+    expect(mmStep).toContain('SI_UNIT(.MILLI.,.METRE.)')
+    const metreStep = mmStep.replaceAll('SI_UNIT(.MILLI.,.METRE.)', 'SI_UNIT($,.METRE.)')
+    const borrowed = new SurfaceEditorKernel(k)
+    try {
+      const imported = k.importStep(metreStep)
+      try { expect(k.getVolume(imported)).toBeCloseTo(6000000000, 0) }
+      finally { k.release(imported) }
+      borrowed.open(mmStep)
+      borrowed.dispose()
+      const stillUsable = k.makeBox(2, 3, 1)
+      try { expect(k.getVolume(stillUsable)).toBeCloseTo(6, 8) }
+      finally { k.release(stillUsable) }
+    } finally { borrowed.clear(); owner.dispose() }
   }, 60000)
   it('replays exact refinement of a rational STEP face and native NURBS on a second edit', async () => {
     const editor = await SurfaceEditorKernel.load()
