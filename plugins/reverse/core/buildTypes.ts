@@ -314,6 +314,17 @@ export interface EdgeInfo {
   polyline: Float32Array
 }
 
+/** Current built CAD for an explicit editor read, not deliverable export.
+ * bodyKey is session-local; it is not a persistent body or face identity. */
+export interface BodyEditSource {
+  bodyId: number
+  bodyKey: string
+  text: string
+  surface: boolean
+  faces: number
+  closed: boolean
+}
+
 export interface BuiltBody {
   /** The id of the feature that made the body. */
   id: number

@@ -7,6 +7,17 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR current CAD editor source - 2026-11-03
+
+- Add read-only `reverse.body.edit_source` for one explicitly named current
+  CAD body, including ordinary open and sewn sheets. Keep general STEP export
+  filtering unchanged; use built CAD rather than the original import file.
+- Reject mismatched body keys and results overtaken by document/build changes.
+  Do not create geometry, notes, or history entries during this read.
+- Document the editor integration contract in `plugins/reverse/EDITOR-SOURCE.md`.
+  The Edit Surface author owns its Load body wiring; annotated Apply and
+  parametric host persistence remain separate work, with no release implied.
+
 ### TMAR Dark default and screenshot gallery - 2026-11-03
 
 - Start with Dark independently of the operating system, including first paint
