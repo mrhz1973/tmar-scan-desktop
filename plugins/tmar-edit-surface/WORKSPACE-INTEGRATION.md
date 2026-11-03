@@ -89,6 +89,11 @@ host state. A host without this capability keeps the original behavior.
   disabling snapping left the same approximately Z=11.5 mm free movement.
   The test checked source feedback, the borrowed geometry and one canvas. CAD
   targets were displayed tessellations. No large-scan timing was measured.
+- Additional pointer-drag runs passed for Local N (`snap-DyusMR`) and Screen
+  (`snap-mqAy49`) against both synthetic references. In each run snapping
+  reached the target, while Alt and snap-off preserved free movement; the
+  Screen drag stayed in the camera plane. These checks cover one planar top
+  face and do not establish the intended behavior for occluded targets.
 - An isolated box test in the shared view selected a control pole, enabled
   symmetry, moved the reflected pair, checked preview-only transparency and
   Undo, then applied a valid modified solid copy (`run-n8jr0q`). The test must
@@ -137,7 +142,8 @@ absolute `EDIT_SURFACE_QA_OUT` outside the app checkout. `STEP_FILE` is optional
 and is read only; without it a synthetic box is created. `TEST_ZEBRA_NOTES=1`
 adds the note/Zebra checks. Evidence, including user-derived screenshots, stays
 in the selected local QA output, not in this repository.
-The separate `tests/e2e-workspace-snap.mjs` exercises the synthetic snap cases.
+The separate `tests/e2e-workspace-snap.mjs` exercises the synthetic snap cases;
+`EDIT_SURFACE_DRAG_MODE=axis|local|screen` selects the movement mode.
 `tests/e2e-workspace-strip.mjs` and `tests/e2e-workspace-strip-drag.mjs` cover
 the separate numeric/apply and pointer/cancel workflows. Generated fixtures,
 screenshots and browser profiles belong outside the app checkout.

@@ -6,6 +6,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 assert.equal(process.env.SCANRULER_ISOLATED, '1', 'Explicit isolated-host guard is required')
+const dragMode = process.env.EDIT_SURFACE_DRAG_MODE ?? 'axis'
+assert(['axis','local','screen'].includes(dragMode), 'Choose axis, local or screen')
 const url = new URL(process.env.APP_URL ?? '')
 assert.equal(url.href, 'http://127.0.0.1:17527/', 'Only the designated local QA host is allowed')
 const outputRoot = process.env.EDIT_SURFACE_QA_OUT
@@ -33,7 +35,7 @@ const scanMesh = importStep(source, { surfaceDeviation: 0.02, maxEdge: 2 }).mesh
 for (let i = 2; i < scanMesh.positions.length; i += 3) scanMesh.positions[i] += 2
 const scanPath = join(out, 'synthetic-reference.stl')
 writeFileSync(scanPath, Buffer.from(writeBinarySTL(scanMesh)))
-const report = { scope: 'real workspace host; separate disposable browser profiles; synthetic source and references',
+const report = { scope: 'real workspace host; separate disposable browser profiles; synthetic source and references', dragMode,
   url: url.href, cases: { scan: { verdict: 'NOT_RUN', checks: [] }, cad: { verdict: 'NOT_RUN', checks: [] } }, verdict: 'INCOMPLETE' }
 const persist = () => writeFileSync(join(out, 'result.json'), JSON.stringify(report, null, 2))
 const check = (result, item, name) => { assert(result, name); item.checks.push(name); persist(); console.log('PASS', item.kind, name) }
@@ -111,13 +113,13 @@ async function runCase(kind) {
       return s.snapshot?.validation.kind === 'valid' && !p?.calculating && !!p?.net
     }, { timeout: 120000 })
     await page.select('[data-test=surface-selection-mode]', 'points')
-    await page.select('[data-test=surface-drag-mode]', 'axis')
-    await page.click('[data-test=surface-axis-2]')
+    await page.select('[data-test=surface-drag-mode]', dragMode)
+    if (dragMode !== 'screen') await page.click('[data-test=surface-axis-2]')
     if (!await page.$eval('[data-test=surface-snap]', el => el.checked)) await page.click('[data-test=surface-snap]')
-    await page.$eval('[data-test=surface-snap-distance]', el => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, '1')
+    await page.$eval('[data-test=surface-snap-distance]', (el,mode) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, mode === 'screen' ? '4' : '1')
       el.dispatchEvent(new Event('input', { bubbles: true }))
-    })
+    }, dragMode)
     const target = await page.evaluate(() => {
       const q = window.workspaceSnapQa, c = q.useWorkspaceEditor.getState().controller
       const v = c.getViewState(), canvas = q.scene.layerHost().canvas, rect = canvas.getBoundingClientRect()
@@ -188,12 +190,23 @@ async function runCase(kind) {
     check(Math.abs(snapped[2] - (target.pole[2] + 2)) < 0.05, item, 'snapped pole reaches the +2 mm reference')
     await undo()
     const alt = await drag('alt', true, null)
-    check(Math.abs(alt[2] - (target.pole[2] + 1.5)) < 0.05, item, 'Alt preserves the unsnapped +1.5 mm motion')
+    if (dragMode === 'screen') {
+      const view = await page.evaluate(() => {
+        const q=window.workspaceSnapQa,group=q.scene.layerHost().partGroup,camera=q.scene.layerHost().camera()
+        group.updateWorldMatrix(true,true);camera.updateMatrixWorld(true)
+        return group.position.clone().set(0,0,-1).transformDirection(camera.matrixWorld).transformDirection(group.matrixWorld.clone().invert()).toArray()
+      })
+      const delta=alt.map((value,i)=>value-target.pole[i])
+      check(Math.hypot(...delta)>1e-4 && Math.abs(delta.reduce((sum,value,i)=>sum+value*view[i],0))<1e-4, item,
+        'Alt keeps unsnapped movement in the camera plane')
+    } else {
+      check(Math.abs(alt[2] - (target.pole[2] + 1.5)) < 0.05, item, 'Alt preserves the unsnapped +1.5 mm motion')
+    }
     await undo()
     await page.click('[data-test=surface-snap]')
     assert.equal(await page.$eval('[data-test=surface-snap]', el => el.checked), false)
     const off = await drag('off', false, null)
-    check(Math.abs(off[2] - alt[2]) < 1e-5, item, 'disabled magnet and Alt have the same unsnapped result')
+    check(off.every((value,i)=>Math.abs(value-alt[i])<1e-5), item, 'disabled magnet and Alt have the same unsnapped result')
     check(await page.evaluate(() => {
       const q = window.workspaceSnapQa
       return q.reScene.bodyMeshes.get(q.sourceId).geometry === q.geometryBefore && document.querySelectorAll('.viewport canvas').length === 1
