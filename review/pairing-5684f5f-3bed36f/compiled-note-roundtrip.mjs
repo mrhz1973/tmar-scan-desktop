@@ -16,6 +16,7 @@ const away = relative(resolve(process.cwd()), resolve(out))
 assert(away && (away === '..' || away.startsWith('..' + sep) || isAbsolute(away)))
 mkdirSync(out, { recursive: true })
 const downloads = join(out, 'downloads'); mkdirSync(downloads)
+let activeDownloadDir = downloads
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
 const source = JSON.parse(readFileSync(sourceReportPath, 'utf8'))
 assert.equal(source.verdict, 'PASS')
@@ -49,8 +50,8 @@ const assertNote = manifest => {
 }
 const waitDownload = async (suffix, before = new Set()) => {
   for (let i=0; i<400; i++) {
-    const name = readdirSync(downloads).find(n => !before.has(n) && n.endsWith(suffix))
-    if (name) return join(downloads,name)
+    const name = readdirSync(activeDownloadDir).find(n => !before.has(n) && n.endsWith(suffix))
+    if (name) return join(activeDownloadDir,name)
     await new Promise(r => setTimeout(r,100))
   }
   throw Error('Download timeout: '+suffix)
@@ -101,10 +102,16 @@ try {
   page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push('fresh reload: '+m.text())})
   await page.goto(process.env.APP_URL,{waitUntil:'domcontentloaded'}); await openNative(saved)
   check(true,'fresh compiled page reopens the newly resaved native project and revalidates its note')
-  const beforeAgain=new Set(readdirSync(downloads))
+  // CDP may overwrite the same suggested filename. Isolate this download so
+  // a successful save is not misclassified by a new-filename-only waiter.
+  // Retain BOTH actual files; do not weaken any project/identity assertion.
+  activeDownloadDir=join(downloads,'second-save');mkdirSync(activeDownloadDir)
+  await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:activeDownloadDir,eventsEnabled:true})
+  const beforeAgain=new Set(readdirSync(activeDownloadDir))
   await page.waitForSelector('[data-test=save-project]:enabled'); await page.click('[data-test=save-project]')
   const savedAgain=await waitDownload('.scanruler',beforeAgain)
   assertNote(readNative(readFileSync(savedAgain)))
+  report.secondSavedSha256=hash(readFileSync(savedAgain))
   check(true,'second compiled save keeps the same identity and both UV records after fresh-page reload')
   await page.$$eval('[data-test=body-visible]',a=>a.filter(b=>b.classList.contains('off')).forEach(b=>b.click()))
   await page.waitForSelector('[data-test=export-body]:enabled'); await page.click('[data-test=export-body]')

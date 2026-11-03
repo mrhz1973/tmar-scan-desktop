@@ -34,7 +34,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: 22.16.0
+          node-version: 22.18.0
       - name: Pair immutable revisions and record production-file hashes
         shell: bash
         run: |
@@ -145,7 +145,7 @@ jobs:
             pair-results/source-mixed/**/*.png
             pair-results/compiled-notes/result.json
             pair-results/compiled-notes/*.png
-            pair-results/compiled-notes/downloads/*.scanruler
-            pair-results/compiled-notes/downloads/*.step
+            pair-results/compiled-notes/downloads/**/*.scanruler
+            pair-results/compiled-notes/downloads/**/*.step
           if-no-files-found: error
           retention-days: 14
