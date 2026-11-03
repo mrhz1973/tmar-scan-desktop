@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Concrete runtime contracts for the optional workspace editor service.
 import type * as THREE from 'three'
+import type { AnnotatedTicketV1, PreparedAnnotatedCopyV1 } from './annotatedCopyTypes'
 import type { ComponentType } from 'react'
 import type { SceneLayer } from '../viewer/sceneLayers'
 export type Dispose = () => void;
@@ -46,13 +47,15 @@ export interface EditorSnapshot {
   readonly redoLabel: string | null;
   readonly historyRevision: number;
   readonly draftNoteCount: number;
+  readonly notesRevision?: number;
   readonly message: string | null;
 }
 export interface EditorCapabilities {
   readonly apiVersion: 1;
   readonly enabled: true;
   readonly commitKinds: readonly CommitKind[];
-  // Initial implementation advertises only cad-copy after its acceptance gates pass.
+  /** Present only when annotated-cad-copy transport version 1 is implemented. */
+  readonly annotationVersion?: 1;
 }
 export type ExitReason = 'applied' | 'cancelled' | 'source-invalid' | 'open-failed' | 'host-error';
 export interface WorkspaceEditorContext {
@@ -132,7 +135,11 @@ export interface CommitReceipt {
   readonly artifactSha256: string;
   readonly createdBodyIds: readonly number[];
   readonly historyActionId: string;
-  readonly mode: 'cad-copy';
+  readonly mode: 'cad-copy' | 'annotated-cad-copy';
+  readonly annotationVersion?: 1;
+  readonly envelopeSha256?: string;
+  readonly createdFeatureUuid?: string;
+  readonly notes?: readonly {draftId:string;noteUuid:string;displayId:number}[];
 }
 export interface WorkspaceEditorController<Camera = THREE.OrthographicCamera, Group = THREE.Group, Geometry = THREE.BufferGeometry, Layer = SceneLayer> {
   getSnapshot(): EditorSnapshot;
@@ -146,6 +153,8 @@ export interface WorkspaceEditorController<Camera = THREE.OrthographicCamera, Gr
   freeze(ticket: ApplyTicket): Dispose;
   // Must not alter project stores, history, source geometry or input state.
   prepareApply(ticket: ApplyTicket, signal: AbortSignal): Promise<PreparedCadCopy>;
+  freezeAnnotated?(ticket: AnnotatedTicketV1): Dispose;
+  prepareAnnotatedApply?(ticket: AnnotatedTicketV1, signal: AbortSignal): Promise<PreparedAnnotatedCopyV1>;
   dispose(reason: ExitReason): Promise<void>;
 }
 export interface WorkspaceEditorDefinition<Controller = WorkspaceEditorController, ParametersComponent = ComponentType<{ controller: Controller }>> {

@@ -288,6 +288,7 @@ function DefaultNoteList({ placementBlocked = null }: NoteListProps) {
             }}
           >
             <span className="notetext" data-test="note-row-text">
+              {note.attachment?.status==='unresolved' && <small role="status" data-test="note-anchor-unresolved">Ancoraggio CAD da verificare · </small>}
               {note.text}
             </span>
             <small>

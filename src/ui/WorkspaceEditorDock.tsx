@@ -14,6 +14,9 @@ export function WorkspaceEditorDock() {
   const state = useWorkspaceEditor()
   if (state.phase === 'closed') return null
   const Parameters = state.definition?.Parameters
+  const capabilities = workspaceEditors.capabilities()
+  const annotated = capabilities?.annotationVersion === 1 && capabilities.commitKinds.includes('annotated-cad-copy') &&
+    !!state.controller?.prepareAnnotatedApply && !!state.controller?.freezeAnnotated
   return <aside className="workspace-editor-dock" data-test="workspace-editor-dock" aria-label="Edit Surface" aria-busy={state.phase !== 'editing'}>
     <header><strong>Edit Surface</strong><span>Modifica nella vista principale</span></header>
     <div className="workspace-editor-parameters" data-slot="workspace.editor.parameters">
@@ -22,7 +25,7 @@ export function WorkspaceEditorDock() {
     <footer>
       <div data-slot="workspace.editor.status" role="status" aria-live="polite">
         {state.error ?? state.snapshot?.message ?? (state.phase === 'editing' ? 'Bozza locale · originale conservato' : 'Elaborazione CAD…')}
-        {!!state.snapshot?.draftNoteCount && <p>Le note in bozza richiedono il supporto della transazione annotata, non ancora disponibile.</p>}
+        {!!state.snapshot?.draftNoteCount && <p>{annotated ? `${state.snapshot.draftNoteCount} note da includere nella copia CAD; gli ancoraggi saranno verificati prima della pubblicazione.` : 'La preparazione annotata non è disponibile per questo controller: Applica resta bloccato.'}</p>}
       </div>
       <label className="workspace-editor-copy-visibility" title="Conserva l'originale nel progetto ma lo nasconde dopo Applica. Undo ripristina la visibilità precedente; Redo mostra la copia e nasconde nuovamente l'originale.">
         <input type="checkbox" data-test="workspace-editor-hide-source" checked={state.hideSourceAfterApply}

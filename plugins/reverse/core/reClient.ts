@@ -358,6 +358,13 @@ export class ReClient {
 
   /** Read one current solid or sheet for an editor. A rebuild, replacement
    * or kernel restart must not silently hand the editor another body. */
+  async verifyAnnotatedNotes(bodyId:number,brep:string,notes:readonly import('../../../src/plugins/annotatedCopyTypes').DraftCopyFaceNoteV1[]) {
+    const body=this.held.get(bodyId),build=this.latestBuild
+    if(!body)throw new Error('Missing staged CAD body.')
+    const res=await this.request<Extract<ReWorkerResponse,{type:'annotated-face-ok'}>>({type:'annotated-face',requestId:this.nextId++,bodyId,expectedKey:body.key,brep,notes:[...notes]},[],HEAVY_MS)
+    if(this.latestBuild!==build||this.held.get(bodyId)?.key!==body.key)throw new Error('Staged CAD changed during note verification.')
+    return res.verified
+  }
   async bodyEditSource(bodyId: number, expectedKey?: string): Promise<BodyEditSource> {
     const body = this.held.get(bodyId)
     if (!body) throw new Error(`There is no current CAD body ${bodyId}.`)

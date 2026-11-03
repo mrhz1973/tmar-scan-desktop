@@ -5,6 +5,7 @@
 // on elements, on sketches and on bodies, the manipulators' drags, and what
 // the workspace puts on the stage — see src/plugins/api.ts.
 
+import { watchAnnotations } from './annotationPersistence'
 import { reSceneOf } from '../viewer/reScene'
 import { useEffect, useRef } from 'react'
 import type { PluginHost, PluginRuntime } from '../../../src/plugins/api'
@@ -82,6 +83,7 @@ const SKETCH_PART_VIEWS: readonly { id: SketchPartView; icon: IconName; label: s
 ]
 
 export function useReversePlugin(host: PluginHost): PluginRuntime {
+  useEffect(()=>watchAnnotations(),[])
   const { sceneRef, clientRef } = host
 
   // The CAD kernel's worker, the feature build, the bodies on the part — and

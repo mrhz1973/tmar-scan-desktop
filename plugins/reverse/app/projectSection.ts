@@ -10,6 +10,7 @@
 // holds a handful of members, and a project of a dozen bought-in parts
 // would have used them up.
 
+import { validateAnnotationSource } from '../core/annotationSchema'
 import { strFromU8, strToU8 } from 'fflate'
 import type { CollectContext, ProjectSection, RestoreContext } from '../../../src/app/projectSections'
 import { array, entries, fields, indices, invalid, object, vector } from '../../../src/core/project/validation'
@@ -123,6 +124,7 @@ export function validateFeatureJson(e: Record<string, unknown>): void {
     fields(route, 'bendRadius', 'number', 'sweep.route')
   }
   if (e.kind === 'import') {
+    if(e.annotationSource!==undefined)validateAnnotationSource(e.annotationSource)
     const file = object(e.file, 'import.file')
     fields(file, 'key name', 'string', 'import.file')
     fields(file, 'size', 'number', 'import.file')
@@ -167,6 +169,8 @@ export function validateReversePart(raw: unknown): ReversePart {
   if (r.version !== undefined && (typeof r.version !== 'number' || !Number.isFinite(r.version))) invalid('reverse.version')
   object(r.nextOfKind, 'reverse.nextOfKind')
   entries(r.features, 'reverse.features', validateFeatureJson)
+  const annotationIds=new Set<string>()
+  for(const f of r.features as Feature[]){if(f.kind==='import'&&f.annotationSource){if(annotationIds.has(f.annotationSource.featureUuid))invalid('duplicate annotated feature UUID');annotationIds.add(f.annotationSource.featureUuid)}}
   if (r.rolledTo !== undefined && (!Number.isSafeInteger(r.rolledTo) || (r.rolledTo as number) < 0 || (r.rolledTo as number) > (r.features as unknown[]).length)) invalid('reverse.rolledTo')
   if (r.parameters !== undefined) {
     // The shape only: a parameter whose expression no longer evaluates is

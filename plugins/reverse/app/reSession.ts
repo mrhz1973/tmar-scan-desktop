@@ -11,6 +11,8 @@
 // (src/app/session.ts) stands under the app's panels. Under a test it
 // stands without a viewport, its kernel in the test's own thread.
 
+import { annotationNoteDelta } from './annotatedNoteDelta'
+import type { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
 import { historyAtomic } from '../../../src/state/historyStore'
 import { abortIfNeeded } from '../../../src/plugins/editorLifetime'
 import type { CommitReceipt } from '../../../src/plugins/workspaceEditorTypes'
@@ -748,7 +750,7 @@ export function createReverseSession({
   /** Build an immutable copy candidate in a DIFFERENT kernel. Nothing enters the
    * project before all CAD validation finishes. The tested kernel is adopted,
    * avoiding a second fallible rebuild after publication. */
-  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal, display?: Readonly<{ hideSourceBodyId: number }>) => {
+  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal, display?: Readonly<{ hideSourceBodyId: number }>, annotation?: Awaited<ReturnType<typeof validateAnnotatedCopy>>) => {
     assertCurrent(); abortIfNeeded(signal)
     const before = useReverse.getState(), originalClient = requireClient()
     // Host-derived identity, not an arbitrary ID from the plugin payload.
@@ -759,7 +761,7 @@ export function createReverseSession({
         before.sketchDraft || before.featureDraft || before.extrudeDraft || before.revolveDraft)
       throw new Error('Concludi la costruzione o la bozza CAD corrente.')
     if (!/^\s*ISO-10303-21\s*;/.test(text.slice(0, 256))) throw new Error('Il risultato non è un file STEP.')
-    const feature: ImportFeature = { id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
+    const feature: ImportFeature = { ...(annotation?{annotationSource:{version:1 as const,featureUuid:crypto.randomUUID(),stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256,faceBrep:annotation.prepared.witnesses[0].brep}}:{}), id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
       file: { key: stepFileKey(text), name, size: text.length } }
     if (before.stepFiles[feature.file.key] !== undefined && before.stepFiles[feature.file.key] !== text)
       throw new Error('Collisione della chiave STEP: importazione rifiutata.')
@@ -795,12 +797,16 @@ export function createReverseSession({
       const check = await candidate.check(made[0].id, 0)
       alive()
       if (!check?.valid || check.faces < 1) throw new Error('La copia CAD preparata non è valida.')
+      const verified=annotation?await candidate.verifyAnnotatedNotes(made[0].id,annotation.prepared.witnesses[0].brep,annotation.prepared.notes):null
+      alive()
+      const notes=annotation&&verified?annotationNoteDelta({prepared:annotation.prepared,verified,face:verified.face,bodyId:made[0].id,featureUuid:feature.annotationSource!.featureUuid,documentEpoch:before.documentEpoch,stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256}):null
       return {
         publish: (operationId: string, artifactSha256: string): CommitReceipt => {
           if (receipt) {
             if (receipt.operationId !== operationId || receipt.artifactSha256 !== artifactSha256) throw new Error('Operazione già pubblicata con un altro contenuto.')
             return receipt
           }
+          if(annotation&&(operationId!==annotation.prepared.operationId||artifactSha256!==annotation.artifactSha256))throw new Error('Ticket annotato o hash CAD cambiato.')
           alive()
           if (client !== originalClient) throw new Error('Il kernel sorgente è cambiato.')
           const live = useReverse.getState(), oldMeshes = new Map(meshes), oldTopologies = new Map(topologies), oldLanded = landed
@@ -816,7 +822,9 @@ export function createReverseSession({
             meshes.clear(); oldMeshes.forEach((m, id) => meshes.set(id, m))
             topologies.clear(); oldTopologies.forEach((m, id) => topologies.set(id, m))
             useReverse.setState(live, true)
+            notes?.rollback()
           }
+          notes?.capturePublication()
           adoptingEditor = true
           try {
             historyAtomic('Edit Surface: copia CAD', () => {
@@ -830,7 +838,8 @@ export function createReverseSession({
                 nextOfKind: { ...live.nextOfKind, import: (live.nextOfKind.import ?? 0) + 1 },
                 buildVersion: nextVersion, bodiesVersion: live.bodiesVersion + 1, building: false, buildError: null,
                 bodies, results: Object.fromEntries(withStepsSaid(answer.results, built).map(result => [result.id, result])) })
-            }, restore, operationId, restoreEffect)
+              notes?.publish()
+            }, restore, operationId, restoreEffect, notes ?? undefined)
             adopted = true
           } finally { adoptingEditor = false }
           candidate.onFailure = why => { if (client === candidate) { useReverse.getState().failBuild(why); useReverse.getState().setKernel('unavailable', why) } }
@@ -841,7 +850,7 @@ export function createReverseSession({
           originalClient.onFailure = null
           try { originalClient.dispose() } catch { /* Published CAD remains owned by candidate. */ }
           receipt = Object.freeze({ operationId, artifactSha256, documentEpoch: live.documentEpoch,
-            createdBodyIds: Object.freeze(made.map(b => b.id)), historyActionId: operationId, mode: 'cad-copy' as const })
+            createdBodyIds: Object.freeze(made.map(b => b.id)), historyActionId: operationId, mode: annotation?'annotated-cad-copy' as const:'cad-copy' as const, ...(annotation?{annotationVersion:1 as const,envelopeSha256:annotation.envelopeSha256,createdFeatureUuid:feature.annotationSource!.featureUuid,notes:notes!.receipt()}: {}) })
           return receipt
         },
         dispose: () => { clearTimeout(deadline); signal.removeEventListener('abort', dispose); dispose() },

@@ -9,6 +9,7 @@
 // The places are in the part's frame, the one the features are built in,
 // and move with it when an alignment moves the part.
 
+import { validateAttachment } from './annotationSchema'
 import { rigidApply, rigidRotate, type Rigid } from '../../../src/core/deviation/rigid'
 import type { Vec3 } from '../../../src/core/types'
 import type { KernelMesh } from './kernelTypes'
@@ -23,6 +24,7 @@ export type NoteTarget =
   | { kind: 'vertex'; body: number; point: Vec3 }
 
 export interface Note {
+  attachment?: {version:1;noteUuid:string;operationId:string;draftId:string;featureUuid:string;stepSha256:string;witnessSha256:string;witnessUV:[number,number];uv:[number,number];status:'verified'|'unresolved'}
   /** Counts from one; the number on the pin. */
   id: number
   /** Who pinned it: the agent, with a question — the person otherwise. */
@@ -190,12 +192,18 @@ export function validateNotes(raw: unknown): Note[] {
   }
   if (!Array.isArray(raw)) bad('not a list')
   const ids = new Set<number>()
+  const uuids=new Set<string>()
   for (const n of raw as unknown[]) {
     if (typeof n !== 'object' || n === null) bad('a note is not an object')
     const note = n as Record<string, unknown>
     if (!Number.isSafeInteger(note.id) || (note.id as number) < 1 || ids.has(note.id as number)) bad('id')
     ids.add(note.id as number)
     if (typeof note.text !== 'string') bad('text')
+    if(note.attachment!==undefined){
+      validateAttachment(note.attachment)
+      if(uuids.has(note.attachment.noteUuid))bad('duplicate attachment UUID')
+      uuids.add(note.attachment.noteUuid)
+    }
     if (!isVec3(note.at)) bad('at')
     if (note.normal !== undefined && !isVec3(note.normal)) bad('normal')
     if (note.done !== undefined && typeof note.done !== 'boolean') bad('done')

@@ -26,7 +26,7 @@ const shown = (object: THREE.Object3D): boolean => {
 }
 export function createReverseEditorHost(): WorkspaceEditorHost {
   return {
-    capabilities: Object.freeze({ apiVersion: 1, enabled: true, commitKinds: Object.freeze(['cad-copy'] as const) }),
+    capabilities: Object.freeze({ apiVersion: 1, enabled: true, annotationVersion: 1 as const, commitKinds: Object.freeze(['cad-copy','annotated-cad-copy'] as const) }),
     async readSource(bodyId, signal) {
       if (useShell.getState().workspace !== 'reverse') throw new Error('Apri Reverse Engineer prima di Edit Surface.')
       if (commandRunning() || useStore.getState().busy) throw new Error('Attendi la conclusione dell’operazione corrente.')
@@ -95,6 +95,13 @@ export function createReverseEditorHost(): WorkspaceEditorHost {
         maskSource: () => reScene.leaseBodyRenderMask(source.binding.bodyId),
         sourceVisible: () => { const s = useReverse.getState(); return !s.bodiesHidden && !!s.bodies.find(b => b.id === source.binding.bodyId)?.visible },
       })
+    },
+    async stageAnnotated(source, plan, signal, display) {
+      source.assertCurrent(); abortIfNeeded(signal)
+      const session = reverseSession()
+      if (!session) throw new Error('Sessione CAD non disponibile.')
+      return session.stageEditorCopy(new TextDecoder('utf-8', { fatal: true }).decode(plan.prepared.step), plan.prepared.name, source.assertCurrent, signal,
+        display?.hideSourceAfterApply ? { hideSourceBodyId: source.binding.bodyId } : undefined, plan)
     },
     async stage(source: BoundEditorSource, prepared, signal, display) {
       source.assertCurrent(); abortIfNeeded(signal)
