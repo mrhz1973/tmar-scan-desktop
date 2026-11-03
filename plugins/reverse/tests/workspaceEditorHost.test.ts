@@ -155,3 +155,99 @@ describe('host staged CAD copy transaction', () => {
   }, 120_000)
 
 })
+
+
+describe('Apply source visibility policy', () => {
+  it('hides only original in the same history action, preserving notes and unrelated later visibility', async () => {
+    const id=await imported(), other=await imported(larger)
+    // imported() returns the first body; obtain the newly added actual body ID.
+    const otherId=useReverse.getState().bodies.find(b=>b.id!==id)!.id
+    void other
+    useNotes.getState().load([{id:1,text:'Original annotation',at:[1,1,1],on:[{kind:'scan'}]}])
+    const source=await sourceFor(id),before=useReverse.getState(),notes=useNotes.getState().notes,past=useHistory.getState().past.length
+    const stage=await session.stageEditorCopy(larger,'hidden-source-copy.step',source.assertCurrent,new AbortController().signal,{hideSourceBodyId:id})
+    expect(useReverse.getState()).toBe(before)
+    const receipt=stage.publish('hide-original','hash');stage.dispose()
+    expect(useHistory.getState().past).toHaveLength(past+1)
+    expect(useReverse.getState().hiddenBodies).toContain(id)
+    expect(useReverse.getState().bodies.find(b=>b.id===id)?.visible).toBe(false)
+    expect(useReverse.getState().bodies.find(b=>b.id===receipt.createdBodyIds[0])?.visible).toBe(true)
+    expect(useNotes.getState().notes).toBe(notes)
+    expect(useReverse.getState().selection).toBe(before.selection)
+    expect((await measure(id)).volume).toBeCloseTo(6000,6)
+    useReverse.getState().setBodiesVisible([otherId],false)
+    await undo();await session.settled()
+    expect(useReverse.getState().bodies).toHaveLength(2)
+    expect(useReverse.getState().hiddenBodies).not.toContain(id)
+    expect(useReverse.getState().hiddenBodies).toContain(otherId)
+    expect(useReverse.getState().bodies.find(b=>b.id===id)?.visible).toBe(true)
+    await redo();await session.settled()
+    expect(useReverse.getState().hiddenBodies).toEqual(expect.arrayContaining([id,otherId]))
+    expect(useReverse.getState().bodies.find(b=>b.id===receipt.createdBodyIds[0])?.visible).toBe(true)
+    const part=collectReversePart()!;applyReversePart(JSON.parse(JSON.stringify(part)));await session.settled()
+    expect(useReverse.getState().hiddenBodies).toEqual(expect.arrayContaining([id,otherId]))
+    expect(useReverse.getState().bodies).toHaveLength(3)
+    expect((await measure(id)).volume).toBeCloseTo(6000,6)
+    expect((await measure(receipt.createdBodyIds[0])).valid).toBe(true)
+  },120_000)
+
+  it('keeps a previously hidden original hidden on Undo and Redo', async () => {
+    const id=await imported();useReverse.getState().setBodiesVisible([id],false)
+    const source=await sourceFor(id),stage=await session.stageEditorCopy(larger,'copy.step',source.assertCurrent,new AbortController().signal,{hideSourceBodyId:id})
+    stage.publish('already-hidden','hash');stage.dispose()
+    await undo();await session.settled();expect(useReverse.getState().hiddenBodies).toEqual([id])
+    await redo();await session.settled();expect(useReverse.getState().hiddenBodies).toEqual([id])
+    expect(useReverse.getState().bodies.filter(b=>b.visible)).toHaveLength(1)
+  },120_000)
+
+  it('rolls back the source visibility along with CAD/resources/history on failed publication', async () => {
+    const id=await imported(),source=await sourceFor(id),before=useReverse.getState(),history=useHistory.getState(),client=session.client()
+    const stage=await session.stageEditorCopy(larger,'copy.step',source.assertCurrent,new AbortController().signal,{hideSourceBodyId:id})
+    let first=true
+    const off=useReverse.subscribe(s=>{if(first&&s.features.length>before.features.length){first=false;throw Error('visibility publication failure')}})
+    try{expect(()=>stage.publish('failed-hide','hash')).toThrow('visibility publication failure')}
+    finally{off();stage.dispose()}
+    expect(useReverse.getState()).toBe(before);expect(useHistory.getState()).toBe(history);expect(session.client()).toBe(client)
+    expect(useReverse.getState().bodies[0].visible).toBe(true)
+  },120_000)
+
+  it('does not hide anything when staged Apply is cancelled', async () => {
+    const id=await imported(),abort=new AbortController(),source=await sourceFor(id,abort.signal),before=useReverse.getState()
+    const stage=await session.stageEditorCopy(larger,'copy.step',source.assertCurrent,abort.signal,{hideSourceBodyId:id})
+    abort.abort();expect(()=>stage.publish('cancelled-hide','hash')).toThrow();stage.dispose()
+    expect(useReverse.getState()).toBe(before)
+  },120_000)
+
+  it('rejects a missing source ID without any mutation', async () => {
+    const id=await imported(),source=await sourceFor(id),before=useReverse.getState()
+    await expect(session.stageEditorCopy(larger,'copy.step',source.assertCurrent,new AbortController().signal,{hideSourceBodyId:999999})).rejects.toThrow('sorgente')
+    expect(useReverse.getState()).toBe(before)
+  },120_000)
+
+  it('restores each source independently through a chain of copies', async () => {
+    const first=await imported()
+    const copy=async (id:number,op:string) => {
+      const source=await sourceFor(id),stage=await session.stageEditorCopy(new TextDecoder().decode(source.step),op+'.step',source.assertCurrent,new AbortController().signal,{hideSourceBodyId:id})
+      const result=stage.publish(op,op);stage.dispose();return result.createdBodyIds[0]
+    }
+    const second=await copy(first,'first-copy'),third=await copy(second,'second-copy')
+    expect(useReverse.getState().hiddenBodies).toEqual([first,second])
+    await undo();await session.settled();expect(useReverse.getState().hiddenBodies).toEqual([first])
+    await undo();await session.settled();expect(useReverse.getState().hiddenBodies).toEqual([])
+    await redo();await session.settled();expect(useReverse.getState().hiddenBodies).toEqual([first])
+    await redo();await session.settled();expect(useReverse.getState().hiddenBodies).toEqual([first,second])
+    expect(useReverse.getState().bodies.filter(b=>b.visible).map(b=>b.id)).toEqual([third])
+  },120_000)
+
+  it('applies the visibility policy to an ordinary open sheet without altering its area', async () => {
+    const id=await imported(sheet),source=await sourceFor(id),stage=await session.stageEditorCopy(new TextDecoder().decode(source.step),'sheet.step',source.assertCurrent,new AbortController().signal,{hideSourceBodyId:id})
+    const receipt=stage.publish('hide-sheet','hash');stage.dispose()
+    expect(useReverse.getState().hiddenBodies).toEqual([id])
+    for(const body of [id,receipt.createdBodyIds[0]]) {
+      const value=await measure(body)
+      expect(value).toMatchObject({valid:true,faces:1,solids:0})
+      expect(value.area).toBeCloseTo(600,9) // OCCT roundoff, about 1e-13 mm².
+    }
+    await undo();await session.settled();expect(useReverse.getState().bodies[0].visible).toBe(true)
+  },120_000)
+})

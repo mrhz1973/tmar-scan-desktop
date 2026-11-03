@@ -24,6 +24,11 @@ export function WorkspaceEditorDock() {
         {state.error ?? state.snapshot?.message ?? (state.phase === 'editing' ? 'Bozza locale · originale conservato' : 'Elaborazione CAD…')}
         {!!state.snapshot?.draftNoteCount && <p>Le note in bozza richiedono il supporto della transazione annotata, non ancora disponibile.</p>}
       </div>
+      <label className="workspace-editor-copy-visibility" title="Conserva l'originale nel progetto ma lo nasconde dopo Applica. Undo ripristina la visibilità precedente; Redo mostra la copia e nasconde nuovamente l'originale.">
+        <input type="checkbox" data-test="workspace-editor-hide-source" checked={state.hideSourceAfterApply}
+          disabled={state.phase !== 'editing'} onChange={e => { workspaceEditors.setHideSourceAfterApply(e.target.checked) }} />
+        <span>Nascondi l’originale dopo Applica</span>
+      </label>
       <div data-slot="workspace.editor.actions" className="keys">
         <button type="button" data-test="workspace-editor-apply" disabled={!state.canApply}
           title="Pubblica una copia CAD verificata come un'unica operazione del progetto"

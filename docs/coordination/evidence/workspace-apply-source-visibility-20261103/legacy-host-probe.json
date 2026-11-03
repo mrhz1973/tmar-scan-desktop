@@ -1,0 +1,103 @@
+{
+  "pass": true,
+  "checks": [
+    {
+      "ok": true,
+      "name": "same main canvas, camera and pose on entry"
+    },
+    {
+      "ok": true,
+      "name": "transient source mask, geometry and selection preserved"
+    },
+    {
+      "ok": true,
+      "name": "contextual parameters/actions/status and overlay without modal"
+    },
+    {
+      "ok": true,
+      "name": "real pointer is captured and Apply is blocked during gesture"
+    },
+    {
+      "ok": true,
+      "name": "foreign pointer does not take or finish the active gesture"
+    },
+    {
+      "ok": true,
+      "name": "Esc before mouseup cancels gesture, releases capture, keeps editor open"
+    },
+    {
+      "ok": true,
+      "name": "late mouseup does not create a history step"
+    },
+    {
+      "ok": true,
+      "name": "toolbar Undo uses local history without project leakage"
+    },
+    {
+      "ok": true,
+      "name": "toolbar Redo restores the local change"
+    },
+    {
+      "ok": true,
+      "name": "one CAD copy and one project Undo entry; leases removed after Apply"
+    },
+    {
+      "ok": true,
+      "name": "project toolbar Undo/Redo removes and restores the copy"
+    },
+    {
+      "ok": true,
+      "name": "Cancel after real CAD staging prevents delayed publication without body/history residue"
+    },
+    {
+      "ok": true,
+      "name": "saved/reopened project exports two independently valid CAD solids with preserved volumes"
+    },
+    {
+      "ok": true,
+      "name": "no browser application console errors"
+    }
+  ],
+  "entered": {
+    "sameCanvas": true,
+    "sameCamera": true,
+    "samePose": true,
+    "count": 1,
+    "oldCount": 1,
+    "originalMasked": true,
+    "overlay": true,
+    "slots": true,
+    "originalGeometry": true,
+    "originalSelection": true,
+    "noModal": true
+  },
+  "applied": {
+    "bodies": 2,
+    "volumes": [
+      6000,
+      7200
+    ],
+    "history": 1,
+    "id": 2,
+    "maskReleased": true,
+    "receipt": true,
+    "overlays": 0,
+    "selection": true
+  },
+  "measures": [
+    {
+      "id": 1,
+      "valid": true,
+      "faces": 6,
+      "volume": 6000
+    },
+    {
+      "id": 2,
+      "valid": true,
+      "faces": 6,
+      "volume": 7200
+    }
+  ],
+  "consoleErrors": [],
+  "scope": "SOURCE HOST + QA CONTROLLER; not the author Edit Surface integration"
+}

@@ -96,12 +96,13 @@ export function createReverseEditorHost(): WorkspaceEditorHost {
         sourceVisible: () => { const s = useReverse.getState(); return !s.bodiesHidden && !!s.bodies.find(b => b.id === source.binding.bodyId)?.visible },
       })
     },
-    async stage(source: BoundEditorSource, prepared, signal) {
+    async stage(source: BoundEditorSource, prepared, signal, display) {
       source.assertCurrent(); abortIfNeeded(signal)
       const session = reverseSession()
       if (!session) throw new Error('Sessione CAD non disponibile.')
       const text = new TextDecoder('utf-8', { fatal: true }).decode(prepared.step)
-      return session.stageEditorCopy(text, prepared.name, source.assertCurrent, signal)
+      return session.stageEditorCopy(text, prepared.name, source.assertCurrent, signal,
+        display?.hideSourceAfterApply ? { hideSourceBodyId: source.binding.bodyId } : undefined)
     },
   }
 }

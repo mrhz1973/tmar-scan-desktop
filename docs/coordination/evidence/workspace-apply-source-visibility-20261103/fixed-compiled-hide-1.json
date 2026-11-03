@@ -1,0 +1,48 @@
+{
+  "mode": "hide-source",
+  "plugin": "b36bf5a195db8c711347ff34117fa40d3bc279c9",
+  "inputHash": "baf41153abbcb6b4b9343f3daa9aca2dd22af945d89da1e87d860c5844950747",
+  "initialVolume": 6192.107966783208,
+  "checks": [
+    "actual published plugin edits a pre-existing B-spline in the main view",
+    "hide-source is visibly enabled by default",
+    "Apply preserves original and creates one separate copy",
+    "chosen source visibility is applied; copy stays visible",
+    "Undo removes copy and restores previous original visibility",
+    "Redo restores copy and the chosen visibility policy",
+    "save/reopen preserves both bodies and individual visibility",
+    "OCCT reimport after reopen retains original volume and a distinct valid edited solid",
+    "input STEP remains byte-for-byte unchanged",
+    "zero application console errors"
+  ],
+  "consoleErrors": [],
+  "verdict": "PASS",
+  "after": [
+    {
+      "name": "Open CASCADE STEP translator 8.0 1",
+      "hidden": true
+    },
+    {
+      "name": "Open CASCADE STEP translator 8.0 1 (2)",
+      "hidden": false
+    }
+  ],
+  "reopened": [
+    {
+      "name": "Open CASCADE STEP translator 8.0 1",
+      "hidden": true
+    },
+    {
+      "name": "Open CASCADE STEP translator 8.0 1 (2)",
+      "hidden": false
+    }
+  ],
+  "geometry": {
+    "valid": true,
+    "solids": 2,
+    "volumes": [
+      6192.107966783208,
+      6194.055651269608
+    ]
+  }
+}

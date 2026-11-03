@@ -23,11 +23,12 @@ export interface StagedEditorCopy {
   publish(operationId: string, artifactSha256: string): CommitReceipt
   dispose(): void
 }
+export interface EditorApplyDisplayOptions { readonly hideSourceAfterApply: boolean }
 export interface WorkspaceEditorHost {
   capabilities: EditorCapabilities
   readSource(bodyId: number, signal: AbortSignal): Promise<BoundEditorSource>
   viewport(source: BoundEditorSource): OwnedEditorViewport
-  stage(source: BoundEditorSource, prepared: PreparedCadCopy, signal: AbortSignal): Promise<StagedEditorCopy>
+  stage(source: BoundEditorSource, prepared: PreparedCadCopy, signal: AbortSignal, display?: EditorApplyDisplayOptions): Promise<StagedEditorCopy>
 }
 export type EditorPhase = 'closed' | 'opening' | 'editing' | 'preparing' | 'committing' | 'closing'
 export interface WorkspaceEditorState {
@@ -39,8 +40,9 @@ export interface WorkspaceEditorState {
   error: string | null
   canApply: boolean
   receipt: CommitReceipt | null
+  hideSourceAfterApply: boolean
 }
-const CLOSED: WorkspaceEditorState = { phase: 'closed', id: null, controller: null, definition: null, snapshot: null, error: null, canApply: false, receipt: null }
+const CLOSED: WorkspaceEditorState = { phase: 'closed', id: null, controller: null, definition: null, snapshot: null, error: null, canApply: false, receipt: null, hideSourceAfterApply: true }
 export const useWorkspaceEditor = create<WorkspaceEditorState>(() => CLOSED)
 const definitions = new Map<string, WorkspaceEditorDefinition>()
 let host: WorkspaceEditorHost | null = null
@@ -183,6 +185,7 @@ function apply(): Promise<CommitReceipt> {
   refresh(session)
   if (!useWorkspaceEditor.getState().canApply) return Promise.reject(new Error('Convalida la bozza corrente senza note prima di applicare.'))
   const controller = session.controller, source = session.source
+  const display = Object.freeze({ hideSourceAfterApply: useWorkspaceEditor.getState().hideSourceAfterApply })
   const snapshot = controller.getSnapshot()
   if (snapshot.validation.kind !== 'valid') return Promise.reject(new Error('Geometria non valida.'))
   const ticket: ApplyTicket = Object.freeze({ operationId: crypto.randomUUID(), source: source.binding, stamp: Object.freeze({ ...snapshot.validation.stamp }), mode: 'cad-copy' })
@@ -204,7 +207,7 @@ function apply(): Promise<CommitReceipt> {
       const prepared = { ...supplied, source: ticket.source, stamp: ticket.stamp, step: supplied.step.slice() }
       const hash = await editorSha256(prepared.step)
       assertLive(session)
-      staged = await session.adapter.stage(source, prepared, session.abort.signal)
+      staged = await session.adapter.stage(source, prepared, session.abort.signal, display)
       assertLive(session)
       const current = controller.getSnapshot()
       if (current.validation.kind !== 'valid' || current.gesture !== 'idle' || current.draftNoteCount ||
@@ -250,6 +253,11 @@ function apply(): Promise<CommitReceipt> {
 }
 export const workspaceEditors = {
   open, apply, cancel, cancelGesture,
+  setHideSourceAfterApply: (hideSourceAfterApply: boolean): boolean => {
+    // Capture the display choice before any asynchronous preparation starts.
+    if (!active || active.apply || useWorkspaceEditor.getState().phase !== 'editing' || typeof hideSourceAfterApply !== 'boolean') return false
+    useWorkspaceEditor.setState({ hideSourceAfterApply }); return true
+  },
   capabilities: () => host?.capabilities ?? null,
   active: () => active !== null,
   busy: () => active ? 'Concludi Edit Surface con Applica o Annulla.' : null,
