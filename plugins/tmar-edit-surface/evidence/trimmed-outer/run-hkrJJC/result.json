@@ -1,0 +1,12 @@
+{
+  "reopen": false,
+  "outerEdges": 5,
+  "chamferSamples": 33,
+  "maxChamferError": 1.7763568394002505e-15,
+  "inputVolume": 22037.25666117694,
+  "editedVolume": 22095.41970752808,
+  "faces": 8,
+  "wires": 2,
+  "rimSamples": 72,
+  "maxRimError": 1.7763568394002505e-15
+}

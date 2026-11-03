@@ -37,7 +37,23 @@ function lockCurvedTrim(net: Net, box: BoundingBox, locked: Set<number>) {
       for (const id of active) locked.add(id)
     }
   }
-  if (!touchesTrim) throw new Error('Il foro non ricade nel reticolo: modifica non disponibile.')
+  if (!touchesTrim) throw new Error('Il contorno non ricade nel reticolo: modifica non disponibile.')
+}
+// On a circular arc shorter than pi, sagitta bounds the displacement from
+// its chord. These enclosing boxes protect the rim without locking the disk.
+function outerEdgeBoxes(k: OcctKernel, edge: ShapeHandle): BoundingBox[] {
+  if (k.curveType(edge) !== 'circle') return [k.getBoundingBox(edge,{useTriangulation:false})]
+  const {first,last} = k.curveParameters(edge)
+  const count = Math.max(1,Math.ceil(Math.abs(last-first)/(Math.PI/12)))
+  return Array.from({length:count}, (_,i) => {
+    const t0 = first+(last-first)*i/count, t1 = first+(last-first)*(i+1)/count
+    const a = k.curvePointAtParam(edge,t0), b = k.curvePointAtParam(edge,t1)
+    const mid = k.curvePointAtParam(edge,(t0+t1)/2)
+    const margin = Math.hypot(mid.x-(a.x+b.x)/2, mid.y-(a.y+b.y)/2, mid.z-(a.z+b.z)/2)+1e-7
+    return { xmin:Math.min(a.x,b.x)-margin, xmax:Math.max(a.x,b.x)+margin,
+      ymin:Math.min(a.y,b.y)-margin, ymax:Math.max(a.y,b.y)+margin,
+      zmin:Math.min(a.z,b.z)-margin, zmax:Math.max(a.z,b.z)+margin }
+  })
 }
 export class SurfaceEditorKernel {
   private source: ShapeHandle | null = null
@@ -95,11 +111,11 @@ export class SurfaceEditorKernel {
     const wires = k.getSubShapes(face, 'wire'), outer = k.outerWire(face), edges = k.getSubShapes(outer, 'edge')
     try {
       const inner = wires.filter(w => !k.isSame(w, outer))
-      if (edges.length !== 4) throw new Error('Serve un contorno esterno rettangolare a quattro bordi.')
+      if (!edges.length) throw new Error('Contorno esterno privo di bordi.')
       const b = k.uvBounds(face), bounds: [number, number, number, number] = [b.uMin, b.uMax, b.vMin, b.vMax]
       if (bounds.some(x => !Number.isFinite(x)) || b.uMax <= b.uMin || b.vMax <= b.vMin) throw new Error('Dominio della faccia non valido.')
       const epsU = 1e-7 * Math.max(1, b.uMax - b.uMin), epsV = 1e-7 * Math.max(1, b.vMax - b.vMin)
-      // Each of the four trimmed edges must lie on ONE natural parameter bound.
+      // Recognize the natural rectangular domain to retain its original net and recipe.
       const sides = edges.map(edge => {
         const { first, last } = k.curveParameters(edge)
         let candidates = [true, true, true, true]
@@ -110,20 +126,22 @@ export class SurfaceEditorKernel {
         }
         return candidates.findIndex(Boolean)
       })
-      if (sides.includes(-1) || new Set(sides).size !== 4) throw new Error('Bordi ritagliati non coincidenti con il dominio naturale: editing protetto non disponibile.')
+      const rectangular = sides.length === 4 && !sides.includes(-1) && new Set(sides).size === 4
+      const trimBoxes = inner.map(w => k.getBoundingBox(w,{useTriangulation:false}))
+      if (!rectangular) for (const edge of edges) trimBoxes.push(...outerEdgeBoxes(k,edge))
+
       const net = r.kind === 1
-        ? (inner.length ? perforatedPlaneNet(r, bounds) : planeNet(r, bounds))
+        ? (trimBoxes.length ? perforatedPlaneNet(r, bounds) : planeNet(r, bounds))
         : enrichBicubic(structuredClone(r.net!))
       if (net.mu[0] !== net.du + 1 || net.mu.at(-1) !== net.du + 1 || net.mv[0] !== net.dv + 1 || net.mv.at(-1) !== net.dv + 1) throw new Error('Servono nodi estremi clamped.')
       if (Math.abs(net.ku[0] - b.uMin) > epsU || Math.abs(net.ku.at(-1)! - b.uMax) > epsU || Math.abs(net.kv[0] - b.vMin) > epsV || Math.abs(net.kv.at(-1)! - b.vMax) > epsV) throw new Error('Il trim non coincide con il dominio NURBS.')
       if (net.nu * net.nv > 1600) throw new Error('Reticolo oltre 1600 punti: non interattivo in questo prototipo.')
       const trimLocks = new Set<number>()
-      if (inner.length) {
+      if (trimBoxes.length) {
         const expanded = (k: number[], m: number[]) => k.flatMap((x, i) => Array(m[i]).fill(x) as number[])
         const us = expanded(net.ku, net.mu), vs = expanded(net.kv, net.mv)
-        for (const wire of inner) {
-          const box = k.getBoundingBox(wire, { useTriangulation: false })
-          if (!Object.values(box).every(Number.isFinite)) throw new Error('Limite interno non determinato.')
+        for (const box of trimBoxes) {
+          if (!Object.values(box).every(Number.isFinite)) throw new Error('Limite del contorno non determinato.')
           if (r.kind !== 1) {
             lockCurvedTrim(net, box, trimLocks)
             continue
@@ -131,14 +149,14 @@ export class SurfaceEditorKernel {
           // A linear plane projection reaches its extrema at box corners.
           const uv = [box.xmin,box.xmax].flatMap(x => [box.ymin,box.ymax].flatMap(y =>
             [box.zmin,box.zmax].map(z => k.uvFromPoint(face,{x,y,z}))))
-          if (uv.some(q => !Number.isFinite(q.u) || !Number.isFinite(q.v))) throw new Error('Limite interno non determinato.')
+          if (uv.some(q => !Number.isFinite(q.u) || !Number.isFinite(q.v))) throw new Error('Limite del contorno non determinato.')
           const loU = Math.min(...uv.map(q=>q.u))-epsU, hiU = Math.max(...uv.map(q=>q.u))+epsU
           const loV = Math.min(...uv.map(q=>q.v))-epsV, hiV = Math.max(...uv.map(q=>q.v))+epsV
           for (let u=0; u<net.nu; u++) for (let v=0; v<net.nv; v++)
             if (us[u]<=hiU && us[u+net.du+1]>=loU && vs[v]<=hiV && vs[v+net.dv+1]>=loV) trimLocks.add(u*net.nv+v)
         }
       }
-      if (inner.length && trimLocks.size === net.poles.length) throw new Error('Tutti i poli influenzano un contorno interno.')
+      if (trimBoxes.length && trimLocks.size === net.poles.length) throw new Error('Tutti i poli influenzano un contorno ritagliato.')
       return {net, trimLocks: [...trimLocks]}
     } finally { [outer, ...wires, ...edges].forEach(h => k.release(h)) }
   }
@@ -177,6 +195,33 @@ export class SurfaceEditorKernel {
     }
     if (pending.length) throw new Error('Conversione piana: contorno aggiunto.')
   }
+  private checkPreparedArea(original: ShapeHandle, prepared: ShapeHandle, trimmed: boolean) {
+    const k = this.kernel, area = k.getSurfaceArea(original)
+    const delta = Math.abs(k.getSurfaceArea(prepared) - area)
+    if (!Number.isFinite(delta)) throw new Error('Conversione piana: area non determinata.')
+    if (trimmed) this.checkPlanarTrims(original,prepared)
+    if (delta <= (trimmed ? Math.max(1e-6,area*1e-6) : 1e-6)) return
+    // The integration rule on a trimmed spline can differ from the analytic
+    // plane. For small discrepancies, measure its 3D wire on the source plane.
+    if (!trimmed || delta > area*1e-5) throw new Error('Conversione piana: area alterata.')
+    const wires = k.getSubShapes(prepared,'wire')
+    try {
+      if (wires.length !== 1) throw new Error('Conversione piana: area alterata.')
+      const planarFace = k.makeFaceOnSurface(original,wires[0])
+      try {
+        const rimArea = k.getSurfaceArea(planarFace)
+        if (k.surfaceType(planarFace) !== 'plane' || !k.isValid(planarFace) ||
+            !Number.isFinite(rimArea) || Math.abs(rimArea-area)>1e-6)
+          throw new Error('Conversione piana: area delimitata dal bordo alterata.')
+      } finally { k.release(planarFace) }
+    } finally { wires.forEach(w=>k.release(w)) }
+    const b = k.uvBounds(original)
+    for (let i=0;i<12;i++) for (let j=0;j<12;j++) {
+      const u=b.uMin+(b.uMax-b.uMin)*(i+.5)/12, v=b.vMin+(b.vMax-b.vMin)*(j+.5)/12
+      if (k.classifyPointOnFace(prepared,u,v)!==k.classifyPointOnFace(original,u,v))
+        throw new Error('Conversione piana: dominio interno alterato.')
+    }
+  }
   select(index: number) {
     const net = this.netFor(index).net, record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
@@ -190,13 +235,7 @@ export class SurfaceEditorKernel {
         if (!k.isValid(prepared) || fs.length !== this.faces.length || this.count(prepared, 'solid') !== this.solids) throw new Error('Conversione piana esatta non qualificabile per questa faccia.')
         for (let f = 0; f < fs.length; f++) {
           const b = k.uvBounds(this.faces[f])
-          const area = k.getSurfaceArea(this.faces[f])
-          const perforated = f === index && this.infos[index].trimLocks.length > 0
-          // OCCT integrates trimmed splines numerically. Compare the actual
-          // trim curves too before allowing quadrature drift on this face.
-          if (perforated) this.checkPlanarTrims(this.faces[f],fs[f])
-          const areaTolerance = perforated ? Math.max(1e-6,area*1e-6) : 1e-6
-          if (Math.abs(k.getSurfaceArea(fs[f])-area)>areaTolerance) throw new Error('Conversione piana: area alterata.')
+          this.checkPreparedArea(this.faces[f],fs[f],f === index && this.infos[index].trimLocks.length > 0)
           for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
             const u = b.uMin + (b.uMax - b.uMin) * i / 4, v = b.vMin + (b.vMax - b.vMin) * j / 4
             if (dist(tuple(k.pointOnSurface(fs[f], u, v)), tuple(k.pointOnSurface(this.faces[f], u, v))) > 1e-7) throw new Error('Conversione piana: geometria o ordine delle facce alterato.')
@@ -287,7 +326,7 @@ export class SurfaceEditorKernel {
     if (!this.source || !this.originalNet || this.chosen < 0) throw new Error('Seleziona prima una faccia.')
     assertNet(this.originalNet, net, continuity)
     for (const i of this.infos[this.chosen].trimLocks) {
-      if (net.poles[i].some((x,d) => x !== this.originalNet!.poles[i][d])) throw new Error('Polo protetto dal contorno interno.')
+      if (net.poles[i].some((x,d) => x !== this.originalNet!.poles[i][d])) throw new Error('Polo protetto dal contorno ritagliato.')
     }
     const k = this.kernel, baseFace = this.faces[this.chosen], text = replaceSurface(this.editBrep, this.editRecord!, net)
     const edited = k.fromBREP(text), fs = k.getSubShapes(edited, 'face')
