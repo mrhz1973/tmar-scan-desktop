@@ -20,7 +20,8 @@ type Payload = Request extends infer R ? R extends Request ? Omit<R, 'id'> : nev
 interface Pin { anchor: DraftAnchor; at: Point; normal: Point }
 export interface SurfaceNoteCommit {
   step: string; name: string; faceIndex: number
-  notes: { text: string; at: Point; normal: Point; u: number; v: number }[]
+  final: {face:number; selectionRevision:number; previewRevision:number; faceBrep:string; editorSessionId:string}
+  notes: { draftId:string; anchor:DraftAnchor; text: string; at: Point; normal: Point; u: number; v: number }[]
 }
 interface SurfaceOptions { applyWithNotes?: (edit: SurfaceNoteCommit) => Promise<void> }
 
@@ -51,6 +52,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   const [selectionMode, setSelectionMode] = useState<NetSelectionMode>('points')
   const [placingNote, setPlacingNote] = useState(false)
   const [notes, setNotes] = useState<(Pin & {id:number; text:string; revision:number})[]>([])
+  const [editorSessionId]=useState(()=>crypto.randomUUID())
   const nextNote = useRef(1)
   const [noteError,setNoteError] = useState('')
   const cancel = () => {
@@ -195,10 +197,11 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         if (notes.length) {
           if (!applyWithNotes || notes.some(n=>!n.text.trim())) throw new Error('Completa le note prima di applicare.')
           const finalNotes=await Promise.all(notes.map(async n=>({
-            text:n.text.trim(),u:n.anchor.u,v:n.anchor.v,
+            draftId:String(n.id),anchor:n.anchor,text:n.text.trim(),u:n.anchor.u,v:n.anchor.v,
             ...await ask<{at:Point;normal:Point}>({action:'noteResolve',anchor:n.anchor,previewRevision:result.previewRevision})
           })))
-          await applyWithNotes({step:result.step,name,faceIndex:face,notes:finalNotes})
+          const witness=await ask<Omit<SurfaceNoteCommit['final'],'editorSessionId'>>({action:'finalFaceWitness',previewRevision:result.previewRevision})
+          await applyWithNotes({step:result.step,name,faceIndex:face,final:{...witness,editorSessionId},notes:finalNotes})
         } else await runCommand('reverse.import.step', { bytes: new TextEncoder().encode(result.step), name })
         close()
       } else { setPreview(result); saveFile(name, new Blob([result.step], { type: 'model/step' })) }
@@ -228,7 +231,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <label>Trascinamento punti<select data-test="surface-drag-mode" value={dragMode} onChange={e => setDragMode(e.target.value as DragMode)}><option value="axis">Mondo · asse X/Y/Z</option><option value="screen">Piano dello schermo</option><option value="local">Locale · U/V/normale</option></select></label>
         <label>Selezione reticolo<select data-test="surface-selection-mode" value={selectionMode} onChange={e => setSelectionMode(e.target.value as NetSelectionMode)}><option value="points">Punti</option><option value="edges">Segmenti del reticolo</option><option value="cells">Celle del reticolo</option><option value="mixed">Punti e segmenti</option></select></label>
         <p className="es-hint">Un segmento seleziona due poli; un clic dentro una cella ne seleziona quattro. Si modifica il reticolo della faccia CAD. Ctrl+clic aggiunge o toglie dalla selezione. I poli bloccati restano fermi. Nascondendo il reticolo, segmenti e celle non sono selezionabili.</p>
-        <p>{dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.' : dragMode === 'local' ? 'U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. La freccia indica il verso positivo. Trascina la selezione o imposta una quota.' : 'Trascina lungo l’asse scelto.'} Trascina lo sfondo per ruotare. Lo stiramento usa sempre X/Y/Z.</p>
+        <p>{dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.' : dragMode === 'local' ? 'U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. Trascina la freccia gialla o imposta una quota.' : 'Trascina la freccia gialla lungo l’asse scelto.'} Trascina lo sfondo per ruotare. Lo stiramento usa sempre X/Y/Z.</p>
         {dragMode === 'local' && editable.length > 0 && !moveDirection && <p role="alert">Riferimento locale non definito in questo punto. Scegli un altro punto o il riferimento mondo.</p>}
         <label>Intensità trascinamento · {Math.round(dragStrength * 100)}%<input data-test="surface-drag-strength" type="range" min="0.05" max="1" step="0.05" value={dragStrength} onChange={e => setDragStrength(Number(e.target.value))} /></label>
         <p className="es-hint">Riduce lo spostamento durante il trascinamento per modifiche fini. Le quote numeriche restano esatte.</p>

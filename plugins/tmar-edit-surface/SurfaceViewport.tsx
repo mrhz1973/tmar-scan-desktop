@@ -95,15 +95,37 @@ export function SurfaceViewport(props: Props) {
       }
       return best
     }
+    const pickArrow = (e: PointerEvent) => {
+      const p=current.current, net=p.net
+      if (!net || p.dragMode==='screen' || e.ctrlKey || e.metaKey) return null
+      const anchor=p.selected.find(i=>!p.locked.includes(i))
+      if (anchor===undefined) return null
+      const direction=dragDirection(net,anchor,p.dragMode,p.axis)
+      if (!direction) return null
+      const start=new THREE.Vector3(...net.poles[anchor]), axis=new THREE.Vector3(...direction)
+      const tip=start.clone().addScaledVector(axis,state.radius*0.22).project(camera)
+      const projected=start.clone().project(camera), rect=div.getBoundingClientRect()
+      if (Math.abs(projected.z)>1 || Math.abs(tip.z)>1) return null
+      const dx=(tip.x-projected.x)*rect.width/2, dy=(projected.y-tip.y)*rect.height/2
+      const length=Math.hypot(dx,dy)
+      if (length<8) return null
+      const x=e.clientX-rect.left-(projected.x+1)*rect.width/2
+      const y=e.clientY-rect.top-(1-projected.y)*rect.height/2
+      const along=(x*dx+y*dy)/length
+      // Leave the pole itself available for ordinary selection.
+      if (along<5 || along>length+4 || Math.abs(x*dy-y*dx)/length>6) return null
+      return anchor
+    }
     const pointerDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY }
       if (e.button !== 0 || current.current.busy) return
       if (current.current.placingNote) return
-      const picked = pickNet(e)
+      const arrow = pickArrow(e)
+      const picked = arrow !== null ? [arrow] : pickNet(e)
       if (!picked) return
       e.stopImmediatePropagation(); controls.enabled = false
       const p = current.current
-      p.onPoints(picked, e.ctrlKey || e.metaKey)
+      if (arrow === null) p.onPoints(picked, e.ctrlKey || e.metaKey)
       if (!p.net || e.ctrlKey || e.metaKey || picked.every(i => p.locked.includes(i))) return
       const ids = (picked.every(i => p.selected.includes(i)) ? p.selected : picked).filter(i => !p.locked.includes(i))
       const anchor = ids[0], index = anchor
@@ -140,6 +162,7 @@ export function SurfaceViewport(props: Props) {
     const pointerMove = (e: PointerEvent) => {
       if (drag) { e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), false); return }
       if (current.current.placingNote) { div.style.cursor='crosshair'; return }
+      if (pickArrow(e) !== null) { div.style.cursor='grab'; return }
       const picked = pickNet(e)
       div.style.cursor = picked ? (picked.every(i => current.current.locked.includes(i)) ? 'not-allowed' : 'grab') : 'crosshair'
     }

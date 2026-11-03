@@ -29,6 +29,17 @@ it('moves an imported planar STEP face while preserving its through hole', async
     net.poles[free][2] += 2
     const exportResult = editor.evaluate(net,'G1',true)
     expect(()=>editor.resolveAnchor(pin.anchor,startPreview.previewRevision)).toThrow(/cambiata/)
+    expect(()=>editor.finalFaceWitness(startPreview.previewRevision)).toThrow(/cambiata/)
+    const witness = editor.finalFaceWitness(exportResult.previewRevision)
+    expect(witness.face).toBe(index)
+    expect(witness.selectionRevision).toBe(pin.anchor.selectionRevision)
+    const witnessFace=k.fromBREP(witness.faceBrep), loops=k.getSubShapes(witnessFace,'wire')
+    try {
+      expect(k.isValid(witnessFace)).toBe(true)
+      expect(loops).toHaveLength(2)
+      const q=k.pointOnSurface(witnessFace,pin.anchor.u,pin.anchor.v)
+      expect(q.z).toBeCloseTo(editor.resolveAnchor(pin.anchor,witness.previewRevision).at[2],9)
+    } finally {loops.forEach(h=>k.release(h));k.release(witnessFace)}
     const movedPin = editor.resolveAnchor(pin.anchor,exportResult.previewRevision)
     expect(movedPin.at[2]).toBeGreaterThan(pin.at[2]+0.1)
     const restoredPin = editor.resolveAnchor(pin.anchor,editor.evaluate(original,'G1').previewRevision)

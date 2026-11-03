@@ -47,7 +47,15 @@ try {
   const camera=new THREE.PerspectiveCamera(40,r.width/r.height,radius/1000,radius*100)
   camera.position.copy(center).add(new THREE.Vector3(1.5,-1.9,1.8).multiplyScalar(radius));camera.up.set(0,0,1);camera.lookAt(center);camera.updateMatrixWorld()
   const pole=originalPoint.clone().add(numericDelta.clone().multiplyScalar(4)),project=q=>{const s=q.clone().project(camera);return{x:r.x+(s.x+1)*r.width/2,y:r.y+(1-s.y)*r.height/2}}
-  const from=project(pole),to=project(pole.clone().addScaledVector(n,1.5))
+  const handle=process.argv.includes('--arrow')
+  const grip=handle ? pole.clone().addScaledVector(n.clone().multiplyScalar(Math.sign(numericDelta.dot(n))),radius*0.20) : pole
+  const from=project(grip),to=project(grip.clone().addScaledVector(n,1.5))
+  if (handle) {
+    const origin=project(pole)
+    assert(Math.hypot(from.x-origin.x,from.y-origin.y)>8)
+    await page.mouse.move(from.x,from.y)
+    assert.equal(await page.$eval('[data-test=edit-surface-viewport]',e=>e.style.cursor),'grab')
+  }
   await page.screenshot({path:join(out,'before-drag.png')})
   const previous=await status();await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:10});await page.mouse.up();await changed(previous)
   const dragged=await exportState('drag-local-N'),delta=new THREE.Vector3(...dragged.center).sub(new THREE.Vector3(...numeric.center))
@@ -58,7 +66,7 @@ try {
   {const previous=await status();await page.click('[data-test=surface-redo]');await changed(previous)}
   const redone=await exportState('redo');assert(new THREE.Vector3(...redone.center).distanceTo(new THREE.Vector3(...dragged.center))<1e-8)
   assert.equal(consoleErrors.length,0,JSON.stringify(consoleErrors))
-  const result={pass:true,base,numeric,numericDelta:numericDelta.toArray(),dragged,delta:delta.toArray(),normal:n.toArray(),from,to,undone,redone,consoleErrors,elapsedMs:performance.now()-started}
+  const result={pass:true,handle,base,numeric,numericDelta:numericDelta.toArray(),dragged,delta:delta.toArray(),normal:n.toArray(),from,to,undone,redone,consoleErrors,elapsedMs:performance.now()-started}
   writeFileSync(join(out,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({out,...result},null,2))
 }catch(e){writeFileSync(join(out,'failure.json'),JSON.stringify({error:String(e),stack:e.stack},null,2));await page.screenshot({path:join(out,'failure.png')});throw e}
 finally{await browser.close();kernel[Symbol.dispose]()}
