@@ -18,6 +18,7 @@ const ZebraRenderer = Object.values(zebraModules)[0]
 export const hasSurfaceZebra = Boolean(ZebraRenderer)
 
 interface Props {
+  mirrorAxis: number; mirrorOffset: number; mirrorPartners: number[] | null
   strip: StripDrag | null
   notePins: Point[]; placingNote: boolean; onNote: (point:Point|null)=>void
   preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; face: number
@@ -234,8 +235,29 @@ export function SurfaceViewport(props: Props) {
     const s = sceneRef.current; if (!s) return
     s.cage.traverse(dispose); s.cage.clear()
     const n = props.net; if (!n) return
+    const mirrored = new Set<number>()
+    if (props.mirrorPartners) {
+      for (const i of props.selected) {
+        const j = props.mirrorPartners[i]
+        if (j >= 0 && !props.locked.includes(i) && !props.locked.includes(j)) mirrored.add(j)
+      }
+      const axis = props.mirrorAxis, u = (axis + 1) % 3, v = (axis + 2) % 3
+      const box = new THREE.Box3().setFromPoints(n.poles.map(p => new THREE.Vector3(...p)))
+      const pad = s.radius * 0.08
+      const corners = [[0,0], [1,0], [1,1], [0,1]].map(([highU, highV]) => {
+        const corner = new THREE.Vector3()
+        corner.setComponent(axis, props.mirrorOffset)
+        corner.setComponent(u, highU ? box.max.getComponent(u) + pad : box.min.getComponent(u) - pad)
+        corner.setComponent(v, highV ? box.max.getComponent(v) + pad : box.min.getComponent(v) - pad)
+        return corner
+      })
+      const frame = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(corners),
+        new THREE.LineBasicMaterial({ color: '#f785ff', transparent: true, opacity: 0.85, depthWrite: false, depthTest: false }))
+      frame.renderOrder = 3
+      s.cage.add(frame)
+    }
     n.poles.forEach((p, i) => {
-      const color = props.selected.includes(i) ? '#ffcf35' : props.locked.includes(i) ? '#89939c' : '#58f3d0'
+      const color = props.selected.includes(i) ? '#ffcf35' : props.locked.includes(i) ? '#89939c' : mirrored.has(i) ? '#f785ff' : '#58f3d0'
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(s.radius * 0.012, 10, 8), new THREE.MeshBasicMaterial({ color, transparent: true, depthTest: false, depthWrite: false })); mesh.position.set(...p); mesh.userData.point = i; mesh.renderOrder = 5; s.cage.add(mesh)
       // Picking can run before the next render after the cage is rebuilt.
       mesh.updateWorldMatrix(true, false)
@@ -260,7 +282,7 @@ export function SurfaceViewport(props: Props) {
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
     const line = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthTest: false, depthWrite: false })); line.renderOrder = 4; s.cage.add(line)
-  }, [props.net, props.selected, props.locked, props.showNet, props.dragMode, props.axis])
+  }, [props.net, props.selected, props.locked, props.showNet, props.dragMode, props.axis, props.mirrorAxis, props.mirrorOffset, props.mirrorPartners])
   useEffect(() => {
     const state=sceneRef.current
     if (!state || !props.notePins.length) return
