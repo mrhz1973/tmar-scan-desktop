@@ -18,6 +18,8 @@ const checks = [], ok = (condition, label) => { assert(condition, label); checks
 try {
   await page.click('[data-test=workspace-reverse]')
   await page.waitForSelector('[data-test=edit-surface-entry] button')
+  // Opening Reverse starts the kernel asynchronously; do not import before it is ready.
+  await page.waitForFunction(() => window.__re?.store.getState().kernelStatus === 'ready', { timeout: 60_000 })
   const result = await page.evaluate(async step => {
     const { runCommand } = await import('/src/commands/registry.ts')
     const { useReverse } = await import('/plugins/reverse/state/reStore.ts')
