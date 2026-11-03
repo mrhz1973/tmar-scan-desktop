@@ -1,0 +1,116 @@
+name: Annotated host runtime review (isolated)
+on:
+  push:
+    branches: [review/annotated-host-archive-audit-20261103]
+    paths: [.github/workflows/annotated-host-runtime-review.yml]
+permissions:
+  contents: read
+jobs:
+  targeted-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: 27c75c3364511dd77e2ec0c5b8f314f529df6291
+          path: host
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: c9a9f3453bb941d06e7e64d83df9b03344a9a299
+          path: archive-source
+          sparse-checkout: review
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: 130d12bf9b4150aa7349365b2200bda80e153feb
+          path: plugin-source
+          sparse-checkout: plugins/tmar-edit-surface
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Verify and assemble exact review snapshot, without publishing it
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,pathlib,re,shutil,stat,subprocess,zipfile
+          root=pathlib.Path.cwd(); host=root/'host'; bundle=root/'bundle'; out=root/'review-results';out.mkdir()
+          source=root/'archive-source/review/annotated-host-review-20261103.zip'
+          assert hashlib.sha256(source.read_bytes()).hexdigest()=='2d740932429b19d5fa719ebf7d37501095f289b13485cd87ff216e5578286220'
+          with zipfile.ZipFile(source) as z:
+              assert len(z.infolist())==50 and len(set(z.namelist()))==50 and z.testzip() is None
+              assert sum(i.file_size for i in z.infolist())<20_000_000
+              for i in z.infolist():
+                  p=pathlib.PurePosixPath(i.filename)
+                  assert not p.is_absolute() and '..' not in p.parts and '\\' not in i.filename and ':' not in i.filename and not stat.S_ISLNK(i.external_attr>>16)
+                  d=bundle.joinpath(*p.parts);d.parent.mkdir(parents=True,exist_ok=True);d.write_bytes(z.read(i))
+          snapshot=json.loads((bundle/'manifests/host-corrected-snapshot.json').read_text())
+          expected=snapshot['hostFilesSha256']; assert len(expected)==34 and not snapshot['deleted']
+          subprocess.run(['git','apply','--check',str(bundle/'host-delta.patch')],cwd=host,check=True)
+          subprocess.run(['git','apply',str(bundle/'host-delta.patch')],cwd=host,check=True)
+          report={'hostBase':'27c75c3364511dd77e2ec0c5b8f314f529df6291','plugin':'130d12bf9b4150aa7349365b2200bda80e153feb','archiveCommit':'c9a9f3453bb941d06e7e64d83df9b03344a9a299','applyCheck':'PASS','files':{}}
+          for name,digest in expected.items():
+              raw=(bundle/'host-delta'/name).read_bytes(); assert hashlib.sha256(raw).hexdigest()==digest,name
+              applied=(host/name).read_bytes()
+              assert applied.replace(b'\r\n',b'\n')==raw.replace(b'\r\n',b'\n'),('Applied delta differs',name)
+              report['files'][name]={'archiveSha256':digest,'testedSha256':hashlib.sha256(applied).hexdigest()}
+          shutil.rmtree(host/'plugins/tmar-edit-surface')
+          shutil.copytree(root/'plugin-source/plugins/tmar-edit-surface',host/'plugins/tmar-edit-surface')
+          shutil.copyfile(bundle/'qa/annotatedNormal.qa.test.ts',host/'plugins/reverse/tests/annotatedNormal.qa.test.ts')
+          shutil.copyfile(bundle/'qa/e2e-workspace-annotated.mjs',host/'plugins/reverse/scripts/e2e-coordinator-annotated-review.mjs')
+          (out/'snapshot.json').write_text(json.dumps(report,indent=2))
+          print('Exact base and complete 34-file patch checked; only pinned plugin paired in runner.')
+          PY
+      - name: Install locked dependencies without lifecycle scripts
+        working-directory: host
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: TypeScript and pinned kernel version
+        working-directory: host
+        run: |
+          node -e "const p=require('./node_modules/occt-wasm/package.json'); if(p.version!=='5.7.1')process.exit(1); console.log('occt-wasm',p.version)"
+          node node_modules/typescript/bin/tsc --noEmit
+      - name: Run only affected host and plugin regressions
+        working-directory: host
+        run: |
+          node node_modules/vitest/vitest.mjs run plugins/reverse/tests/annotatedCopy.test.ts plugins/reverse/tests/annotatedNormal.qa.test.ts tests/workspaceEditors.test.ts plugins/reverse/tests/workspaceEditorHost.test.ts tests/history.test.ts plugins/tmar-edit-surface/tests/workspaceSession.test.ts plugins/tmar-edit-surface/tests/workspaceLayer.test.ts plugins/tmar-edit-surface/tests/note-orientation.test.ts --reporter=default --reporter=json --outputFile=../review-results/targeted-tests.json
+      - name: Compile the exact paired application
+        working-directory: host
+        run: npm run build
+      - name: Real controller source Apply, Undo, Redo, native Save and fresh-page Load
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,subprocess,time,urllib.request
+          root=pathlib.Path.cwd();host=root/'host';out=root/'review-results/source-controller';out.mkdir()
+          env=os.environ.copy();env.update({'SCANRULER_ISOLATED':'1','APP_URL':'http://127.0.0.1:17723/','EDIT_SURFACE_QA_OUT':str(out),'CHROME':'/usr/bin/google-chrome'})
+          with (out/'server.log').open('w') as log:
+              server=subprocess.Popen(['node','node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','17723','--strictPort'],cwd=host,env=env,stdout=log,stderr=subprocess.STDOUT)
+              try:
+                  for _ in range(100):
+                      if server.poll() is not None:raise RuntimeError('Owned server exited')
+                      try:
+                          with urllib.request.urlopen(env['APP_URL'],timeout=1) as r:
+                              if r.status==200:break
+                      except Exception:time.sleep(.2)
+                  else:raise TimeoutError('Owned server did not start')
+                  subprocess.run(['node','plugins/reverse/scripts/e2e-coordinator-annotated-review.mjs'],cwd=host,env=env,check=True,timeout=300)
+              finally:
+                  server.terminate()
+                  try:server.wait(timeout=10)
+                  except subprocess.TimeoutExpired:server.kill();server.wait()
+          PY
+      - name: Retain bounded review evidence, never browser profiles or credentials
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: annotated-host-independent-runtime-review
+          path: |
+            review-results/snapshot.json
+            review-results/targeted-tests.json
+            review-results/source-controller/**/result.json
+            review-results/source-controller/**/*.png
+            review-results/source-controller/**/downloads/*.scanruler
+            review-results/source-controller/server.log
+          if-no-files-found: error
+          retention-days: 7
