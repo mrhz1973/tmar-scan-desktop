@@ -187,3 +187,26 @@ from 22815.467778 to 22873.205669 cubic millimetres. All 72 checked rim
 positions matched the original hole. The kernel regression also rejects a
 protected-pole edit and replays the second edit as a native NURBS recipe.
 Evidence: evidence/perforated/run-lOxVW8/.
+
+### External trims on imported CAD faces
+
+Nonrectangular outer wires now contribute protected regions around their edges.
+Circular arcs use enclosing chord boxes expanded by their sagitta. Pole support
+may conservatively prevent movement near an edge, especially on coarse nets.
+Periodic surfaces, generic underlying analytic surface types, and trims whose
+UV bounding extents differ from the underlying spline knot domain remain limited.
+
+Browser QA on a five-sided plate with a through hole: the center-area pole was
+dragged, and STEP export/reimport produced a valid eight-face solid retaining
+both boundary loops. Volume changed from 22037.256661 to 22095.419708 mm3.
+Maximum discrepancy on the chamfer (33 samples) and the hole rim (72 samples):
+1.78e-15 mm on this fixture. Evidence: evidence/trimmed-outer/run-hkrJJC/.
+Run tests/e2e-perforated.mjs with --chamfer to reproduce.
+
+A separate OCCT regression moves the center of a circular STEP face, reimports
+the result and checks its rim at 72 positions. During exact planar preparation,
+the spline quadrature differed from analytic disk area by 0.002631 mm2 on a
+24 mm radius disk. For a single trimmed planar loop, discrepancies between
+one and ten ppm undergo an independent check using the converted wire on the
+original plane (1e-6 mm2 tolerance) and 144 inside/outside classifications.
+Larger differences remain a refusal.

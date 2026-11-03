@@ -6,14 +6,22 @@ import { Vector3, PerspectiveCamera, Box3, BufferAttribute } from 'three'
 import { OcctKernel } from 'occt-wasm'
 import { launchApp } from '../../../scripts/e2e-lib.mjs'
 
+const chamfer=process.argv.includes('--chamfer')
 const reopen=process.argv.includes('--reopen')
-const root=resolve('plugins/tmar-edit-surface/evidence/perforated')
+const root=resolve('plugins/tmar-edit-surface/evidence',chamfer?'trimmed-outer':'perforated')
 mkdirSync(root,{recursive:true})
 const out=mkdtempSync(join(root,'run-')), k=await OcctKernel.init()
 function testPlate() {
-  const box=k.makeBox(48,48,10), drill=k.makeCylinder(3,14), positioned=k.translate(drill,12,12,-2)
+  const vertices=[[0,0],[48,0],[48,48],[12,48],[0,36]].map(([x,y])=>({x,y,z:0}))
+  const handles=[]
+  if(chamfer){
+    const edges=vertices.map((v,i)=>k.makeLineEdge(v,vertices[(i+1)%vertices.length]))
+    const wire=k.makeWire(edges),face=k.makeFace(wire)
+    handles.push(...edges,wire,face)
+  }
+  const box=chamfer?k.extrude(handles.at(-1),0,0,10):k.makeBox(48,48,10), drill=k.makeCylinder(3,14), positioned=k.translate(drill,12,12,-2)
   const shape=k.cut(box,positioned)
-  try { return k.exportStep(shape) } finally { [shape,positioned,drill,box].forEach(h=>k.release(h)) }
+  try { return k.exportStep(shape) } finally { [shape,positioned,drill,box,...handles].forEach(h=>k.release(h)) }
 }
 const input=reopen ? join(root,'run-tYwpbn','drilled-edit.step') : join(out,'drilled-input.step')
 if (!reopen) writeFileSync(input,testPlate())
@@ -45,7 +53,7 @@ try {
   const cam=new PerspectiveCamera(40,r.width/r.height,radius/1000,radius*100)
   cam.position.copy(center).add(new Vector3(1.5,-1.9,1.8).multiplyScalar(radius))
   cam.up.set(0,0,1);cam.lookAt(center);cam.updateMatrixWorld()
-  const project=z=>{const q=new Vector3(36,reopen?30:36,z).project(cam);return [r.x+(1+q.x)*r.width/2,r.y+(1-q.y)*r.height/2]}
+  const project=z=>{const q=new Vector3(chamfer?30:36,(chamfer||reopen)?30:36,z).project(cam);return [r.x+(1+q.x)*r.width/2,r.y+(1-q.y)*r.height/2]}
   await page.mouse.move(...project(10));await page.mouse.down()
   await page.mouse.move(...project(12),{steps:6});await page.mouse.up()
   await ready()
@@ -72,8 +80,23 @@ try {
       const uv=k.uvFromPoint(faces[top],q),p=k.pointOnSurface(faces[top],uv.u,uv.v)
       maxRimError=Math.max(maxRimError,Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z))
     }
+    let maxChamferError=0
+    if(chamfer){
+      const outer=k.outerWire(faces[top]), edges=k.getSubShapes(outer,'edge')
+      try {
+        assert.equal(edges.length,5)
+        for(let i=0;i<=32;i++){
+          const q={x:12*i/32,y:36+12*i/32,z:10}, vertex=k.makeVertex(q.x,q.y,q.z)
+          try {
+            const uv=k.uvFromPoint(faces[top],q), p=k.pointOnSurface(faces[top],uv.u,uv.v)
+            maxChamferError=Math.max(maxChamferError,k.distanceBetween(outer,vertex),Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z))
+          } finally { k.release(vertex) }
+        }
+        assert(maxChamferError<1e-7)
+      } finally {edges.forEach(e=>k.release(e));k.release(outer)}
+    }
     assert(maxRimError<1e-7);assert.deepEqual(consoleErrors,[])
-    const report={reopen,inputVolume:volume,editedVolume:k.getVolume(edited),faces:faces.length,wires:2,rimSamples:72,maxRimError}
+    const report={reopen,...(chamfer?{outerEdges:5,chamferSamples:33,maxChamferError}:{}),inputVolume:volume,editedVolume:k.getVolume(edited),faces:faces.length,wires:2,rimSamples:72,maxRimError}
     writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));console.log(out, report)
   } finally { faces.forEach(f=>k.release(f));k.release(edited) }
 } finally { await browser.close();[...fs,base].forEach(h=>k.release(h));k[Symbol.dispose]() }
