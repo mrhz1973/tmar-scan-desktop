@@ -1,0 +1,102 @@
+name: Publish reviewed annotated host branch (no merge or release)
+on:
+  push:
+    branches: [review/annotated-host-archive-audit-20261103]
+    paths: [.github/workflows/annotated-host-publish-review.yml]
+permissions:
+  contents: read
+jobs:
+  publish-new-review-branch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Require the exact successful independent review and unchanged frozen refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: mrhz1973/tmar-scan-desktop
+        shell: bash
+        run: |
+          test "$GITHUB_REPOSITORY" = 'mrhz1973/tmar-scan-desktop'
+          gh api repos/mrhz1973/tmar-scan-desktop/actions/runs/41736875852 > "$RUNNER_TEMP/review-gate.json"
+          python3 - <<'PY'
+          import json,os,pathlib
+          d=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'review-gate.json').read_text())
+          assert d['status']=='completed' and d['conclusion']=='success'
+          assert d['head_sha']=='88a16399debcccbac54cf6a58b68ff1e6b25b4d7'
+          assert d['head_branch']=='review/annotated-host-archive-audit-20261103'
+          PY
+          test "$(gh api repos/mrhz1973/tmar-scan-desktop/git/ref/heads/feat/workspace-editor-host-20261103 --jq .object.sha)" = 'a28c747591e740d62f3b1f90330f145141c77de1'
+          test "$(gh api repos/mrhz1973/tmar-scan-desktop/git/ref/heads/fix/workspace-apply-guard-20261103 --jq .object.sha)" = '64af91e87f076e58af2094683ee233d34832ee23'
+          test "$(gh api repos/mrhz1973/tmar-scan-desktop/git/ref/heads/feat/apply-source-visibility-20261103 --jq .object.sha)" = '27c75c3364511dd77e2ec0c5b8f314f529df6291'
+      - uses: actions/checkout@v5
+        with:
+          ref: 27c75c3364511dd77e2ec0c5b8f314f529df6291
+          path: host
+      - uses: actions/checkout@v5
+        with:
+          ref: c9a9f3453bb941d06e7e64d83df9b03344a9a299
+          path: archive-source
+          sparse-checkout: review
+          persist-credentials: false
+      - name: Publish exact reviewed host files with permanent regression and receipt
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,pathlib,shutil,stat,subprocess,zipfile
+          root=pathlib.Path.cwd();host=root/'host';bundle=root/'bundle'
+          source=root/'archive-source/review/annotated-host-review-20261103.zip'
+          zipsha=hashlib.sha256(source.read_bytes()).hexdigest()
+          assert zipsha=='2d740932429b19d5fa719ebf7d37501095f289b13485cd87ff216e5578286220'
+          with zipfile.ZipFile(source) as z:
+              assert z.testzip() is None and len(z.infolist())==50 and len(set(z.namelist()))==50
+              for i in z.infolist():
+                  p=pathlib.PurePosixPath(i.filename)
+                  assert not p.is_absolute() and '..' not in p.parts and '\\' not in i.filename and ':' not in i.filename and not stat.S_ISLNK(i.external_attr>>16)
+                  d=bundle.joinpath(*p.parts);d.parent.mkdir(parents=True,exist_ok=True);d.write_bytes(z.read(i))
+          manifest=json.loads((bundle/'manifests/host-corrected-snapshot.json').read_text())
+          expected=manifest['hostFilesSha256'];assert len(expected)==34
+          def git(*args):return subprocess.run(['git',*args],cwd=host,check=True,text=True,capture_output=True).stdout.strip()
+          assert git('rev-parse','HEAD')=='27c75c3364511dd77e2ec0c5b8f314f529df6291'
+          target='feat/annotated-cad-copy-v1-host-20261103'
+          assert not git('ls-remote','--heads','origin','refs/heads/'+target),'Target exists: refuse to move it'
+          git('switch','-c',target)
+          git('apply','--check',str(bundle/'host-delta.patch'))
+          git('apply',str(bundle/'host-delta.patch'))
+          hashes={}
+          for name,digest in expected.items():
+              assert not name.startswith('plugins/tmar-edit-surface/')
+              original=(bundle/'host-delta'/name).read_bytes();applied=(host/name).read_bytes()
+              assert hashlib.sha256(original).hexdigest()==digest
+              assert original.replace(b'\r\n',b'\n')==applied.replace(b'\r\n',b'\n'),name
+              hashes[name]={'archiveSha256':digest,'publishedFileSha256':hashlib.sha256(applied).hexdigest()}
+          extras={
+            'plugins/reverse/tests/annotatedNormal.qa.test.ts':'qa/annotatedNormal.qa.test.ts',
+            'plugins/reverse/scripts/e2e-coordinator-annotated-review.mjs':'qa/e2e-workspace-annotated.mjs',
+          }
+          for name,src in extras.items():
+              assert not (host/name).exists();shutil.copyfile(bundle/src,host/name)
+          doc='docs/coordination/annotated-host-review-acceptance-20261103.md'
+          (host/doc).write_text('''# Annotated host V1: recovered, reviewed and published for integration\n\nReview only; no merge, release, desktop qualification or Versione 2.\nBase: `27c75c3364511dd77e2ec0c5b8f314f529df6291`.\nBundle commit: `c9a9f3453bb941d06e7e64d83df9b03344a9a299`.\nBundle SHA256: `2d740932429b19d5fa719ebf7d37501095f289b13485cd87ff216e5578286220`.\nAuthor plugin paired for tests: `130d12bf9b4150aa7349365b2200bda80e153feb`; NOT imported into this host branch.\n\n## What is published\nThe complete 34-file host delta, including corrected oriented normals and both corrected fixtures; the permanent real-OCCT reversed-face regression; the exact real-controller source-browser regression; this receipt and a source hash manifest. No changes under plugins/tmar-edit-surface, no dependencies, workflows, credentials, profiles or user projects. Original Windows worktrees are untouched. The original contract/validation documents are historical records: their earlier QA-controller limitations and older plugin SHA are not this new review's result.\n\n## Independent rerun\nGitHub Actions run `41736131010`: ZIP digest, all 50 member CRCs and 49 supplied digests PASS. Local sandbox verification repeated these byte checks.\nGitHub Actions run `41736875852`, workflow revision `88a16399debcccbac54cf6a58b68ff1e6b25b4d7`: exact-base git apply --check PASS; applied contents match every archive source after CRLF/LF normalization; occt-wasm 5.7.1; TypeScript and production build PASS. Targeted host/plugin suite: **153 tests PASS across 8 files**. Real controller, source app on Linux/Chrome: **14 checks PASS**, zero application console or atomic-publication errors.\n\nThe source scenario imports a synthetic STEP box, chooses a reversed face, enables Zebra, prepares a note through the actual controller, deforms numerically, applies one copy plus note in one history action, hides the preserved original, performs Undo/Redo, saves and reopens in a fresh page. Note UUID, feature UUID and receipt body ID are checked before continuing. The note remains verified with an outward normal; the reimported copy is a valid solid. A signed normal test accepts the correct vector and rejects its inverse. Source-review output: `annotated-edit-ajfgjj`; saved synthetic project SHA256 `fd12e77ffbfb4986e05ede9a8dd4ea60a9e32a5e12fb3f3bfc6742c21febc62b`.\n\nThis is a new independent execution, not relabeling the author's prior 14 PASS. The original bundled exact-identity project is a different run: SHA256 `1884663fcf66262bb7c9017b40df69009189822af7d615c1e19e5343d55b2a7b`. The first early asynchronous check and later author results remain in the immutable review ZIP. No assertion was weakened.\n\n## Actual contract\nUse src/plugins/annotatedCopyTypes.ts, src/plugins/workspaceEditorTypes.ts and src/plugins/workspaceEditors.ts. Capability: apiVersion=1, annotationVersion=1, commitKinds=[cad-copy, annotated-cad-copy]. Controller methods freezeAnnotated and prepareAnnotatedApply plus monotonically changing notesRevision are required; unsupported controllers still block annotated Apply. Return all notes with the final STEP and one final-face BREP witness. orientedNormal is already face-oriented; no second reversed sign and no abs(dot). Existing cad-copy, viewport lease and source-hiding option remain. Witness and destination UV are distinct; persisted verified status is revalidated against CAD on load. This is not parametric surfaceEdit.\n\n## Limits before broader acceptance\nThe compiled application was built, but annotated Apply/Save/Load of this exact real-controller pair was not driven in the compiled browser in this review. No fresh qualification of Lego, arbitrary trims, periodic/multiple faces, large-model performance, packaged desktop/macOS, generalized QS parity, Patch Network, layout/timeline or Settings/tooltips. Face correspondence uses conservative finite CAD samples, classification and unique-match checks, not a universal proof of topological identity. The old modal import race remains separate. No independent subagent endorsement is claimed.\n\n## Integration\nKeep a28c747, 64af91e and 27c75c3 frozen. Review this host branch separately and pair it with an explicit plugin SHA in an isolated checkout. Do not identify the raw bundle commit, workflow commit or old 27c75c3 as the new runtime revision: use this branch's resulting git SHA.\n''',encoding='utf-8')
+          hashpath='docs/coordination/annotated-host-published-source-hashes-20261103.json'
+          (host/hashpath).write_text(json.dumps({'base':manifest['base'],'archiveCommit':'c9a9f3453bb941d06e7e64d83df9b03344a9a299','zipSha256':zipsha,'reviewRunId':41736875852,'pluginSha':'130d12bf9b4150aa7349365b2200bda80e153feb','files':hashes},indent=2),encoding='utf-8')
+          names=list(expected)+list(extras)+[doc,hashpath]
+          git('add','--',*names)
+          staged=git('diff','--cached','--name-only').splitlines();assert set(staged)==set(names)
+          assert all(not n.startswith(('plugins/tmar-edit-surface/','.github/')) for n in staged)
+          git('-c','user.name=TMAR Host Review','-c','user.email=53308962+mrhz1973@users.noreply.github.com','commit','-m','Publish reviewed annotated CAD-copy V1 host with oriented-normal fix and persistence regressions')
+          sha=git('rev-parse','HEAD');assert git('rev-parse','HEAD^')==manifest['base']
+          # Empty expected value is a create-only lease: never overwrite an existing branch.
+          git('push','--force-with-lease=refs/heads/'+target+':','origin','HEAD:refs/heads/'+target)
+          receipt={'branch':target,'sha':sha,'parent':manifest['base'],'changedFiles':len(names),'archiveSha256':zipsha,'reviewRunId':41736875852,'release':False,'merged':False}
+          (root/'publication-receipt.json').write_text(json.dumps(receipt,indent=2));print(json.dumps(receipt))
+          PY
+      - name: Retain exact publication receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: annotated-host-runtime-publication-receipt
+          path: publication-receipt.json
+          if-no-files-found: error
+          retention-days: 7
