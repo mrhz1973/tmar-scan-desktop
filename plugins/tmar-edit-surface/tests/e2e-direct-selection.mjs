@@ -30,6 +30,7 @@ try {
   await page.select('[data-test=surface-face]','5')
   const ready=()=>page.waitForFunction(()=>document.querySelector('[data-test=surface-status]')?.textContent.includes('CAD valido')&&!document.querySelector('[data-test=surface-apply]')?.disabled,{timeout:60000})
   await ready();await page.select('[data-test=surface-continuity]','G0');await ready()
+  assert.equal(await page.$eval('[data-test=edit-surface-viewport]',e=>Number(e.dataset.directEdges)),0,'A solid face must not offer free-edge duplication')
   const mode=await page.$eval('[data-test=surface-selection-mode]',e=>e.value)
   const rect=await page.$eval('[data-test=edit-surface-viewport]',e=>e.getBoundingClientRect().toJSON())
   const center=bounds.getCenter(new Vector3()),radius=bounds.getSize(new Vector3()).length()/2

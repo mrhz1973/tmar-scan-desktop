@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
@@ -8,7 +8,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import type { Preview } from './editorKernel'
 import type { Net, Point } from './brep'
 import { dragDirection, type DragMode } from './localFrame'
-import { bindStripDrag, drawStrip, type StripDrag } from './sheetDrag'
+import { bindStripDrag, drawStrip, pickSheetEdge, type DirectStrip, type StripDrag } from './sheetDrag'
 import { netEdges, type NetSelectionMode } from './netSelection'
 
 export interface StripeSettings { orientation: 'horizontal' | 'vertical'; width: number; color: string }
@@ -22,7 +22,7 @@ export const hasSurfaceZebra = Boolean(ZebraRenderer)
 
 interface Props {
   mirrorAxis: number; mirrorOffset: number; mirrorPartners: number[] | null
-  strip: StripDrag | null
+  strip: StripDrag | null; directStrip: DirectStrip | null; stripBlocked: () => boolean
   notePins: Point[]; placingNote: boolean; onNote: (point:Point|null)=>void
   preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; hiddenPoles: number[]; face: number
   axis: number; onFace: (i: number) => void; onPoints: (ids: number[], multi: boolean) => void
@@ -33,6 +33,13 @@ interface Props {
 }
 export function SurfaceViewport(props: Props) {
   const host = useRef<HTMLDivElement>(null), current = useRef(props)
+  const handle = useRef<HTMLButtonElement>(null)
+  const [edgeHandle, setEdgeHandleState] = useState<{edge:number; anchor:Point}|null>(null)
+  const edgeHandleRef = useRef(edgeHandle)
+  const setEdgeHandle = (value:{edge:number; anchor:Point}|null) => {
+    if(handle.current) handle.current.style.visibility='hidden'
+    edgeHandleRef.current=value;setEdgeHandleState(value)
+  }
   current.current = props
   const stripeLayer = useRef<StripeLayer | null>(null)
   const sceneRef = useRef<{ scene: THREE.Scene; body: THREE.Group; cage: THREE.Group; hover: THREE.Group; hoverKey: string; camera: THREE.PerspectiveCamera; controls: OrbitControls; radius: number; fitted: boolean } | null>(null)
@@ -157,6 +164,11 @@ export function SurfaceViewport(props: Props) {
       if (e.button !== 0 || current.current.busy) return
       if (current.current.placingNote) return
       const arrow = pickArrow(e)
+      const direct=current.current.directStrip
+      if (arrow===null && !e.ctrlKey && !e.metaKey) {
+        const edge=direct && pickSheetEdge(direct.paths,camera,div.getBoundingClientRect(),e.clientX,e.clientY)
+        setEdgeHandle(edge ? {edge:edge.edge,anchor:edge.anchor.toArray() as Point} : null)
+      }
       const picked = arrow !== null ? [arrow] : pickNet(e)
       if (!picked) return
       e.stopImmediatePropagation(); controls.enabled = false
@@ -231,11 +243,21 @@ export function SurfaceViewport(props: Props) {
     renderer.domElement.addEventListener('pointerup', pointerUp, true)
     renderer.domElement.addEventListener('pointercancel', cancel, true)
     renderer.domElement.addEventListener('pointerleave', pointerLeave)
-    const unbindStrip=bindStripDrag(div,camera,()=>current.current.strip,()=>current.current.busy)
+    const unbindStrip=bindStripDrag(div,camera,()=>current.current.strip,()=>current.current.busy || current.current.stripBlocked(),()=>current.current.directStrip)
     const resize = new ResizeObserver(() => { const w = div.clientWidth, h = div.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix() }); resize.observe(div)
-    renderer.setAnimationLoop(() => renderer.render(scene, camera))
+    renderer.setAnimationLoop(() => {
+      renderer.render(scene, camera)
+      const button=handle.current, selected=edgeHandleRef.current
+      if (button && selected) {
+        const p=new THREE.Vector3(...selected.anchor).project(camera), r=div.getBoundingClientRect()
+        const x=(p.x+1)*r.width/2, y=(1-p.y)*r.height/2
+        button.style.left=x+'px';button.style.top=y+'px'
+        button.style.visibility=Math.abs(p.z)<=1 && x>=0 && x<=r.width && y>=0 && y<=r.height ? 'visible' : 'hidden'
+      }
+    })
     return () => { unbindStrip(); resize.disconnect(); renderer.domElement.removeEventListener('pointerleave', pointerLeave); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
   }, [])
+  useEffect(() => { setEdgeHandle(null) }, [props.directStrip?.revision])
   useEffect(() => {
     const s = sceneRef.current; if (!s || !props.preview) return
     s.body.children.forEach(dispose); s.body.clear()
@@ -352,6 +374,10 @@ export function SurfaceViewport(props: Props) {
     const group=drawStrip(props.strip);state.scene.add(group)
     return ()=>{group.removeFromParent();group.traverse(dispose)}
   },[props.strip])
-  return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" data-hidden-poles={props.hiddenPoles.length} />
+  return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" data-hidden-poles={props.hiddenPoles.length} data-direct-edges={props.directStrip?.paths.length ?? 0}>
+    {edgeHandle && props.directStrip && !props.busy && <button ref={handle} type="button" className="es-direct-handle" style={{visibility:'hidden'}}
+      data-test="strip-direct-handle" data-strip-direct-edge={edgeHandle.edge} aria-label="Trascina per duplicare il bordo libero"
+      title="Trascina per duplicare il bordo libero">D</button>}
+  </div>
 }
 function dispose(o: THREE.Object3D) { const m = o as THREE.Mesh; m.geometry?.dispose(); if (Array.isArray(m.material)) m.material.forEach(a => a.dispose()); else m.material?.dispose() }

@@ -428,3 +428,37 @@ the source app. TypeScript and the isolated production build passed. Evidence:
 These checks use a small test net; responsiveness on large control nets,
 parity of every QS gesture and the direct D handle for duplicating a free edge
 remain unqualified. The prior separate free-edge command remains available.
+
+### Direct D handle for one-face open sheets
+
+For a compatible, validated one-face STEP sheet, the editor now prepares its
+free CAD edges. Click a free edge and drag its D handle along the selected
+world X/Y/Z axis: the new strip is previewed during the drag and validated as
+CAD on release. A click without movement or a pointer cancellation returns to
+the original face editor without creating a strip. During a pending operation,
+a synchronous guard blocks another strip gesture, Undo and Apply. The handle
+is not offered for solid faces or while a note is being placed.
+
+This reuses the existing ruled-strip extrusion and sewing operation; it does
+not refit the original surface and does not guarantee tangent continuity. After
+the first extension the existing strip workflow permits further edge drags,
+Undo/Redo and an explicit Apply as a separate CAD body. The direct D handle is
+currently limited to the initial one-face sheet; it is not yet offered on
+multi-face sheets or a solid. QS interaction parity remains unverified.
+
+On a synthetic imported STEP sheet, the source and compiled UI tests exercised
+edge click, D drag, live preview, click-without-drag, pointer cancellation,
+Undo/Redo and a second extension. The compiled test also held the worker
+response and confirmed that a second gesture was blocked; a separate test
+injected a rejected request and confirmed the last valid state could still be
+edited. Independent OCCT import confirmed a valid three-face shell with two
+shared edges and areas approximately 600, 149.955 and 119.996 mm². A source
+host test applied it as a second body, verified project Undo/Redo, saved and
+reopened the project, and reopened the edited sheet. The two-unit-test edge
+picker check covers perspective anchoring and a forced choice among nearby
+edges. The worker delay and rejected request are test instrumentation. No
+arbitrary customer STEP, curved edge, touch device or full QS comparison was
+qualified.
+
+Evidence: `evidence/duplicate-edge/direct-host-20261103/`,
+`direct-compiled-20261103/`, and `direct-reject-20261103/`.
