@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // @ts-ignore -- optional host types are supplied by ScanRuler's workspace-editor host.
 import type { ApplyTicket, DraftStamp, EditorSnapshot, ExitReason, PreparedCadCopy, PreviewStamp, SourceBinding, WorkspaceEditorContext, WorkspaceEditorController } from '../../src/plugins/workspaceEditorTypes'
+// @ts-ignore -- this optional V1 contract is supplied by annotation-capable hosts.
+import type { AnnotatedTicketV1, PreparedAnnotatedCopyV1 } from '../../src/plugins/annotatedCopyTypes'
 import { boundaryLocked, type Net, type Point } from './brep'
 import type { DraftAnchor, FaceInfo, Preview } from './editorKernel'
 import { dragDirection, type DragMode } from './localFrame'
@@ -50,6 +52,8 @@ export interface WorkspaceSurfacePanelState {
   readonly transparency: number
   readonly placingNote: boolean
   readonly notes: readonly WorkspaceSurfaceNote[]
+  readonly annotatedCopyAvailable: boolean
+  readonly noteResolutionError: boolean
   readonly gesture: 'idle' | 'pole' | 'strip'
   readonly canBeginStrip: boolean
   readonly directStripAxis: 0 | 1 | 2
@@ -81,7 +85,7 @@ interface StripMode {
 interface DirectIdentity { readonly revision:number; readonly selectionEpoch:number; readonly face:number; readonly net:Net }
 interface DirectCache extends DirectIdentity { readonly paths:readonly (readonly Point[])[] }
 interface DirectPending extends DirectIdentity { readonly controller:AbortController; readonly generation:number; readonly key:string }
-type Frozen = { readonly ticketKey: string; readonly operationId: string; readonly stamp: PreviewStamp; readonly source: SourceBinding; readonly stripResult: StripResult | null; preparing: boolean }
+type Frozen = { readonly ticketKey: string; readonly operationId: string; readonly stamp: PreviewStamp; readonly source: SourceBinding; readonly stripResult: StripResult | null; readonly notes?: readonly Note[]; readonly notesRevision?: number; preparing: boolean }
 type Options = {
   /** Injected only for a controlled worker in tests; the session owns this runtime. */
   runtime?: SurfaceRuntime
@@ -96,8 +100,8 @@ const sourceKey = (source: SourceBinding) => JSON.stringify([
   source.documentEpoch, source.sourceEpoch, source.bodyId, source.bodyKey, source.buildVersion,
   source.kernelGeneration, source.frameRevision, source.stepSha256, source.units, source.coordinateFrame,
 ])
-const ticketKey = (ticket: ApplyTicket) => JSON.stringify([ticket.operationId, ticket.mode, sourceKey(ticket.source), stampKey(ticket.stamp)])
-const finitePoint = (point: readonly number[]) => point.length === 3 && point.every(Number.isFinite)
+const ticketKey = (ticket: ApplyTicket | AnnotatedTicketV1) => JSON.stringify([ticket.operationId, ticket.mode, sourceKey(ticket.source), stampKey(ticket.stamp), ticket.mode === 'annotated-cad-copy' ? ticket.notesRevision : null])
+const finitePoint = (point: readonly number[] | null | undefined) => !!point && point.length === 3 && point.every(Number.isFinite)
 const pointCopy = (point: readonly number[]): Point => [point[0], point[1], point[2]]
 const freezePoint = (point: readonly number[]): Point => Object.freeze(pointCopy(point)) as Point
 const sameArray = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((v, i) => v === b[i])
@@ -167,8 +171,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private stripes: WorkspaceStripeSettings | null = null
   private placingNote = false
   private notes: readonly Note[] = Object.freeze([])
+  private notesRevision = 0
   private resolvingNotes = false
   private failedNoteRevision: number | null = null
+  private failedNoteSet: readonly Note[] | null = null
   private symmetryCache: { net: Net; axis: number; offset: number; partners: number[] } | null = null
   private lockCache: { net: Net | null; locks: readonly number[]; trim: readonly number[]; continuity: 'G0' | 'G1'; free: boolean; value: readonly number[] } | null = null
   private pinCache: { notes: readonly Note[]; revision: number | undefined; value: readonly Point[] } | null = null
@@ -279,7 +285,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const previousContinuity = this.draft.getSnapshot().continuity
     this.change(() => {
       this.busy = true; this.selectionEpoch++; this.face = -1; this.message = null
-      this.placingNote = false; this.failedNoteRevision = null
+      this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
       this.draft.reset({ preserveContinuity: true })
     })
     const epoch = this.selectionEpoch
@@ -631,14 +637,28 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   setNoteText(id: string, text: string): void {
     this.change(() => {
       if (text.length > 2000 || !this.notes.some(note => note.id === id)) throw new Error('Nota non valida.')
+      if (this.notes.find(note => note.id === id)?.text === text) return
+      this.advanceNotesRevision()
       this.notes = Object.freeze(this.notes.map(note => note.id === id ? Object.freeze({ ...note, text }) : note))
     })
   }
-  removeNote(id: string): void { this.change(() => { this.notes = Object.freeze(this.notes.filter(note => note.id !== id)) }) }
+  removeNote(id: string): void { this.change(() => {
+    if (!this.notes.some(note => note.id === id)) return
+    this.advanceNotesRevision()
+    this.notes = Object.freeze(this.notes.filter(note => note.id !== id))
+  }) }
+  retryNoteResolution(): void {
+    this.assertMutable()
+    const revision = this.draft.getSnapshot().preview?.previewRevision
+    if (revision === undefined || revision !== this.failedNoteRevision || this.notes !== this.failedNoteSet) return
+    this.failedNoteRevision = null; this.failedNoteSet = null; this.message = null
+    this.resolveNotes(); this.refresh()
+  }
 
   async placeNote(point: Point | null): Promise<void> {
     this.assertMutable()
     if (this.strip || this.stripPending) throw new Error('Chiudi prima la modifica del bordo.')
+    if (this.notes.length >= 200) throw new Error('Sono consentite al massimo 200 note per questa modifica.')
     if (!point || !finitePoint(point)) throw new Error('Clicca sulla faccia CAD.')
     const draft = this.draft.getSnapshot(), revision = draft.preview?.previewRevision
     if (!draft.net || draft.validNet !== draft.net || draft.calculating || revision === undefined)
@@ -655,6 +675,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
           !pin.anchor || pin.anchor.face !== this.face || !Number.isSafeInteger(pin.anchor.selectionRevision) ||
           !Number.isFinite(pin.anchor.u) || !Number.isFinite(pin.anchor.v)) throw new Error('La faccia è cambiata durante la scelta della nota.')
       this.change(() => {
+        this.advanceNotesRevision()
         this.notes = Object.freeze([...this.notes, Object.freeze({ id: crypto.randomUUID(), text: '',
           at: freezePoint(pin.at), normal: freezePoint(pin.normal), anchor: Object.freeze({ ...pin.anchor }), revision })])
         this.placingNote = false; this.busy = false
@@ -685,6 +706,33 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     return () => { if (this.frozen === frozen) { this.frozen = null; if (!this.disposed) this.refresh() } }
   }
 
+  /** A capable host may publish all resolved notes with the validated CAD copy. */
+  freezeAnnotated(ticket: AnnotatedTicketV1): () => void {
+    this.assertLive()
+    if (!this.supportsAnnotatedCopy()) throw new Error('Il progetto non supporta ancora il salvataggio delle note con la copia CAD.')
+    const d = this.draft.getSnapshot(), revision = d.preview?.previewRevision
+    if (this.frozen || this.mutating || this.busy || this.placingNote || this.gesture !== 'idle' || this.strip || this.stripPending ||
+        !this.notes.length || this.notes.length > 200 || revision === undefined ||
+        this.notes.some(note => !note.text.trim() || note.revision !== revision))
+      throw new Error('Completa e attendi la verifica di tutte le note prima di applicare.')
+    if (!ticket || ticket.annotationVersion !== 1 || ticket.mode !== 'annotated-cad-copy' ||
+        typeof ticket.operationId !== 'string' || !ticket.operationId.trim() || !ticket.source || !ticket.stamp ||
+        ticket.notesRevision !== this.notesRevision || sourceKey(ticket.source) !== this.sourceId ||
+        this.snapshot.validation.kind !== 'valid' || stampKey(ticket.stamp) !== stampKey(this.snapshot.validation.stamp))
+      throw new Error('Il ticket annotato non corrisponde alla bozza convalidata.')
+    const frozen: Frozen = { ticketKey: ticketKey(ticket), operationId: ticket.operationId,
+      source: Object.freeze({ ...this.source }), stamp: Object.freeze({ ...ticket.stamp }), stripResult: null,
+      notes: this.notes, notesRevision: this.notesRevision, preparing: false }
+    this.frozen = frozen
+    this.refresh()
+    return () => {
+      if (this.frozen === frozen) {
+        this.frozen = null
+        if (!this.disposed) { this.refresh(); this.resolveNotes() }
+      }
+    }
+  }
+
   async prepareApply(ticket: ApplyTicket, signal: AbortSignal): Promise<PreparedCadCopy> {
     const frozen = this.frozen
     if (!frozen || frozen.preparing) throw new Error('La bozza non è congelata o è già in preparazione.')
@@ -698,6 +746,53 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.assertFrozen(ticket, frozen, signal)
       return { kind: 'cad-copy', operationId: frozen.operationId, source: frozen.source, stamp: frozen.stamp,
         units: 'mm', coordinateFrame: 'part', name: 'superficie-modificata.step', step, draftNoteCount: 0 }
+    } finally { frozen.preparing = false }
+  }
+
+  /** Prepare a single-face witness and every note against the final STEP evaluation. */
+  async prepareAnnotatedApply(ticket: AnnotatedTicketV1, signal: AbortSignal): Promise<PreparedAnnotatedCopyV1> {
+    const frozen = this.frozen
+    if (!frozen || !frozen.notes || frozen.preparing) throw new Error('La bozza annotata non è congelata o è già in preparazione.')
+    this.assertFrozenAnnotated(ticket, frozen, signal)
+    frozen.preparing = true
+    try {
+      const result = await this.draft.evaluateForExport()
+      this.assertFrozenAnnotated(ticket, frozen, signal)
+      if (!result.step.trim() || result.step.charCodeAt(0) === 0xfeff || !Number.isSafeInteger(result.previewRevision))
+        throw new Error('Esportazione STEP annotata non valida.')
+      const step = new TextEncoder().encode(result.step)
+      if (!step.length || step.length > 128_000_000) throw new Error('Dimensione STEP annotato non valida.')
+      const witness = await this.runtime.worker.ask<{face:number;selectionRevision:number;previewRevision:number;faceBrep:string}>(
+        { action: 'finalFaceWitness', previewRevision: result.previewRevision }, signal)
+      this.assertFrozenAnnotated(ticket, frozen, signal)
+      if (!witness || witness.face !== this.face || witness.previewRevision !== result.previewRevision ||
+          !Number.isSafeInteger(witness.selectionRevision) || typeof witness.faceBrep !== 'string' ||
+          !witness.faceBrep.trim() || witness.faceBrep.length > 16_000_000)
+        throw new Error('Faccia finale non verificabile: le note restano nella bozza.')
+      const key = 'final-face', notes: Array<{draftId:string;text:string;target:{kind:'copy-face';witnessKey:string;sourceUV:[number,number];resolvedAt:Point;orientedNormal:Point;resolvedStamp:PreviewStamp}}> = []
+      for (const note of frozen.notes) {
+        if (note.anchor.face !== witness.face || note.anchor.selectionRevision !== witness.selectionRevision ||
+            !Number.isFinite(note.anchor.u) || !Number.isFinite(note.anchor.v) || !note.text.trim())
+          throw new Error('Una nota non appartiene alla faccia finale.')
+        const resolved = await this.runtime.worker.ask<{at:Point;normal:Point}>(
+          { action: 'noteResolve', anchor: note.anchor, previewRevision: result.previewRevision }, signal)
+        this.assertFrozenAnnotated(ticket, frozen, signal)
+        if (!finitePoint(resolved?.at) || !finitePoint(resolved?.normal) || Math.abs(Math.hypot(...resolved.normal) - 1) > 1e-6)
+          throw new Error('Posizione o normale finale della nota non valida.')
+        notes.push({ draftId: note.id, text: note.text, target: { kind:'copy-face', witnessKey:key,
+          sourceUV:[note.anchor.u,note.anchor.v], resolvedAt:pointCopy(resolved.at), orientedNormal:pointCopy(resolved.normal), resolvedStamp:frozen.stamp } })
+      }
+      if (notes.length !== frozen.notes.length) throw new Error('Non tutte le note sono state preparate.')
+      const stepHash = await this.digest(step)
+      this.assertFrozenAnnotated(ticket, frozen, signal)
+      const brepHash = await this.digest(new TextEncoder().encode(witness.faceBrep))
+      this.assertFrozenAnnotated(ticket, frozen, signal)
+      if (!/^[a-f0-9]{64}$/i.test(stepHash) || !/^[a-f0-9]{64}$/i.test(brepHash)) throw new Error('Hash della copia annotata non valido.')
+      return { annotationVersion:1, kind:'annotated-cad-copy', operationId:frozen.operationId,
+        source:frozen.source, stamp:frozen.stamp, notesRevision:frozen.notesRevision!, units:'mm', coordinateFrame:'part',
+        name:'superficie-modificata.step', step, witnesses:[{ key, kind:'occt-face-brep', brep:witness.faceBrep,
+          brepSha256:brepHash.toLowerCase(), finalStepSha256:stepHash.toLowerCase(), stamp:frozen.stamp, diagnosticFaceIndex:witness.face }],
+        notes:notes as [typeof notes[number], ...typeof notes[number][]] }
     } finally { frozen.preparing = false }
   }
 
@@ -761,6 +856,16 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.assertLive()
     if (this.frozen || this.mutating || (!allowBusy && this.busy)) throw new Error('La bozza è occupata o congelata.')
   }
+  private supportsAnnotatedCopy(): boolean {
+    const capabilities = this.context.capabilities as { apiVersion?: number; enabled?: boolean; annotationVersion?: number; commitKinds?: readonly string[] }
+    return capabilities.apiVersion === 1 && capabilities.enabled === true && capabilities.annotationVersion === 1 &&
+      Array.isArray(capabilities.commitKinds) && capabilities.commitKinds.includes('annotated-cad-copy')
+  }
+  private advanceNotesRevision(): void {
+    if (!Number.isSafeInteger(this.notesRevision) || this.notesRevision >= Number.MAX_SAFE_INTEGER)
+      throw new Error('Revisione delle note non valida.')
+    this.notesRevision++
+  }
   private assertFrozen(ticket: ApplyTicket, frozen: Frozen, signal: AbortSignal): void {
     abortIf(signal); this.assertLive(); abortIf(signal)
     if (this.frozen !== frozen || ticketKey(ticket) !== frozen.ticketKey || this.notes.length ||
@@ -768,6 +873,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         (this.strip?.frames[this.strip.at] ?? null) !== frozen.stripResult || (!!this.strip !== !!frozen.stripResult) ||
         stampKey(this.snapshot.validation.stamp) !== stampKey(frozen.stamp))
       throw new Error('La bozza congelata non corrisponde al ticket.')
+  }
+  private assertFrozenAnnotated(ticket: AnnotatedTicketV1, frozen: Frozen, signal: AbortSignal): void {
+    abortIf(signal); this.assertLive(); abortIf(signal)
+    if (!ticket || ticket.annotationVersion !== 1 || ticket.mode !== 'annotated-cad-copy' || !ticket.source || !ticket.stamp ||
+        this.frozen !== frozen || !frozen.notes || frozen.notes !== this.notes || this.notesRevision !== frozen.notesRevision ||
+        ticket.notesRevision !== frozen.notesRevision || ticketKey(ticket) !== frozen.ticketKey || this.busy || this.placingNote ||
+        this.gesture !== 'idle' || this.strip || this.stripPending || this.snapshot.validation.kind !== 'valid' ||
+        stampKey(this.snapshot.validation.stamp) !== stampKey(frozen.stamp))
+      throw new Error('La bozza annotata congelata non corrisponde al ticket.')
   }
   private directIdentity(): DirectIdentity | null {
     const d = this.draft.getSnapshot(), queue = this.runtime.previews.getSnapshot()
@@ -891,13 +1005,22 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const queue = this.runtime.previews.getSnapshot()
     const strip = this.strip, stripResult = strip?.frames[strip.at] ?? null
     const stamp: PreviewStamp = Object.freeze({ ...current, requestId: strip ? (stripResult?.requestId ?? 0) : (queue.current?.revision ?? 0) })
-    const validation = !d.net ? { kind: 'none' as const } :
+    const geometryValidation = !d.net ? { kind: 'none' as const } :
       (d.calculating || this.busy || this.placingNote || this.gesture === 'strip') ? { kind: 'pending' as const, wanted: stamp } :
       strip?.error ? { kind: 'invalid' as const, stamp, message: strip.error } :
       strip ? (stripResult ? { kind: 'valid' as const, stamp } : { kind: 'pending' as const, wanted: stamp }) :
       d.validNet === d.net && !d.previewStale && d.preview?.valid && queue.validRevision === queue.current?.revision
         ? { kind: 'valid' as const, stamp } :
         d.error ? { kind: 'invalid' as const, stamp, message: d.error } : { kind: 'pending' as const, wanted: stamp }
+    const annotatedCopyAvailable = this.supportsAnnotatedCopy()
+    const checkNotes = annotatedCopyAvailable && this.notes.length > 0 && !this.frozen?.notes
+    const noteMessage = checkNotes && this.notes.some(note => !note.text.trim()) ? 'Scrivi il testo di tutte le note prima di applicare.' : null
+    const notesPending = checkNotes && this.notes.some(note => note.revision !== d.preview?.previewRevision)
+    const noteResolutionError = d.preview?.previewRevision !== undefined && this.failedNoteRevision === d.preview.previewRevision &&
+      this.failedNoteSet === this.notes
+    const validation = geometryValidation.kind !== 'valid' ? geometryValidation : noteMessage
+      ? { kind: 'invalid' as const, stamp, message: noteMessage }
+      : notesPending ? { kind: 'pending' as const, wanted: stamp } : geometryValidation
     const original = d.originalNet
     const dirty = !!this.notes.length || !!strip?.frames.some(Boolean) || d.canUndo || !!(d.net && d.net !== d.committedNet) ||
       !!(d.net && original && !d.canUndo && JSON.stringify(d.net.poles) !== JSON.stringify(original.poles))
@@ -924,7 +1047,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const lockedSet = new Set(locked)
     const symmetryBlocked = !!symmetryPartners && d.selected.some(i =>
       !lockedSet.has(i) && (symmetryPartners[i] < 0 || lockedSet.has(symmetryPartners[i])))
-    const message = this.message ?? (strip?.error || d.error || null)
+    const message = this.message ?? (strip?.error || d.error || noteMessage || (notesPending ? 'Verifica della posizione delle note in corso…' : null))
     const canUndo = strip ? strip.at > 0 : d.canUndo, canRedo = strip ? strip.at + 1 < strip.frames.length : d.canRedo
     const stripView: WorkspaceStripViewState | null = strip ? Object.freeze({
       paths: stripResult?.paths ?? strip.initialPaths, selectedEdge:strip.selectedEdge, axis:strip.axis, delta:freezePoint(strip.delta),
@@ -946,7 +1069,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.snapshot = Object.freeze({ revision: ++this.revision, current, dirty, gesture: this.gesture, validation,
       canUndo, canRedo, undoLabel: canUndo ? (strip ? 'Annulla striscia' : 'Annulla modifica superficie') : null,
       redoLabel: canRedo ? (strip ? 'Ripeti striscia' : 'Ripeti modifica superficie') : null, historyRevision: this.historyRevision,
-      draftNoteCount: this.notes.length, message })
+      draftNoteCount: this.notes.length, notesRevision:this.notesRevision, message })
     this.panel = Object.freeze({ faces: this.faces, face: this.face, net: d.net, selected: d.selected,
       locked, manualLocks: d.locks, continuity: d.continuity, freeBoundary: d.freeBoundary,
       canFreeBoundary: !!face?.freeBoundary, canUndo, canRedo, calculating: d.calculating || this.stripPending,
@@ -954,7 +1077,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       dragMode: this.dragMode, axis: this.axis, dragStrength: this.dragStrength, selectionMode: this.selectionMode,
       showNet: this.showNet, stripes: this.stripes, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
       mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency,
-      placingNote: this.placingNote, notes: this.notes, gesture: this.gesture, canBeginStrip, directStripAxis:this.directStripAxis,
+      placingNote: this.placingNote, notes: this.notes, annotatedCopyAvailable, noteResolutionError, gesture: this.gesture, canBeginStrip, directStripAxis:this.directStripAxis,
       directStripError,
       canExportStep, strip:stripView })
     this.viewState = Object.freeze({ net: strip ? null : d.net, preview, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
@@ -968,7 +1091,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private resolveNotes(): void {
     const d = this.draft.getSnapshot(), revision = d.preview?.previewRevision
     if (this.disposed || this.frozen || this.resolvingNotes || !d.net || d.validNet !== d.net ||
-        d.calculating || revision === undefined || revision === this.failedNoteRevision ||
+        d.calculating || revision === undefined || (revision === this.failedNoteRevision && this.notes === this.failedNoteSet) ||
         !this.notes.some(note => note.revision !== revision)) return
     const notes = this.notes, net = d.net, epoch = this.selectionEpoch
     this.resolvingNotes = true
@@ -981,11 +1104,17 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (this.notes !== notes || epoch !== this.selectionEpoch || current.net !== net || current.validNet !== net ||
           current.preview?.previewRevision !== revision || this.frozen) return
       if (updated.some(note => !finitePoint(note.at) || !finitePoint(note.normal))) throw new Error('Posizione nota non valida.')
+      this.advanceNotesRevision()
+      this.failedNoteRevision = null; this.failedNoteSet = null
       this.notes = Object.freeze(updated.map(note => Object.freeze({ ...note, at: freezePoint(note.at), normal: freezePoint(note.normal) })))
       this.draftEpoch++; this.refresh()
     }).catch(error => {
-      if (!this.disposed && this.selectionEpoch === epoch && this.draft.getSnapshot().preview?.previewRevision === revision) {
-        this.failedNoteRevision = revision; this.message = String((error as Error)?.message ?? error); this.refresh()
+      const current = this.draft.getSnapshot()
+      if (!this.disposed && !this.frozen && this.notes === notes && this.selectionEpoch === epoch &&
+          current.net === net && current.validNet === net && !current.calculating && !current.previewStale &&
+          current.preview?.previewRevision === revision) {
+        this.failedNoteRevision = revision; this.failedNoteSet = notes
+        this.message = String((error as Error)?.message ?? error); this.refresh()
       }
     }).finally(() => {
       this.resolvingNotes = false
@@ -1004,7 +1133,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.unsubscribeDraft()
     try { this.draft.dispose() } catch (error) { failure ??= error }
     try { this.runtime.dispose() } catch (error) { failure ??= error }
-    this.notes = Object.freeze([]); this.faces = Object.freeze([]); this.sourcePreview = null; this.symmetryCache = null
+    this.notes = Object.freeze([]); this.failedNoteSet = null; this.faces = Object.freeze([]); this.sourcePreview = null; this.symmetryCache = null
     this.face = -1; this.busy = false; this.gesture = 'idle'; this.gestureNet = null
     this.placingNote = false; this.message = 'Editor chiuso.'
     try { this.refresh() } catch (error) { failure ??= error }

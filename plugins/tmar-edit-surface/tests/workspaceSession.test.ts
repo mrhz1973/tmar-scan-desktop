@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import type { Net, Point } from '../brep'
 import { SurfaceEditorKernel } from '../editorKernel'
 import type { StripMove } from '../sheetExtension'
@@ -28,7 +29,7 @@ const preview = (revision: number) => ({ valid:true, previewRevision:revision, m
 const info = { index:0,kind:'plane',reason:null,converted:true,enriched:false,
   openSheet:false,freeBoundary:false,trimLocks:[],hiddenPoles:[] }
 async function flush() { for (let i=0;i<8;i++) await Promise.resolve() }
-async function setup(options: {sheet?:boolean} = {}) {
+async function setup(options: {sheet?:boolean;annotated?:boolean} = {}) {
   vi.useFakeTimers()
   const worker = new FakeWorker(), runtime = new SurfaceRuntime(() => worker as unknown as Worker)
   const abort = new AbortController(), hash = 'a'.repeat(64)
@@ -37,14 +38,17 @@ async function setup(options: {sheet?:boolean} = {}) {
     buildVersion:5,kernelGeneration:6,frameRevision:7,stepSha256:hash,units:'mm',coordinateFrame:'part' }
   const owned = new Set<() => void>()
   const context = { apiVersion:1,sessionId:'session-1',source:binding,step:new Uint8Array([1,2,3]),
-    capabilities:{apiVersion:1,enabled:true,commitKinds:['cad-copy']},signal:abort.signal,
+    capabilities:options.annotated
+      ? {apiVersion:1,enabled:true,annotationVersion:1,commitKinds:['cad-copy','annotated-cad-copy']}
+      : {apiVersion:1,enabled:true,commitKinds:['cad-copy']},signal:abort.signal,
     assertSourceCurrent:()=>{if(!sourceCurrent)throw Error('source changed')},
     own:(fn:()=>void)=>{let active=true;const once=()=>{if(active){active=false;owned.delete(once);fn()}};owned.add(once);return once},
     reportFatal:vi.fn() }
   let owner: WorkspaceSurfaceSession
   const layer = { cancelGesture:vi.fn(()=>{ if(owner.getSnapshot().gesture === 'pole') owner.finishPoleGesture(null); return true }),dispose:vi.fn() }
   const factory = vi.fn((_view: unknown, controller: WorkspaceSurfaceSession)=>{owner=controller;return layer})
-  const creating = createWorkspaceSurfaceSession(context as never,factory as never,{runtime,sha256:async()=>hash})
+  const creating = createWorkspaceSurfaceSession(context as never,factory as never,{runtime,sha256:async bytes=>
+    bytes.length===3 && bytes[0]===1 && bytes[1]===2 && bytes[2]===3 ? hash : createHash('sha256').update(bytes).digest('hex')})
   await flush()
   expect(worker.sent[0]?.action).toBe('open')
   const faces = options.sheet ? [{...info,openSheet:true,freeBoundary:true}] : [info,{...info,index:1}]
@@ -69,6 +73,22 @@ function ticket(test: Awaited<ReturnType<typeof setup>>) {
   if(state.validation.kind!=='valid')throw Error('preview not valid')
   return { operationId:'op-1',mode:'cad-copy',source:{...test.binding},stamp:{...state.validation.stamp} }
 }
+function annotatedTicket(test: Awaited<ReturnType<typeof setup>>) {
+  const state=test.session.getSnapshot()
+  if(state.validation.kind!=='valid')throw Error('preview not valid')
+  return { annotationVersion:1,operationId:'annotated-op-1',mode:'annotated-cad-copy',source:{...test.binding},
+    stamp:{...state.validation.stamp},notesRevision:state.notesRevision }
+}
+async function addNote(test: Awaited<ReturnType<typeof setup>>, text: string, u: number) {
+  test.session.setPlacingNote(true)
+  const placing=test.session.placeNote([u,2,3]), request=test.worker.sent.at(-1)!
+  expect(request.action).toBe('notePick')
+  test.worker.reply(request.id,{anchor:{face:0,selectionRevision:1,u,v:.5},at:[u,2,3],normal:[0,0,1]})
+  await placing
+  const id=test.session.getPanelState().notes.at(-1)!.id
+  if(text)test.session.setNoteText(id,text)
+  return id
+}
 function changedPoles(session: WorkspaceSurfaceSession, z=.2) {
   const net = session.getPanelState().net!
   const poles = structuredClone(net.poles)
@@ -90,6 +110,258 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 afterEach(()=>vi.useRealTimers())
 
 describe('WorkspaceSurfaceSession',()=>{
+  it('ignores a failed stale note resolution after a note is removed', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    const removed=await addNote(t,'Da rimuovere',.25)
+    const remaining=await addNote(t,'Da conservare',.75)
+    t.session.selectPoints([12],false);t.session.moveSelected(.2)
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    const original=t.worker.sent.filter(request=>request.action==='noteResolve')
+    expect(original).toHaveLength(2)
+    t.session.removeNote(removed)
+    t.worker.fail(original[0].id,'errore obsoleto');await flush()
+    const retried=t.worker.sent.filter(request=>request.action==='noteResolve')
+    expect(retried).toHaveLength(3)
+    expect(t.session.getPanelState().noteResolutionError).toBe(false)
+    t.worker.reply(retried[2].id,{at:[.75,2,4],normal:[0,0,1]});await flush()
+    t.worker.reply(original[1].id,{at:[99,99,99],normal:[0,0,1]});await flush()
+    expect(t.session.getPanelState().notes).toMatchObject([{id:remaining,text:'Da conservare',at:[.75,2,4]}])
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    expect(t.session.getPanelState().message).toBeNull()
+    await t.session.dispose('cancelled')
+  })
+
+  it('keeps a failed note and retries only when requested', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    await addNote(t,'Da conservare',.5)
+    t.session.selectPoints([12],false);t.session.moveSelected(.2)
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    const failed=t.worker.sent.at(-1)!
+    expect(failed.action).toBe('noteResolve')
+    t.worker.fail(failed.id,'nota temporaneamente non disponibile');await flush()
+    expect(t.session.getPanelState().noteResolutionError).toBe(true)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    const count=t.worker.sent.length, history=t.session.getSnapshot().historyRevision
+    t.session.setSnap(false);await flush()
+    expect(t.worker.sent).toHaveLength(count)
+    t.session.retryNoteResolution()
+    const retried=t.worker.sent.at(-1)!
+    expect(retried.action).toBe('noteResolve')
+    expect(retried.id).not.toBe(failed.id)
+    t.worker.reply(retried.id,{at:[.5,2,4],normal:[0,0,1]});await flush()
+    expect(t.session.getPanelState().noteResolutionError).toBe(false)
+    expect(t.session.getPanelState().notes).toMatchObject([{text:'Da conservare',at:[.5,2,4]}])
+    expect(t.session.getSnapshot()).toMatchObject({historyRevision:history,validation:{kind:'valid'}})
+    await t.session.dispose('cancelled')
+  })
+
+  it('prepares a modified STEP solid and a Zebra note on a real reversed face', async()=>{
+    vi.useFakeTimers()
+    const editor=await SurfaceEditorKernel.load(), k=editor.kernel, box=k.makeBox(20,30,10)
+    let imported:ReturnType<typeof k.importStep> | null=null, faces:ReturnType<typeof k.getSubShapes>=[]
+    let session:WorkspaceSurfaceSession | undefined
+    try {
+      const source=k.exportStep(box), sha=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex')
+      const sourceBytes=new TextEncoder().encode(source), hash=sha(sourceBytes), abort=new AbortController()
+      imported=k.importStep(source);faces=k.getSubShapes(imported,'face')
+      const index=faces.findIndex(face=>k.shapeOrientation(face)==='reversed')
+      expect(index).toBeGreaterThanOrEqual(0)
+      const face=faces[index], bounds=k.uvBounds(face), u=(bounds.uMin+bounds.uMax)/2, v=(bounds.vMin+bounds.vMax)/2
+      const p=k.pointOnSurface(face,u,v), seed:[number,number,number]=[p.x,p.y,p.z]
+      const outward=[p.x-10,p.y-15,p.z-5], length=Math.hypot(...outward)
+      class KernelWorker extends FakeWorker {
+        postMessage(message: Msg) {
+          this.sent.push(message)
+          void Promise.resolve().then(()=>{
+            try {
+              const m=message as Msg & {step:string;face:number;continuity:'G0'|'G1';freeBoundary:boolean;previewRevision:number;point:Point;anchor:Parameters<SurfaceEditorKernel['resolveAnchor']>[0]}
+              const value=m.action==='open' ? editor.open(m.step) : m.action==='select' ? editor.select(m.face) :
+                m.action==='evaluate' ? editor.evaluate(m.net!,m.continuity,!!m.exportStep,m.freeBoundary) :
+                m.action==='notePick' ? editor.anchorFromPick(m.point,m.previewRevision) :
+                m.action==='noteResolve' ? editor.resolveAnchor(m.anchor,m.previewRevision) :
+                m.action==='finalFaceWitness' ? editor.finalFaceWitness(m.previewRevision) : (()=>{throw Error(`unexpected worker action: ${m.action}`)})()
+              this.reply(m.id,value)
+            } catch(error) { this.onmessage?.({data:{id:message.id,error:String((error as Error).message)}} as MessageEvent<unknown>) }
+          })
+        }
+      }
+      const worker=new KernelWorker(), runtime=new SurfaceRuntime(()=>worker as unknown as Worker)
+      const sourceBinding={documentEpoch:'doc',sourceEpoch:1,bodyId:1,bodyKey:'box',buildVersion:1,kernelGeneration:1,
+        frameRevision:1,stepSha256:hash,units:'mm',coordinateFrame:'part'}
+      const context={apiVersion:1,sessionId:'real-annotated',source:sourceBinding,step:sourceBytes,
+        capabilities:{apiVersion:1,enabled:true,annotationVersion:1,commitKinds:['cad-copy','annotated-cad-copy']},
+        signal:abort.signal,assertSourceCurrent:()=>{},own:(fn:()=>void)=>fn,reportFatal:vi.fn()}
+      session=await createWorkspaceSurfaceSession(context as never,vi.fn() as never,{runtime,sha256:async bytes=>sha(bytes)})
+      await session.chooseFace(index)
+      await vi.advanceTimersByTimeAsync(90);await flush()
+      expect(session.getSnapshot().validation.kind).toBe('valid')
+      session.setStripes({orientation:'horizontal',width:3,color:'#5288b2'})
+      session.setPlacingNote(true);await session.placeNote(seed)
+      const note=session.getPanelState().notes[0]
+      session.setNoteText(note.id,'Controlla la faccia inversa')
+      session.selectAllFree();expect(session.getPanelState().selected.length).toBeGreaterThan(0)
+      session.moveSelected(.2)
+      await vi.advanceTimersByTimeAsync(90);await flush()
+      expect(session.getSnapshot().validation.kind).toBe('valid')
+      expect(session.getViewState().stripes).toMatchObject({orientation:'horizontal'})
+      const state=session.getSnapshot()
+      if(state.validation.kind!=='valid')throw Error('annotated preview not valid')
+      const ticket={annotationVersion:1,operationId:'real-annotated',mode:'annotated-cad-copy',source:sourceBinding,
+        stamp:state.validation.stamp,notesRevision:state.notesRevision}
+      const release=session.freezeAnnotated(ticket as never)
+      const result=await session.prepareAnnotatedApply(ticket as never,new AbortController().signal)
+      const saved=k.importStep(new TextDecoder().decode(result.step)), witness=k.fromBREP(result.witnesses[0].brep)
+      try {
+        expect(k.isValid(saved)).toBe(true)
+        const solids=k.getSubShapes(saved,'solid')
+        try {expect(solids).toHaveLength(1)} finally {solids.forEach(s=>k.release(s))}
+        expect(result.witnesses[0].finalStepSha256).toBe(sha(result.step))
+        expect(result.witnesses[0].brepSha256).toBe(sha(new TextEncoder().encode(result.witnesses[0].brep)))
+        expect(result.notes).toHaveLength(1)
+        const target=result.notes[0].target as {sourceUV:[number,number];resolvedAt:Point;orientedNormal:Point}
+        const q=k.pointOnSurface(witness,...target.sourceUV)
+        expect(Math.hypot(q.x-target.resolvedAt[0],q.y-target.resolvedAt[1],q.z-target.resolvedAt[2])).toBeLessThan(1e-7)
+        expect(target.orientedNormal.reduce((sum,n,i)=>sum+n*outward[i]/length,0)).toBeGreaterThan(.99)
+        expect(result.notes[0].text).toBe('Controlla la faccia inversa')
+        expect(sourceBytes).toEqual(new TextEncoder().encode(source))
+      } finally {k.release(witness);k.release(saved)}
+      release()
+    } finally {
+      if(session)await session.dispose('cancelled')
+      faces.forEach(face=>k.release(face));if(imported!==null)k.release(imported)
+      k.release(box);editor.dispose()
+    }
+  },60000)
+
+  it('prepares every annotated note from the final CAD evaluation without publishing the draft', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    const first=await addNote(t,'Controlla il bordo',.25)
+    const second=await addNote(t,'Verifica raccordo',.75)
+    const value=annotatedTicket(t), before=t.session.getSnapshot()
+    expect(value.notesRevision).toBe(4)
+    const release=t.session.freezeAnnotated(value as never)
+    expect(()=>t.session.setNoteText(first,'non consentito')).toThrow('congelata')
+    expect(()=>t.session.removeNote(second)).toThrow('congelata')
+    expect(()=>t.session.undo()).toThrow('congelata')
+    const preparing=t.session.prepareAnnotatedApply(value as never,new AbortController().signal)
+    await expect(t.session.prepareAnnotatedApply(value as never,new AbortController().signal)).rejects.toThrow('già in preparazione')
+    let request=t.worker.sent.at(-1)!
+    expect(request).toMatchObject({action:'evaluate',exportStep:true})
+    t.worker.reply(request.id,{...preview(2),step:'FINAL STEP'});await flush()
+    request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('finalFaceWitness')
+    t.worker.reply(request.id,{face:0,selectionRevision:1,previewRevision:2,faceBrep:'FINAL BREP'});await flush()
+    request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('noteResolve')
+    t.worker.reply(request.id,{at:[.25,2,4],normal:[0,0,1]});await flush()
+    request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('noteResolve')
+    t.worker.reply(request.id,{at:[.75,2,4],normal:[0,0,1]});await flush()
+    const output=await preparing
+    const sha=(text:string)=>createHash('sha256').update(text).digest('hex')
+    expect(output).toMatchObject({kind:'annotated-cad-copy',annotationVersion:1,operationId:value.operationId,
+      notesRevision:value.notesRevision,units:'mm',coordinateFrame:'part',source:value.source,stamp:value.stamp,
+      witnesses:[{kind:'occt-face-brep',brep:'FINAL BREP',brepSha256:sha('FINAL BREP'),finalStepSha256:sha('FINAL STEP'),stamp:value.stamp}],
+      notes:[{draftId:first,text:'Controlla il bordo',target:{sourceUV:[.25,.5],resolvedAt:[.25,2,4],orientedNormal:[0,0,1],resolvedStamp:value.stamp}},
+        {draftId:second,text:'Verifica raccordo',target:{sourceUV:[.75,.5],resolvedAt:[.75,2,4],orientedNormal:[0,0,1],resolvedStamp:value.stamp}}]})
+    expect(new TextDecoder().decode(output.step)).toBe('FINAL STEP')
+    expect(t.session.getSnapshot()).toMatchObject({draftNoteCount:2,notesRevision:value.notesRevision,historyRevision:before.historyRevision,
+      validation:{kind:'valid',stamp:value.stamp}})
+    expect(t.context.step).toEqual(new Uint8Array([1,2,3]))
+    release()
+    expect(t.session.getSnapshot().draftNoteCount).toBe(2)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await t.session.dispose('cancelled')
+  })
+
+  it('requires a capable host, complete text, and a matching note revision', async()=>{
+    const old=await setup();await selectFace(old)
+    expect(()=>old.session.freezeAnnotated({} as never)).toThrow('non supporta')
+    await old.session.dispose('cancelled')
+    const t=await setup({annotated:true});await selectFace(t)
+    const id=await addNote(t,'',.5)
+    expect(t.session.getSnapshot().validation.kind).toBe('invalid')
+    expect(()=>t.session.freezeAnnotated({} as never)).toThrow('Completa')
+    t.session.setNoteText(id,'Nota valida')
+    const value=annotatedTicket(t)
+    expect(()=>t.session.freezeAnnotated({...value,notesRevision:value.notesRevision-1} as never)).toThrow('ticket')
+    const release=t.session.freezeAnnotated(value as never);release()
+    await t.session.dispose('cancelled')
+  })
+
+  it('does not offer annotated publication for a disabled or incompatible host', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    const capability=t.context.capabilities as {apiVersion:number;enabled:boolean;annotationVersion?:number;commitKinds:string[]}
+    capability.enabled=false
+    expect(()=>t.session.freezeAnnotated({} as never)).toThrow('non supporta')
+    capability.enabled=true;capability.apiVersion=2
+    expect(()=>t.session.freezeAnnotated({} as never)).toThrow('non supporta')
+    capability.apiVersion=1;capability.commitKinds=[]
+    expect(()=>t.session.freezeAnnotated({} as never)).toThrow('non supporta')
+    await t.session.dispose('cancelled')
+  })
+
+  it('rejects a final note failure without returning a partial package or losing either note', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    await addNote(t,'Prima',.25);await addNote(t,'Seconda',.75)
+    const value=annotatedTicket(t), release=t.session.freezeAnnotated(value as never)
+    const preparing=t.session.prepareAnnotatedApply(value as never,new AbortController().signal)
+    const rejected=expect(preparing).rejects.toThrow('nota fuori dalla faccia')
+    let request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,{...preview(2),step:'FINAL STEP'});await flush()
+    request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,{face:0,selectionRevision:1,previewRevision:2,faceBrep:'FINAL BREP'});await flush()
+    request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,{at:[.25,2,4],normal:[0,0,1]});await flush()
+    request=t.worker.sent.at(-1)!
+    t.worker.fail(request.id,'nota fuori dalla faccia')
+    await rejected
+    release()
+    expect(t.session.getPanelState().notes.map(note=>note.text)).toEqual(['Prima','Seconda'])
+    expect(t.session.getSnapshot().draftNoteCount).toBe(2)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await t.session.dispose('cancelled')
+  })
+
+  it('refuses an annotated result if the source changes while the witness is pending', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    await addNote(t,'Da conservare',.5)
+    const value=annotatedTicket(t), release=t.session.freezeAnnotated(value as never)
+    const preparing=t.session.prepareAnnotatedApply(value as never,new AbortController().signal)
+    const rejected=expect(preparing).rejects.toThrow('source changed')
+    let request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,{...preview(2),step:'FINAL STEP'});await flush()
+    request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('finalFaceWitness')
+    t.invalidate()
+    t.worker.reply(request.id,{face:0,selectionRevision:1,previewRevision:2,faceBrep:'FINAL BREP'})
+    await rejected
+    release()
+    expect(t.session.getPanelState().notes.map(note=>note.text)).toEqual(['Da conservare'])
+    expect(t.context.step).toEqual(new Uint8Array([1,2,3]))
+    await t.session.dispose('source-invalid')
+  })
+
+  it('rejects an invalid final normal instead of publishing an ambiguous note', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    await addNote(t,'Da conservare',.5)
+    const value=annotatedTicket(t), release=t.session.freezeAnnotated(value as never)
+    const preparing=t.session.prepareAnnotatedApply(value as never,new AbortController().signal)
+    const rejected=expect(preparing).rejects.toThrow('normale finale')
+    let request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,{...preview(2),step:'FINAL STEP'});await flush()
+    request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,{face:0,selectionRevision:1,previewRevision:2,faceBrep:'FINAL BREP'});await flush()
+    request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,{at:[.5,2,4],normal:[0,0,0]})
+    await rejected
+    release()
+    expect(t.session.getPanelState().notes.map(note=>note.text)).toEqual(['Da conservare'])
+    await t.session.dispose('cancelled')
+  })
+
   it('loads a verified source and prepares exactly the frozen validated CAD copy', async()=>{
     const t=await setup();await selectFace(t)
     const valid=ticket(t)

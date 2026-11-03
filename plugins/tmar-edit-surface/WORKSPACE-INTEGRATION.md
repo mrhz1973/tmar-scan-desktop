@@ -12,8 +12,11 @@ The shared-view session owns its worker and draft, not the app's camera, canvas,
 source geometry or model history. It previews a selected CAD face in part-frame
 millimetres. A host ticket freezes an exactly validated draft before exporting
 an independent STEP copy. The host stages and publishes that copy atomically.
-An armed note, an in-flight note pick or a draft note blocks Apply. Existing
-notes are not written by this first `cad-copy` contract.
+An armed note or an in-flight note pick blocks Apply. The original `cad-copy`
+contract also blocks Apply while draft notes exist. With the separate optional
+`annotated-cad-copy` V1 capability, the session freezes all notes and prepares
+them together with the final STEP and a face witness; it does not itself write
+host state. A host without this capability keeps the original behavior.
 
 ## Evidence on 2026-11-03
 
@@ -50,8 +53,19 @@ notes are not written by this first `cad-copy` contract.
   and pin survived another deformation, and a plain Apply was blocked until
   the draft note was removed. A separate synthetic UI case selected a face and
   placed a note by clicking in the shared view; Cancel preserved the body,
-  source render geometry, project build and history. Persistent annotated
-  Apply is not yet available.
+  source render geometry, project build and history. That browser run used the
+  original host and did not test persistent annotated Apply.
+- On a synthetic box STEP, an in-process session using the real OCCT kernel
+  selected a reversed face, enabled Zebra state, placed a note and deformed the
+  face. Final preparation produced a valid one-solid STEP, the face witness and
+  the note with consistent hashes, UV, position and outward-oriented normal.
+  Separate checks cover all six box faces and a curved torus. These are kernel
+  and session checks, not browser rendering or host Save/Load qualification.
+- The updated controller was also exercised in the isolated source app with the
+  original host (`run-EBOzsj`): Zebra and note editing worked together, the
+  note was re-resolved after a surface move, and an unannotated Apply remained
+  blocked until the note was removed. A subsequent ordinary Apply made one valid
+  CAD copy and one history action. This did not test annotated persistence.
 - Separate isolated source-app snap cases used a synthetic scan and a second
   synthetic CAD body. In both, the pole snapped from Z=10 to Z=12 mm; Alt and
   disabling snapping left the same approximately Z=11.5 mm free movement.
@@ -116,8 +130,11 @@ the sampled G1 boundary and the handle on their respective synthetic fixtures.
 ## Not yet qualified
 
 The new adapter has not yet been qualified in a packaged desktop release or
-against every existing standalone-editor function. Transactional note saving,
-parametric replay and editing an already existing NURBS face through this host
+against every existing standalone-editor function. Transactional note saving
+still needs the separate host V1 with its reversed-normal correction and real
+integrated Apply/Undo/Redo/Save/Load validation. It must remain blocked until
+that validation succeeds. Parametric replay and
+editing an already existing NURBS face through this host
 on further real-world topologies remain separate checks. Snap to the host's other CAD bodies uses their displayed
 tessellation, not exact B-rep targets. Large-scan performance, real-world
 snapping, real-project save/reopen and cancellation under delayed staging

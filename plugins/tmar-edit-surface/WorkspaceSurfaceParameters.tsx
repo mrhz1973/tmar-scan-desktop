@@ -62,7 +62,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   }
   return <div className="workspace-surface-panel" data-test="workspace-surface-parameters">
     <p>Seleziona una faccia nella vista oppure nell’elenco. La modifica resta una bozza CAD fino ad Applica.</p>
-    <p>Esporta STEP crea un file locale della geometria CAD convalidata; le note restano nella bozza e non vengono incluse nel file.</p>
+    <p>Esporta STEP crea un file locale della geometria CAD convalidata; il file STEP non contiene le note.</p>
     <label>Faccia CAD
       <select data-test="surface-face" value={state.face < 0 ? '' : String(state.face)} disabled={disabled || !!strip}
         onChange={e => { if (e.target.value !== '') chooseFace(Number(e.target.value)) }}>
@@ -231,7 +231,12 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         {state.notes.map((note, index) => <div key={note.id}><label>Nota {index + 1}<input data-test="surface-note-text" value={note.text} maxLength={2000} disabled={disabled}
           onChange={e => attempt(() => controller.setNoteText(note.id, e.target.value))} /></label>
           <button type="button" disabled={disabled} onClick={() => attempt(() => controller.removeNote(note.id))}>Rimuovi nota</button></div>)}
-        {!!state.notes.length && <p>Le note restano nella bozza e non vengono incluse nello STEP né salvate nel progetto. Rimuovile prima di esportare o applicare.</p>}
+        {state.noteResolutionError && <div role="alert"><p>Non è stato possibile aggiornare la posizione delle note. Sono ancora nella bozza.</p>
+          <button type="button" data-test="surface-note-retry" disabled={disabled} onClick={() => attempt(() => controller.retryNoteResolution())}>Riprova</button></div>}
+        {!!state.notes.length && <p>{state.annotatedCopyAvailable
+          ? 'Con Applica le note complete vengono salvate nel progetto insieme alla copia CAD. Per esportare solo lo STEP, rimuovi prima le note dalla bozza.'
+          : 'Le note restano nella bozza e non vengono incluse nello STEP né salvate nel progetto. Rimuovile prima di esportare o applicare.'}</p>}
+        {state.annotatedCopyAvailable && state.notes.some(note => !note.text.trim()) && <p>Scrivi il testo di tutte le note prima di applicare.</p>}
       </fieldset>
       </>}
     </>}
