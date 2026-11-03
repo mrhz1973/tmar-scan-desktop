@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Net } from './brep'
 
-export type NetSelectionMode = 'points' | 'edges' | 'mixed'
+export type NetSelectionMode = 'points' | 'edges' | 'cells' | 'mixed'
 export function netEdges(n: Pick<Net, 'nu' | 'nv'>): [number, number][] {
   const edges: [number, number][] = []
   for (let u = 0; u < n.nu; u++) for (let v = 0; v < n.nv; v++) {

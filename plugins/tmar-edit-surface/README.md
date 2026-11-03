@@ -132,3 +132,18 @@ Evidence: `evidence/net-selection/run-bDCaoF/` includes the five STEP exports, f
 QS observation on the separate QA Freeform rectangle: Edges only with Show DUPLICATE handle enabled extended the face with a new strip. With duplication disabled, dragging the top edge moved it without adding a strip; Ctrl+Z restored the rectangle. The imported solid was preserved. Our control-net segment operation is the bounded deformation counterpart, not QS face duplication or proof of imported-STEP parity. Face selection, boundary selection, duplication and arbitrary trimmed-face editing remain unqualified or unsupported here.
 
 Coordinator receipt: the preceding Local checkpoint `30fa75f` was integrated as `69a4806` on `review/edit-surface-integration-20261103`, PR #14 still draft. The coordinator reported targeted tests, TypeScript, production build and Local-N Windows/Chrome checks on that exact revision. These results do not qualify the new segment-selection increment.
+
+### Selezione di celle del reticolo (STEP)
+In QuickSurface, nel documento QA modified-solid, Faces only sulla singola faccia Freeform
+ha selezionato i quattro angoli. Trascinamento di 30 px con duplicazione disattivata:
+traslazione del riquadro senza striscia aggiunta; Undo ha ripristinato la posizione.
+In ScanRuler scegliere Celle del reticolo per afferrare quattro poli della faccia STEP.
+Il reticolo rappresenta la superficie NURBS: la cella non costituisce una faccia
+topologica indipendente. Con G0/G1 restano fermi i poli protetti.
+
+Prova: node plugins/tmar-edit-surface/tests/e2e-net-selection.mjs --cells.
+Risultati in evidence/cell-selection/run-9iN6Il. Cinque esportazioni reali
+lette dal link di download e reimportate in OCCT: sei facce valide, volumi positivi.
+Centro Z: 10 -> 10.5625 (quota +1 sui quattro poli) -> 11.007922811 mm
+(trascinamento); Undo e Redo riproducono i due stati. Scarto massimo su 36 campioni
+del bordo 1.78e-15 mm. Questa prova non qualifica le facce con fori o la duplicazione.
