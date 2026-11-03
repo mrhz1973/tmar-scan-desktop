@@ -7,16 +7,27 @@ import type { Net, Point } from './brep'
 import { dragDirection, type DragMode } from './localFrame'
 import { netEdges, type NetSelectionMode } from './netSelection'
 
+export interface StripeSettings { orientation: 'horizontal' | 'vertical'; width: number; color: string }
+type LayerOptions = StripeSettings & { target: 'visible'; selectedIds: number[] }
+interface StripeLayer { setOptions(options: LayerOptions): void; dispose(): void }
+type StripeConstructor = new (sources: { bodies(): Map<number, THREE.Mesh>; scan(): null; invalidate(): void }, options: LayerOptions) => StripeLayer
+// Some distributions omit the Zebra plugin. Only expose the control when its renderer ships.
+const zebraModules = import.meta.glob<StripeConstructor>('../tmar-zebra/ZebraLayer.ts', { eager: true, import: 'ZebraLayer' })
+const ZebraRenderer = Object.values(zebraModules)[0]
+export const hasSurfaceZebra = Boolean(ZebraRenderer)
+
 interface Props {
   preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; face: number
   axis: number; onFace: (i: number) => void; onPoints: (ids: number[], multi: boolean) => void
   onDrag: (poles: Point[], final: boolean) => void; busy: boolean
   dragStrength: number; showNet: boolean; transparency: number; dragMode: DragMode
+  stripes: StripeSettings | null
   selectionMode: NetSelectionMode
 }
 export function SurfaceViewport(props: Props) {
   const host = useRef<HTMLDivElement>(null), current = useRef(props)
   current.current = props
+  const stripeLayer = useRef<StripeLayer | null>(null)
   const sceneRef = useRef<{ scene: THREE.Scene; body: THREE.Group; cage: THREE.Group; camera: THREE.PerspectiveCamera; controls: OrbitControls; radius: number; fitted: boolean } | null>(null)
   useEffect(() => {
     const div = host.current!, scene = new THREE.Scene()
@@ -143,7 +154,7 @@ export function SurfaceViewport(props: Props) {
     renderer.domElement.addEventListener('pointercancel', cancel, true)
     const resize = new ResizeObserver(() => { const w = div.clientWidth, h = div.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix() }); resize.observe(div)
     renderer.setAnimationLoop(() => renderer.render(scene, camera))
-    return () => { resize.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
+    return () => { resize.disconnect(); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
   }, [])
   useEffect(() => {
     const s = sceneRef.current; if (!s || !props.preview) return
@@ -159,21 +170,40 @@ export function SurfaceViewport(props: Props) {
   }, [props.preview, props.face])
   useEffect(() => {
     const s = sceneRef.current; if (!s) return
+    if (props.stripes && ZebraRenderer) {
+      const options: LayerOptions = { ...props.stripes, target: 'visible', selectedIds: [] }
+      stripeLayer.current ??= new ZebraRenderer({
+        bodies: () => new Map(s.body.children.map((o,i) => [i,o as THREE.Mesh])),
+        scan: () => null, invalidate: () => {},
+      }, options)
+      stripeLayer.current.setOptions(options)
+    } else {
+      stripeLayer.current?.dispose()
+      stripeLayer.current = null
+    }
     s.body.children.forEach(o => {
       const material = (o as THREE.Mesh).material as THREE.MeshStandardMaterial
       material.opacity = 1 - props.transparency
       material.transparent = props.transparency > 0
-      material.depthWrite = props.transparency === 0
+      const overlay = o.children.find(child => child.userData.tmarZebra) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined
+      material.colorWrite = !overlay
+      material.depthWrite = !overlay && props.transparency === 0
+      if (overlay) {
+        overlay.material.transparent = props.transparency > 0
+        overlay.material.opacity = material.opacity
+        overlay.material.depthWrite = props.transparency === 0
+        overlay.material.side = material.side
+      }
       material.needsUpdate = true
     })
-  }, [props.preview, props.face, props.transparency])
+  }, [props.preview, props.face, props.transparency, props.stripes])
   useLayoutEffect(() => {
     const s = sceneRef.current; if (!s) return
     s.cage.traverse(dispose); s.cage.clear()
     const n = props.net; if (!n) return
     n.poles.forEach((p, i) => {
       const color = props.selected.includes(i) ? '#ffcf35' : props.locked.includes(i) ? '#89939c' : '#58f3d0'
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(s.radius * 0.012, 10, 8), new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false })); mesh.position.set(...p); mesh.userData.point = i; mesh.renderOrder = 5; s.cage.add(mesh)
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(s.radius * 0.012, 10, 8), new THREE.MeshBasicMaterial({ color, transparent: true, depthTest: false, depthWrite: false })); mesh.position.set(...p); mesh.userData.point = i; mesh.renderOrder = 5; s.cage.add(mesh)
       // Picking can run before the next render after the cage is rebuilt.
       mesh.updateWorldMatrix(true, false)
     })
@@ -184,7 +214,7 @@ export function SurfaceViewport(props: Props) {
         const arrow = new THREE.ArrowHelper(new THREE.Vector3(...direction), new THREE.Vector3(...n.poles[anchor]), s.radius * 0.22, 0xffcf35, s.radius * 0.045, s.radius * 0.025)
         // ArrowHelper shares default geometry globally; this viewport owns only its clones.
         arrow.line.geometry = arrow.line.geometry.clone(); arrow.cone.geometry = arrow.cone.geometry.clone()
-        arrow.traverse(o => { const m = o as THREE.Mesh; if (m.material && !Array.isArray(m.material)) { m.material.depthTest = false; m.material.depthWrite = false }; o.renderOrder = 6 })
+        arrow.traverse(o => { const m = o as THREE.Mesh; if (m.material && !Array.isArray(m.material)) { m.material.transparent = true; m.material.depthTest = false; m.material.depthWrite = false }; o.renderOrder = 6 })
         s.cage.add(arrow)
       }
     }
@@ -196,7 +226,7 @@ export function SurfaceViewport(props: Props) {
       colors.push(c.r, c.g, c.b, c.r, c.g, c.b)
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
-    const line = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, depthWrite: false })); line.renderOrder = 4; s.cage.add(line)
+    const line = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthTest: false, depthWrite: false })); line.renderOrder = 4; s.cage.add(line)
   }, [props.net, props.selected, props.locked, props.showNet, props.dragMode, props.axis])
   return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" />
 }

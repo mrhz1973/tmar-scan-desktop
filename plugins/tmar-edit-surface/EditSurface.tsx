@@ -11,7 +11,7 @@ import { bodyStepResult } from '../tmar-body-export/bodyExport'
 import { assertNet, boundaryLocked, type Net, type Point } from './brep'
 import type { FaceInfo, Preview } from './editorKernel'
 import type { Request } from './editor.worker'
-import { SurfaceViewport } from './SurfaceViewport'
+import { SurfaceViewport, hasSurfaceZebra, type StripeSettings } from './SurfaceViewport'
 import { dragDirection, type DragMode } from './localFrame'
 import { selectNetPoints, type NetSelectionMode } from './netSelection'
 import './surface.css'
@@ -42,6 +42,8 @@ function SurfaceDialog({ close }: { close: () => void }) {
   const [dragStrength, setDragStrength] = useState(1), [smoothStrength, setSmoothStrength] = useState(0.5)
   const [dragMode, setDragMode] = useState<DragMode>('axis')
   const [selectionMode, setSelectionMode] = useState<NetSelectionMode>('points')
+  const [zebra, setZebra] = useState(false)
+  const [stripes, setStripes] = useState<StripeSettings>({ orientation:'horizontal', width:3, color:'#5388b1' })
   const [showNet, setShowNet] = useState(true), [transparency, setTransparency] = useState(0)
   const [busy, setBusy] = useState(false), [calculating, setCalculating] = useState(false)
   const [error, setError] = useState(''), [validNet, setValidNet] = useState<Net | null>(null)
@@ -180,6 +182,14 @@ function SurfaceDialog({ close }: { close: () => void }) {
         <label>Intensità trascinamento · {Math.round(dragStrength * 100)}%<input data-test="surface-drag-strength" type="range" min="0.05" max="1" step="0.05" value={dragStrength} onChange={e => setDragStrength(Number(e.target.value))} /></label>
         <p className="es-hint">Riduce lo spostamento durante il trascinamento per modifiche fini. Le quote numeriche restano esatte.</p>
         <button data-test="surface-control-net" aria-pressed={showNet} onClick={() => setShowNet(v => !v)}>{showNet ? 'Nascondi reticolo' : 'Mostra reticolo'}</button>
+        {hasSurfaceZebra && <>
+          <button data-test="surface-zebra" aria-pressed={zebra} onClick={() => setZebra(v=>!v)}>Zebra</button>
+          {zebra && <details><summary>Opzioni Zebra</summary>
+            <label>Larghezza strisce · {stripes.width}<input type="range" min="1" max="7" step="1" value={stripes.width} onChange={e=>setStripes({...stripes,width:Number(e.target.value)})}/></label>
+            <label>Orientamento<select data-test="surface-zebra-direction" value={stripes.orientation} onChange={e=>setStripes({...stripes,orientation:e.target.value as StripeSettings['orientation']})}><option value="horizontal">Orizzontale</option><option value="vertical">Verticale</option></select></label>
+            <label>Colore strisce<input type="color" value={stripes.color} onChange={e=>setStripes({...stripes,color:e.target.value})}/></label>
+          </details>}
+        </>}
         <label>Trasparenza superficie · {Math.round(transparency * 100)}%<input data-test="surface-transparency" type="range" min="0" max="0.9" step="0.05" value={transparency} onChange={e => setTransparency(Number(e.target.value))} /></label>
         <div className="es-row"><button onClick={() => setSelected(net.poles.flatMap((_, i) => locked.includes(i) ? [] : [i]))}>Seleziona liberi</button><button onClick={() => setSelected([])}>Nessuno</button></div>
         <p data-test="surface-selection">{selected.length} selezionati · {editable.length} modificabili</p>
@@ -193,7 +203,7 @@ function SurfaceDialog({ close }: { close: () => void }) {
         <button disabled={busy || !editable.length || !Number.isFinite(factor) || factor <= 0 || factor > 3} onClick={() => { const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factor : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
         <div className="es-row"><button data-test="surface-undo" disabled={busy || at.current <= 0} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || at.current >= history.current.length - 1} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
       </>}
-    </aside><main><SurfaceViewport key={loadId} preview={preview} net={net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => void chooseFace(i)} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={(poles, final) => { const n = { ...netRef.current!, poles }; if (final) commit(n); else setNet(n) }} />
+    </aside><main><SurfaceViewport stripes={zebra ? stripes : null} key={loadId} preview={preview} net={net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => void chooseFace(i)} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={(poles, final) => { const n = { ...netRef.current!, poles }; if (final) commit(n); else setNet(n) }} />
       <div className="es-status" role="status" data-test="surface-status">{busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · volume ${preview.volume.toFixed(3)} mm³ · scarto bordo ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
     <footer><span>Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.</span><button disabled={busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={busy || calculating || !net || validNet !== net} onClick={() => void finish(true)}>Applica come nuovo corpo</button><button disabled={busy} onClick={close}>Annulla</button></footer>
