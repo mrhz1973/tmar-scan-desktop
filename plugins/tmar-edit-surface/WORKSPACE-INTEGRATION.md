@@ -79,6 +79,11 @@ host state. A host without this capability keeps the original behavior.
   waited specifically for the receipt's note UUID, feature and copy body at
   each verification (`annotated-edit-sdytYJ`). This is source-app evidence,
   not qualification of a published host or packaged desktop release.
+- An isolated compiled web build of that experimental host reopened and
+  resaved the `sdytYJ` synthetic project through its public UI: seven checks
+  passed for the note, UUID, face binding, normal, visibility and independent
+  STEP reimport of both valid solids (`compiled-reopen-sdyt-20261104`). This
+  does not test creation of the annotation in the compiled UI or a desktop EXE.
 - Separate isolated source-app snap cases used a synthetic scan and a second
   synthetic CAD body. In both, the pole snapped from Z=10 to Z=12 mm; Alt and
   disabling snapping left the same approximately Z=11.5 mm free movement.
