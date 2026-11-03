@@ -270,12 +270,15 @@ export class SurfaceEditorKernel {
     return info.converted ? 'plane-to-bicubic' : info.enriched ? 'bicubic-midpoint-refinement' : 'native-nurbs'
   }
   /** Persist only after exact CAD validation. The host supplies its stable body ID. */
-  async createRecipe(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string): Promise<SurfaceEditRecipe> {
+  async createRecipe(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string, freeBoundary = false): Promise<SurfaceEditRecipe> {
     if (!this.originalNet || !this.source) throw new Error('Seleziona prima una faccia.')
+    if (typeof freeBoundary !== 'boolean' || !['G0', 'G1'].includes(continuity)) throw new Error('Modalità bordo non valida.')
     const base = structuredClone(this.originalNet), next = structuredClone(net), rev = this.revision
-    assertNet(base, next, continuity)
+    if (freeBoundary && !this.infos[this.chosen].freeBoundary)
+      throw new Error('Il bordo libero richiede una sola faccia aperta con contorno naturale rettangolare.')
+    assertNet(base, next, continuity, freeBoundary)
     const recipe: SurfaceEditRecipe = {
-      schema: 'tmar.surface-edit', version: 2, engine: 'occt-wasm-5.7.1/brep-v3',
+      schema: 'tmar.surface-edit', ...(freeBoundary ? { version: 3, boundaryMode: 'free-natural' } : { version: 2 }), engine: 'occt-wasm-5.7.1/brep-v3',
       units: 'mm', coordinateFrame: 'imported-step',
       source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids },
       faceIndex: this.chosen, preparation: this.preparation(), baseNetSha256: '', continuity,
@@ -286,7 +289,7 @@ export class SurfaceEditorKernel {
     if (this.revision !== rev) throw new Error('Sorgente cambiata durante il salvataggio della ricetta.')
     const checked = readRecipe(recipe)
     if (checked.lockedPoles.some(i => i >= base.poles.length)) throw new Error('Blocco di un polo inesistente.')
-    this.evaluate(next, continuity)
+    this.evaluate(next, continuity, false, freeBoundary)
     return checked
   }
   private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false) {
@@ -302,8 +305,9 @@ export class SurfaceEditorKernel {
     if (baseFingerprint !== recipe.baseNetSha256 || this.preparation() !== recipe.preparation) throw new Error('Base NURBS o raffinamento diverso dalla ricetta.')
     if ([...recipe.edits.map(e => e.index), ...recipe.lockedPoles].some(i => i >= net.poles.length)) throw new Error('La ricetta contiene un polo inesistente.')
     for (const edit of recipe.edits) net.poles[edit.index] = [...edit.point]
-    const preview = this.evaluate(net, recipe.continuity, exportStep)
-    return { faces: opened.faces, net, preview, continuity: recipe.continuity, lockedPoles: recipe.lockedPoles }
+    const freeBoundary = recipe.version === 3
+    const preview = this.evaluate(net, recipe.continuity, exportStep, freeBoundary)
+    return { faces: opened.faces, net, preview, continuity: recipe.continuity, freeBoundary, lockedPoles: recipe.lockedPoles }
   }
   /** Validate in isolation; failed restores leave the current edit untouched. */
   async restoreRecipe(step: string, recipe: unknown, bodyId: string) {
@@ -411,6 +415,7 @@ export class SurfaceEditorKernel {
   }
   evaluate(net: Net, continuity: 'G0' | 'G1', exportStep = false, freeBoundary = false) {
     if (!this.source || !this.originalNet || this.chosen < 0) throw new Error('Seleziona prima una faccia.')
+    if (typeof freeBoundary !== 'boolean' || !['G0', 'G1'].includes(continuity)) throw new Error('Modalità bordo non valida.')
     this.releasePreviewFace()
     if (freeBoundary && !this.infos[this.chosen].freeBoundary)
       throw new Error('Il bordo libero richiede una sola faccia aperta con contorno naturale rettangolare.')

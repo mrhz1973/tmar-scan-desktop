@@ -309,6 +309,21 @@ interface to prepare the fixture; its edit, Apply and project controls used
 the visible UI. Evidence: `evidence/free-boundary/host-roundtrip-20261103/`.
 
 This is a bounded prototype, not general free-boundary editing or a claim of
-QUICKSURFACE equivalence. The new mode is not part of the versioned parametric
-recipe. Host save/reopen was qualified on the recorded fixture, not arbitrary
-projects or the compiled application.
+QUICKSURFACE equivalence. The author's host save/reopen test used the recorded
+source-host fixture. The coordinator separately reports a compiled-UI
+round-trip for integration `c92404c` in PR #14, not arbitrary project coverage.
+
+### Free-boundary replay contract
+
+The worker can now serialize and replay the supported free-boundary edit as a
+version 3 recipe with an explicit `free-natural` boundary mode. Existing v2
+recipes retain protected boundaries and their original format. Replay checks
+the source, prepared net and actual boundary eligibility; individual locks,
+including locks on the free rim, are returned on restore. Invalid modes,
+changed sources, solids and a holed open face are refused. Rational weights
+and sampled geometry were checked on STEP replay. Source and compiled browser
+worker evidence: `evidence/recipe/browser-free-boundary-v3.json` and
+`evidence/recipe/browser-free-boundary-v3-compiled.json`.
+
+This is the plugin-side recipe contract only. The host has not yet integrated
+the parametric feature or qualified recipe persistence in project history.

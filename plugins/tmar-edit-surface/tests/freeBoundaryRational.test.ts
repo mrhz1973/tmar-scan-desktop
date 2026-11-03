@@ -112,6 +112,13 @@ it('rebuilds a moved rational free boundary exactly on its modified NURBS suppor
     compareSurface(rebuilt)
     const rebuiltNet = surfaceTable(k.toBREP(rebuilt)).find(r => r.net)?.net
     expect(rebuiltNet?.weights).toEqual(edited.weights)
+    const recipe = await editor.createRecipe(edited, 'G0', [0], 'rational-sheet', true)
+    expect(recipe.version).toBe(3)
+    const replayed = keep(k.importStep((await editor.replayRecipe(originalStep, JSON.parse(JSON.stringify(recipe)), 'rational-sheet')).step!))
+    const replayedFaces = k.getSubShapes(replayed, 'face'); owned.push(...replayedFaces)
+    expect(k.isValid(replayed)).toBe(true); expect(replayedFaces).toHaveLength(1)
+    compareSurface(replayedFaces[0])
+    expect(surfaceTable(k.toBREP(replayedFaces[0])).find(r => r.net)?.net?.weights).toEqual(expect.arrayContaining(edited.weights))
 
     const supportRecord = surfaceTable(supportText).find(r => r.net)!
     expect(supportRecord.net?.weights).toEqual(edited.weights)
