@@ -5,12 +5,14 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { Preview } from './editorKernel'
 import type { Net, Point } from './brep'
 import { dragDirection, type DragMode } from './localFrame'
+import { netEdges, type NetSelectionMode } from './netSelection'
 
 interface Props {
   preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; face: number
-  axis: number; onFace: (i: number) => void; onPoint: (i: number, multi: boolean) => void
+  axis: number; onFace: (i: number) => void; onPoints: (ids: number[], multi: boolean) => void
   onDrag: (poles: Point[], final: boolean) => void; busy: boolean
   dragStrength: number; showNet: boolean; transparency: number; dragMode: DragMode
+  selectionMode: NetSelectionMode
 }
 export function SurfaceViewport(props: Props) {
   const host = useRef<HTMLDivElement>(null), current = useRef(props)
@@ -36,19 +38,46 @@ export function SurfaceViewport(props: Props) {
       raycaster.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, 1 - (e.clientY - r.top) / r.height * 2), camera)
       return raycaster.intersectObjects(objects, false)
     }
+    const pickNet = (e: PointerEvent): number[] | null => {
+      const p = current.current
+      if (!p.net) return null
+      if (p.selectionMode !== 'edges') {
+        const point = hits(e, cage.children.filter(o => o.userData.point !== undefined))[0]
+        if (point) return [point.object.userData.point as number]
+      }
+      if (p.selectionMode === 'points' || !p.showNet) return null
+      const r = renderer.domElement.getBoundingClientRect()
+      const projected = p.net.poles.map(q => new THREE.Vector3(...q).project(camera))
+      let best: number[] | null = null, distance = 7 // CSS pixels, independent of zoom.
+      for (const [a, b] of netEdges(p.net)) {
+        const pa = projected[a], pb = projected[b]
+        if (Math.abs(pa.z) > 1 || Math.abs(pb.z) > 1) continue
+        const ax = r.left + (pa.x + 1) * r.width / 2, ay = r.top + (1 - pa.y) * r.height / 2
+        const dx = (pb.x - pa.x) * r.width / 2, dy = -(pb.y - pa.y) * r.height / 2
+        const length2 = dx * dx + dy * dy
+        if (length2 < 1) continue
+        const t = Math.max(0, Math.min(1, ((e.clientX - ax) * dx + (e.clientY - ay) * dy) / length2))
+        const d = Math.hypot(e.clientX - ax - t * dx, e.clientY - ay - t * dy)
+        if (d < distance) { distance = d; best = [a, b] }
+      }
+      return best
+    }
     const pointerDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY }
       if (e.button !== 0 || current.current.busy) return
-      const point = hits(e, cage.children.filter(o => o.userData.point !== undefined))[0]
-      if (!point) return
+      const picked = pickNet(e)
+      if (!picked) return
       e.stopImmediatePropagation(); controls.enabled = false
-      const p = current.current, index = point.object.userData.point as number
-      p.onPoint(index, e.ctrlKey || e.metaKey)
-      if (!p.net || p.locked.includes(index) || e.ctrlKey || e.metaKey) return
-      const anchor = p.selected.includes(index) ? p.selected.find(i => !p.locked.includes(i))! : index
+      const p = current.current
+      p.onPoints(picked, e.ctrlKey || e.metaKey)
+      if (!p.net || e.ctrlKey || e.metaKey || picked.every(i => p.locked.includes(i))) return
+      const ids = (picked.every(i => p.selected.includes(i)) ? p.selected : picked).filter(i => !p.locked.includes(i))
+      const anchor = ids[0], index = anchor
       const direction = dragDirection(p.net, anchor, p.dragMode, p.axis)
       if (!direction) return
-      const origin = new THREE.Vector3(...p.net.poles[index]), end = origin.clone().addScaledVector(new THREE.Vector3(...direction), state.radius)
+      const origin = picked.reduce((v, i) => v.add(new THREE.Vector3(...p.net!.poles[i])), new THREE.Vector3()).multiplyScalar(1 / picked.length)
+      const end = origin.clone().addScaledVector(new THREE.Vector3(...direction), state.radius)
+      hits(e, []) // Edge picking projects segments; refresh the ray for screen dragging.
       // Keep camera depth fixed. The initial ray hit accounts for grabbing off-center.
       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), origin)
       const start = raycaster.ray.intersectPlane(plane, new THREE.Vector3())
@@ -57,7 +86,7 @@ export function SurfaceViewport(props: Props) {
       origin.project(camera); end.project(camera)
       const r = div.getBoundingClientRect(), sx = (end.x - origin.x) * r.width / 2 / state.radius, sy = -(end.y - origin.y) * r.height / 2 / state.radius
       if (!screen && sx * sx + sy * sy < 0.1) return
-      drag = { index, start: structuredClone(p.net.poles), ids: p.selected.includes(index) ? p.selected.filter(i => !p.locked.includes(i)) : [index], x: e.clientX, y: e.clientY, sx, sy, direction, strength: p.dragStrength, screen }
+      drag = { index, start: structuredClone(p.net.poles), ids, x: e.clientX, y: e.clientY, sx, sy, direction, strength: p.dragStrength, screen }
       renderer.domElement.setPointerCapture(e.pointerId); div.style.cursor = 'grabbing'
     }
     const dragPoles = (e: PointerEvent): Point[] => {
@@ -76,12 +105,12 @@ export function SurfaceViewport(props: Props) {
     }
     const pointerMove = (e: PointerEvent) => {
       if (drag) { e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), false); return }
-      const point = hits(e, cage.children.filter(o => o.userData.point !== undefined))[0]
-      div.style.cursor = point ? (current.current.locked.includes(point.object.userData.point) ? 'not-allowed' : 'grab') : 'crosshair'
+      const picked = pickNet(e)
+      div.style.cursor = picked ? (picked.every(i => current.current.locked.includes(i)) ? 'not-allowed' : 'grab') : 'crosshair'
     }
     const pointerUp = (e: PointerEvent) => {
       if (drag) { e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), true); drag = null; renderer.domElement.releasePointerCapture(e.pointerId) }
-      else if (e.button === 0 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 3 && !hits(e, cage.children.filter(o => o.userData.point !== undefined)).length) {
+      else if (e.button === 0 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 3 && !pickNet(e)) {
         const hit = hits(e, body.children)[0]; if (hit && !current.current.net && !current.current.busy) current.current.onFace(hit.object.userData.face)
       }
       controls.enabled = true; div.style.cursor = 'crosshair'
@@ -137,9 +166,14 @@ export function SurfaceViewport(props: Props) {
       }
     }
     if (!props.showNet) return // Hide the connecting cage, retain editable poles.
-    const lines: number[] = []
-    for (let i = 0; i < n.nu; i++) for (let j = 0; j < n.nv; j++) { const at = i * n.nv + j; if (i + 1 < n.nu) lines.push(...n.poles[at], ...n.poles[at + n.nv]); if (j + 1 < n.nv) lines.push(...n.poles[at], ...n.poles[at + 1]) }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); const line = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#95e7ea', depthTest: false, transparent: true, opacity: 0.6 })); line.renderOrder = 4; s.cage.add(line)
+    const lines: number[] = [], colors: number[] = []
+    for (const [a, b] of netEdges(n)) {
+      lines.push(...n.poles[a], ...n.poles[b])
+      const c = new THREE.Color(props.selected.includes(a) && props.selected.includes(b) ? '#ffcf35' : '#95e7ea')
+      colors.push(c.r, c.g, c.b, c.r, c.g, c.b)
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+    const line = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, depthWrite: false })); line.renderOrder = 4; s.cage.add(line)
   }, [props.net, props.selected, props.locked, props.showNet, props.dragMode, props.axis])
   return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" />
 }

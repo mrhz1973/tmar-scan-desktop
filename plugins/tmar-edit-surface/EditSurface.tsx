@@ -13,6 +13,7 @@ import type { FaceInfo, Preview } from './editorKernel'
 import type { Request } from './editor.worker'
 import { SurfaceViewport } from './SurfaceViewport'
 import { dragDirection, type DragMode } from './localFrame'
+import { selectNetPoints, type NetSelectionMode } from './netSelection'
 import './surface.css'
 type Payload = Request extends infer R ? R extends Request ? Omit<R, 'id'> : never : never
 
@@ -40,6 +41,7 @@ function SurfaceDialog({ close }: { close: () => void }) {
   const [distance, setDistance] = useState(1), [factor, setFactor] = useState(1.1)
   const [dragStrength, setDragStrength] = useState(1), [smoothStrength, setSmoothStrength] = useState(0.5)
   const [dragMode, setDragMode] = useState<DragMode>('axis')
+  const [selectionMode, setSelectionMode] = useState<NetSelectionMode>('points')
   const [showNet, setShowNet] = useState(true), [transparency, setTransparency] = useState(0)
   const [busy, setBusy] = useState(false), [calculating, setCalculating] = useState(false)
   const [error, setError] = useState(''), [validNet, setValidNet] = useState<Net | null>(null)
@@ -166,11 +168,13 @@ function SurfaceDialog({ close }: { close: () => void }) {
         <p><strong>Faccia {face + 1} · {net.nu} × {net.nv} punti</strong><br/>{faces[face]?.converted ? 'Piano convertito esattamente in NURBS, senza fitting.' : 'Modifica diretta dei poli NURBS esistenti.'}</p>
         {faces[face]?.enriched && <p className="es-hint">Reticolo arricchito da 4×4 a 5×5 senza modificare la forma. Il punto centrale resta libero anche con protezione G1.</p>}
         <button disabled={busy || calculating} onClick={() => { if (loaded.current && window.confirm('Scartare questa bozza e scegliere un’altra faccia?')) void load(loaded.current.step, loaded.current.name) }}>Cambia faccia / corpo</button>
-        <label>Protezione bordi<select value={continuity} disabled={busy} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { assertNet(base.current!, net, c); setContinuity(c) } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">G0 · mantieni posizione dei bordi</option><option value="G1">G1 · mantieni anche tangenti esistenti</option></select></label>
+        <label>Protezione bordi<select data-test="surface-continuity" value={continuity} disabled={busy} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { assertNet(base.current!, net, c); setContinuity(c) } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">G0 · mantieni posizione dei bordi</option><option value="G1">G1 · mantieni anche tangenti esistenti</option></select></label>
         <p className="es-hint">I bordi restano bloccati per proteggere il solido. G1 conserva le tangenti originali; non corregge discontinuità preesistenti.</p>
         <div className="es-row">{axisNames.map((a, i) => <button key={a} data-test={`surface-axis-${i}`} aria-pressed={axis === i} onClick={() => setAxis(i)}>{a}</button>)}</div>
         <label>Trascinamento punti<select data-test="surface-drag-mode" value={dragMode} onChange={e => setDragMode(e.target.value as DragMode)}><option value="axis">Mondo · asse X/Y/Z</option><option value="screen">Piano dello schermo</option><option value="local">Locale · U/V/normale</option></select></label>
-        <p>Clic: punto. Ctrl+clic: più punti. {dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.' : dragMode === 'local' ? 'U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. La freccia indica il verso positivo. Trascina un punto o imposta una quota.' : 'Trascina lungo l’asse scelto.'} Trascina lo sfondo per ruotare. Lo stiramento usa sempre X/Y/Z.</p>
+        <label>Selezione reticolo<select data-test="surface-selection-mode" value={selectionMode} onChange={e => setSelectionMode(e.target.value as NetSelectionMode)}><option value="points">Punti</option><option value="edges">Segmenti del reticolo</option><option value="mixed">Punti e segmenti</option></select></label>
+        <p className="es-hint">Un segmento seleziona i due poli agli estremi, non un bordo CAD. Ctrl+clic aggiunge o toglie dalla selezione. I poli bloccati restano fermi. Nascondendo il reticolo, i segmenti non sono selezionabili.</p>
+        <p>{dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.' : dragMode === 'local' ? 'U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. La freccia indica il verso positivo. Trascina la selezione o imposta una quota.' : 'Trascina lungo l’asse scelto.'} Trascina lo sfondo per ruotare. Lo stiramento usa sempre X/Y/Z.</p>
         {dragMode === 'local' && editable.length > 0 && !moveDirection && <p role="alert">Riferimento locale non definito in questo punto. Scegli un altro punto o il riferimento mondo.</p>}
         <label>Intensità trascinamento · {Math.round(dragStrength * 100)}%<input data-test="surface-drag-strength" type="range" min="0.05" max="1" step="0.05" value={dragStrength} onChange={e => setDragStrength(Number(e.target.value))} /></label>
         <p className="es-hint">Riduce lo spostamento durante il trascinamento per modifiche fini. Le quote numeriche restano esatte.</p>
@@ -188,7 +192,7 @@ function SurfaceDialog({ close }: { close: () => void }) {
         <button disabled={busy || !editable.length || !Number.isFinite(factor) || factor <= 0 || factor > 3} onClick={() => { const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factor : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
         <div className="es-row"><button data-test="surface-undo" disabled={busy || at.current <= 0} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || at.current >= history.current.length - 1} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
       </>}
-    </aside><main><SurfaceViewport key={loadId} preview={preview} net={net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} showNet={showNet} transparency={transparency} onFace={i => void chooseFace(i)} onPoint={(i, multi) => setSelected(s => multi ? s.includes(i) ? s.filter(j => j !== i) : [...s, i] : s.includes(i) ? s : [i])} onDrag={(poles, final) => { const n = { ...netRef.current!, poles }; if (final) commit(n); else setNet(n) }} />
+    </aside><main><SurfaceViewport key={loadId} preview={preview} net={net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => void chooseFace(i)} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={(poles, final) => { const n = { ...netRef.current!, poles }; if (final) commit(n); else setNet(n) }} />
       <div className="es-status" role="status" data-test="surface-status">{busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · volume ${preview.volume.toFixed(3)} mm³ · scarto bordo ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
     <footer><span>Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.</span><button disabled={busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={busy || calculating || !net || validNet !== net} onClick={() => void finish(true)}>Applica come nuovo corpo</button><button disabled={busy} onClick={close}>Annulla</button></footer>
