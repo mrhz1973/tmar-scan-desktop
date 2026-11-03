@@ -20,26 +20,34 @@ const validPreview: Preview = { mesh, faceMeshes: [mesh], valid: true, volume: 1
 const stripFixture = (): WorkspaceStripViewState => ({
   paths: [[[-1, -1, 0], [1, -1, 0]], [[1, -1, 0], [1, 1, 0]],
     [[1, 1, 0], [-1, 1, 0]], [[-1, 1, 0], [-1, -1, 0]]],
-  selectedEdge: -1, delta: [0, 0, 0], pending: false, canUndo: false, canRedo: false,
+  selectedEdge: -1, axis: 2, delta: [0, 0, 0], pending: false, canUndo: false, canRedo: false,
   addedArea: null, totalArea: null, hasResult: false,
 })
 
-function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; oblique?: boolean; preview?: Preview | null } = {}) {
+function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; oblique?: boolean; nearAligned?: boolean; perspective?: boolean; preview?: Preview | null } = {}) {
   const host = new THREE.Group(), group = new THREE.Group()
   host.add(group)
   if (options.rotated) { host.rotation.z = Math.PI / 2; host.position.set(5, -3, 2) }
   host.updateWorldMatrix(true, true)
   const target = new THREE.Vector3(0, 0, 0).applyMatrix4(group.matrixWorld)
-  const camera = new THREE.OrthographicCamera(-3, 3, 3, -3, 0.1, 100)
-  camera.position.copy(target).add(new THREE.Vector3(options.oblique ? 4 : 0, 0, 10)); camera.lookAt(target)
+  const camera = options.perspective ? new THREE.PerspectiveCamera(35, 1, 0.1, 100) : new THREE.OrthographicCamera(-3, 3, 3, -3, 0.1, 100)
+  camera.position.copy(target).add(new THREE.Vector3(options.oblique ? 4 : options.nearAligned ? 0.1 : 0, 0, 10)); camera.lookAt(target)
   camera.updateProjectionMatrix(); camera.updateMatrixWorld(true)
   const rect = { left: 0, top: 0, width: 600, height: 600 }
-  const overlay: { children: Array<{ style: Record<string, string>; dataset: Record<string, string>; textContent: string; remove: () => void }>; ownerDocument: unknown; getBoundingClientRect: () => typeof rect; appendChild: (child: typeof overlay.children[number]) => void } = {
+  type OverlayNode = { style: Record<string, string>; dataset: Record<string, string>; textContent: string; remove: () => void;
+    type: string; title: string; disabled: boolean; setAttribute(name: string, value: string): void;
+    addEventListener(name: string, fn: (event: PointerEvent) => void): void;
+    removeEventListener(name: string, fn: (event: PointerEvent) => void): void; dispatch(name: string, event: PointerEvent): void }
+  const overlay: { children: OverlayNode[]; ownerDocument: unknown; getBoundingClientRect: () => typeof rect; appendChild: (child: OverlayNode) => void } = {
     children: [], ownerDocument: null, getBoundingClientRect: () => rect,
     appendChild: child => { overlay.children.push(child) },
   }
   overlay.ownerDocument = { createElement: () => {
-    const child = { style: {} as Record<string, string>, dataset: {} as Record<string, string>, textContent: '', remove: () => {
+    const handlers = new Map<string, (event: PointerEvent) => void>()
+    const child: OverlayNode = { style: {}, dataset: {}, textContent: '', type: '', title: '', disabled: false,
+      setAttribute: () => {}, addEventListener: (name, fn) => { handlers.set(name, fn) },
+      removeEventListener: (name, fn) => { if (handlers.get(name) === fn) handlers.delete(name) },
+      dispatch: (name, event) => { handlers.get(name)?.(event) }, remove: () => {
       const i = overlay.children.indexOf(child); if (i >= 0) overlay.children.splice(i, 1)
     } }
     return child
@@ -48,6 +56,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
   let layer: import('../../../src/viewer/sceneLayers').SceneLayer | null = null
   let handlers: { move(e: PointerEvent): void; up(e: PointerEvent): void; cancel(e: PointerEvent): void; lostCapture(e: PointerEvent): void } | null = null
   let interrupted: (() => void) | null = null
+  let frameCallback: (() => void) | null = null
   let notifyReference: (() => void) | null = null
   const listeners = new Set<() => void>()
   let state: WorkspaceSurfaceViewState = { net, preview: options.preview === undefined ? validPreview : options.preview,
@@ -92,6 +101,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     addLayer(l: NonNullable<typeof layer>) { layer = l; l.clippingChanged?.(null, false); return () => l.dispose() },
     onCapturedPointer(h: NonNullable<typeof handlers>) { handlers = h; return () => { handlers = null } },
     onInterruption(fn: () => void) { interrupted = fn; return () => { interrupted = null } },
+    onFrame(fn: () => void) { frameCallback = fn; return () => { frameCallback = null } },
     subscribeReferences(fn: () => void) { notifyReference = fn; return () => { notifyReference = null } },
     references: () => options.reference ? [reference] : [],
     maskSourceForPreview() { maskCount++; let restored = false; return () => { if (!restored) { restored = true; restoreCount++ } } },
@@ -106,7 +116,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
   return { view, owner, set, net, group, rect, client, event, getLayer, getHandlers, counts: () => ({ maskCount, restoreCount, captured }),
     selectPoints, chooseFace, previewPoles, finishPoleGesture, placeNote, reportViewError, referenceGeometry, beforePosition,
     beginStripGesture, previewStripDelta, finishStripGesture,
-    overlay, notifyReferences: () => notifyReference?.(),
+    overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
 
@@ -412,6 +422,89 @@ it('selects an edge without a commit on click and ignores unrelated pointers', (
   expect(f.counts().captured).toBeNull()
   expect(f.group.getObjectByName('tmar-selected-strip-edge')).toBeDefined()
   layer.dispose()
+})
+
+it.each([
+  { axis: 0 as const, destination: [0.5, -1, 0] as Point, rotated: false, oblique: false, perspective: false },
+  { axis: 1 as const, destination: [0, -0.5, 0] as Point, rotated: true, oblique: false, perspective: false },
+  { axis: 2 as const, destination: [0, -1, 0.5] as Point, rotated: false, oblique: true, perspective: false },
+  { axis: 0 as const, destination: [0.5, -1, 0] as Point, rotated: true, oblique: true, perspective: true },
+])('constrains the D handle to part axis $axis and commits the resulting delta', ({ axis, destination, rotated, oblique, perspective }) => {
+  const f = fixture({ rotated, oblique, perspective }), layer = createWorkspaceLayer(f.view, f.owner)
+  const strip = { ...stripFixture(), selectedEdge: 0, axis }, original = JSON.stringify(strip.paths)
+  f.set({ net: null, strip }); f.frame()
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  expect(handle.style.display).toBe('block')
+  const start = f.client([0, -1, 0]), target = f.client(destination)
+  const x = Number.parseFloat(handle.style.left), y = Number.parseFloat(handle.style.top)
+  const event = (id: number, clientX: number, clientY: number) => ({ pointerId: id, button: 0, shiftKey: false,
+    ctrlKey: false, metaKey: false, altKey: false, clientX, clientY, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as PointerEvent)
+  const down = event(1, x, y)
+  handle.dispatch('pointerdown', down)
+  expect(down.preventDefault).toHaveBeenCalledOnce()
+  expect(f.counts().captured).toBe(1)
+  const end = event(1, x + target.clientX - start.clientX, y + target.clientY - start.clientY)
+  f.getHandlers().move(end)
+  const delta = f.previewStripDelta.mock.lastCall?.[0]
+  expect(delta?.[axis]).toBeCloseTo(0.5)
+  for (let i = 0; i < 3; i++) if (i !== axis) expect(delta?.[i]).toBeCloseTo(0)
+  f.frame()
+  expect(Number.parseFloat(handle.style.left)).toBeCloseTo(x + target.clientX - start.clientX)
+  expect(Number.parseFloat(handle.style.top)).toBeCloseTo(y + target.clientY - start.clientY)
+  f.getHandlers().up(end)
+  expect(f.finishStripGesture.mock.lastCall?.[0]?.[axis]).toBeCloseTo(0.5)
+  expect(f.counts().captured).toBeNull()
+  expect(JSON.stringify(strip.paths)).toBe(original)
+  layer.dispose()
+  expect(f.overlay.children).toHaveLength(0)
+})
+
+it.each([false, true])('rejects an axis aligned or almost aligned to the view (%s) with a useful message', nearAligned => {
+  const f = fixture({ nearAligned }), layer = createWorkspaceLayer(f.view, f.owner)
+  const strip = { ...stripFixture(), selectedEdge: 0, axis: 2 as const }
+  f.set({ net: null, strip }); f.frame()
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  const event = { pointerId: 1, button: 0, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false,
+    clientX: Number.parseFloat(handle.style.left), clientY: Number.parseFloat(handle.style.top),
+    preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as PointerEvent
+  handle.dispatch('pointerdown', event)
+  expect(f.reportViewError).toHaveBeenCalledWith('Direzione allineata alla vista: ruota il modello o scegli un altro asse.')
+  expect(f.counts().captured).toBeNull()
+  expect(f.beginStripGesture).not.toHaveBeenCalled()
+  f.set({ strip: { ...strip, axis: 0 } }); f.frame()
+  handle.dispatch('pointerdown', event)
+  expect(f.counts().captured).toBe(1)
+  expect(layer.cancelGesture()).toBe(true)
+  expect(f.finishStripGesture).toHaveBeenCalledWith(null)
+  expect(f.counts().captured).toBeNull()
+  layer.dispose()
+})
+
+it('hides D for unselected, clipped or disposed borders and cancels the captured drag on interruption', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  const strip = { ...stripFixture(), selectedEdge: 0, axis: 0 as const }
+  f.set({ net: null, strip: { ...strip, selectedEdge: -1 } }); f.frame()
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  expect(handle.style.display).toBe('none')
+  f.set({ strip }); f.frame(); expect(handle.style.display).toBe('block')
+  f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0, 0, 1), -1)], false)
+  expect(handle.style.display).toBe('none')
+  f.getLayer().clippingChanged?.(null, false); f.frame(); expect(handle.style.display).toBe('block')
+  const down = { pointerId: 7, button: 0, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false,
+    clientX: Number.parseFloat(handle.style.left), clientY: Number.parseFloat(handle.style.top),
+    preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as PointerEvent
+  handle.dispatch('pointerdown', down)
+  f.getHandlers().move({ ...down, clientX: down.clientX + 50 } as PointerEvent)
+  expect(f.previewStripDelta).toHaveBeenCalled()
+  f.getHandlers().up({ ...down, pointerId: 8 } as PointerEvent)
+  expect(f.counts().captured).toBe(7)
+  f.interrupt()
+  expect(f.finishStripGesture).toHaveBeenCalledWith(null)
+  expect(f.counts().captured).toBeNull()
+  layer.dispose()
+  expect(f.overlay.children).toHaveLength(0)
+  handle.dispatch('pointerdown', down) // The listener has been removed.
+  expect(f.beginStripGesture).toHaveBeenCalledOnce()
 })
 
 it('keeps the panel-selected edge when two boundaries overlap in the projection', () => {

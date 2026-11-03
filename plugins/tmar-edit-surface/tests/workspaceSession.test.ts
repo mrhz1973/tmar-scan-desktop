@@ -530,6 +530,23 @@ describe('workspace free-edge strip',()=>{
     await t.session.dispose('cancelled')
   })
 
+  it('shares a validated D direction with the panel and holds it fixed during a drag',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);await enterStrip(t)
+    expect(t.session.getPanelState().strip?.axis).toBe(2)
+    expect(t.session.getViewState().strip?.axis).toBe(2)
+    t.session.setStripAxis(1)
+    expect(t.session.getPanelState().strip?.axis).toBe(1)
+    expect(t.session.getViewState().strip?.axis).toBe(1)
+    expect(()=>t.session.setStripAxis(7 as 0)).toThrow('Direzione')
+    expect(t.session.getViewState().strip?.axis).toBe(1)
+    expect(t.session.beginStripGesture(0)).toBe(true)
+    expect(()=>t.session.setStripAxis(0)).toThrow('trascinamento')
+    await t.session.finishStripGesture(null)
+    t.session.setStripAxis(0)
+    expect(t.session.getViewState().strip?.axis).toBe(0)
+    await t.session.dispose('cancelled')
+  })
+
   it('exports the exact validated extension with freeze and immutable inputs',async()=>{
     const t=await setup({sheet:true});await selectFace(t);await enterStrip(t)
     expect(t.session.getSnapshot().validation.kind).toBe('pending')

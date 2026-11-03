@@ -18,7 +18,7 @@ notes are not written by this first `cad-copy` contract.
 ## Evidence on 2026-11-03
 
 - Actual host TypeScript check: PASS. The current session and shared-layer
-  suites passed 27 and 21 tests respectively. These do not alone establish
+  suites passed 28 tests each. These do not alone establish
   app-level behavior.
 - Isolated source application, synthetic STEP box: same main canvas, camera and
   camera pose on entry; selected face, normal numeric move, local Undo/Redo,
@@ -38,6 +38,13 @@ notes are not written by this first `cad-copy` contract.
   unchanged. The owner's Lego STEP has no pre-existing B-spline faces, so it
   does not establish this specific capability. Other NURBS topologies remain
   unqualified.
+- On a synthetic rational B-spline solid, the shared-view G1 workflow moved an
+  interior pole and applied a valid copy (`workspace-g1-j9Cs5o`). At 68 sampled
+  boundary positions the maximum displacement was 3.17e-13 mm; the minimum
+  dot product of source and result normals was 0.9999999999999998. This compares
+  the edited face to its own original boundary, not all adjacent faces or the
+  entire continuous boundary. G1 protects existing conditions; it does not create
+  tangency that was absent in the source.
 - On the synthetic box, real Zebra overlays and the editable note panel were
   active together. A note anchor was supplied to the real CAD worker, the text
   and pin survived another deformation, and a plain Apply was blocked until
@@ -61,6 +68,13 @@ notes are not written by this first `cad-copy` contract.
   A separate real-pointer test verified the visible strip, Escape, Undo and
   Redo without applying (`strip-drag-Hs5mQZ`). This is limited to one open
   sheet face, not an arbitrary multi-face object.
+- In strip mode a D handle now uses the X/Y/Z direction selected in the panel;
+  dragging the edge itself still moves in the screen plane. A real-pointer
+  synthetic-sheet test verified the X handle, preview, Escape, Undo/Redo and
+  reimport of a valid two-face sewn STEP (`strip-handle-xlmyGT`). The Y/Z
+  interactions, other sheet shapes and complete QS gesture equivalence remain
+  unqualified. The handle appears after entering strip mode and selecting an
+  edge; it is not the legacy editor's immediate D entry.
 - The local STEP export was downloaded and reimported as a valid edited solid;
   the source body retained its CAD geometry and topology and no project history
   was added (`workspace-export-step-A22rAX`). With a draft note present, export
@@ -87,6 +101,8 @@ The separate `tests/e2e-workspace-snap.mjs` exercises the synthetic snap cases.
 the separate numeric/apply and pointer/cancel workflows. Generated fixtures,
 screenshots and browser profiles belong outside the app checkout.
 `tests/e2e-workspace-export-step.mjs` covers the local export and note guard.
+`tests/e2e-workspace-g1.mjs` and `tests/e2e-workspace-strip-handle.mjs` cover
+the sampled G1 boundary and the handle on their respective synthetic fixtures.
 
 ## Not yet qualified
 

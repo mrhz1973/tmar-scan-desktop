@@ -18,6 +18,8 @@ export interface WorkspaceStripeSettings {
 export interface WorkspaceStripViewState {
   readonly paths: readonly (readonly Point[])[]
   readonly selectedEdge: number
+  /** Axis for the D handle and numeric extension, in the part CAD frame. */
+  readonly axis: 0 | 1 | 2
   readonly delta: Point
   readonly pending: boolean
   readonly canUndo: boolean

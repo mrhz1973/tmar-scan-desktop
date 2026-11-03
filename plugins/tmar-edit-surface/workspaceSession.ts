@@ -72,6 +72,7 @@ interface StripMode {
   frames: (StripResult | null)[]
   at: number
   selectedEdge: number
+  axis: 0 | 1 | 2
   delta: Point
   error: string | null
 }
@@ -340,7 +341,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         throw new Error('Anteprima del bordo superata.')
       this.change(() => {
         this.strip = { baseNet:net, basePreviewRevision:revision, initialPaths:paths, frames:[null], at:0,
-          selectedEdge:-1, delta:[0,0,0], error:null }
+          selectedEdge:-1, axis:2, delta:[0,0,0], error:null }
         this.stripPending = false; this.stripAbort = null; this.busy = false
       }, true, false, true)
     } catch (error) {
@@ -369,6 +370,14 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const strip = this.requireStrip(), paths = strip.frames[strip.at]?.paths ?? strip.initialPaths
       if (!Number.isInteger(index) || index < 0 || index >= paths.length) throw new Error('Scegli un bordo libero valido.')
       strip.selectedEdge = index; strip.delta = [0,0,0]; strip.error = null; this.message = null
+    }, false, false, true)
+  }
+
+  setStripAxis(axis: 0 | 1 | 2): void {
+    this.change(() => {
+      const strip = this.requireStrip()
+      if (axis !== 0 && axis !== 1 && axis !== 2) throw new Error('Direzione del bordo non valida.')
+      strip.axis = axis
     }, false, false, true)
   }
 
@@ -793,7 +802,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const message = this.message ?? (strip?.error || d.error || null)
     const canUndo = strip ? strip.at > 0 : d.canUndo, canRedo = strip ? strip.at + 1 < strip.frames.length : d.canRedo
     const stripView: WorkspaceStripViewState | null = strip ? Object.freeze({
-      paths: stripResult?.paths ?? strip.initialPaths, selectedEdge:strip.selectedEdge, delta:freezePoint(strip.delta),
+      paths: stripResult?.paths ?? strip.initialPaths, selectedEdge:strip.selectedEdge, axis:strip.axis, delta:freezePoint(strip.delta),
       pending:this.stripPending || this.gesture === 'strip', canUndo, canRedo,
       addedArea:stripResult?.addedArea ?? null, totalArea:stripResult?.totalArea ?? null, hasResult:!!stripResult,
     }) : null

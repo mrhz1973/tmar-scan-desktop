@@ -13,7 +13,6 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const [distance, setDistance] = useState(0.1)
   const [smooth, setSmooth] = useState(0.5)
   const [factor, setFactor] = useState(1.1)
-  const [stripAxis, setStripAxis] = useState<0 | 1 | 2>(2)
   const [stripDistance, setStripDistance] = useState(0.1)
   const disabled = state.busy || state.gesture !== 'idle'
   const editable = state.selected.filter(i => !state.locked.includes(i))
@@ -43,7 +42,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const extendStrip = () => {
     if (!strip || strip.selectedEdge < 0 || !Number.isFinite(stripDistance) || Math.abs(stripDistance) <= 1e-7) return
     const delta: [number, number, number] = [0, 0, 0]
-    delta[stripAxis] = stripDistance
+    delta[strip.axis] = stripDistance
     attempt(() => controller.applyStripDelta(delta))
   }
   const exportStep = async () => {
@@ -78,7 +77,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         title={state.notes.length || state.placingNote ? 'Le note non vengono incluse nello STEP: rimuovile prima di esportare.' : 'Scarica la geometria CAD convalidata come STEP.'}
         onClick={() => { void exportStep() }}>Esporta STEP</button>
       {strip ? <fieldset data-test="surface-strip-panel"><legend>Duplica bordo libero</legend>
-        <p>Scegli un bordo e indica lo spostamento lungo un asse, in millimetri.</p>
+        <p>Scegli un bordo e trascina D lungo l’asse scelto, oppure indica lo spostamento in millimetri.</p>
         <label>Bordo libero<select data-test="surface-strip-edge" value={strip.selectedEdge < 0 ? '' : String(strip.selectedEdge)}
           disabled={disabled || strip.pending} onChange={e => {
             if (e.target.value !== '') attempt(() => controller.selectStripEdge(Number(e.target.value)))
@@ -86,8 +85,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           <option value="">Scegli un bordo…</option>
           {strip.paths.map((_, index) => <option key={index} value={index}>Bordo {index + 1}</option>)}
         </select></label>
-        <label>Direzione<select data-test="surface-strip-axis" value={stripAxis} disabled={disabled || strip.pending}
-          onChange={e => setStripAxis(Number(e.target.value) as 0 | 1 | 2)}>
+        <label>Direzione<select data-test="surface-strip-axis" value={strip.axis} disabled={disabled || strip.pending}
+          onChange={e => attempt(() => controller.setStripAxis(Number(e.target.value) as 0 | 1 | 2))}>
           <option value={0}>X</option><option value={1}>Y</option><option value={2}>Z</option>
         </select></label>
         <label>Spostamento · mm<input data-test="surface-strip-distance" type="number" step="any"
@@ -96,7 +95,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <button type="button" data-test="surface-strip-extend"
           disabled={disabled || strip.pending || strip.selectedEdge < 0 || !Number.isFinite(stripDistance) || Math.abs(stripDistance) <= 1e-7}
           onClick={extendStrip}>Duplica e sposta il bordo</button>
-        <p role="status" data-test="surface-strip-status">{strip.pending ? 'Calcolo della superficie in corso…' : strip.hasResult
+        <p role="status" data-test="surface-strip-status">{strip.pending ? state.gesture === 'strip'
+          ? 'Sposta il bordo; rilascia per verificare la superficie.' : 'Calcolo della superficie in corso…' : strip.hasResult
           ? 'Superficie estesa pronta: puoi continuare oppure usare Applica per creare la copia CAD.'
           : 'Scegli un bordo libero per iniziare.'}</p>
         {strip.hasResult && strip.addedArea !== null && strip.totalArea !== null && <p data-test="surface-strip-area">
