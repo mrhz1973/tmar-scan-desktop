@@ -61,6 +61,22 @@ try {
   await page.click('[data-test=surface-control-net]'); await click(edge); await selected(0)
   await page.click('[data-test=surface-control-net]'); await page.select('[data-test=surface-selection-mode]','mixed')
   await click(project(poles[12])); await selected(1)
+  // Rebuild the handles and pick again inside ONE frame. Browser scheduling
+  // cannot accidentally make a stale world matrix pass this regression.
+  await clickText('Nessuno')
+  await page.evaluate(({x,y}) => new Promise(resolve => requestAnimationFrame(async () => {
+    const toggle = document.querySelector('[data-test=surface-control-net]')
+    const canvas = document.querySelector('[data-test=edit-surface-viewport] canvas')
+    toggle.click()
+    await Promise.resolve()
+    toggle.click()
+    await Promise.resolve()
+    const init = { bubbles:true, clientX:x, clientY:y, button:0, ctrlKey:true, pointerType:'mouse' }
+    canvas.dispatchEvent(new PointerEvent('pointerdown',init))
+    canvas.dispatchEvent(new PointerEvent('pointerup',init))
+    resolve()
+  })),project(poles[12]))
+  await selected(1)
   await click(edge); await selected(2)
   await clickText('Blocca punti'); await selected(2,0)
   await page.mouse.move(edge.x,edge.y)
@@ -124,7 +140,7 @@ try {
   let maxBorderError=0
   for(const result of [numeric,dragged,undone,redone]) for(let i=0;i<base.border.length;i++) maxBorderError=Math.max(maxBorderError,new THREE.Vector3(...result.border[i]).distanceTo(new THREE.Vector3(...base.border[i])))
   assert(maxBorderError<1e-6);assert.deepEqual(consoleErrors,[])
-  const report={pass:true,selectionChecks:cells?['corner cell: 4 selected, 1 free','hidden cells unpickable','interior cell: 4 free','selection creates no undo']:['points excludes segments','segment selects two poles','Ctrl add/remove shared endpoints','hidden net unpickable','mixed prioritizes poles','locked segment cannot drag','selection creates no undo'],base,numeric,dragged,undone,redone,maxBorderError,consoleErrors,elapsedMs:performance.now()-started}
+  const report={pass:true,selectionChecks:cells?['corner cell: 4 selected, 1 free','hidden cells unpickable','interior cell: 4 free','selection creates no undo']:['points excludes segments','segment selects two poles','Ctrl add/remove shared endpoints','hidden net unpickable','mixed prioritizes poles','mixed picks pole before next frame','locked segment cannot drag','selection creates no undo'],base,numeric,dragged,undone,redone,maxBorderError,consoleErrors,elapsedMs:performance.now()-started}
   writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({out,pass:report.pass,selectionChecks:report.selectionChecks,elapsedMs:report.elapsedMs,maxBorderError,consoleErrors,centers:[base,numeric,dragged,undone,redone].map(({file,center,volume})=>({file,center,volume}))},null,2))
 } catch(e) { writeFileSync(join(out,'failure.json'),JSON.stringify({error:String(e),stack:e.stack},null,2));await page.screenshot({path:join(out,'failure.png')});throw e }
 finally {await browser.close();kernel[Symbol.dispose]()}
