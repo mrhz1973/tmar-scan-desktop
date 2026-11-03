@@ -9,7 +9,7 @@ import { registerHistory } from '../../src/state/historyStore'
 import { reEditorOpen, useReverse } from '../reverse/state/reStore'
 import { bodyStepResult } from '../tmar-body-export/bodyExport'
 import { assertNet, boundaryLocked, type Net, type Point } from './brep'
-import type { FaceInfo, Preview } from './editorKernel'
+import type { DraftAnchor, FaceInfo, Preview } from './editorKernel'
 import type { Request } from './editor.worker'
 import { SurfaceViewport, hasSurfaceZebra, type StripeSettings } from './SurfaceViewport'
 import { dragDirection, type DragMode } from './localFrame'
@@ -17,14 +17,21 @@ import { selectNetPoints, type NetSelectionMode } from './netSelection'
 import './surface.css'
 type Payload = Request extends infer R ? R extends Request ? Omit<R, 'id'> : never : never
 
-export function EditSurface() {
+interface Pin { anchor: DraftAnchor; at: Point; normal: Point }
+export interface SurfaceNoteCommit {
+  step: string; name: string; faceIndex: number
+  notes: { text: string; at: Point; normal: Point; u: number; v: number }[]
+}
+interface SurfaceOptions { applyWithNotes?: (edit: SurfaceNoteCommit) => Promise<void> }
+
+export function EditSurface({ applyWithNotes }: SurfaceOptions = {}) {
   const [open, setOpen] = useState(false)
   const busy = useStore(s => s.busy), running = useCommandActivity(s => s.running !== null)
   const re = useReverse(useShallow(s => ({ bodies: s.bodies, building: s.building, editing: reEditorOpen(s), playback: s.playback !== null })))
   return <div className="group" data-test="edit-surface-entry"><button className="block" disabled={busy || running || re.building || re.editing || re.playback} onClick={() => setOpen(true)}>Edit Surface · punti CAD…</button>
-    {open && <SurfaceDialog close={() => setOpen(false)} />}</div>
+    {open && <SurfaceDialog applyWithNotes={applyWithNotes} close={() => setOpen(false)} />}</div>
 }
-function SurfaceDialog({ close }: { close: () => void }) {
+function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () => void }) {
   const re = useReverse.getState(), model = useStore.getState()
   const source = useRef({ version: re.buildVersion, features: re.features, file: model.fileName, alignment: model.appliedAlignment })
   const [bodyId, setBodyId] = useState(re.bodies[0]?.id ?? '')
@@ -42,6 +49,13 @@ function SurfaceDialog({ close }: { close: () => void }) {
   const [dragStrength, setDragStrength] = useState(1), [smoothStrength, setSmoothStrength] = useState(0.5)
   const [dragMode, setDragMode] = useState<DragMode>('axis')
   const [selectionMode, setSelectionMode] = useState<NetSelectionMode>('points')
+  const [placingNote, setPlacingNote] = useState(false)
+  const [notes, setNotes] = useState<(Pin & {id:number; text:string; revision:number})[]>([])
+  const nextNote = useRef(1)
+  const [noteError,setNoteError] = useState('')
+  const cancel = () => {
+    if (!notes.length || window.confirm('Chiudere e scartare le note della bozza?')) close()
+  }
   const [zebra, setZebra] = useState(false)
   const [stripes, setStripes] = useState<StripeSettings>({ orientation:'horizontal', width:3, color:'#5388b1' })
   const [showNet, setShowNet] = useState(true), [transparency, setTransparency] = useState(0)
@@ -67,7 +81,7 @@ function SurfaceDialog({ close }: { close: () => void }) {
     setNet(n); historyTick(v => v + 1)
   }
   const undo = (delta: number) => { const next = at.current + delta; if (next >= 0 && next < history.current.length) { at.current = next; setNet(structuredClone(history.current[next])); historyTick(v => v + 1) } }
-  const modalKeys = useRef({ busy, undo, close }); modalKeys.current = { busy, undo, close }
+  const modalKeys = useRef({ busy, undo, close }); modalKeys.current = { busy, undo, close:cancel }
   useEffect(() => {
     const unregister = registerHistory({ blocked: () => true })
     const onKey = (e: KeyboardEvent) => {
@@ -108,7 +122,7 @@ function SurfaceDialog({ close }: { close: () => void }) {
     setBusy(true); setError('')
     try {
       const result = await ask<{ faces: FaceInfo[]; preview: Preview }>({ action: 'open', step })
-      loaded.current = { step, name: fileName }; setLoadId(i => i + 1); setValidNet(null)
+      setNotes([]); setPlacingNote(false); setNoteError(''); loaded.current = { step, name: fileName }; setLoadId(i => i + 1); setValidNet(null)
       setNet(null); base.current = null; history.current = []; at.current = -1; setSelected([]); setLocks([]); setFace(-1)
       setFaces(result.faces); setPreview(result.preview); setName(fileName.replace(/\.(step|stp)$/i, '') + '-edit.step')
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
@@ -140,24 +154,61 @@ function SurfaceDialog({ close }: { close: () => void }) {
     normal.forEach((x, i) => { normal[i] = x / len })
     transform(p => { const d = p.reduce((s, x, i) => s + (x - a[i]) * normal[i], 0); return p.map((x, i) => x - d * normal[i]) as Point })
   }
+  const pickNote = async (point: Point | null) => {
+    if (!point) { setNoteError('Clicca sulla faccia in modifica.'); return }
+    const revision = preview?.previewRevision
+    if (revision === undefined || !net || net !== validNet || calculating || busy) return
+    setBusy(true)
+    try {
+      const pin = await ask<Pin>({action:'notePick',point,previewRevision:revision})
+      const id = nextNote.current++
+      setNotes(prev=>[...prev,{...pin,id,text:'',revision}])
+      setNoteError(''); setPlacingNote(false)
+    } catch(e) { setNoteError((e as Error).message) }
+    finally { if (mounted.current) setBusy(false) }
+  }
+  const notesRef = useRef(notes); notesRef.current = notes
+  useEffect(() => {
+    const revision=preview?.previewRevision
+    if (!revision || net !== validNet) return
+    let active=true
+    const pending=notesRef.current.filter(n=>n.revision!==revision)
+    if (pending.length) void Promise.all(pending.map(async n=>({
+      id:n.id,...await ask<{at:Point;normal:Point}>({action:'noteResolve',anchor:n.anchor,previewRevision:revision})
+    }))).then(pins=>{
+      if (active) setNotes(prev=>prev.map(n=>{
+        const pin=pins.find(p=>p.id===n.id)
+        return pin ? {...n,...pin,revision} : n
+      }))
+    }).catch(e=>{if(active)setNoteError(e.message)})
+    return ()=>{active=false}
+  },[preview,validNet,net])
   const finish = async (importBody: boolean) => {
     if (!net || busy || calculating || validNet !== net) return
     setBusy(true); setError('')
     try {
-      const result = await ask<Preview & { step: string }>({ action: 'evaluate', net, continuity, exportStep: true })
+      const result = await ask<Preview & { step: string; previewRevision:number }>({ action: 'evaluate', net, continuity, exportStep: true })
       if (importBody) {
         const r = useReverse.getState(), m = useStore.getState(), s = source.current
         if (r.buildVersion !== s.version || r.features !== s.features || m.fileName !== s.file || m.appliedAlignment !== s.alignment || reEditorOpen(r) || r.building) throw new Error('Il progetto è cambiato. Esporta il risultato STEP e riaprilo nel progetto aggiornato.')
-        await runCommand('reverse.import.step', { bytes: new TextEncoder().encode(result.step), name })
+        setPreview(result)
+        if (notes.length) {
+          if (!applyWithNotes || notes.some(n=>!n.text.trim())) throw new Error('Completa le note prima di applicare.')
+          const finalNotes=await Promise.all(notes.map(async n=>({
+            text:n.text.trim(),u:n.anchor.u,v:n.anchor.v,
+            ...await ask<{at:Point;normal:Point}>({action:'noteResolve',anchor:n.anchor,previewRevision:result.previewRevision})
+          })))
+          await applyWithNotes({step:result.step,name,faceIndex:face,notes:finalNotes})
+        } else await runCommand('reverse.import.step', { bytes: new TextEncoder().encode(result.step), name })
         close()
-      } else saveFile(name, new Blob([result.step], { type: 'model/step' }))
+      } else { setPreview(result); saveFile(name, new Blob([result.step], { type: 'model/step' })) }
     } catch (e) { setError((e as Error).message) } finally { if (mounted.current) setBusy(false) }
   }
   return <div className="modalback es-back"><div role="dialog" aria-modal="true" aria-label="Edit Surface" className="es-dialog" data-test="edit-surface-dialog" onKeyDown={e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); e.stopPropagation(); if (!busy) undo(e.shiftKey ? 1 : -1) }
-    if (e.key === 'Escape') { e.stopPropagation(); if (!busy) close() }
+    if (e.key === 'Escape') { e.stopPropagation(); if (!busy) cancel() }
   }}>
-    <header><strong>Edit Surface · prototipo CAD</strong><button disabled={busy} onClick={close} aria-label="Chiudi Edit Surface">×</button></header>
+    <header><strong>Edit Surface · prototipo CAD</strong><button disabled={busy} onClick={cancel} aria-label="Chiudi Edit Surface">×</button></header>
     <div className="es-content"><aside>
       {!net && <><label>Corpo CAD<select value={bodyId} disabled={busy} onChange={e => setBodyId(Number(e.target.value))}>{re.bodies.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
         <button disabled={busy || !re.bodies.some(b => b.id === bodyId)} onClick={() => void loadBody()}>Carica corpo</button>
@@ -190,6 +241,17 @@ function SurfaceDialog({ close }: { close: () => void }) {
             <label>Colore strisce<input type="color" value={stripes.color} onChange={e=>setStripes({...stripes,color:e.target.value})}/></label>
           </details>}
         </>}
+        {(zebra || notes.length>0 || placingNote) && <fieldset><legend>Note sulla superficie</legend>
+          <button data-test="surface-note-add" disabled={busy || calculating || validNet!==net} aria-pressed={placingNote}
+            onClick={()=>{setNoteError('');setPlacingNote(!placingNote)}}>{placingNote?'Annulla scelta punto':'Aggiungi nota sulla faccia'}</button>
+          {placingNote && <p>Clicca sulla faccia in modifica per posizionare la nota.</p>}
+          {notes.map(n=><div key={n.id}><label>Nota {n.id}<input data-test="surface-note-text" disabled={busy} value={n.text} maxLength={2000}
+            onChange={e=>setNotes(prev=>prev.map(item=>item.id===n.id?{...item,text:e.target.value}:item))}/></label>
+            <small data-test="surface-note-position">{n.revision===preview?.previewRevision ? n.at.map((v,i)=>['X','Y','Z'][i]+' '+v.toFixed(3)).join(' · ')+' mm' : 'Aggiornamento posizione…'}</small>
+            <button disabled={busy} onClick={()=>setNotes(prev=>prev.filter(item=>item.id!==n.id))}>Rimuovi nota {n.id}</button></div>)}
+          {notes.length>0 && !applyWithNotes && <p>Note in bozza. Questa versione non salva ancora le note nel progetto. Rimuovile per applicare il corpo senza note.</p>}
+          {noteError && <p role="alert">{noteError}</p>}
+        </fieldset>}
         <label>Trasparenza superficie · {Math.round(transparency * 100)}%<input data-test="surface-transparency" type="range" min="0" max="0.9" step="0.05" value={transparency} onChange={e => setTransparency(Number(e.target.value))} /></label>
         <div className="es-row"><button onClick={() => setSelected(net.poles.flatMap((_, i) => locked.includes(i) ? [] : [i]))}>Seleziona liberi</button><button onClick={() => setSelected([])}>Nessuno</button></div>
         <p data-test="surface-selection">{selected.length} selezionati · {editable.length} modificabili</p>
@@ -203,9 +265,9 @@ function SurfaceDialog({ close }: { close: () => void }) {
         <button disabled={busy || !editable.length || !Number.isFinite(factor) || factor <= 0 || factor > 3} onClick={() => { const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factor : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
         <div className="es-row"><button data-test="surface-undo" disabled={busy || at.current <= 0} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || at.current >= history.current.length - 1} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
       </>}
-    </aside><main><SurfaceViewport stripes={zebra ? stripes : null} key={loadId} preview={preview} net={net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => void chooseFace(i)} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={(poles, final) => { const n = { ...netRef.current!, poles }; if (final) commit(n); else setNet(n) }} />
+    </aside><main><SurfaceViewport notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={preview} net={net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => void chooseFace(i)} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={(poles, final) => { const n = { ...netRef.current!, poles }; if (final) commit(n); else setNet(n) }} />
       <div className="es-status" role="status" data-test="surface-status">{busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · volume ${preview.volume.toFixed(3)} mm³ · scarto bordo ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
-    <footer><span>Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.</span><button disabled={busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={busy || calculating || !net || validNet !== net} onClick={() => void finish(true)}>Applica come nuovo corpo</button><button disabled={busy} onClick={close}>Annulla</button></footer>
+    <footer><span>Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.</span><button disabled={busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={(notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => void finish(true)}>Applica come nuovo corpo</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>
   </div></div>
 }

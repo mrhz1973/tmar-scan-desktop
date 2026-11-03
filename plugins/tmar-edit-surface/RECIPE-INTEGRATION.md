@@ -52,3 +52,17 @@ The revision and selectionRevision are session-local. Resolve draft anchors on
 the final validated geometry before Apply. The host owns text, stable body/face
 identity, the transaction and project persistence. Do not serialize a session
 revision as a project face ID. An exported STEP by itself does not carry notes.
+
+The EditSurface component accepts an optional applyWithNotes callback. On Apply
+with notes it hands the host exactly one package: the final STEP, name,
+faceIndex and all nonempty notes with text, UV, position and normal resolved on
+that exact final evaluation. The host callback must atomically commit the new
+body and notes or reject without committing either. With no callback installed,
+annotated Apply is disabled and notes are explicitly marked as draft. Closing
+asks before discarding notes. STEP export carries geometry only.
+
+Browser QA: e2e-perforated.mjs --reopen --note. A real click and text entry
+with Zebra enabled followed the edited face from Z 10.163 to 10.874 mm. The
+text was retained and Apply was disabled in the absence of an adapter. After
+explicitly removing that draft, STEP export/reimport yielded a valid solid.
+This does not verify host persistence. See evidence/perforated/run-pIwcn6/.

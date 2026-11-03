@@ -17,6 +17,7 @@ const ZebraRenderer = Object.values(zebraModules)[0]
 export const hasSurfaceZebra = Boolean(ZebraRenderer)
 
 interface Props {
+  notePins: Point[]; placingNote: boolean; onNote: (point:Point|null)=>void
   preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; face: number
   axis: number; onFace: (i: number) => void; onPoints: (ids: number[], multi: boolean) => void
   onDrag: (poles: Point[], final: boolean) => void; busy: boolean
@@ -97,6 +98,7 @@ export function SurfaceViewport(props: Props) {
     const pointerDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY }
       if (e.button !== 0 || current.current.busy) return
+      if (current.current.placingNote) return
       const picked = pickNet(e)
       if (!picked) return
       e.stopImmediatePropagation(); controls.enabled = false
@@ -137,11 +139,16 @@ export function SurfaceViewport(props: Props) {
     }
     const pointerMove = (e: PointerEvent) => {
       if (drag) { e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), false); return }
+      if (current.current.placingNote) { div.style.cursor='crosshair'; return }
       const picked = pickNet(e)
       div.style.cursor = picked ? (picked.every(i => current.current.locked.includes(i)) ? 'not-allowed' : 'grab') : 'crosshair'
     }
     const pointerUp = (e: PointerEvent) => {
       if (drag) { e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), true); drag = null; renderer.domElement.releasePointerCapture(e.pointerId) }
+      else if (current.current.placingNote && !current.current.busy && e.button===0 && Math.hypot(e.clientX-down.x,e.clientY-down.y)<3) {
+        const hit=hits(e,body.children)[0]
+        current.current.onNote(hit?.object.userData.face===current.current.face ? hit.point.toArray() as Point : null)
+      }
       else if (e.button === 0 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 3 && !pickNet(e)) {
         const hit = hits(e, body.children)[0]; if (hit && !current.current.net && !current.current.busy) current.current.onFace(hit.object.userData.face)
       }
@@ -228,6 +235,18 @@ export function SurfaceViewport(props: Props) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
     const line = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthTest: false, depthWrite: false })); line.renderOrder = 4; s.cage.add(line)
   }, [props.net, props.selected, props.locked, props.showNet, props.dragMode, props.axis])
+  useEffect(() => {
+    const state=sceneRef.current
+    if (!state || !props.notePins.length) return
+    const pins=new THREE.Group()
+    for (const point of props.notePins) {
+      const marker=new THREE.Mesh(new THREE.OctahedronGeometry(state.radius*0.026),
+        new THREE.MeshBasicMaterial({color:0xff699b,transparent:true,depthTest:false,depthWrite:false}))
+      marker.position.set(...point); marker.renderOrder=8; pins.add(marker)
+    }
+    state.scene.add(pins)
+    return ()=>{pins.removeFromParent();pins.traverse(dispose)}
+  },[props.notePins])
   return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" />
 }
 function dispose(o: THREE.Object3D) { const m = o as THREE.Mesh; m.geometry?.dispose(); if (Array.isArray(m.material)) m.material.forEach(a => a.dispose()); else m.material?.dispose() }
