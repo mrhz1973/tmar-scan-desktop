@@ -9,7 +9,9 @@ import type { Preview } from './editorKernel'
 import type { Net, Point } from './brep'
 import { dragDirection, type DragMode } from './localFrame'
 import { bindStripDrag, drawStrip, pickSheetEdge, type DirectStrip, type StripDrag } from './sheetDrag'
-import { netEdges, type NetSelectionMode } from './netSelection'
+import type { NetSelectionMode } from './netSelection'
+import { pickNetAt } from './netPicking'
+import { populateSurfaceCage } from './surfaceCage'
 import { sceneOf } from '../../src/commands/host'
 import { reSceneOf } from '../reverse/viewer/reScene'
 import { withBoundsTree } from '../reverse/viewer/bodyPicks'
@@ -69,6 +71,7 @@ export function SurfaceViewport(props: Props) {
     let drag: { index: number; start: Point[]; ids: number[]; x: number; y: number; sx: number; sy: number; direction: Point; strength: number; started: boolean; screen: { plane: THREE.Plane; start: THREE.Vector3 } | null } | null = null
     let down = { x: 0, y: 0 }
     const raycaster = new THREE.Raycaster()
+    const netFrame = new THREE.Matrix4() // This prototype keeps the net in the scene frame.
     const hits = (e: PointerEvent, objects: THREE.Object3D[]) => {
       const r = renderer.domElement.getBoundingClientRect()
       raycaster.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, 1 - (e.clientY - r.top) / r.height * 2), camera)
@@ -77,52 +80,16 @@ export function SurfaceViewport(props: Props) {
     const pickNet = (e: PointerEvent): number[] | null => {
       const p = current.current
       if (!p.net) return null
-      const hidden = new Set(p.hiddenPoles)
       if (p.selectionMode !== 'edges' && p.selectionMode !== 'cells') {
         const point = hits(e, cage.children.filter(o => o.userData.point !== undefined))[0]
         if (point) return [point.object.userData.point as number]
       }
       if (!p.showNet || p.selectionMode === 'points') return null
-      if (p.selectionMode !== 'cells') {
-        const r = renderer.domElement.getBoundingClientRect()
-        const projected = p.net.poles.map(q => new THREE.Vector3(...q).project(camera))
-        let best: number[] | null = null, distance = 7 // CSS pixels, independent of zoom.
-        for (const [a, b] of netEdges(p.net)) {
-          if (hidden.has(a) || hidden.has(b)) continue
-          const pa = projected[a], pb = projected[b]
-          if (Math.abs(pa.z) > 1 || Math.abs(pb.z) > 1) continue
-          const ax = r.left + (pa.x + 1) * r.width / 2, ay = r.top + (1 - pa.y) * r.height / 2
-          const dx = (pb.x - pa.x) * r.width / 2, dy = -(pb.y - pa.y) * r.height / 2
-          const length2 = dx * dx + dy * dy
-          if (length2 < 1) continue
-          const t = Math.max(0, Math.min(1, ((e.clientX - ax) * dx + (e.clientY - ay) * dy) / length2))
-          const d = Math.hypot(e.clientX - ax - t * dx, e.clientY - ay - t * dy)
-          if (d < distance) { distance = d; best = [a, b] }
-        }
-        if (best) return best
-      }
-      if (p.selectionMode === 'cells' || p.selectionMode === 'auto') {
-        hits(e, [])
-        // The cage may be nonplanar. Pick its nearest visible-depth half-quad
-        // but return the four poles, regardless of the internal diagonal.
-        const { nu, nv, poles } = p.net
-        const vertices = poles.map(x => new THREE.Vector3(...x))
-        const hit = new THREE.Vector3()
-        let best: number[] | null = null, nearest = Infinity
-        for (let u = 0; u < nu - 1; u++) for (let v = 0; v < nv - 1; v++) {
-          const a = u * nv + v, b = a + nv, c = b + 1, d = a + 1
-          if ([a,b,c,d].some(i=>hidden.has(i))) continue
-          for (const [j, k] of [[b, c], [c, d]]) {
-            if (!raycaster.ray.intersectTriangle(vertices[a], vertices[j], vertices[k], false, hit)) continue
-            const distance = hit.distanceToSquared(raycaster.ray.origin)
-            if (distance < nearest && Math.abs(hit.project(camera).z) <= 1) {
-              nearest = distance; best = [a, b, c, d]
-            }
-          }
-        }
-        return best
-      }
-      return null
+      // Keep pole picking on the actual visible handles; use the shared
+      // screen-space picker for segments and cells in either viewport.
+      return pickNetAt({ net: p.net, mode: p.selectionMode, hiddenPoles: p.hiddenPoles,
+        camera, partWorld: netFrame, rect: renderer.domElement.getBoundingClientRect(),
+        clientX: e.clientX, clientY: e.clientY, pointRadiusPx: 0 })
     }
     const showHover = (ids: number[] | null) => {
       const net = current.current.net, key = net && ids ? ids.join(',') : ''
@@ -409,56 +376,11 @@ export function SurfaceViewport(props: Props) {
     s.hover.traverse(dispose); s.hover.clear(); s.hoverKey = ''
     if (host.current) host.current.dataset.hoverKind = ''
     const n = props.net; if (!n) return
-    const hidden = new Set(props.hiddenPoles)
-    const mirrored = new Set<number>()
-    if (props.mirrorPartners) {
-      for (const i of props.selected) {
-        const j = props.mirrorPartners[i]
-        if (j >= 0 && !props.locked.includes(i) && !props.locked.includes(j)) mirrored.add(j)
-      }
-      const axis = props.mirrorAxis, u = (axis + 1) % 3, v = (axis + 2) % 3
-      const box = new THREE.Box3().setFromPoints(n.poles.map(p => new THREE.Vector3(...p)))
-      const pad = s.radius * 0.08
-      const corners = [[0,0], [1,0], [1,1], [0,1]].map(([highU, highV]) => {
-        const corner = new THREE.Vector3()
-        corner.setComponent(axis, props.mirrorOffset)
-        corner.setComponent(u, highU ? box.max.getComponent(u) + pad : box.min.getComponent(u) - pad)
-        corner.setComponent(v, highV ? box.max.getComponent(v) + pad : box.min.getComponent(v) - pad)
-        return corner
-      })
-      const frame = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(corners),
-        new THREE.LineBasicMaterial({ color: '#f785ff', transparent: true, opacity: 0.85, depthWrite: false, depthTest: false }))
-      frame.renderOrder = 3
-      s.cage.add(frame)
-    }
-    n.poles.forEach((p, i) => {
-      if (hidden.has(i)) return
-      const color = props.selected.includes(i) ? '#ffcf35' : props.locked.includes(i) ? '#89939c' : mirrored.has(i) ? '#f785ff' : '#58f3d0'
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(s.radius * 0.012, 10, 8), new THREE.MeshBasicMaterial({ color, transparent: true, depthTest: false, depthWrite: false })); mesh.position.set(...p); mesh.userData.point = i; mesh.renderOrder = 5; s.cage.add(mesh)
-      // Picking can run before the next render after the cage is rebuilt.
-      mesh.updateWorldMatrix(true, false)
+    populateSurfaceCage(s.cage, {
+      net: n, selected: props.selected, locked: props.locked, hiddenPoles: props.hiddenPoles,
+      showNet: props.showNet, dragMode: props.dragMode, axis: props.axis, radius: s.radius,
+      mirrorAxis: props.mirrorAxis, mirrorOffset: props.mirrorOffset, mirrorPartners: props.mirrorPartners,
     })
-    const anchor = props.selected.find(i => !props.locked.includes(i) && !hidden.has(i))
-    if (anchor !== undefined && props.dragMode !== 'screen') {
-      const direction = dragDirection(n, anchor, props.dragMode, props.axis)
-      if (direction) {
-        const arrow = new THREE.ArrowHelper(new THREE.Vector3(...direction), new THREE.Vector3(...n.poles[anchor]), s.radius * 0.22, 0xffcf35, s.radius * 0.045, s.radius * 0.025)
-        // ArrowHelper shares default geometry globally; this viewport owns only its clones.
-        arrow.line.geometry = arrow.line.geometry.clone(); arrow.cone.geometry = arrow.cone.geometry.clone()
-        arrow.traverse(o => { const m = o as THREE.Mesh; if (m.material && !Array.isArray(m.material)) { m.material.transparent = true; m.material.depthTest = false; m.material.depthWrite = false }; o.renderOrder = 6 })
-        s.cage.add(arrow)
-      }
-    }
-    if (!props.showNet) return // Hide the connecting cage, retain editable poles.
-    const lines: number[] = [], colors: number[] = []
-    for (const [a, b] of netEdges(n)) {
-      if (hidden.has(a) || hidden.has(b)) continue
-      lines.push(...n.poles[a], ...n.poles[b])
-      const c = new THREE.Color(props.selected.includes(a) && props.selected.includes(b) ? '#ffcf35' : '#95e7ea')
-      colors.push(c.r, c.g, c.b, c.r, c.g, c.b)
-    }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
-    const line = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthTest: false, depthWrite: false })); line.renderOrder = 4; s.cage.add(line)
   }, [props.net, props.selected, props.locked, props.hiddenPoles, props.showNet, props.dragMode, props.axis, props.mirrorAxis, props.mirrorOffset, props.mirrorPartners])
   useEffect(() => {
     const state=sceneRef.current

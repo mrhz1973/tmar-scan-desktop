@@ -94,3 +94,12 @@ revision and preview revision. Stale revisions are rejected. applyWithNotes
 now passes this witness with the editor session UUID and each draft note's ID
 and UV anchor. The host gateway still owns document context, operation
 idempotency, artifact hashing and binding to the newly imported face.
+
+
+## Shared main viewport: integration prerequisites
+
+The owner requires editing in the existing viewport, with the scan, other bodies and camera retained. `populateSurfaceCage` and `pickNetAt` are reusable plugin primitives, not an integrated host tool. They do not by themselves arbitrate input, preserve host visibility or implement scene occlusion.
+
+The host currently dispatches existing gizmo/marking/grip handlers before plugin layers; `claimDrag` only takes navigation drag. A surface-edit session therefore needs an exclusive, scoped interaction lease that refuses or suspends conflicting gestures and always restores input, capture, cursor and hover on completion, cancellation or failure.
+
+The host body-preview slot is shared and its setter resets materials across bodies. Surface editing needs an exclusive preview lease, preserving and restoring the actual prior visibility of each affected body and tracking changes while the preview is active. Do not silently replace another tool's preview. The host should reject stale asynchronous updates after project body, build or alignment changes. No host code or live session is changed by this plugin checkpoint.

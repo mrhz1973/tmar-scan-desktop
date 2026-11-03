@@ -476,3 +476,10 @@ qualified.
 
 Evidence: `evidence/duplicate-edge/direct-host-20261103/`,
 `direct-compiled-20261103/`, and `direct-reject-20261103/`.
+
+
+## Main-view preparation · 2026-11-03
+
+The existing prototype now uses the same reusable control-cage drawing and screen-space segment/cell picker intended for the shared viewport. The picker supports orthographic and perspective cameras and a separate part-to-world transform; its isolated tests do not prove host interaction or occlusion by other objects. The current editor is still a separate dialog.
+
+With an imported synthetic 20 × 30 × 10 mm STEP solid, the source UI passed the point/segment and cell gesture checks; the compiled UI passed the cell check. Both paths exported and reimported valid six-face CAD, including the changed cell and Undo/Redo states; no console errors were recorded. TypeScript and 18 focused tests passed. Reports and a compiled-UI screenshot are in `evidence/main-view-preparation/`. These tests do not establish main-view integration, large-scan performance, QuickSurface equivalence or real-project acceptance.
