@@ -4,7 +4,8 @@ import { assertNet, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface,
 import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 
 export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; trimLocks: number[] }
-export interface Preview { mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
+export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
+export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
 // On each nonempty knot span a positive-weight NURBS lies inside the
@@ -67,6 +68,8 @@ export class SurfaceEditorKernel {
   private editRecord: RecordSpan | null = null
   private solids = 0
   private revision = 0
+  private previewRevision = 0
+  private validatedFace: ShapeHandle | null = null
   infos: FaceInfo[] = []
   /** Injected kernels are borrowed; load() creates an editor-owned runtime. */
   constructor(readonly kernel: OcctKernel, private readonly ownsKernel = false) {}
@@ -250,6 +253,7 @@ export class SurfaceEditorKernel {
         editRecord = found[0]
       } finally { fs.forEach(f => k.release(f)); k.release(prepared); k.release(converted) }
     }
+    this.releasePreviewFace()
     this.revision++
     this.chosen = index; this.originalNet = structuredClone(net); this.editBrep = text; this.editRecord = editRecord
     return net
@@ -307,6 +311,8 @@ export class SurfaceEditorKernel {
       this.editBrep = temporary.editBrep; this.editRecord = temporary.editRecord
       this.solids = temporary.solids; this.infos = temporary.infos
       // Transfer handle ownership without disposing the shared OCCT runtime.
+      this.validatedFace = temporary.validatedFace; temporary.validatedFace = null
+      result.preview.previewRevision = ++this.previewRevision
       temporary.source = null; temporary.faces = []
       return result
     } finally { temporary.clear() }
@@ -317,6 +323,37 @@ export class SurfaceEditorKernel {
     try { return (await temporary.prepareRecipe(step, recipe, bodyId, true)).preview }
     finally { temporary.clear() }
   }
+  private releasePreviewFace() {
+    if (this.validatedFace !== null) this.kernel.release(this.validatedFace)
+    this.validatedFace = null
+  }
+  private noteFace(previewRevision: number) {
+    if (this.validatedFace === null || previewRevision !== this.previewRevision)
+      throw new Error('Anteprima cambiata. Scegli il punto sulla faccia aggiornata.')
+    return this.validatedFace
+  }
+  resolveAnchor(anchor: DraftAnchor, previewRevision: number) {
+    const face = this.noteFace(previewRevision), k = this.kernel
+    if (anchor.face !== this.chosen || anchor.selectionRevision !== this.revision ||
+        !Number.isFinite(anchor.u) || !Number.isFinite(anchor.v))
+      throw new Error('Riferimento della nota estraneo alla faccia attiva.')
+    const location = k.classifyPointOnFace(face,anchor.u,anchor.v)
+    if (location !== 'in' && location !== 'on') throw new Error('Il punto cade fuori dalla faccia o dentro un foro.')
+    const at = tuple(k.pointOnSurface(face,anchor.u,anchor.v)), normal = tuple(k.surfaceNormal(face,anchor.u,anchor.v))
+    if (!at.every(Number.isFinite) || !normal.every(Number.isFinite)) throw new Error('Posizione della nota non determinata.')
+    return { at, normal }
+  }
+  anchorFromPick(point: Point, previewRevision: number) {
+    const face = this.noteFace(previewRevision)
+    if (point.length !== 3 || !point.every(Number.isFinite)) throw new Error('Punto della nota non valido.')
+    const uv = this.kernel.uvFromPoint(face,{x:point[0],y:point[1],z:point[2]})
+    const anchor = { face:this.chosen, selectionRevision:this.revision, u:uv.u, v:uv.v }
+    const placement = this.resolveAnchor(anchor,previewRevision)
+    // A visible tessellated triangle is only the pick seed; reject unrelated
+    // geometry instead of silently taking the nearest face across the part.
+    if (dist(point,placement.at)>0.16) throw new Error('Il punto selezionato è distante dalla faccia CAD.')
+    return {anchor,...placement}
+  }
   private render(shape: ShapeHandle): Preview {
     const k = this.kernel, faces = k.getSubShapes(shape, 'face')
     try { return { mesh: k.tessellate(shape, { linearDeflection: 0.08, angularDeflection: 0.15 }), faceMeshes: faces.map(f => k.tessellate(f, { linearDeflection: 0.08, angularDeflection: 0.15 })), valid: k.isValid(shape), volume: this.solids ? k.getVolume(shape) : 0, maxBoundaryError: 0, minimumNormalDot: 1 } }
@@ -324,6 +361,7 @@ export class SurfaceEditorKernel {
   }
   evaluate(net: Net, continuity: 'G0' | 'G1', exportStep = false) {
     if (!this.source || !this.originalNet || this.chosen < 0) throw new Error('Seleziona prima una faccia.')
+    this.releasePreviewFace()
     assertNet(this.originalNet, net, continuity)
     for (const i of this.infos[this.chosen].trimLocks) {
       if (net.poles[i].some((x,d) => x !== this.originalNet!.poles[i][d])) throw new Error('Polo protetto dal contorno ritagliato.')
@@ -372,9 +410,12 @@ export class SurfaceEditorKernel {
       const volume = this.solids ? k.getVolume(edited) : 0
       if (!Number.isFinite(volume) || (this.solids && volume <= 0)) throw new Error('Volume non valido.')
       const step = exportStep ? k.exportStep(edited) : undefined
-      return { ...this.render(edited), volume, maxBoundaryError, minimumNormalDot, step }
+      const preview = this.render(edited)
+      // Transfer this one subshape handle. The finally block releases the others.
+      this.validatedFace = fs.splice(this.chosen,1)[0]
+      return { ...preview, volume, maxBoundaryError, minimumNormalDot, step, previewRevision: ++this.previewRevision }
     } finally { fs.forEach(f => k.release(f)); k.release(edited) }
   }
-  clear() { this.revision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null }
+  clear() { this.releasePreviewFace(); this.revision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null }
   dispose() { this.clear(); if (this.ownsKernel) this.kernel[Symbol.dispose]() }
 }

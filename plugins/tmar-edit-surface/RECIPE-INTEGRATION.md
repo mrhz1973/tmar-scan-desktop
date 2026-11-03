@@ -35,3 +35,20 @@ Kernel: `node node_modules/vitest/vitest.mjs run plugins/tmar-edit-surface/tests
 Browser worker: `node plugins/tmar-edit-surface/tests/e2e-recipe.mjs` — passed against the existing isolated development server; report in `evidence/recipe/browser-result.json`. TypeScript no-emit passed. No new packaged desktop release is claimed.
 
 Contract follow-up: kernel tests passed in 3.57 s total (2.45 s tests), including metre-to-millimetre STEP import and continued use of an injected kernel after editor disposal. TypeScript passed. Browser history and project recipe persistence remain host acceptance gates.
+
+## Draft note anchors for the Edit Surface viewport
+
+After a successful interactive evaluate, retain its previewRevision along with
+the displayed geometry. While Zebra is active, the same face mesh is pickable.
+Send notePick with the clicked point in imported STEP millimetres and that revision.
+The caller must first verify that the hit belongs to the active face. The worker
+returns an anchor (face, selectionRevision, u, v), CAD position at and the surface
+normal. For the same selection, noteResolve with the latest validated revision
+reevaluates this UV on a changed surface, including after Undo/Redo. Refused
+evaluations invalidate picking. A different face selection invalidates draft
+anchors, even when the new face has the same numeric index.
+
+The revision and selectionRevision are session-local. Resolve draft anchors on
+the final validated geometry before Apply. The host owns text, stable body/face
+identity, the transaction and project persistence. Do not serialize a session
+revision as a project face ID. An exported STEP by itself does not carry notes.
