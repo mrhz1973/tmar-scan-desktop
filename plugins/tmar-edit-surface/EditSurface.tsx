@@ -221,14 +221,28 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
       setStripEdge(-1);setStripDelta([0,0,0]);setStripResult(result)
     } catch(e){stripUndo(0);setError((e as Error).message)} finally{setBusy(false)}
   }
+  const checkProject = () => {
+        const r = useReverse.getState(), m = useStore.getState(), s = source.current
+        if (r.buildVersion !== s.version || r.features !== s.features || m.fileName !== s.file || m.appliedAlignment !== s.alignment || reEditorOpen(r) || r.building) throw new Error('Il progetto è cambiato. Esporta il risultato STEP e riaprilo nel progetto aggiornato.')
+  }
+  const stripName=name.replace(/\.step$/i,'-striscia.step')
+  const applyStrip = async () => {
+    if (!stripPaths || !stripResult || stripEdge>=0 || busy || notes.length) return
+    setBusy(true); setError('')
+    try {
+      checkProject()
+      await runCommand('reverse.import.step',{bytes:new TextEncoder().encode(stripResult.step),name:stripName})
+      close()
+    } catch(e){setError((e as Error).message)}
+    finally{if(mounted.current)setBusy(false)}
+  }
   const finish = async (importBody: boolean) => {
     if (!net || busy || calculating || validNet !== net) return
     setBusy(true); setError('')
     try {
       const result = await ask<Preview & { step: string; previewRevision:number }>({ action: 'evaluate', net, continuity, exportStep: true })
       if (importBody) {
-        const r = useReverse.getState(), m = useStore.getState(), s = source.current
-        if (r.buildVersion !== s.version || r.features !== s.features || m.fileName !== s.file || m.appliedAlignment !== s.alignment || reEditorOpen(r) || r.building) throw new Error('Il progetto è cambiato. Esporta il risultato STEP e riaprilo nel progetto aggiornato.')
+        checkProject()
         setPreview(result)
         if (notes.length) {
           if (!applyWithNotes || notes.some(n=>!n.text.trim())) throw new Error('Completa le note prima di applicare.')
@@ -261,7 +275,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <p data-test="strip-result">{stripEdge>=0?'Anteprima striscia':stripResult?'Striscia valida · '+stripResult.addedArea.toFixed(3)+' mm²': 'Trascina il bordo esterno'}</p>
         <div className="es-row"><button data-test="strip-undo" disabled={busy || stripAt.current===0} onClick={()=>stripUndo(-1)}>Annulla striscia</button>
           <button data-test="strip-redo" disabled={busy || stripAt.current+1>=stripHistory.current.length} onClick={()=>stripUndo(1)}>Ripeti striscia</button></div>
-        <button data-test="strip-export" disabled={busy || stripEdge>=0 || !stripResult} onClick={()=>{if(stripResult)saveFile(name.replace(/\.step$/i,'-striscia.step'),new Blob([stripResult.step],{type:'model/step'}))}}>Esporta superficie con striscia</button>
+        <button data-test="strip-export" disabled={busy || stripEdge>=0 || !stripResult} onClick={()=>{if(stripResult)saveFile(stripName,new Blob([stripResult.step],{type:'model/step'}))}}>Esporta superficie con striscia</button>
         <button disabled={busy} onClick={()=>{setStripPaths(null);setStripResult(null);setError('')}}>Torna alla faccia iniziale</button></>}
       {net && !stripPaths && <>
         <p><strong>Faccia {face + 1} · {net.nu} × {net.nv} punti</strong><br/>{faces[face]?.converted ? 'Piano convertito esattamente in NURBS, senza fitting.' : 'Modifica diretta dei poli NURBS esistenti.'}</p>
@@ -315,6 +329,6 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
     </aside><main><SurfaceViewport strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={(poles, final) => { const n = { ...netRef.current!, poles }; if (final) commit(n); else setNet(n) }} />
       <div className="es-status" role="status" data-test="surface-status">{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · volume ${preview.volume.toFixed(3)} mm³ · scarto bordo ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
-    <footer><span>{stripPaths?'Esporta la superficie cucita dal pannello Duplica bordo.':'Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.'}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={!!stripPaths || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => void finish(true)}>Applica come nuovo corpo</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>
+    <footer><span>{stripPaths?'Applica aggiunge la superficie cucita al progetto come nuovo corpo.':'Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.'}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={(!!stripPaths && (!stripResult || stripEdge>=0)) || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => stripPaths ? void applyStrip() : void finish(true)}>{stripPaths ? 'Applica superficie cucita' : 'Applica come nuovo corpo'}</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>
   </div></div>
 }

@@ -3,16 +3,24 @@ import {launchApp} from '../../../scripts/e2e-lib.mjs'
 import {OcctKernel} from 'occt-wasm'
 import {PerspectiveCamera,Vector3} from 'three'
 import {join,resolve} from 'node:path'
-import {mkdirSync,mkdtempSync,writeFileSync} from 'node:fs'
+import {mkdirSync,mkdtempSync,readFileSync,writeFileSync} from 'node:fs'
 import assert from 'node:assert/strict'
-const chain=process.argv.includes('--chain')
+const project=process.argv.includes('--project')
+const chain=project || process.argv.includes('--chain')
 const k=await OcctKernel.init(),box=k.makeBox(20,30,10),fs=k.getSubShapes(box,'face')
 const root=resolve('plugins/tmar-edit-surface/evidence/duplicate-edge');mkdirSync(root,{recursive:true})
 const out=mkdtempSync(join(root,'run-')), input=join(out,'sheet.step')
 writeFileSync(input,k.exportStep(fs[5]));fs.forEach(f=>k.release(f));k.release(box)
 const {browser,page,consoleErrors}=await launchApp({url:process.env.APP_URL,width:1440,height:1000})
 try {
-  await page.click('[data-test=workspace-reverse]');await page.waitForSelector('[data-test=edit-surface-entry] button');await page.click('[data-test=edit-surface-entry] button')
+  await page.click('[data-test=workspace-reverse]')
+  await page.waitForSelector('[data-test=edit-surface-entry] button')
+  if(project)await page.waitForFunction(()=>window.__re?.store.getState().kernelStatus==='ready',{timeout:60000})
+  if(project)await page.evaluate(async step=>{
+    const {runCommand}=await import('/src/commands/registry.ts')
+    await runCommand('reverse.import.step',{bytes:new TextEncoder().encode(step),name:'Original sheet.step'})
+  },readFileSync(input,'utf8'))
+  await page.click('[data-test=edit-surface-entry] button')
   await (await page.$('[data-test=surface-step-file]')).uploadFile(input)
   await page.waitForFunction(()=>document.querySelectorAll('[data-test=surface-face] option').length===2)
   await page.select('[data-test=surface-face]','0');await page.waitForFunction(()=>document.querySelector('[data-test=strip-open]')?.disabled===false)
@@ -62,8 +70,51 @@ try {
       }))
     } finally {edgeLists.flat().forEach(e=>k.release(e))}
     assert.equal(sharedEdges,chain?2:1)
+    let projectResult
+    if(project){
+      const bodyCount=(p,count)=>p.waitForFunction(n=>window.__re?.store.getState().bodies.length===n &&
+        !document.querySelector('[data-test=edit-surface-dialog]') && !window.__re.store.getState().building,{timeout:30000},count)
+      await page.click('[data-test=surface-apply]');await bodyCount(page,2)
+      const toolbarUndoEnabled=await page.$eval('[data-test=undo]',e=>!e.disabled)
+      if(toolbarUndoEnabled) await page.click('[data-test=undo]')
+      else { await page.keyboard.down('Control');await page.keyboard.press('z');await page.keyboard.up('Control') }
+      await bodyCount(page,1)
+      await page.keyboard.down('Control');await page.keyboard.press('y');await page.keyboard.up('Control')
+      await bodyCount(page,2)
+      await page.evaluate(()=>document.addEventListener('click',e=>{
+        if(e.target instanceof HTMLAnchorElement && e.target.download.endsWith('.scanruler')){
+          e.preventDefault();window.savedProject=fetch(e.target.href).then(r=>r.arrayBuffer()).then(b=>Array.from(new Uint8Array(b)))
+        }
+      },true))
+      await page.click('[data-test=save-project]');await page.waitForFunction(()=>!!window.savedProject)
+      const file=join(out,'extended-sheet.scanruler')
+      writeFileSync(file,Buffer.from(await page.evaluate(()=>window.savedProject)))
+      const reopened=await browser.newPage()
+      try{
+        reopened.on('pageerror',e=>consoleErrors.push(e.message))
+        await reopened.goto(process.env.APP_URL)
+        await reopened.waitForSelector('[data-test=project-input]')
+        await (await reopened.$('[data-test=project-input]')).uploadFile(file)
+        await reopened.click('[data-test=workspace-reverse]');await bodyCount(reopened,2)
+        const restored=await reopened.evaluate(()=>{
+          const {features,stepFiles,bodies}=window.__re.store.getState()
+          if(bodies.length!==2 || !bodies.every(b=>b.surface))throw Error('Expected two restored CAD sheets')
+          return features.filter(f=>f.kind==='import').map(f=>stepFiles[f.file.key])
+        })
+        const measured=restored.map(text=>{
+          const body=k.importStep(text), surfaces=k.getSubShapes(body,'face'), solids=k.getSubShapes(body,'solid')
+          try{
+            assert(k.isValid(body));assert.equal(solids.length,0)
+            return surfaces.map(s=>k.getSurfaceArea(s)).sort((a,b)=>a-b)
+          }finally{[...surfaces,...solids,body].forEach(h=>k.release(h))}
+        }).sort((a,b)=>a.length-b.length)
+        assert.deepEqual(measured.map(xs=>xs.length),[1,3]);assert(Math.abs(measured[0][0]-600)<1e-7)
+        for(let i=0;i<areas.length;i++)assert(Math.abs(measured[1][i]-areas[i])<1e-6)
+        projectResult={toolbarUndoEnabled,undoBodyCount:1,redoBodyCount:2,reopenedBodyAreas:measured}
+      }finally{await reopened.close()}
+    }
     assert.deepEqual(consoleErrors,[])
     console.log(out,areas)
-    writeFileSync(join(out,'result.json'),JSON.stringify({valid:true,areas,sharedEdges,chain,consoleErrors}))
+    writeFileSync(join(out,'result.json'),JSON.stringify({valid:true,areas,sharedEdges,chain,consoleErrors,projectResult}))
   }finally{faces.forEach(f=>k.release(f));k.release(shape)}
-}finally{await browser.close();k[Symbol.dispose]()}
+}catch(error){console.error('Edit Surface QA:',error,await page.evaluate(()=>({kernel:window.__re?.store.getState().kernelStatus,bodies:window.__re?.store.getState().bodies.length,status:document.querySelector('[data-test=surface-status]')?.textContent,dialog:document.querySelector('.es-dialog')?.innerText?.slice(-900)})));throw error}finally{await browser.close();k[Symbol.dispose]()}
