@@ -75,11 +75,11 @@ try {
       const bodyCount=(p,count)=>p.waitForFunction(n=>window.__re?.store.getState().bodies.length===n &&
         !document.querySelector('[data-test=edit-surface-dialog]') && !window.__re.store.getState().building,{timeout:30000},count)
       await page.click('[data-test=surface-apply]');await bodyCount(page,2)
-      const toolbarUndoEnabled=await page.$eval('[data-test=undo]',e=>!e.disabled)
-      if(toolbarUndoEnabled) await page.click('[data-test=undo]')
-      else { await page.keyboard.down('Control');await page.keyboard.press('z');await page.keyboard.up('Control') }
+      await page.waitForSelector('[data-test=undo]:enabled')
+      await page.click('[data-test=undo]')
       await bodyCount(page,1)
-      await page.keyboard.down('Control');await page.keyboard.press('y');await page.keyboard.up('Control')
+      await page.waitForSelector('[data-test=redo]:enabled')
+      await page.click('[data-test=redo]')
       await bodyCount(page,2)
       await page.evaluate(()=>document.addEventListener('click',e=>{
         if(e.target instanceof HTMLAnchorElement && e.target.download.endsWith('.scanruler')){
@@ -110,7 +110,7 @@ try {
         }).sort((a,b)=>a.length-b.length)
         assert.deepEqual(measured.map(xs=>xs.length),[1,3]);assert(Math.abs(measured[0][0]-600)<1e-7)
         for(let i=0;i<areas.length;i++)assert(Math.abs(measured[1][i]-areas[i])<1e-6)
-        projectResult={toolbarUndoEnabled,undoBodyCount:1,redoBodyCount:2,reopenedBodyAreas:measured}
+        projectResult={toolbarUndoEnabled:true,toolbarRedoEnabled:true,undoBodyCount:1,redoBodyCount:2,reopenedBodyAreas:measured}
       }finally{await reopened.close()}
     }
     assert.deepEqual(consoleErrors,[])
