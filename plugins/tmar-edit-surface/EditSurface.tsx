@@ -54,6 +54,8 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   const [selected, setSelected] = useState<number[]>([]), [locks, setLocks] = useState<number[]>([])
   const [continuity, setContinuity] = useState<'G0' | 'G1'>('G1'), [axis, setAxis] = useState(2)
   const continuityRef = useRef(continuity); continuityRef.current = continuity
+  const [freeBoundary, setFreeBoundary] = useState(false)
+  const freeBoundaryRef = useRef(freeBoundary); freeBoundaryRef.current = freeBoundary
   const [distance, setDistance] = useState(1), [factor, setFactor] = useState(1.1)
   const [dragStrength, setDragStrength] = useState(1), [smoothStrength, setSmoothStrength] = useState(0.5)
   const [dragMode, setDragMode] = useState<DragMode>('axis')
@@ -86,7 +88,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   const [error, setError] = useState(''), [validNet, setValidNet] = useState<Net | null>(null)
   const worker = useRef<Worker | null>(null), serial = useRef(0), mounted = useRef(true)
   const requests = useRef(new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>())
-  const evaluateRunning = useRef(false), latest = useRef<{ net: Net; continuity: 'G0' | 'G1' } | null>(null)
+  const evaluateRunning = useRef(false), latest = useRef<{ net: Net; continuity: 'G0' | 'G1'; freeBoundary: boolean } | null>(null)
   useEffect(() => {
     mounted.current = true
     const w = new Worker(new URL('./editor.worker.ts', import.meta.url), { type: 'module' }); worker.current = w
@@ -124,7 +126,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   }, [])
   useEffect(() => {
     if (!net) return
-    latest.current = { net, continuity }; setCalculating(true); setValidNet(null)
+    latest.current = { net, continuity, freeBoundary }; setCalculating(true); setValidNet(null)
     let cancelled = false
     const timer = setTimeout(() => {
       const drain = async () => {
@@ -134,8 +136,8 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
           const job = latest.current; latest.current = null
           try {
             const p = await ask<Preview>({ action: 'evaluate', ...job })
-            if (mounted.current && job.net === netRef.current && job.continuity === continuityRef.current) { setPreview(p); setError(''); setValidNet(job.net) }
-          } catch (e) { if (mounted.current && job.net === netRef.current && job.continuity === continuityRef.current) { setError(String((e as Error).message)); setValidNet(null) } }
+            if (mounted.current && job.net === netRef.current && job.continuity === continuityRef.current && job.freeBoundary === freeBoundaryRef.current) { setPreview(p); setError(''); setValidNet(job.net) }
+          } catch (e) { if (mounted.current && job.net === netRef.current && job.continuity === continuityRef.current && job.freeBoundary === freeBoundaryRef.current) { setError(String((e as Error).message)); setValidNet(null) } }
         }
         evaluateRunning.current = false
         if (mounted.current) setCalculating(false)
@@ -143,7 +145,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
       if (!cancelled) void drain()
     }, 90)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [net, continuity])
+  }, [net, continuity, freeBoundary])
   const load = async (step: string, fileName: string, expected?: { faces: number; surface: boolean; guard?: () => Promise<void> }) => {
     setBusy(true); setError('')
     try {
@@ -156,7 +158,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
           throw new Error('Il CAD ricevuto non corrisponde al corpo selezionato nel progetto.')
       }
       setNotes([]); setPlacingNote(false); setNoteError(''); loaded.current = { step, name: fileName }; setLoadId(i => i + 1); setValidNet(null)
-      setSymmetry(false); setNet(null); base.current = null; history.current = []; at.current = -1; setSelected([]); setLocks([]); setFace(-1)
+      setSymmetry(false); setFreeBoundary(false); setNet(null); base.current = null; history.current = []; at.current = -1; setSelected([]); setLocks([]); setFace(-1)
       setFaces(result.faces); setPreview(result.preview); setName(fileName.replace(/\.(step|stp)$/i, '') + '-edit.step')
     } catch (e) {
       // Opening a STEP replaces the worker's document even if its validation
@@ -224,10 +226,10 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   const chooseFace = async (index: number) => {
     if (faces[index]?.reason) { setError(faces[index].reason!); return }
     setBusy(true); setError('')
-    try { const n = await ask<Net>({ action: 'select', face: index }); base.current = structuredClone(n); setFace(index); history.current = []; at.current = -1; setSelected([]); setLocks([]); commit(n) }
+    try { const n = await ask<Net>({ action: 'select', face: index }); base.current = structuredClone(n); setFace(index); setFreeBoundary(false); history.current = []; at.current = -1; setSelected([]); setLocks([]); commit(n) }
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
-  const locked = net ? net.poles.flatMap((_, i) => boundaryLocked(net, i, continuity) || faces[face]?.trimLocks.includes(i) || locks.includes(i) ? [i] : []) : []
+  const locked = net ? net.poles.flatMap((_, i) => (!freeBoundary && boundaryLocked(net, i, continuity)) || faces[face]?.trimLocks.includes(i) || locks.includes(i) ? [i] : []) : []
   const editable = selected.filter(i => !locked.includes(i))
   const moveDirection = net && editable.length ? dragDirection(net, editable[0], dragMode, axis) : null
   const axisNames = dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']
@@ -323,7 +325,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
     if (!net || busy || calculating || validNet !== net) return
     setBusy(true); setError('')
     try {
-      const result = await ask<Preview & { step: string; previewRevision:number }>({ action: 'evaluate', net, continuity, exportStep: true })
+      const result = await ask<Preview & { step: string; previewRevision:number }>({ action: 'evaluate', net, continuity, freeBoundary, exportStep: true })
       if (importBody) {
         checkProject()
         setPreview(result)
@@ -366,8 +368,15 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         {faces[face]?.enriched && <p className="es-hint">Reticolo arricchito da 4×4 a 5×5 senza modificare la forma. Il punto centrale resta libero anche con protezione G1.</p>}
         <button disabled={busy || calculating} onClick={() => { if (loaded.current && window.confirm('Scartare questa bozza e scegliere un’altra faccia?')) void load(loaded.current.step, loaded.current.name) }}>Cambia faccia / corpo</button>
         {faces[face]?.openSheet && <button data-test="strip-open" disabled={busy || calculating || validNet!==net || !!notes.length} onClick={()=>void beginStrip()}>Duplica bordo libero…</button>}
-        <label>Protezione bordi<select data-test="surface-continuity" value={continuity} disabled={busy} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { assertNet(base.current!, net, c); setContinuity(c) } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">G0 · mantieni posizione dei bordi</option><option value="G1">G1 · mantieni anche tangenti esistenti</option></select></label>
-        <p className="es-hint">I bordi restano bloccati per proteggere il solido. G1 conserva le tangenti originali; non corregge discontinuità preesistenti.</p>
+        {faces[face]?.freeBoundary && <label><input data-test="surface-free-boundary" type="checkbox" checked={freeBoundary} disabled={busy || calculating} onChange={e => {
+          if (!e.target.checked) {
+            try { assertNet(base.current!, net, continuity) }
+            catch { setError('Annulla prima gli spostamenti dei bordi per proteggerli di nuovo.'); return }
+          }
+          setValidNet(null); setError(''); setFreeBoundary(e.target.checked)
+        }}/> Consenti lo spostamento dei bordi liberi</label>}
+        <label>Protezione bordi<select data-test="surface-continuity" value={continuity} disabled={busy || freeBoundary} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { assertNet(base.current!, net, c); setContinuity(c) } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">G0 · mantieni posizione dei bordi</option><option value="G1">G1 · mantieni anche tangenti esistenti</option></select></label>
+        <p className="es-hint">{freeBoundary ? 'Puoi spostare i punti del bordo della superficie aperta. I punti bloccati manualmente restano fermi.' : 'I bordi restano bloccati. G1 conserva le tangenti originali; non corregge discontinuità preesistenti.'}</p>
         <div className="es-row">{axisNames.map((a, i) => <button key={a} data-test={`surface-axis-${i}`} aria-pressed={axis === i} onClick={() => setAxis(i)}>{a}</button>)}</div>
         <label>Trascinamento punti<select data-test="surface-drag-mode" value={dragMode} onChange={e => setDragMode(e.target.value as DragMode)}><option value="axis">Mondo · asse X/Y/Z</option><option value="screen">Piano dello schermo</option><option value="local">Locale · U/V/normale</option></select></label>
         <label>Selezione reticolo<select data-test="surface-selection-mode" value={selectionMode} onChange={e => setSelectionMode(e.target.value as NetSelectionMode)}><option value="points">Punti</option><option value="edges">Segmenti del reticolo</option><option value="cells">Celle del reticolo</option><option value="mixed">Punti e segmenti</option></select></label>
@@ -428,7 +437,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <div className="es-row"><button data-test="surface-undo" disabled={busy || at.current <= 0} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || at.current >= history.current.length - 1} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
       </>}
     </aside><main><SurfaceViewport mirrorAxis={mirrorAxis} mirrorOffset={mirrorOffset} mirrorPartners={partners} strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={changePoles} />
-      <div className="es-status" role="status" data-test="surface-status">{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · volume ${preview.volume.toFixed(3)} mm³ · scarto bordo ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
+      <div className="es-status" role="status" data-test="surface-status">{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · ${faces[face]?.openSheet ? 'superficie aperta' : `volume ${preview.volume.toFixed(3)} mm³`} · ${freeBoundary ? 'spostamento bordo' : 'scarto bordo'} ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
     <footer><span>{stripPaths?'Applica aggiunge la superficie cucita al progetto come nuovo corpo.':'Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.'}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={(!!stripPaths && (!stripResult || stripEdge>=0)) || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => stripPaths ? void applyStrip() : void finish(true)}>{stripPaths ? 'Applica superficie cucita' : 'Applica come nuovo corpo'}</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>
   </div></div>

@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import { expect, it } from 'vitest'
+import type { ShapeHandle } from 'occt-wasm'
+import { SurfaceEditorKernel } from '../editorKernel'
+import { encodeNet, replaceSurface, signature, surfaceTable } from '../brep'
+
+it('reconstructs a free NURBS boundary without refitting its support surface',async()=>{
+  const editor=await SurfaceEditorKernel.load(), k=editor.kernel
+  const box=k.makeBox(20,30,10), boxFaces=k.getSubShapes(box,'face')
+  const step=k.exportStep(boxFaces[5])
+  boxFaces.forEach(f=>k.release(f));k.release(box)
+  const source=k.importStep(step), sourceFaces=k.getSubShapes(source,'face')
+  const made:ShapeHandle[]=[]
+  const keep=(shape:ShapeHandle)=>{made.push(shape);return shape}
+  try{
+    editor.open(step)
+    const net=editor.select(0), changed=structuredClone(net)
+    // Move one corner, testing both incident curved boundary edges.
+    changed.poles[0]=changed.poles[0].map((n,d)=>n+(d===2?2:0)) as [number,number,number]
+    const brep=k.toBREP(sourceFaces[0]), records=surfaceTable(brep)
+    expect(records).toHaveLength(1)
+    const support=keep(k.fromBREP(replaceSurface(brep,records[0],changed)))
+    const v0=Array.from({length:net.nv},(_,j)=>j)
+    const u1=Array.from({length:net.nu},(_,i)=>i*net.nv+net.nv-1)
+    const v1=Array.from({length:net.nv},(_,j)=>(net.nu-1)*net.nv+j)
+    const u0=Array.from({length:net.nu},(_,i)=>i*net.nv)
+    const edge=(indices:number[],along:'u'|'v')=>keep(k.makeBSplineEdge(indices.flatMap(i=>changed.poles[i]),indices.map(i=>changed.weights[i]),along==='u'?changed.ku:changed.kv,along==='u'?changed.mu:changed.mv,along==='u'?changed.du:changed.dv))
+    const wire=keep(k.makeWire([edge(v0,'v'),edge(u1,'u'),edge(v1,'v'),edge(u0,'u')]))
+    const raw=keep(k.makeFaceOnSurface(support,wire))
+    const face=keep(k.fixShape(raw))
+    expect(k.isValid(face)).toBe(true)
+    const expected=encodeNet(changed).trim().split(/\s+/).map(Number).join(' ')
+    expect(surfaceTable(k.toBREP(face)).filter(r=>signature(r)===expected)).toHaveLength(1)
+    const surface=k.getSubShapes(face,'face')
+    try {
+      expect(surface).toHaveLength(1)
+      const originalBounds=k.uvBounds(sourceFaces[0]), actualBounds=k.uvBounds(surface[0])
+      for(let i=0;i<=12;i++)for(let j=0;j<=12;j++){
+        const u=originalBounds.uMin+(originalBounds.uMax-originalBounds.uMin)*i/12
+        const v=originalBounds.vMin+(originalBounds.vMax-originalBounds.vMin)*j/12
+        const a=k.pointOnSurface(support,u,v),b=k.pointOnSurface(surface[0],u,v)
+        expect(Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)).toBeLessThan(1e-7)
+        expect(['in','on']).toContain(k.classifyPointOnFace(surface[0],u,v))
+      }
+      expect(actualBounds.uMin).toBeCloseTo(originalBounds.uMin,6)
+      expect(actualBounds.vMin).toBeCloseTo(originalBounds.vMin,6)
+      const imported=k.importStep(k.exportStep(face)), importedFaces=k.getSubShapes(imported,'face')
+      try{expect(k.isValid(imported)).toBe(true);expect(importedFaces).toHaveLength(1)}
+      finally{importedFaces.forEach(f=>k.release(f));k.release(imported)}
+    }finally{surface.forEach(f=>k.release(f))}
+  }finally{made.reverse().forEach(h=>k.release(h));sourceFaces.forEach(f=>k.release(f));k.release(source);editor.dispose()}
+},60000)
+
+it('moves an open-sheet corner through the editor and rejects free edges on solids',async()=>{
+  const editor=await SurfaceEditorKernel.load(), k=editor.kernel
+  const box=k.makeBox(20,30,10), boxFaces=k.getSubShapes(box,'face')
+  try{
+    const opened=editor.open(k.exportStep(boxFaces[5]))
+    expect(opened.faces[0].freeBoundary).toBe(true)
+    const original=editor.select(0), changed=structuredClone(original)
+    changed.poles[0][2]+=2
+    expect(()=>editor.evaluate(changed,'G0')).toThrow(/protetto/)
+    const result=editor.evaluate(changed,'G0',true,true)
+    expect(result.valid).toBe(true)
+    expect(result.maxBoundaryError).toBeCloseTo(2,7)
+    const restored=k.importStep(result.step!), faces=k.getSubShapes(restored,'face')
+    try{
+      expect(k.isValid(restored)).toBe(true);expect(faces).toHaveLength(1)
+      const b=k.uvBounds(faces[0]), point=k.pointOnSurface(faces[0],b.uMin,b.vMin)
+      expect(point.z).toBeCloseTo(original.poles[0][2]+2,7)
+    }finally{faces.forEach(f=>k.release(f));k.release(restored)}
+    const solid=editor.open(k.exportStep(box))
+    expect(solid.faces.every(face=>!face.freeBoundary)).toBe(true)
+    expect(()=>editor.evaluate(editor.select(0),'G0',false,true)).toThrow(/sola faccia aperta/)
+  }finally{boxFaces.forEach(f=>k.release(f));k.release(box);editor.dispose()}
+},60000)

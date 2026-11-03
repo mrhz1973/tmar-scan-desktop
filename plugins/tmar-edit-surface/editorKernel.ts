@@ -4,8 +4,9 @@ import { assertNet, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface,
 import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
+import { rebuildFreeBoundary } from './freeBoundary'
 
-export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; trimLocks: number[] }
+export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[] }
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
@@ -104,9 +105,10 @@ export class SurfaceEditorKernel {
     this.infos = this.faces.map((face, index) => {
       let reason: string | null = null
       let trimLocks: number[] = []
-      try { trimLocks = this.netFor(index).trimLocks } catch (e) { reason = e instanceof Error ? e.message : String(e) }
+      let natural = false
+      try { const info = this.netFor(index); trimLocks = info.trimLocks; natural = info.natural } catch (e) { reason = e instanceof Error ? e.message : String(e) }
       const record = this.records[this.recordsByFace[index]]
-      return { index, trimLocks, openSheet, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
+      return { index, trimLocks, openSheet, freeBoundary: openSheet && this.faces.length === 1 && natural, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
         enriched: !!record?.net && enrichBicubic(record.net) !== record.net }
     })
     return { faces: this.infos, preview: this.render(this.source) }
@@ -165,7 +167,7 @@ export class SurfaceEditorKernel {
         }
       }
       if (trimBoxes.length && trimLocks.size === net.poles.length) throw new Error('Tutti i poli influenzano un contorno ritagliato.')
-      return {net, trimLocks: [...trimLocks]}
+      return {net, trimLocks: [...trimLocks], natural: rectangular && inner.length === 0}
     } finally { [outer, ...wires, ...edges].forEach(h => k.release(h)) }
   }
   private checkPlanarTrims(before: ShapeHandle, after: ShapeHandle) {
@@ -407,15 +409,27 @@ export class SurfaceEditorKernel {
     try { return { mesh: k.tessellate(shape, { linearDeflection: 0.08, angularDeflection: 0.15 }), faceMeshes: faces.map(f => k.tessellate(f, { linearDeflection: 0.08, angularDeflection: 0.15 })), valid: k.isValid(shape), volume: this.solids ? k.getVolume(shape) : 0, maxBoundaryError: 0, minimumNormalDot: 1 } }
     finally { faces.forEach(f => k.release(f)) }
   }
-  evaluate(net: Net, continuity: 'G0' | 'G1', exportStep = false) {
+  evaluate(net: Net, continuity: 'G0' | 'G1', exportStep = false, freeBoundary = false) {
     if (!this.source || !this.originalNet || this.chosen < 0) throw new Error('Seleziona prima una faccia.')
     this.releasePreviewFace()
-    assertNet(this.originalNet, net, continuity)
+    if (freeBoundary && !this.infos[this.chosen].freeBoundary)
+      throw new Error('Il bordo libero richiede una sola faccia aperta con contorno naturale rettangolare.')
+    assertNet(this.originalNet, net, continuity, freeBoundary)
     for (const i of this.infos[this.chosen].trimLocks) {
       if (net.poles[i].some((x,d) => x !== this.originalNet!.poles[i][d])) throw new Error('Polo protetto dal contorno ritagliato.')
     }
     const k = this.kernel, baseFace = this.faces[this.chosen], text = replaceSurface(this.editBrep, this.editRecord!, net)
-    const edited = k.fromBREP(text), fs = k.getSubShapes(edited, 'face')
+    let edited = k.fromBREP(text)
+    if (freeBoundary) {
+      const old = edited, supports = k.getSubShapes(old, 'face')
+      try {
+        if (supports.length !== 1) throw new Error('Impossibile identificare la superficie del bordo libero.')
+        edited = rebuildFreeBoundary(k, supports[0], net)
+      } catch (e) { k.release(old); throw e }
+      finally { supports.forEach(face => k.release(face)) }
+      k.release(old)
+    }
+    const fs = k.getSubShapes(edited, 'face')
     try {
       if (!k.isValid(edited) || fs.length !== this.faces.length || this.count(edited, 'solid') !== this.solids) throw new Error('Modifica rifiutata: CAD non valido o topologia alterata.')
       const face = fs[this.chosen], b = k.uvBounds(baseFace)
@@ -451,10 +465,10 @@ export class SurfaceEditorKernel {
         minimumNormalDot = Math.min(minimumNormalDot, dot)
         if (i === 0 || i === 16 || j === 0 || j === 16) {
           maxBoundaryError = Math.max(maxBoundaryError, dist(p, q))
-          if (continuity === 'G1' && dot < 1 - 1e-8) throw new Error('La modifica non conserva la tangente sul bordo.')
+          if (!freeBoundary && continuity === 'G1' && dot < 1 - 1e-8) throw new Error('La modifica non conserva la tangente sul bordo.')
         }
       }
-      if (maxBoundaryError > 1e-6) throw new Error('Il bordo si è mosso: modifica non applicabile al solido.')
+      if (!freeBoundary && maxBoundaryError > 1e-6) throw new Error('Il bordo si è mosso: modifica non applicabile al solido.')
       const volume = this.solids ? k.getVolume(edited) : 0
       if (!Number.isFinite(volume) || (this.solids && volume <= 0)) throw new Error('Volume non valido.')
       const step = exportStep ? k.exportStep(edited) : undefined

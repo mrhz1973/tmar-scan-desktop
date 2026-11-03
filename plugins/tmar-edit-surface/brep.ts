@@ -102,10 +102,10 @@ export function enrichBicubic(n: Net): Net {
   return { ...n, nu: 5, nv: 5, poles: points.map(p => p.slice(0, 3).map(x => x / p[3]) as Point),
     weights: points.map(p => p[3]), ku: midpoint(n.ku), kv: midpoint(n.kv), mu: [4, 1, 4], mv: [4, 1, 4] }
 }
-export function assertNet(base: Net, n: Net, continuity: 'G0' | 'G1') {
+export function assertNet(base: Net, n: Net, continuity: 'G0' | 'G1', freeBoundary = false) {
   if (n.poles.length !== base.poles.length || JSON.stringify({ ...base, poles: [] }) !== JSON.stringify({ ...n, poles: [] })) throw new Error('Grado, nodi, pesi e parametrizzazione devono restare invariati.')
   n.poles.forEach((p, i) => {
     if (p.length !== 3 || p.some(x => !Number.isFinite(x))) throw new Error('Coordinate non valide.')
-    if (boundaryLocked(base, i, continuity) && p.some((x, j) => x !== base.poles[i][j])) throw new Error('Un punto protetto è stato modificato.')
+    if (!freeBoundary && boundaryLocked(base, i, continuity) && p.some((x, j) => x !== base.poles[i][j])) throw new Error('Un punto protetto è stato modificato.')
   })
 }
