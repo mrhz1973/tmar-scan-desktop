@@ -2,26 +2,42 @@
 import type { OcctKernel, ShapeHandle } from 'occt-wasm'
 import type { Point } from './brep'
 
-export function sheetEdgePaths(k: OcctKernel, face: ShapeHandle): Point[][] {
-  const outer = k.outerWire(face)
+// Count incidences across all face wires, including inner loops. A seam
+// has two incidences and cannot be selected again as a free outer edge.
+function withBoundary<T>(k:OcctKernel,shape:ShapeHandle,read:(edges:ShapeHandle[],incidences:number[])=>T):T {
+  const owned:ShapeHandle[]=[], unique:ShapeHandle[]=[], counts:number[]=[], outerFlags:boolean[]=[]
   try {
-    const edges = k.getSubShapes(outer,'edge')
-    try {
-      return edges.map(edge=>{
+    const faces=k.getSubShapes(shape,'face');owned.push(...faces)
+    for(const face of faces){
+      const outer=k.outerWire(face);owned.push(outer)
+      const wires=k.getSubShapes(face,'wire');owned.push(...wires)
+      for(const wire of wires){
+        const edges=k.getSubShapes(wire,'edge');owned.push(...edges)
+        for(const edge of edges){
+          const id=unique.findIndex(other=>k.isSame(edge,other))
+          if(id<0){unique.push(edge);counts.push(1);outerFlags.push(k.isSame(wire,outer))}
+          else counts[id]++
+        }
+      }
+    }
+    return read(unique.filter((_,i)=>counts[i]===1 && outerFlags[i]),counts)
+  } finally {owned.reverse().forEach(h=>k.release(h))}
+}
+export interface StripMove {edge:number;delta:Point;path:Point[]}
+export function sheetEdgePaths(k: OcctKernel, shape: ShapeHandle): Point[][] {
+  return withBoundary(k,shape,edges=>edges.map(edge=>{
         const {first,last}=k.curveParameters(edge)
         const steps=k.curveType(edge)==='line'?1:48
         return Array.from({length:steps+1},(_,i)=>{
           const p=k.curvePointAtParam(edge,first+(last-first)*i/steps)
           return [p.x,p.y,p.z] as Point
         })
-      })
-    } finally {edges.forEach(h=>k.release(h))}
-  } finally {k.release(outer)}
+  }))
 }
 
 /** Extrude the chosen boundary curve, then sew its ruled face to the
  * original sheet. The original surface is never refitted or overwritten. */
-export function extendSheet(k: OcctKernel, face: ShapeHandle, index: number, delta: Point) {
+export function extendSheet(k: OcctKernel, shape: ShapeHandle, index: number, delta: Point) {
   if (delta.length!==3 || !delta.every(Number.isFinite) || Math.hypot(...delta)<=1e-7)
     throw new Error('Indica uno spostamento del bordo diverso da zero.')
   const owned: ShapeHandle[]=[]
@@ -30,15 +46,16 @@ export function extendSheet(k: OcctKernel, face: ShapeHandle, index: number, del
     const handles=k.getSubShapes(s,type);owned.push(...handles);return handles
   }
   try {
-    const outer=keep(k.outerWire(face)), edges=children(outer,'edge')
+    const sourceFaces=children(shape,'face')
+    return withBoundary(k,shape,(edges,incidences)=>{
     if(!Number.isInteger(index) || !edges[index]) throw new Error('Scegli un bordo esterno della superficie.')
     const edge=edges[index], strip=keep(k.extrude(edge,...delta))
     const addedArea=k.getSurfaceArea(strip)
     if(!k.isValid(strip) || !Number.isFinite(addedArea) || addedArea<=1e-8)
       throw new Error('La direzione scelta non crea una faccia valida.')
-    const common=keep(k.common(face,strip))
+    const common=keep(k.common(shape,strip))
     if(children(common,'face').length) throw new Error('La striscia si sovrappone alla superficie.')
-    const section=keep(k.section(face,strip))
+    const section=keep(k.section(shape,strip))
     const requireOnSeam=(vertex:ShapeHandle)=>{
       if(k.distanceBetween(vertex,edge)>1e-6) throw new Error('La striscia interseca la superficie fuori dal bordo scelto.')
     }
@@ -50,12 +67,17 @@ export function extendSheet(k: OcctKernel, face: ShapeHandle, index: number, del
         requireOnSeam(keep(k.makeVertex(p.x,p.y,p.z)))
       }
     }
-    const shell=keep(k.sew([face,strip],1e-7)), faces=children(shell,'face')
-    if(!k.isValid(shell) || children(shell,'shell').length!==1 || faces.length!==2)
-      throw new Error('Le due facce non formano una superficie cucita valida.')
-    const left=children(faces[0],'edge'), right=children(faces[1],'edge')
-    if(left.filter(a=>right.some(b=>k.isSame(a,b))).length!==1)
-      throw new Error('Cucitura del bordo non univoca.')
-    return {step:k.exportStep(shell), addedArea, totalArea:k.getSurfaceArea(shell)}
+    const shell=k.sew([...sourceFaces,strip],1e-7)
+    try {
+      if(!k.isValid(shell) || children(shell,'shell').length!==1 || children(shell,'face').length!==sourceFaces.length+1)
+        throw new Error('Le facce non formano una superficie cucita valida.')
+      withBoundary(k,shell,(_,counts)=>{
+        const shared=(values:number[])=>values.filter(n=>n===2).length
+        if(counts.some(n=>n>2) || shared(counts)!==shared(incidences)+1)
+          throw new Error('Cucitura del bordo non univoca.')
+      })
+      return {shell,addedArea}
+    } catch(e){k.release(shell);throw e}
+    })
   } finally {owned.reverse().forEach(h=>k.release(h))}
 }
