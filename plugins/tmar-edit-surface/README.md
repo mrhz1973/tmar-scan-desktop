@@ -68,7 +68,7 @@ Revo Design Pro 8.0.123, QA document `modified-solid`: the imported solid displa
 ## Limits / next acceptance
 
 - Natural rectangular four-edge faces without internal trims; clamped nonperiodic NURBS, at most 1600 poles. Cylinders and arbitrary trimmed/holed faces are not editable here. Some mixed STEP/BREP representations are deliberately refused.
-- One face at a time. Apply creates a new body, not an in-place feature-history edit. The control-net editing recipe is not persisted as a feature.
+- One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.
 - OCCT validity, face/solid counts, positive volume, original boundary preservation, sampled normals and face intersections are checked. This is not exhaustive certification against every possible self-intersection; intersection edges and normals have sampled checks.
 - No qualification yet on arbitrary production STEP parts, touch input, multi-face continuity creation or full QUICKSURFACE equivalence. Project save/reopen is qualified on the recorded fixture only. Locks are not part of the local geometry undo history.
 - Preview is interactive and coalesced while dragging; exact frame rate and large-model latency have not been benchmarked.
@@ -84,3 +84,11 @@ Added adjustable drag strength (5–100%), local smoothing strength (5–100%), 
 Evidence: `evidence/controls/run-OClKPs/result.json`, screenshots and five STEP exports. The half-drag screenshot was visually inspected. Earlier local runs failed in the test harness while collecting repeated download filenames; exports now use separate download directories. Those failures are not product success evidence.
 
 Additional bounded QS observation: New Freeform opened an Edit Surface panel containing Drag Strength, Control Net and transparency controls. This motivated the controls above, but their QS behavior was not functionally qualified. Closing that panel and Ctrl+Z did not remove the displayed Freeform item; the QA document was left unsaved. No claim of complete QS parity or native imported-face editing follows from this observation.
+
+### Serializable edit recipe checkpoint, 2026-11-03
+
+Added `recipe.ts` and three worker actions, documented in `RECIPE-INTEGRATION.md`. Recipes record the source body and geometry fingerprints, face index, exact preparation, sparse pole edits, continuity protection and individual locks. Replay refuses changed sources instead of silently choosing another face. Restore validates in a temporary editor before replacing the current session; a refused restore leaves the current editing session intact.
+
+`tests/recipe.test.ts`: two real OCCT tests passed (3.45 s total), covering planar STEP, curved rational STEP with exact refinement, subsequent native-NURBS editing, STEP reimport and sampled geometry equality, plus malformed recipes and invalid edits. TypeScript passed. `tests/e2e-recipe.mjs`: browser worker contract passed in **3.724 s**, zero console errors. JSON serialization/replay/restore preserved the net, lock and valid solid volume **6094.724657678973 mm³**; rejected base signatures preserved the active draft. Evidence: `evidence/recipe/browser-result.json`. This run verifies the browser worker, **not** host history, project recipe persistence or annotated-body integration. Production build was not repeated.
+
+Follow-up QS inspection reopened Edit Surface on the existing QA Freeform item. Clicking Control Net did not expose control points on the displayed imported solid. The comparison remains limited to observed UI controls; no imported-face deformation was qualified in QS.
