@@ -104,7 +104,11 @@ try {
   await page.waitForFunction(()=>{const s=window.annotatedQa.useWorkspaceEditor.getState();return s.phase==='closed'||!!s.error},{timeout:120000})
   const failure=await page.evaluate(()=>window.annotatedQa.useWorkspaceEditor.getState().error)
   if(failure)throw Error('Host refused annotated Apply: '+failure)
-  await page.waitForFunction(()=>window.annotatedQa.useNotes.getState().notes.some(n=>n.attachment?.status==='verified'),{timeout:60000})
+  const receipt=await page.evaluate(()=>window.annotatedQa.useWorkspaceEditor.getState().receipt)
+  assert(receipt?.notes?.length===1&&receipt.createdBodyIds?.length===1,'Expected one note and one copy in the receipt')
+  const expected={uuid:receipt.notes[0].noteUuid,body:receipt.createdBodyIds[0],feature:receipt.createdFeatureUuid}
+  await page.waitForFunction(({uuid,body,feature})=>window.annotatedQa.useNotes.getState().notes.some(n=>
+    n.attachment?.noteUuid===uuid&&n.attachment?.featureUuid===feature&&n.attachment?.status==='verified'&&n.on[0]?.body===body),{timeout:60000},expected)
   const applied=await page.evaluate(()=>{
     const q=window.annotatedQa,s=q.useWorkspaceEditor.getState()
     return {phase:s.phase,error:s.error,receipt:s.receipt,notes:q.useNotes.getState().notes,bodies:q.useReverse.getState().bodies,
@@ -121,7 +125,8 @@ try {
   await page.waitForFunction(()=>{const q=window.annotatedQa;return q.useReverse.getState().bodies.length===1&&!q.useReverse.getState().building},{timeout:60000})
   check(await page.evaluate(()=>{const q=window.annotatedQa;return q.useNotes.getState().notes.length===0&&q.useReverse.getState().bodies[0].visible}),'Undo removes the copy and its note and restores the original')
   await page.click('[data-test=redo]')
-  await page.waitForFunction(()=>{const q=window.annotatedQa;return q.useReverse.getState().bodies.length===2&&q.useNotes.getState().notes.some(n=>n.attachment?.status==='verified')},{timeout:60000})
+  await page.waitForFunction(({uuid,body,feature})=>{const q=window.annotatedQa;return q.useReverse.getState().bodies.length===2&&q.useNotes.getState().notes.some(n=>
+    n.attachment?.noteUuid===uuid&&n.attachment?.featureUuid===feature&&n.attachment?.status==='verified'&&n.on[0]?.body===body)},{timeout:60000},expected)
   check(await page.evaluate(text=>window.annotatedQa.useNotes.getState().notes.some(n=>n.text===text),noteText),'Redo restores the annotated copy')
   await page.waitForSelector('[data-test=save-project]:enabled');await page.click('[data-test=save-project]')
   const saved=await waitFile('.scanruler');report.savedSha256=sha(readFileSync(saved))
@@ -135,7 +140,8 @@ try {
     const {reverseSession}=await import('/plugins/reverse/app/reSession.ts')
     window.annotatedReopen={useNotes,useReverse,reverseSession}
   })
-  await page.waitForFunction(()=>{const q=window.annotatedReopen;return q.useNotes.getState().notes.some(n=>n.attachment?.status==='verified')&&q.useReverse.getState().bodies.length===2},{timeout:90000})
+  await page.waitForFunction(({uuid,body,feature})=>{const q=window.annotatedReopen;return q.useNotes.getState().notes.some(n=>
+    n.attachment?.noteUuid===uuid&&n.attachment?.featureUuid===feature&&n.attachment?.status==='verified'&&n.on[0]?.body===body)&&q.useReverse.getState().bodies.length===2},{timeout:90000},expected)
   const reopened=await page.evaluate(async()=>{
     const q=window.annotatedReopen,n=q.useNotes.getState().notes.find(n=>n.attachment)
     return {note:n,bodies:q.useReverse.getState().bodies,step:(await q.reverseSession().client().bodyEditSource(n.on[0].body)).text}

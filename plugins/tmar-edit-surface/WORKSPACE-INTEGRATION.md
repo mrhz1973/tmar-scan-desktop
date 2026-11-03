@@ -75,7 +75,9 @@ host state. A host without this capability keeps the original behavior.
   14 checks). The positive and negative normal cases were also tested in the
   real kernel. The first run checked before asynchronous note revalidation;
   the successful run explicitly waited for it; the versioned test repeated
-  the same scenario successfully (`annotated-edit-T0KZUH`). This is source-app evidence,
+  the same scenario successfully (`annotated-edit-T0KZUH`). A subsequent run
+  waited specifically for the receipt's note UUID, feature and copy body at
+  each verification (`annotated-edit-sdytYJ`). This is source-app evidence,
   not qualification of a published host or packaged desktop release.
 - Separate isolated source-app snap cases used a synthetic scan and a second
   synthetic CAD body. In both, the pole snapped from Z=10 to Z=12 mm; Alt and
