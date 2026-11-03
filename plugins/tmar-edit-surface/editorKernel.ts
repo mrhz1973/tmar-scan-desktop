@@ -332,6 +332,11 @@ export class SurfaceEditorKernel {
       throw new Error('Anteprima cambiata. Scegli il punto sulla faccia aggiornata.')
     return this.validatedFace
   }
+  finalFaceWitness(previewRevision: number) {
+    const face = this.noteFace(previewRevision)
+    return { face: this.chosen, selectionRevision: this.revision, previewRevision,
+      faceBrep: this.kernel.toBREP(face) }
+  }
   resolveAnchor(anchor: DraftAnchor, previewRevision: number) {
     const face = this.noteFace(previewRevision), k = this.kernel
     if (anchor.face !== this.chosen || anchor.selectionRevision !== this.revision ||

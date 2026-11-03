@@ -66,3 +66,10 @@ with Zebra enabled followed the edited face from Z 10.163 to 10.874 mm. The
 text was retained and Apply was disabled in the absence of an adapter. After
 explicitly removing that draft, STEP export/reimport yielded a valid solid.
 This does not verify host persistence. See evidence/perforated/run-pIwcn6/.
+
+After final export evaluation, finalFaceWitness(previewRevision) serializes
+the validated selected face as OCCT BREP and returns its face index, selection
+revision and preview revision. Stale revisions are rejected. applyWithNotes
+now passes this witness with the editor session UUID and each draft note's ID
+and UV anchor. The host gateway still owns document context, operation
+idempotency, artifact hashing and binding to the newly imported face.

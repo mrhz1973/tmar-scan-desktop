@@ -4,6 +4,7 @@ import wasmUrl from 'occt-wasm/dist/occt-wasm.wasm?url'
 import type { Net, Point } from './brep'
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
+  | { action: 'finalFaceWitness'; previewRevision: number }
   | { action: 'notePick'; point: Point; previewRevision: number }
   | { action: 'noteResolve'; anchor: DraftAnchor; previewRevision: number }
   | { action: 'evaluate'; net: Net; continuity: 'G0' | 'G1'; exportStep?: boolean }
@@ -21,6 +22,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
       switch (req.action) {
         case 'open': result = editor.open(req.step); break
         case 'select': result = editor.select(req.face); break
+        case 'finalFaceWitness': result = editor.finalFaceWitness(req.previewRevision); break
         case 'notePick': result = editor.anchorFromPick(req.point,req.previewRevision); break
         case 'noteResolve': result = editor.resolveAnchor(req.anchor,req.previewRevision); break
         case 'evaluate': result = editor.evaluate(req.net, req.continuity, req.exportStep); break
