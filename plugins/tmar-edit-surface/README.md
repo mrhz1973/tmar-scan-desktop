@@ -374,3 +374,32 @@ project-level persistence of the local editing history.
 Evidence: `evidence/history/baseline-20261103/`, `source-20261103/` and
 `compiled-20261103/`. The existing segment/cell selection and live-preview
 regressions also passed on the source fixture.
+
+### Direct editing of partially trimmed NURBS STEP faces
+
+Some imported STEP faces occupy only a part of a larger, clamped NURBS
+support. The previous editor refused those faces. It now edits their existing
+control net directly, preserving the CAD support and protecting every pole
+that may influence an outer or inner trim. The potentially free boundary
+option is unavailable for these trimmed faces. Automatically protected poles
+outside the face's parameter bounds are hidden only when they are also locked
+under G0; the underlying net and pole indices are unchanged. Segments and
+cells containing hidden poles cannot be selected.
+
+Before this change the imported test face was refused with "Il trim non
+coincide con il dominio NURBS." Three OCCT STEP round-trip tests now pass for
+planar, curved rational, and curved rational perforated NURBS faces. They check
+validity, protected boundaries and adjacent faces, sampled surface positions
+and normals, and replay of the edit recipe. On the curved fixture, source and
+compiled UI tests selected the previously refused face, dragged an editable
+pole, exported STEP and reopened a valid solid. One hundred sampled outer-edge
+points had a maximum measured distance of 0 mm in these runs; this is a
+fixture-specific sampled check, not a general accuracy guarantee. Fifteen
+relevant kernel tests and compiled point/segment/cell selection regressions
+passed. Evidence: `evidence/partial-domain/source-20261103/` and
+`evidence/partial-domain/compiled-20261103/`.
+
+The conservative trim protection may leave few or no editable poles on some
+faces. Periodic and analytic cylindrical surfaces remain unsupported by this
+path. These results do not establish QUICKSURFACE parity, universal G1
+continuity, or qualification on arbitrary customer STEP files.

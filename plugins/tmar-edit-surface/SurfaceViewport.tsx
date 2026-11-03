@@ -21,7 +21,7 @@ interface Props {
   mirrorAxis: number; mirrorOffset: number; mirrorPartners: number[] | null
   strip: StripDrag | null
   notePins: Point[]; placingNote: boolean; onNote: (point:Point|null)=>void
-  preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; face: number
+  preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; hiddenPoles: number[]; face: number
   axis: number; onFace: (i: number) => void; onPoints: (ids: number[], multi: boolean) => void
   onDrag: (poles: Point[], final: boolean) => void; busy: boolean
   dragStrength: number; showNet: boolean; transparency: number; dragMode: DragMode
@@ -56,6 +56,7 @@ export function SurfaceViewport(props: Props) {
     const pickNet = (e: PointerEvent): number[] | null => {
       const p = current.current
       if (!p.net) return null
+      const hidden = new Set(p.hiddenPoles)
       if (p.selectionMode === 'cells') {
         if (!p.showNet) return null
         hits(e, [])
@@ -67,6 +68,7 @@ export function SurfaceViewport(props: Props) {
         let best: number[] | null = null, nearest = Infinity
         for (let u = 0; u < nu - 1; u++) for (let v = 0; v < nv - 1; v++) {
           const a = u * nv + v, b = a + nv, c = b + 1, d = a + 1
+          if ([a,b,c,d].some(i=>hidden.has(i))) continue
           for (const [j, k] of [[b, c], [c, d]]) {
             if (!raycaster.ray.intersectTriangle(vertices[a], vertices[j], vertices[k], false, hit)) continue
             const distance = hit.distanceToSquared(raycaster.ray.origin)
@@ -86,6 +88,7 @@ export function SurfaceViewport(props: Props) {
       const projected = p.net.poles.map(q => new THREE.Vector3(...q).project(camera))
       let best: number[] | null = null, distance = 7 // CSS pixels, independent of zoom.
       for (const [a, b] of netEdges(p.net)) {
+        if (hidden.has(a) || hidden.has(b)) continue
         const pa = projected[a], pb = projected[b]
         if (Math.abs(pa.z) > 1 || Math.abs(pb.z) > 1) continue
         const ax = r.left + (pa.x + 1) * r.width / 2, ay = r.top + (1 - pa.y) * r.height / 2
@@ -101,7 +104,7 @@ export function SurfaceViewport(props: Props) {
     const pickArrow = (e: PointerEvent) => {
       const p=current.current, net=p.net
       if (!net || p.dragMode==='screen' || e.ctrlKey || e.metaKey) return null
-      const anchor=p.selected.find(i=>!p.locked.includes(i))
+      const anchor=p.selected.find(i=>!p.locked.includes(i) && !p.hiddenPoles.includes(i))
       if (anchor===undefined) return null
       const direction=dragDirection(net,anchor,p.dragMode,p.axis)
       if (!direction) return null
@@ -235,6 +238,7 @@ export function SurfaceViewport(props: Props) {
     const s = sceneRef.current; if (!s) return
     s.cage.traverse(dispose); s.cage.clear()
     const n = props.net; if (!n) return
+    const hidden = new Set(props.hiddenPoles)
     const mirrored = new Set<number>()
     if (props.mirrorPartners) {
       for (const i of props.selected) {
@@ -257,12 +261,13 @@ export function SurfaceViewport(props: Props) {
       s.cage.add(frame)
     }
     n.poles.forEach((p, i) => {
+      if (hidden.has(i)) return
       const color = props.selected.includes(i) ? '#ffcf35' : props.locked.includes(i) ? '#89939c' : mirrored.has(i) ? '#f785ff' : '#58f3d0'
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(s.radius * 0.012, 10, 8), new THREE.MeshBasicMaterial({ color, transparent: true, depthTest: false, depthWrite: false })); mesh.position.set(...p); mesh.userData.point = i; mesh.renderOrder = 5; s.cage.add(mesh)
       // Picking can run before the next render after the cage is rebuilt.
       mesh.updateWorldMatrix(true, false)
     })
-    const anchor = props.selected.find(i => !props.locked.includes(i))
+    const anchor = props.selected.find(i => !props.locked.includes(i) && !hidden.has(i))
     if (anchor !== undefined && props.dragMode !== 'screen') {
       const direction = dragDirection(n, anchor, props.dragMode, props.axis)
       if (direction) {
@@ -276,13 +281,14 @@ export function SurfaceViewport(props: Props) {
     if (!props.showNet) return // Hide the connecting cage, retain editable poles.
     const lines: number[] = [], colors: number[] = []
     for (const [a, b] of netEdges(n)) {
+      if (hidden.has(a) || hidden.has(b)) continue
       lines.push(...n.poles[a], ...n.poles[b])
       const c = new THREE.Color(props.selected.includes(a) && props.selected.includes(b) ? '#ffcf35' : '#95e7ea')
       colors.push(c.r, c.g, c.b, c.r, c.g, c.b)
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
     const line = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthTest: false, depthWrite: false })); line.renderOrder = 4; s.cage.add(line)
-  }, [props.net, props.selected, props.locked, props.showNet, props.dragMode, props.axis, props.mirrorAxis, props.mirrorOffset, props.mirrorPartners])
+  }, [props.net, props.selected, props.locked, props.hiddenPoles, props.showNet, props.dragMode, props.axis, props.mirrorAxis, props.mirrorOffset, props.mirrorPartners])
   useEffect(() => {
     const state=sceneRef.current
     if (!state || !props.notePins.length) return
@@ -301,6 +307,6 @@ export function SurfaceViewport(props: Props) {
     const group=drawStrip(props.strip);state.scene.add(group)
     return ()=>{group.removeFromParent();group.traverse(dispose)}
   },[props.strip])
-  return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" />
+  return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" data-hidden-poles={props.hiddenPoles.length} />
 }
 function dispose(o: THREE.Object3D) { const m = o as THREE.Mesh; m.geometry?.dispose(); if (Array.isArray(m.material)) m.material.forEach(a => a.dispose()); else m.material?.dispose() }

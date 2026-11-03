@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { OcctKernel, type Mesh, type BoundingBox, type ShapeHandle } from 'occt-wasm'
-import { assertNet, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
+import { assertNet, boundaryLocked, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
 import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
 
-export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[] }
+export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[] }
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
@@ -104,11 +104,11 @@ export class SurfaceEditorKernel {
     const openSheet=this.solids===0 && (sourceKind==='face' || sourceKind==='shell')
     this.infos = this.faces.map((face, index) => {
       let reason: string | null = null
-      let trimLocks: number[] = []
+      let trimLocks: number[] = [], hiddenPoles: number[] = []
       let natural = false
-      try { const info = this.netFor(index); trimLocks = info.trimLocks; natural = info.natural } catch (e) { reason = e instanceof Error ? e.message : String(e) }
+      try { const info = this.netFor(index); trimLocks = info.trimLocks; hiddenPoles = info.hiddenPoles; natural = info.natural } catch (e) { reason = e instanceof Error ? e.message : String(e) }
       const record = this.records[this.recordsByFace[index]]
-      return { index, trimLocks, openSheet, freeBoundary: openSheet && this.faces.length === 1 && natural, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
+      return { index, trimLocks, hiddenPoles, openSheet, freeBoundary: openSheet && this.faces.length === 1 && natural, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
         enriched: !!record?.net && enrichBicubic(record.net) !== record.net }
     })
     return { faces: this.infos, preview: this.render(this.source) }
@@ -125,6 +125,16 @@ export class SurfaceEditorKernel {
       const b = k.uvBounds(face), bounds: [number, number, number, number] = [b.uMin, b.uMax, b.vMin, b.vMax]
       if (bounds.some(x => !Number.isFinite(x)) || b.uMax <= b.uMin || b.vMax <= b.vMin) throw new Error('Dominio della faccia non valido.')
       const epsU = 1e-7 * Math.max(1, b.uMax - b.uMin), epsV = 1e-7 * Math.max(1, b.vMax - b.vMin)
+      const support = r.net
+      if (support && (b.uMin < support.ku[0]-epsU || b.uMax > support.ku.at(-1)!+epsU ||
+          b.vMin < support.kv[0]-epsV || b.vMax > support.kv.at(-1)!+epsV))
+        throw new Error('Il trim supera il dominio NURBS.')
+      // A STEP face may occupy only a subset of its clamped support surface.
+      // Its visible rim is then an interior curve of that support, so protect
+      // every pole whose span can influence it instead of locking only the
+      // outermost rows of the full control net.
+      const partial = !!support && (Math.abs(support.ku[0]-b.uMin)>epsU || Math.abs(support.ku.at(-1)!-b.uMax)>epsU ||
+        Math.abs(support.kv[0]-b.vMin)>epsV || Math.abs(support.kv.at(-1)!-b.vMax)>epsV)
       // Recognize the natural rectangular domain to retain its original net and recipe.
       const sides = edges.map(edge => {
         const { first, last } = k.curveParameters(edge)
@@ -138,13 +148,12 @@ export class SurfaceEditorKernel {
       })
       const rectangular = sides.length === 4 && !sides.includes(-1) && new Set(sides).size === 4
       const trimBoxes = inner.map(w => k.getBoundingBox(w,{useTriangulation:false}))
-      if (!rectangular) for (const edge of edges) trimBoxes.push(...outerEdgeBoxes(k,edge))
+      if (!rectangular || partial) for (const edge of edges) trimBoxes.push(...outerEdgeBoxes(k,edge))
 
       const net = r.kind === 1
         ? (trimBoxes.length ? perforatedPlaneNet(r, bounds) : planeNet(r, bounds))
         : enrichBicubic(structuredClone(r.net!))
       if (net.mu[0] !== net.du + 1 || net.mu.at(-1) !== net.du + 1 || net.mv[0] !== net.dv + 1 || net.mv.at(-1) !== net.dv + 1) throw new Error('Servono nodi estremi clamped.')
-      if (Math.abs(net.ku[0] - b.uMin) > epsU || Math.abs(net.ku.at(-1)! - b.uMax) > epsU || Math.abs(net.kv[0] - b.vMin) > epsV || Math.abs(net.kv.at(-1)! - b.vMax) > epsV) throw new Error('Il trim non coincide con il dominio NURBS.')
       if (net.nu * net.nv > 1600) throw new Error('Reticolo oltre 1600 punti: non interattivo in questo prototipo.')
       const trimLocks = new Set<number>()
       if (trimBoxes.length) {
@@ -167,7 +176,20 @@ export class SurfaceEditorKernel {
         }
       }
       if (trimBoxes.length && trimLocks.size === net.poles.length) throw new Error('Tutti i poli influenzano un contorno ritagliato.')
-      return {net, trimLocks: [...trimLocks], natural: rectangular && inner.length === 0}
+      const hiddenPoles: number[] = []
+      if (partial) {
+        const expand = (knots:number[], mult:number[]) => knots.flatMap((x,i)=>Array<number>(mult[i]).fill(x))
+        const us=expand(net.ku,net.mu), vs=expand(net.kv,net.mv)
+        const greville=(knots:number[],degree:number,i:number)=>knots.slice(i+1,i+degree+1).reduce((sum,x)=>sum+x,0)/degree
+        for(let u=0;u<net.nu;u++) for(let v=0;v<net.nv;v++) {
+          const id=u*net.nv+v, gu=greville(us,net.du,u), gv=greville(vs,net.dv,v)
+          // Greville outside the trim is not proof of zero influence: hide
+          // only poles already protected even under the less restrictive G0.
+          if ((gu<b.uMin-epsU || gu>b.uMax+epsU || gv<b.vMin-epsV || gv>b.vMax+epsV) &&
+              (trimLocks.has(id) || boundaryLocked(net,id,'G0'))) hiddenPoles.push(id)
+        }
+      }
+      return {net, trimLocks: [...trimLocks], hiddenPoles, natural: rectangular && inner.length === 0 && !partial}
     } finally { [outer, ...wires, ...edges].forEach(h => k.release(h)) }
   }
   private checkPlanarTrims(before: ShapeHandle, after: ShapeHandle) {
