@@ -1,0 +1,250 @@
+{
+  "author": "3857f2ca1aa90fb6e421cfd26fa230748d6ae1be",
+  "tested_runtime": "02bf4c66b0258d7b761928d2c196abeebd00a701",
+  "plugin_tree": "88dc1e6054e235960fcff0a323d11c31d5c5c02e",
+  "recorded_at": "2026-11-03T03:06:33.164340+00:00",
+  "platform": "Windows/Chrome",
+  "main_merge": false,
+  "unit_tests": 45,
+  "regression_checks": 221,
+  "runs": {
+    "head": "02bf4c66b0258d7b761928d2c196abeebd00a701",
+    "checkedAt": "2026-11-03T02:55:18.056Z",
+    "results": [
+      {
+        "name": "unit",
+        "code": 0,
+        "assertions": 0,
+        "failed": 0,
+        "seconds": 5.79
+      },
+      {
+        "name": "typecheck",
+        "code": 0,
+        "assertions": 0,
+        "failed": 0,
+        "seconds": 23.477
+      },
+      {
+        "name": "production-build",
+        "code": 0,
+        "assertions": 0,
+        "failed": 0,
+        "seconds": 19.102
+      },
+      {
+        "name": "inherited-plugin-boundary",
+        "code": 1,
+        "assertions": 0,
+        "failed": 0,
+        "seconds": 0.306
+      },
+      {
+        "name": "controls-dev",
+        "code": 1,
+        "assertions": 0,
+        "failed": 0,
+        "seconds": 12.791
+      },
+      {
+        "name": "original-editor",
+        "code": 0,
+        "assertions": 0,
+        "failed": 0,
+        "seconds": 9.481
+      },
+      {
+        "name": "zebra",
+        "code": 0,
+        "assertions": 32,
+        "failed": 0,
+        "seconds": 17.661
+      },
+      {
+        "name": "categories-fixture",
+        "code": 0,
+        "assertions": 35,
+        "failed": 0,
+        "seconds": 21.812
+      },
+      {
+        "name": "edges-fixture",
+        "code": 0,
+        "assertions": 25,
+        "failed": 0,
+        "seconds": 20.04
+      },
+      {
+        "name": "controls-production",
+        "code": 0,
+        "assertions": 0,
+        "failed": 0,
+        "seconds": 10.932
+      },
+      {
+        "name": "focus-production",
+        "code": 0,
+        "assertions": 31,
+        "failed": 0,
+        "seconds": 13.39
+      },
+      {
+        "name": "categories-production",
+        "code": 0,
+        "assertions": 22,
+        "failed": 0,
+        "seconds": 10.594
+      },
+      {
+        "name": "edges-production",
+        "code": 0,
+        "assertions": 9,
+        "failed": 0,
+        "seconds": 11.074
+      },
+      {
+        "name": "mesh-production",
+        "code": 0,
+        "assertions": 18,
+        "failed": 0,
+        "seconds": 11.603
+      },
+      {
+        "name": "smooth-production",
+        "code": 0,
+        "assertions": 49,
+        "failed": 0,
+        "seconds": 22.904
+      },
+      {
+        "name": "curved-roundtrip-production",
+        "code": 0,
+        "assertions": 0,
+        "failed": 0,
+        "seconds": 7.432
+      }
+    ]
+  },
+  "controls_compiled": {
+    "pass": true,
+    "base": {
+      "file": "base.step",
+      "center": {
+        "x": 10,
+        "y": 15,
+        "z": 11.5
+      },
+      "volume": 6225.005849983061
+    },
+    "full": {
+      "file": "100-percent-drag.step",
+      "center": {
+        "x": 10,
+        "y": 15,
+        "z": 11.79458991739675
+      },
+      "volume": 6269.195486489925
+    },
+    "half": {
+      "file": "50-percent-drag.step",
+      "center": {
+        "x": 10,
+        "y": 15,
+        "z": 11.6472949586985
+      },
+      "volume": 6247.100668236511
+    },
+    "fullDelta": 0.2945899173967508,
+    "halfDelta": 0.14729495869850062,
+    "dragRatio": 0.5000000000004251,
+    "smoothQuarter": {
+      "file": "25-percent-smoothing.step",
+      "center": {
+        "x": 10,
+        "y": 15,
+        "z": 11.125
+      },
+      "volume": 6168.754387487296
+    },
+    "smoothThreeQuarter": {
+      "file": "75-percent-smoothing.step",
+      "center": {
+        "x": 10,
+        "y": 15,
+        "z": 10.375
+      },
+      "volume": 6056.251462495766
+    },
+    "displayRestoredExactly": true,
+    "consoleErrors": [],
+    "elapsedMs": 10116.1505
+  },
+  "unchanged_dev_retries": [
+    {
+      "name": "unchanged-controls-retry-1",
+      "code": 0,
+      "seconds": 14.927
+    },
+    {
+      "name": "unchanged-controls-retry-2",
+      "code": 0,
+      "seconds": 10.132
+    }
+  ],
+  "curved_roundtrip_compiled": {
+    "pass": true,
+    "originalVolume": 6075.247994550057,
+    "editedVolume": 6192.107966783208,
+    "roundtripVolume": 6192.107966783208,
+    "maxError": 0,
+    "editedStatus": "CAD valido · volume 6192.108 mm³ · scarto bordo 2.0e-14 mm",
+    "project": "project.scanruler",
+    "consoleErrors": [],
+    "elapsedMs": 6542.2414
+  },
+  "toolbar_undo_defect": {
+    "disabled": true,
+    "blocked": false,
+    "editorOpen": false,
+    "activeElement": "BODY"
+  },
+  "host_keyboard_diagnostic": {
+    "pass": true,
+    "checks": [
+      "Fixture has source body and a downstream dependent body",
+      "Both notes are real UI face picks, not scan-coordinate substitutes",
+      "Apply adds exactly one body copy",
+      "Apply preserves every pre-existing feature including the dependency",
+      "Apply preserves exact original and dependent note records",
+      "Apply preserves source and dependent body identities, names and visibility",
+      "Apply adds exactly one host Undo transaction",
+      "Independent OCCT samples and volumes of source and dependent are unchanged",
+      "One host Undo removes only the new copy and restores previous feature list",
+      "Host Undo preserves both notes",
+      "Host Undo preserves source and dependent CAD",
+      "Host Redo restores the same copy, identities and feature list",
+      "Host Redo preserves both notes",
+      "Separate page project reopen preserves all three bodies and history recipe",
+      "Reopened note contents and anchors match; imported provenance is retained",
+      "Reopened source and dependent shapes remain unchanged",
+      "Reopened note 1 still focuses/highlights",
+      "Reopened note 2 still focuses/highlights",
+      "No agent connection was enabled",
+      "No application console/page errors"
+    ],
+    "consoleErrors": [],
+    "does_not_waive_toolbar_bug": true
+  },
+  "open_gates": [
+    "Inherited gallery plugin-boundary import violation",
+    "Stale disabled host Undo toolbar after Edit Surface Apply"
+  ],
+  "equivalent_recipe_replay_adapter_found": false,
+  "evidence_sha256": {
+    "e2e-out/edit-controls-integration/controls-production/controls/run-yWvsfP/result.json": "6e8dbf7ea8fc91c01046e4f8897b8b49f77aaadc0a15338edfc64bdfef237e25",
+    "e2e-out/edit-controls-integration/compiled-roundtrip/run-B8ipU5/result.json": "27c8caab06e73d60a0722017e3b28fc945ab732c59323498643b0c3f749daa9d",
+    "e2e-out/edit-controls-integration/host-keyboard-diagnostic/result.json": "7db84880d6d52a3a07c0c82c6684bcd33d3d1bf14432d7877094345683fcdae1",
+    "e2e-out/edit-controls-integration/host-copy/failure.json": "f9076aad831b9ad66ee84da22fafcdc8681eaf144168c9c705513f709ab7b03b",
+    "e2e-out/edit-controls-integration/retry/results.json": "bee0775d97a093519cd21446d8bc69ce3285ef77dcce91e8b8bf43c41e010692"
+  }
+}
