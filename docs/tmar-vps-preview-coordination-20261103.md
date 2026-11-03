@@ -35,3 +35,18 @@ The owner has requested a live HTTPS preview on the **new** IONOS VPS, accessibl
 - [ ] Related work/PRs in ScanRuler and SurfaceLab linked here
 
 **Stop rule:** if another executor is already updating `/opt/tmar-scanruler-preview`, use read-only inspection and communicate with that owner. Do not overwrite or start competing build/deploy jobs.
+
+## Version selector delivered (3 November 2026; external HTTP + isolated Chrome smoke)
+- Entry point in Italian: `https://scanruler.31-70-139-73.sslip.io/` — static chooser page offering **Stable** and **Dev — Edit Surface**.
+- Stable: `https://scanruler.31-70-139-73.sslip.io/?version=stable` retains the **same browser origin** as the old URL and all existing stable asset paths (`/assets/...`) and sample downloads; the original `main` build pipeline and 15-minute timer are unchanged.
+- Dev: `https://scanruler-dev.31-70-139-73.sslip.io/` has a separate origin, independent release tree, localhost/Docker-bridge-only static server, test + TypeScript/Vite build gate, atomic current symlink, last-failed-SHA suppression and a 30-minute update timer following `review/edit-surface-integration-20261103`. Known PR #14 gesture limitations remain; **DO NOT treat experimental as stable or merged**.
+- External HTTP/HTTPS probe: chooser, Stable route, Dev route, synthetic fixture gallery/ZIP, TecnoOne and Catalogo all returned HTTP 200 with valid TLS. Isolated Chrome headless smoke rendered Dev without page-level browser failure; Edit Surface module strings are present in the compiled JS, but interaction-specific UI acceptance was not repeated on VPS.
+- Initial Dev deployment pinned `39e92174927ebe43fcab409f03fb78ab470e89da` (may change through polling); Stable at last recorded `935f07f23a2311e8d90684590b8aac3d78ca0b5a`.
+- Note: preview is a publicly reachable static web application. Do not load private AIRBOX/STL2 CAD without intentional user approval. Preserve `.scanruler` saves and take a backup before switching versions.
+
+## Italian localization — explicit operator requirement (NOT completed by chooser)
+- Deliver **complete Italian UI** for ScanRuler, including menus, settings, status/error messages, descriptions and **all tooltips**; keep original command/tool names unmodified: e.g. `Edit Surface`, `2D Sketch`, `Loft`, `Move face`, `Patch network`.
+- Add **Settings → Language / Lingua**, with persistent language selection across restarts and a clear English fallback. Italian should be the operator-facing default where supported; verify behavior in both Stable and Dev and independent browser profiles.
+- Maintain translation resources per plugin rather than hard-coded string replacement; protect CAD geometry code and avoid translating API or saved feature schema identifiers.
+- **Acceptance gate**: UI inventory includes menus, dialogs, forms, warnings and tooltips; tested Italian screenshots and language switching; no untranslated user-facing tooltip or malformed command label. Do not mark localization complete based on the Italian entry page.
+- Coordination owners: «ScanRuler TMAR App Desktop» handles application-wide language infrastructure and translations; «2 - SurfaceLab Imple Codex 1 2D Sketch» handles localized descriptions/tooltips for Edit Surface only, with command label kept verbatim.
