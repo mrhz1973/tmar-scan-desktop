@@ -63,6 +63,24 @@ export function planeNet(r: RecordSpan, bounds: [number, number, number, number]
   for (const gu of g) for (const gv of g) { const u = u0 + gu * (u1 - u0), v = v0 + gv * (v1 - v0); poles.push([a[1] + u * a[7] + v * a[10], a[2] + u * a[8] + v * a[11], a[3] + u * a[9] + v * a[12]]) }
   return { nu: 5, nv: 5, du: 3, dv: 3, poles, weights: poles.map(() => 1), rational: [0, 0], ku: [u0, (u0 + u1) / 2, u1], kv: [v0, (v0 + v1) / 2, v1], mu: [4, 1, 4], mv: [4, 1, 4] }
 }
+// Eight spans keep movement local around a protected trim. Cubic Greville
+// coordinates reproduce the original plane exactly in the original UV domain.
+export function perforatedPlaneNet(plane: RecordSpan, bounds: [number, number, number, number]): Net {
+  const spans = 8, degree = 3, count = spans + degree
+  const knots = (min: number, max: number) => Array.from({ length: spans + 1 }, (_, i) =>
+    i === spans ? max : min + (max - min) * i / spans)
+  const ku = knots(bounds[0], bounds[1]), kv = knots(bounds[2], bounds[3])
+  const mult = ku.map((_, i) => i === 0 || i === spans ? 4 : 1)
+  const greville = (k: number[]) => {
+    const full = k.flatMap((value, i) => Array(mult[i]).fill(value) as number[])
+    return Array.from({ length: count }, (_, i) => (full[i+1] + full[i+2] + full[i+3]) / 3)
+  }
+  const a = plane.values, vs = greville(kv)
+  const poles = greville(ku).flatMap(u => vs.map(v =>
+    [0,1,2].map(d => a[1+d] + u*a[7+d] + v*a[10+d]) as Point))
+  return { nu: count, nv: count, du: degree, dv: degree, poles,
+    weights: poles.map(() => 1), rational: [0,0], ku, kv, mu: mult, mv: [...mult] }
+}
 export function boundaryLocked(n: Net, index: number, continuity: 'G0' | 'G1'): boolean {
   const i = Math.floor(index / n.nv), j = index % n.nv, rings = continuity === 'G1' ? 2 : 1
   return Math.min(i, j, n.nu - 1 - i, n.nv - 1 - j) < rings
