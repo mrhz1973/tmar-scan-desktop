@@ -8,7 +8,8 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import type { Preview } from './editorKernel'
 import type { Net, Point } from './brep'
 import { dragDirection, type DragMode } from './localFrame'
-import { createDragFrame, type DragFrame } from './dragFrame'
+import { createDragFrame } from './dragFrame'
+import { createSurfaceGesture, type SurfaceGesture, type SurfacePointer } from './surfaceGesture'
 import { bindStripDrag, drawStrip, pickSheetEdge, type DirectStrip, type StripDrag } from './sheetDrag'
 import type { NetSelectionMode } from './netSelection'
 import { pickNetAt } from './netPicking'
@@ -31,7 +32,7 @@ interface Props {
   mirrorAxis: number; mirrorOffset: number; mirrorPartners: number[] | null
   strip: StripDrag | null; directStrip: DirectStrip | null; stripBlocked: () => boolean
   notePins: Point[]; placingNote: boolean; onNote: (point:Point|null)=>void
-  preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; hiddenPoles: number[]; face: number
+  preview: Preview | null; net: Net | null; selected: readonly number[]; locked: readonly number[]; hiddenPoles: number[]; face: number
   axis: number; onFace: (i: number) => void; onPoints: (ids: number[], multi: boolean) => void
   onDrag: (poles: Point[], final: boolean) => void; busy: boolean
   dragStrength: number; showNet: boolean; transparency: number; dragMode: DragMode
@@ -69,7 +70,7 @@ export function SurfaceViewport(props: Props) {
     const light = new THREE.DirectionalLight(0xffffff, 3); light.position.set(2, 5, 4); scene.add(light)
     const body = new THREE.Group(), references = new THREE.Group(), cage = new THREE.Group(), hover = new THREE.Group(); scene.add(references, body, cage, hover)
     const state = { scene, body, references, cage, hover, hoverKey: '', camera, controls, radius: 1, fitted: false }; sceneRef.current = state
-    let drag: { index: number; pointerId: number; start: Point[]; last: Point[]; ids: number[]; x: number; y: number; direction: Point; strength: number; started: boolean; screen: boolean; frame: DragFrame } | null = null
+    let drag: { pointerId: number; gesture: SurfaceGesture } | null = null
     let down = { x: 0, y: 0 }
     const raycaster = new THREE.Raycaster()
     const releaseCapture = (id: number) => {
@@ -144,6 +145,30 @@ export function SurfaceViewport(props: Props) {
       if (along<5 || along>length+4 || Math.abs(x*dy-y*dx)/length>6) return null
       return anchor
     }
+    const showSnap = (hit: SnapHit | null) => {
+      div.dataset.snapKind = hit?.kind ?? ''
+      const label=snapFeedback.current
+      if (!label) return
+      if (!hit) { label.style.display='none'; return }
+      const p=hit.point.clone().project(camera), rect=div.getBoundingClientRect()
+      label.style.left=((p.x+1)*rect.width/2)+'px'; label.style.top=((1-p.y)*rect.height/2)+'px'
+      label.textContent='●  Agganciato: '+hit.label; label.style.display='block'
+    }
+    const showSnapError = (pointer: SurfacePointer) => {
+      showSnap(null)
+      const label=snapFeedback.current
+      if (!label) return
+      div.dataset.snapKind='error'
+      label.textContent='Magnete non disponibile per questo riferimento'
+      label.style.left=(pointer.clientX-div.getBoundingClientRect().left)+'px'
+      label.style.top=(pointer.clientY-div.getBoundingClientRect().top)+'px'
+      label.style.display='block'
+    }
+    const pointerSample = (e: PointerEvent): SurfacePointer => {
+      const p=current.current
+      return { pointerId:e.pointerId, clientX:e.clientX, clientY:e.clientY, altKey:e.altKey,
+        snapEnabled:p.snap && Number.isFinite(p.snapDistance) && p.snapDistance>0 && p.snapDistance<=1000 }
+    }
     const pointerDown = (e: PointerEvent) => {
       if (drag) { e.stopImmediatePropagation(); return } // A second pointer cannot replace the active gesture.
       down = { x: e.clientX, y: e.clientY }
@@ -166,67 +191,50 @@ export function SurfaceViewport(props: Props) {
       if (arrow === null) p.onPoints(picked, e.ctrlKey || e.metaKey)
       if (!p.net || e.ctrlKey || e.metaKey || picked.every(i => p.locked.includes(i))) return
       const ids = (picked.every(i => p.selected.includes(i)) ? p.selected : picked).filter(i => !p.locked.includes(i))
-      const anchor = ids[0], index = anchor
-      const direction = dragDirection(p.net, anchor, p.dragMode, p.axis)
+      const index = ids[0], direction = dragDirection(p.net, index, p.dragMode, p.axis)
       if (!direction) return
       const origin = picked.reduce((v, i) => v.add(new THREE.Vector3(...p.net!.poles[i])), new THREE.Vector3()).multiplyScalar(1 / picked.length)
+      const snapDirection = p.dragMode === 'screen'
+        ? camera.getWorldDirection(new THREE.Vector3())
+        : new THREE.Vector3(...direction)
       const frame = createDragFrame({ camera, partWorld: netFrame, rect: div.getBoundingClientRect(),
         anchor: origin.toArray() as Point, clientX: e.clientX, clientY: e.clientY,
         ...(p.dragMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction }) })
       if (!frame) return
-      const start = structuredClone(p.net.poles)
-      drag = { index, pointerId: e.pointerId, start, last: start, ids, x: e.clientX, y: e.clientY,
-        direction, strength: p.dragStrength, screen: p.dragMode === 'screen', frame, started: false }
+      const startAnchor = new THREE.Vector3(...p.net.poles[index])
+      const gesture = createSurfaceGesture({ frame, poles:p.net.poles, selected:ids,
+        start:pointerSample(e), strength:p.dragStrength,
+        resolveDelta: (delta, pointer) => {
+          const now=current.current
+          try {
+            const refs=references.children.filter(o=>typeof o.userData.isCurrent!=='function' || o.userData.isCurrent()) as THREE.Mesh[]
+            // Exclude the edited face itself: otherwise it immediately attracts its own poles.
+            const neighbours=body.children.filter(o=>o.userData.face!==now.face) as THREE.Mesh[]
+            const targets=[...refs,...neighbours]
+            targets.forEach(target=>{ if (!target.userData.borrowedGeometry) withBoundsTree(target) })
+            const candidate=startAnchor.clone().add(new THREE.Vector3(...delta))
+            const snapHit=snapAlong(candidate,snapDirection,now.snapDistance,targets)
+            showSnap(snapHit)
+            return snapHit ? snapHit.point.clone().sub(startAnchor).toArray() as Point : null
+          } catch {
+            // A failed reference must not prevent the unconstrained drag.
+            showSnapError(pointer)
+            return null
+          }
+        } })
+      if (!gesture) return
+      drag = { pointerId:e.pointerId, gesture }
       div.style.cursor = 'grabbing'
-    }
-    const showSnap = (hit: SnapHit | null) => {
-      div.dataset.snapKind = hit?.kind ?? ''
-      const label=snapFeedback.current
-      if (!label) return
-      if (!hit) { label.style.display='none'; return }
-      const p=hit.point.clone().project(camera), rect=div.getBoundingClientRect()
-      label.style.left=((p.x+1)*rect.width/2)+'px'; label.style.top=((1-p.y)*rect.height/2)+'px'
-      label.textContent='●  Agganciato: '+hit.label; label.style.display='block'
-    }
-    const dragPoles = (e: PointerEvent): Point[] => {
-      const d = drag!, poles = structuredClone(d.start)
-      const displacement = d.frame.deltaAt(e.clientX, e.clientY)
-      if (!displacement) return d.last
-      let delta = new THREE.Vector3(...displacement).multiplyScalar(d.strength)
-      const p=current.current
-      let snapHit: SnapHit | null = null
-      let snapFailed=false
-      if (p.snap && !e.altKey && Number.isFinite(p.snapDistance) && p.snapDistance>0 && p.snapDistance<=1000) {
-        const refs=references.children.filter(o=>typeof o.userData.isCurrent!=='function' || o.userData.isCurrent()) as THREE.Mesh[]
-        // Exclude the edited face itself: otherwise it immediately attracts its own poles.
-        const neighbours=body.children.filter(o=>o.userData.face!==p.face) as THREE.Mesh[]
-        try {
-          const targets=[...refs,...neighbours]
-          targets.forEach(target=>{ if (!target.userData.borrowedGeometry) withBoundsTree(target) })
-          const candidate=new THREE.Vector3(...d.start[d.index]).add(delta)
-          const direction=d.screen ? camera.getWorldDirection(new THREE.Vector3()) : new THREE.Vector3(...d.direction)
-          snapHit=snapAlong(candidate,direction,p.snapDistance,targets)
-          if (snapHit) delta=snapHit.point.clone().sub(new THREE.Vector3(...d.start[d.index]))
-        } catch { snapFailed=true }
-      }
-      showSnap(snapHit)
-      if (snapFailed && snapFeedback.current) {
-        div.dataset.snapKind='error'
-        snapFeedback.current.textContent='Magnete non disponibile per questo riferimento'
-        snapFeedback.current.style.left=(e.clientX-div.getBoundingClientRect().left)+'px'
-        snapFeedback.current.style.top=(e.clientY-div.getBoundingClientRect().top)+'px'
-        snapFeedback.current.style.display='block'
-      }
-      d.ids.forEach(i => { poles[i] = poles[i].map((x, j) => x + delta.getComponent(j)) as Point })
-      d.last = poles
-      return poles
     }
     const pointerMove = (e: PointerEvent) => {
       if (drag) {
         if (e.pointerId !== drag.pointerId) { e.stopImmediatePropagation(); return }
         e.stopImmediatePropagation()
-        if (!drag.started && Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<4) return
-        drag.started=true; showHover(null); current.current.onDrag(dragPoles(e), false); return
+        const sample=pointerSample(e)
+        if (sample.altKey || !sample.snapEnabled) showSnap(null)
+        const result=drag.gesture.move(sample)
+        if (result.kind === 'preview') { showHover(null); current.current.onDrag(result.poles, false) }
+        return
       }
       if (current.current.placingNote || current.current.busy || current.current.strip) { showHover(null); div.style.cursor='crosshair'; return }
       if (pickArrow(e) !== null) { showHover(null); div.style.cursor='grab'; return }
@@ -236,7 +244,15 @@ export function SurfaceViewport(props: Props) {
     }
     const pointerUp = (e: PointerEvent) => {
       if (drag && e.pointerId !== drag.pointerId) { e.stopImmediatePropagation(); return }
-      if (drag) { e.stopImmediatePropagation(); if (drag.started) current.current.onDrag(dragPoles(e), true); drag = null; showSnap(null) }
+      if (drag) {
+        e.stopImmediatePropagation()
+        const active=drag, sample=pointerSample(e)
+        if (sample.altKey || !sample.snapEnabled) showSnap(null)
+        const result=active.gesture.up(sample); drag=null
+        if (result.kind === 'commit') current.current.onDrag(result.poles, true)
+        else if (result.kind === 'restore') current.current.onDrag(result.poles, false)
+        showSnap(null)
+      }
       else if (current.current.placingNote && !current.current.busy && e.button===0 && Math.hypot(e.clientX-down.x,e.clientY-down.y)<3) {
         const hit=hits(e,body.children)[0]
         current.current.onNote(hit?.object.userData.face===current.current.face ? hit.point.toArray() as Point : null)
@@ -250,8 +266,9 @@ export function SurfaceViewport(props: Props) {
     const cancelGesture = () => {
       if (!drag) return false
       const cancelled = drag; drag = null
+      const result=cancelled.gesture.cancel()
       releaseCapture(cancelled.pointerId)
-      if (cancelled.started) current.current.onDrag(cancelled.start, false)
+      if (result.kind === 'restore') current.current.onDrag(result.poles, false)
       showSnap(null); showHover(null); controls.enabled = true; div.style.cursor = 'crosshair'
       return true
     }

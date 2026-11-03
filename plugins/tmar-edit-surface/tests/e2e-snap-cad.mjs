@@ -104,11 +104,11 @@ try {
   camera.updateMatrixWorld()
   const origin = new THREE.Vector3(pole.x, pole.y, pole.z)
   const projected = origin.clone().project(camera)
-  const end = origin.clone().add(new THREE.Vector3(0, 0, radius)).project(camera)
+  // Perspective screen coordinates are not linear with depth. Project the
+  // actual 1.5 mm endpoint, rather than scaling a longer projected segment.
+  const end = origin.clone().add(new THREE.Vector3(0, 0, 1.5)).project(camera)
   const from = [rect.x + (projected.x + 1) * rect.width / 2, rect.y + (1 - projected.y) * rect.height / 2]
-  const sx = (end.x - projected.x) * rect.width / 2 / radius
-  const sy = -(end.y - projected.y) * rect.height / 2 / radius
-  const to = [from[0] + sx * 1.5, from[1] + sy * 1.5]
+  const to = [rect.x + (end.x + 1) * rect.width / 2, rect.y + (1 - end.y) * rect.height / 2]
   assert(Math.hypot(to[0] - from[0], to[1] - from[1]) >= 4, 'synthetic drag exceeds pointer slack')
 
   await page.mouse.click(...from)

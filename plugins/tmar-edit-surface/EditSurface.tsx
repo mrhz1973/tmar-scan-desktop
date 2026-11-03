@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { listCommands, runCommand } from '../../src/commands/registry'
 import { useCommandActivity } from '../../src/commands/activity'
@@ -9,7 +9,7 @@ import { create } from 'zustand'
 import { reEditorOpen, useReverse } from '../reverse/state/reStore'
 import { stepFileKey } from '../reverse/core/features'
 import { bodyStepResult } from '../tmar-body-export/bodyExport'
-import { assertNet, boundaryLocked, type Net, type Point } from './brep'
+import { boundaryLocked, type Net, type Point } from './brep'
 import type { StripMove } from './sheetExtension'
 import type { DraftAnchor, FaceInfo, Preview } from './editorKernel'
 import type { SurfaceWorkerPayload } from './workerClient'
@@ -18,12 +18,35 @@ import { SurfaceViewport, hasSurfaceZebra, type StripeSettings } from './Surface
 import { dragDirection, type DragMode } from './localFrame'
 import { mirrorPartners, mirrorEdit } from './symmetry'
 import { selectNetPoints, type NetSelectionMode } from './netSelection'
-import type { EditFrame } from './surfaceHistory'
+import { SurfaceDraft } from './surfaceDraft'
 import './surface.css'
 const NO_HIDDEN_POLES: number[] = []
 
 interface StripState {step:string;addedArea:number;preview:Preview;paths:Point[][];moves:StripMove[]}
 interface Pin { anchor: DraftAnchor; at: Point; normal: Point }
+type SurfaceNote = Pin & {id:number; text:string; revision:number}
+type LoadedSurface = { step: string; name: string; bodyId: number | null }
+
+function createSurfaceSession() {
+  const re = useReverse.getState(), model = useStore.getState()
+  const runtime = new SurfaceRuntime()
+  try {
+    return {
+      runtime, draft: new SurfaceDraft(runtime),
+      source: { version: re.buildVersion, features: re.features, rolledBack: re.rolledBack,
+        stepFiles: re.stepFiles, parameters: re.parameters, file: model.fileName, alignment: model.appliedAlignment },
+      loaded: null as LoadedSurface | null, sourcePreview: null as Preview | null,
+      faces: [] as FaceInfo[], face: -1, loadId: 0, generation: 0,
+      notes: [] as SurfaceNote[], nextNote: 1, editorSessionId: crypto.randomUUID(),
+      zebra: false, stripes: { orientation:'horizontal', width:3, color:'#5388b1' } as StripeSettings,
+    }
+  } catch (error) { runtime.dispose(); throw error }
+}
+type SurfaceSession = ReturnType<typeof createSurfaceSession>
+function disposeSurfaceSession(session: SurfaceSession) {
+  session.draft.dispose()
+  session.runtime.dispose()
+}
 export interface SurfaceNoteCommit {
   step: string; name: string; faceIndex: number
   final: {face:number; selectionRevision:number; previewRevision:number; faceBrep:string; editorSessionId:string}
@@ -36,51 +59,54 @@ interface SurfaceOptions { applyWithNotes?: (edit: SurfaceNoteCommit) => Promise
 export const useSurfaceDialogs = create(() => ({ count: 0 }))
 
 export function EditSurface({ applyWithNotes }: SurfaceOptions = {}) {
-  const [session, setSession] = useState<SurfaceRuntime | null>(null)
-  const sessionRef = useRef<SurfaceRuntime | null>(null)
+  const [session, setSession] = useState<SurfaceSession | null>(null)
+  const sessionRef = useRef<SurfaceSession | null>(null)
   const [startupError, setStartupError] = useState('')
   const busy = useStore(s => s.busy), running = useCommandActivity(s => s.running !== null)
   const re = useReverse(useShallow(s => ({ bodies: s.bodies, building: s.building, editing: reEditorOpen(s), playback: s.playback !== null })))
-  useEffect(() => () => { sessionRef.current?.dispose(); sessionRef.current = null }, [])
+  useEffect(() => () => { if (sessionRef.current) disposeSurfaceSession(sessionRef.current); sessionRef.current = null }, [])
   const open = () => {
     if (sessionRef.current) return
-    try { const next = new SurfaceRuntime(); sessionRef.current = next; setStartupError(''); setSession(next) }
+    try { const next = createSurfaceSession(); sessionRef.current = next; setStartupError(''); setSession(next) }
     catch (error) { setStartupError(error instanceof Error ? error.message : String(error)) }
   }
-  const close = () => { const active = sessionRef.current; sessionRef.current = null; active?.dispose(); setSession(null) }
+  const close = () => { const active = sessionRef.current; sessionRef.current = null; if (active) disposeSurfaceSession(active); setSession(null) }
   return <div className="group" data-test="edit-surface-entry"><button className="block" disabled={busy || running || re.building || re.editing || re.playback} onClick={open}>Edit Surface · punti CAD…</button>
     {startupError && <p role="alert">{startupError}</p>}
-    {session && <SurfaceDialog runtime={session} applyWithNotes={applyWithNotes} close={close} />}</div>
+    {session && <SurfaceDialog session={session} applyWithNotes={applyWithNotes} close={close} />}</div>
 }
-function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { close: () => void; runtime: SurfaceRuntime }) {
-  const re = useReverse.getState(), model = useStore.getState()
-  const source = useRef({ version: re.buildVersion, features: re.features, rolledBack: re.rolledBack, stepFiles: re.stepFiles, parameters: re.parameters, file: model.fileName, alignment: model.appliedAlignment })
+function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { close: () => void; session: SurfaceSession }) {
+  const { runtime, draft } = session
+  const draftState = useSyncExternalStore(draft.subscribe, draft.getSnapshot, draft.getSnapshot)
+  const { net, selected, locks, continuity, freeBoundary, validNet, calculating } = draftState
+  const re = useReverse.getState()
+  const source = useRef(session.source)
   const [bodyId, setBodyId] = useState(re.bodies[0]?.id ?? '')
-  const [name, setName] = useState('superficie-modificata.step')
-  const loaded = useRef<{ step: string; name: string; bodyId: number | null } | null>(null)
-  const [referenceBody, setReferenceBody] = useState<number | null>(null)
+  const [name, setName] = useState(session.loaded ? session.loaded.name.replace(/\.(step|stp)$/i, '') + '-edit.step' : 'superficie-modificata.step')
+  const loaded = useRef<LoadedSurface | null>(session.loaded)
+  const setLoaded = (value: LoadedSurface | null) => { session.loaded = value; loaded.current = value }
+  const [referenceBody, setReferenceBody] = useState<number | null>(session.loaded?.bodyId ?? null)
   const [snap, setSnap] = useState(true), [snapDistance, setSnapDistance] = useState(1)
   const [referenceCount, setReferenceCount] = useState(0)
   const cancelGesture = useRef<() => boolean>(() => false)
-  const [loadId, setLoadId] = useState(0)
-  const [faces, setFaces] = useState<FaceInfo[]>([]), [face, setFace] = useState(-1)
-  const [preview, setPreview] = useState<Preview | null>(null), [net, setNetState] = useState<Net | null>(null)
-  const netRef = useRef<Net | null>(null), base = useRef<Net | null>(null)
-  const history = runtime.history, [, historyTick] = useState(0)
-  const [selected, setSelected] = useState<number[]>([]), [locks, setLocks] = useState<number[]>([])
-  const locksRef = useRef(locks); locksRef.current = locks
-  const [continuity, setContinuity] = useState<'G0' | 'G1'>('G1'), [axis, setAxis] = useState(2)
-  const continuityRef = useRef(continuity); continuityRef.current = continuity
-  const [freeBoundary, setFreeBoundary] = useState(false)
-  const freeBoundaryRef = useRef(freeBoundary); freeBoundaryRef.current = freeBoundary
+  const [loadId, setLoadId] = useState(session.loadId)
+  const [faces, setFacesState] = useState(session.faces), [face, setFaceState] = useState(session.face)
+  const setFaces = (value: FaceInfo[]) => { session.faces = value; setFacesState(value) }
+  const setFace = (value: number) => { session.face = value; setFaceState(value) }
+  const [sourcePreview, setSourcePreviewState] = useState(session.sourcePreview)
+  const setSourcePreview = (value: Preview | null) => { session.sourcePreview = value; setSourcePreviewState(value) }
+  const preview = draftState.preview ?? sourcePreview
+  const [axis, setAxis] = useState(2)
   const [distance, setDistance] = useState(1), [factor, setFactor] = useState(1.1)
   const [dragStrength, setDragStrength] = useState(1), [smoothStrength, setSmoothStrength] = useState(0.5)
   const [dragMode, setDragMode] = useState<DragMode>('axis')
   const [selectionMode, setSelectionMode] = useState<NetSelectionMode>('auto')
   const [placingNote, setPlacingNote] = useState(false)
-  const [notes, setNotes] = useState<(Pin & {id:number; text:string; revision:number})[]>([])
-  const [editorSessionId]=useState(()=>crypto.randomUUID())
-  const nextNote = useRef(1)
+  const [notes, setNotesState] = useState<SurfaceNote[]>(session.notes)
+  const setNotes = (value: SurfaceNote[] | ((previous: SurfaceNote[]) => SurfaceNote[])) => {
+    setNotesState(previous => { const next = typeof value === 'function' ? value(previous) : value; session.notes = next; return next })
+  }
+  const editorSessionId = session.editorSessionId
   const [noteError,setNoteError] = useState('')
   const cancel = () => {
     if (!notes.length || window.confirm('Chiudere e scartare le note della bozza?')) close()
@@ -100,58 +126,33 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
     if(item===undefined)return
     stripAt.current=next;setStripEdge(-1);setStripDelta([0,0,0]);setStripResult(item);setError('')
   }
-  const [zebra, setZebra] = useState(false)
-  const [stripes, setStripes] = useState<StripeSettings>({ orientation:'horizontal', width:3, color:'#5388b1' })
+  const [zebra, setZebraState] = useState(session.zebra)
+  const setZebra = (value: boolean | ((previous: boolean) => boolean)) => {
+    setZebraState(previous => { const next = typeof value === 'function' ? value(previous) : value; session.zebra = next; return next })
+  }
+  const [stripes, setStripesState] = useState<StripeSettings>(session.stripes)
+  const setStripes = (value: StripeSettings) => { session.stripes = value; setStripesState(value) }
   const [symmetry, setSymmetry] = useState(false)
   const [mirrorAxis, setMirrorAxis] = useState(0), [mirrorOffset, setMirrorOffset] = useState(0)
   const [showNet, setShowNet] = useState(true), [transparency, setTransparency] = useState(0)
-  const [busy, setBusy] = useState(false), [calculating, setCalculating] = useState(false)
-  const [error, setError] = useState(''), [validNet, setValidNet] = useState<Net | null>(null)
-  const mounted = useRef(true), previewEpoch = useRef(0), shownPreview = useRef(0)
+  const [busy, setBusy] = useState(false)
+  const [actionError, setError] = useState('')
+  const error = actionError || draftState.error
+  const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
-    const sync = () => {
-      if (!mounted.current) return
-      const state = runtime.previews.getSnapshot(), current = state.current?.draft
-      setCalculating(state.calculating)
-      const validContext = (job: { continuity: 'G0' | 'G1'; freeBoundary: boolean; epoch: number }) =>
-        job.epoch === previewEpoch.current && job.continuity === continuityRef.current && job.freeBoundary === freeBoundaryRef.current
-      const visible = state.preview
-      if (visible && visible.revision > shownPreview.current && validContext(visible.identity)) {
-        shownPreview.current = visible.revision; setPreview(visible.value)
-      }
-      if (current && validContext(current) && current.net === netRef.current && state.validRevision === state.current?.revision) {
-        setError(''); setValidNet(current.net)
-      } else setValidNet(null)
-      if (state.error && current && validContext(current) && current.net === netRef.current && state.error.revision === state.current?.revision)
-        setError(String((state.error.error as Error)?.message ?? state.error.error))
-    }
-    const unsubscribe = runtime.previews.subscribe(sync)
-    const onFailure = (error: Error) => { if (mounted.current) setError(error.message) }
+    const onFailure = (failure: Error) => { if (mounted.current) setError(failure.message) }
     runtime.worker.onFailure = onFailure
-    sync()
-    return () => { mounted.current = false; unsubscribe(); if (runtime.worker.onFailure === onFailure) runtime.worker.onFailure = null }
+    return () => { mounted.current = false; if (runtime.worker.onFailure === onFailure) runtime.worker.onFailure = null }
   }, [runtime])
+  useEffect(() => { if (validNet && !calculating) setError('') }, [validNet, calculating])
   const ask = <T,>(payload: SurfaceWorkerPayload): Promise<T> => runtime.worker.ask<T>(payload)
   const ensureSession = () => { if (!mounted.current || !runtime.active) throw new Error('Editor chiuso.') }
-  const invalidatePreview = () => {
-    previewEpoch.current++; runtime.previews.invalidate({ clearPreview: true }); setCalculating(false); setValidNet(null)
+  const commit = (n: Net) => {
+    try { draft.commit(n); setError('') }
+    catch (e) { setError((e as Error).message) }
   }
-  const setNet = (n: Net | null) => { netRef.current = n; setNetState(n) }
-  const applyFrame = (frame: EditFrame) => {
-    const geometryChanged = netRef.current !== frame.net || continuityRef.current !== frame.continuity || freeBoundaryRef.current !== frame.freeBoundary
-    if (geometryChanged) { setValidNet(null); setCalculating(true); setError('') }
-    if (netRef.current !== frame.net) setNet(frame.net)
-    if (JSON.stringify(locksRef.current) !== JSON.stringify(frame.locks)) { locksRef.current = frame.locks; setLocks(frame.locks) }
-    if (continuityRef.current !== frame.continuity) { continuityRef.current = frame.continuity; setContinuity(frame.continuity) }
-    if (freeBoundaryRef.current !== frame.freeBoundary) { freeBoundaryRef.current = frame.freeBoundary; setFreeBoundary(frame.freeBoundary) }
-  }
-  const commit = (n: Net, change: Partial<Omit<EditFrame, 'net'>> = {}) => {
-    const next = history.commit({ net: n, locks: change.locks ?? locksRef.current,
-      continuity: change.continuity ?? continuityRef.current, freeBoundary: change.freeBoundary ?? freeBoundaryRef.current })
-    applyFrame(next); historyTick(v => v + 1)
-  }
-  const undo = (delta: number) => { const frame = history.step(delta); if (frame) { applyFrame(frame); historyTick(v => v + 1) } }
+  const undo = (delta: number) => { if (delta === -1) draft.undo(); else if (delta === 1) draft.redo() }
   const modalKeys = useRef({ busy, undo, close, cancelGesture: () => cancelGesture.current() }); modalKeys.current = { busy, undo:stripPaths?stripUndo:undo, close:cancel, cancelGesture: () => cancelGesture.current() }
   useEffect(() => {
     useSurfaceDialogs.setState(s => ({ count: s.count + 1 }))
@@ -170,35 +171,34 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
     window.addEventListener('keydown', onKey, true)
     return () => { window.removeEventListener('keydown', onKey, true); useSurfaceDialogs.setState(s => ({ count: s.count - 1 })) }
   }, [])
-  useEffect(() => {
-    if (!net) { runtime.previews.invalidate({ clearPreview: true }); return }
-    runtime.previews.schedule({ net, continuity, freeBoundary, epoch: previewEpoch.current })
-  }, [runtime, net, continuity, freeBoundary])
   const load = async (step: string, fileName: string, expected?: { faces: number; surface: boolean; guard?: () => Promise<void> }, bodyRef: number | null = null) => {
-    ensureSession(); invalidatePreview(); setBusy(true); setError('')
+    ensureSession()
+    const generation = ++session.generation
+    const ensureCurrent = () => { ensureSession(); if (generation !== session.generation) throw new Error('Operazione superata.') }
+    draft.reset({ preserveContinuity: true })
+    setLoaded(null); setReferenceBody(null); setFace(-1); setFaces([]); setSourcePreview(null)
+    setNotes([]); setPlacingNote(false); setNoteError(''); setSymmetry(false); setBusy(true); setError('')
     try {
       const result = await ask<{ faces: FaceInfo[]; preview: Preview }>({ action: 'open', step })
-      ensureSession()
+      ensureCurrent()
       if (expected) {
         checkProject()
         await expected.guard?.()
+        ensureCurrent()
         checkProject()
         if (result.faces.length !== expected.faces || !result.faces.every(f => f.openSheet === expected.surface))
           throw new Error('Il CAD ricevuto non corrisponde al corpo selezionato nel progetto.')
       }
-      setNotes([]); setPlacingNote(false); setNoteError(''); loaded.current = { step, name: fileName, bodyId: bodyRef }; setReferenceBody(bodyRef); setLoadId(i => i + 1); setValidNet(null)
-      setSymmetry(false); freeBoundaryRef.current = false; setFreeBoundary(false); setNet(null); base.current = null; history.reset(); setSelected([]); locksRef.current = []; setLocks([]); setFace(-1)
-      setFaces(result.faces); setPreview(result.preview); setName(fileName.replace(/\.(step|stp)$/i, '') + '-edit.step')
+      setLoaded({ step, name: fileName, bodyId: bodyRef }); setReferenceBody(bodyRef)
+      session.loadId++; setLoadId(session.loadId)
+      setFaces(result.faces); setSourcePreview(result.preview)
+      setName(fileName.replace(/\.(step|stp)$/i, '') + '-edit.step')
     } catch (e) {
-      if (!mounted.current || !runtime.active) return
-      // Opening a STEP replaces the worker's document even if its validation
-      // fails. Do not restore a frame from the previous worker document.
-      loaded.current = null; setReferenceBody(null); setFaces([]); setPreview(null); setNet(null)
-      base.current = null; history.reset(); setSelected([])
-      locksRef.current = []; setLocks([]); freeBoundaryRef.current = false; setFreeBoundary(false)
-      continuityRef.current = 'G1'; setContinuity('G1'); historyTick(v => v + 1)
-      setFace(-1); setValidNet(null); setError((e as Error).message)
-    } finally { if (mounted.current && runtime.active) setBusy(false) }
+      if (!mounted.current || !runtime.active || generation !== session.generation) return
+      // The worker's document may already have changed: never revive the old face.
+      draft.reset(); setLoaded(null); setReferenceBody(null); setFaces([]); setSourcePreview(null); setFace(-1)
+      setError((e as Error).message)
+    } finally { if (mounted.current && runtime.active && generation === session.generation) setBusy(false) }
   }
   const loadBody = async () => {
     setBusy(true); setError('')
@@ -257,31 +257,45 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
     catch (e) { if (mounted.current && runtime.active) setError((e as Error).message) } finally { if (mounted.current && runtime.active) setBusy(false) }
   }
   const chooseFace = async (index: number) => {
-    if (faces[index]?.reason) { setError(faces[index].reason!); return }
-    invalidatePreview(); setBusy(true); setError('')
-    try { const n = await ask<Net>({ action: 'select', face: index }); ensureSession(); base.current = structuredClone(n); setFace(index); history.reset(); setSelected([]); commit(n, { locks: [], freeBoundary: false }) }
-    catch (e) { if (mounted.current && runtime.active) setError((e as Error).message) } finally { if (mounted.current && runtime.active) setBusy(false) }
+    const selectedFace = faces[index]
+    if (!selectedFace || busy || (net && face === index)) return
+    if (selectedFace.reason) { setError(selectedFace.reason); return }
+    if (face >= 0 && face !== index && notes.length && !window.confirm('Cambiare faccia e scartare le note della faccia attuale?')) return
+    const generation = ++session.generation
+    const chosenContinuity = draft.getSnapshot().continuity
+    draft.reset({ preserveContinuity: true })
+    setFace(-1); setNotes([]); setPlacingNote(false); setNoteError(''); setBusy(true); setError('')
+    try {
+      const n = await ask<Net>({ action: 'select', face: index })
+      ensureSession()
+      if (generation !== session.generation) return
+      draft.install(n, { continuity: chosenContinuity, trimLocks: selectedFace.trimLocks })
+      setFace(index)
+    } catch (e) {
+      if (mounted.current && runtime.active && generation === session.generation) setError((e as Error).message)
+    } finally { if (mounted.current && runtime.active && generation === session.generation) setBusy(false) }
   }
-  const locked = net ? net.poles.flatMap((_, i) => (!freeBoundary && boundaryLocked(net, i, continuity)) || faces[face]?.trimLocks.includes(i) || locks.includes(i) ? [i] : []) : []
+  const locked = useMemo(() => net ? net.poles.flatMap((_, i) => (!freeBoundary && boundaryLocked(net, i, continuity)) || draftState.trimLocks.includes(i) || locks.includes(i) ? [i] : []) : [], [net, freeBoundary, continuity, draftState.trimLocks, locks])
   const editable = selected.filter(i => !locked.includes(i))
   const moveDirection = net && editable.length ? dragDirection(net, editable[0], dragMode, axis) : null
   const axisNames = dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']
-  const committed = history.current?.net
+  const committed = draftState.committedNet
   const partners = useMemo(() => symmetry && committed ? mirrorPartners(committed.poles, mirrorAxis, mirrorOffset) : null, [committed, symmetry, mirrorAxis, mirrorOffset])
   const changePoles = (poles: Point[], final: boolean) => {
     if (!committed) return
     try {
       const changed = { ...committed, poles: partners ? mirrorEdit(committed.poles, poles, partners, mirrorAxis, mirrorOffset, locked) : poles }
-      if (final) commit(changed); else setNet(changed)
-    } catch (e) { setNet(committed); setError((e as Error).message) }
+      if (final) draft.commit(changed); else draft.preview(changed)
+      setError('')
+    } catch (e) { draft.cancelDraft(); setError((e as Error).message) }
   }
   const transform = (fn: (p: Point, i: number, n: Net) => Point) => {
     if (!net) return
     const n = structuredClone(net); editable.forEach(i => { n.poles[i] = fn(net.poles[i], i, net) }); changePoles(n.poles, true)
   }
   const flatten = () => {
-    if (!base.current) return
-    const n = base.current, a = n.poles[0], u = n.poles[(n.nu - 1) * n.nv].map((x, i) => x - a[i]), v = n.poles[n.nv - 1].map((x, i) => x - a[i])
+    if (!draftState.originalNet) return
+    const n = draftState.originalNet, a = n.poles[0], u = n.poles[(n.nu - 1) * n.nv].map((x, i) => x - a[i]), v = n.poles[n.nv - 1].map((x, i) => x - a[i])
     const normal = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]], len = Math.hypot(...normal)
     if (len < 1e-10) { setError('I tre angoli non definiscono un piano.'); return }
     normal.forEach((x, i) => { normal[i] = x / len })
@@ -293,9 +307,11 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
     if (revision === undefined || !net || net !== validNet || calculating || busy) return
     setBusy(true)
     try {
+      const generation = session.generation
       const pin = await ask<Pin>({action:'notePick',point,previewRevision:revision})
       ensureSession()
-      const id = nextNote.current++
+      if (generation !== session.generation) return
+      const id = session.nextNote++
       setNotes(prev=>[...prev,{...pin,id,text:'',revision}])
       setNoteError(''); setPlacingNote(false)
     } catch(e) { if (mounted.current && runtime.active) setNoteError((e as Error).message) }
@@ -306,15 +322,16 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
     const revision=preview?.previewRevision
     if (!revision || net !== validNet) return
     let active=true
+    const generation = session.generation
     const pending=notesRef.current.filter(n=>n.revision!==revision)
     if (pending.length) void Promise.all(pending.map(async n=>({
       id:n.id,...await ask<{at:Point;normal:Point}>({action:'noteResolve',anchor:n.anchor,previewRevision:revision})
     }))).then(pins=>{
-      if (active) setNotes(prev=>prev.map(n=>{
+      if (active && generation === session.generation) setNotes(prev=>prev.map(n=>{
         const pin=pins.find(p=>p.id===n.id)
         return pin ? {...n,...pin,revision} : n
       }))
-    }).catch(e=>{if(active)setNoteError(e.message)})
+    }).catch(e=>{if(active && generation === session.generation)setNoteError(e.message)})
     return ()=>{active=false}
   },[preview,validNet,net])
   useEffect(() => {
@@ -385,11 +402,10 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
     if (!net || busy || calculating || validNet !== net) return
     setBusy(true); setError('')
     try {
-      const result = await ask<Preview & { step: string; previewRevision:number }>({ action: 'evaluate', net, continuity, freeBoundary, exportStep: true })
+      const result = await draft.evaluateForExport()
       ensureSession()
       if (importBody) {
         checkProject()
-        setPreview(result)
         if (notes.length) {
           if (!applyWithNotes || notes.some(n=>!n.text.trim())) throw new Error('Completa le note prima di applicare.')
           const finalNotes=await Promise.all(notes.map(async n=>({
@@ -401,7 +417,7 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
           await applyWithNotes({step:result.step,name,faceIndex:face,final:{...witness,editorSessionId},notes:finalNotes})
         } else await runCommand('reverse.import.step', { bytes: new TextEncoder().encode(result.step), name })
         close()
-      } else { setPreview(result); saveFile(name, new Blob([result.step], { type: 'model/step' })) }
+      } else { saveFile(name, new Blob([result.step], { type: 'model/step' })) }
     } catch (e) { if (mounted.current && runtime.active) setError((e as Error).message) } finally { if (mounted.current && runtime.active) setBusy(false) }
   }
   return <div className="modalback es-back"><div role="dialog" aria-modal="true" aria-label="Edit Surface" className="es-dialog" data-test="edit-surface-dialog" onKeyDown={e => {
@@ -432,13 +448,10 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
         {faces[face]?.openSheet && <button data-test="strip-open" disabled={busy || calculating || validNet!==net || !!notes.length} onClick={()=>void beginStrip()}>Duplica bordo libero…</button>}
         {directEdges && <p className="es-hint">{freeBoundary ? 'Per duplicare un bordo usa il pulsante dedicato. La maniglia D è nascosta mentre modifichi i bordi.' : "Per duplicare un bordo libero, cliccalo e trascina la maniglia D lungo l'asse scelto."}</p>}
         {faces[face]?.freeBoundary && <label><input data-test="surface-free-boundary" type="checkbox" checked={freeBoundary} disabled={busy || calculating} onChange={e => {
-          if (!e.target.checked) {
-            try { assertNet(base.current!, net, continuity) }
-            catch { setError('Annulla prima gli spostamenti dei bordi per proteggerli di nuovo.'); return }
-          }
-          commit(net, { freeBoundary: e.target.checked })
+          try { draft.setFreeBoundary(e.target.checked); setError('') }
+          catch { setError('Annulla prima gli spostamenti dei bordi per proteggerli di nuovo.') }
         }}/> Consenti lo spostamento dei bordi liberi</label>}
-        <label>Protezione bordi<select data-test="surface-continuity" value={continuity} disabled={busy || freeBoundary} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { assertNet(base.current!, net, c); commit(net, { continuity: c }) } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">G0 · mantieni posizione dei bordi</option><option value="G1">G1 · mantieni anche tangenti esistenti</option></select></label>
+        <label>Protezione bordi<select data-test="surface-continuity" value={continuity} disabled={busy || freeBoundary} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { draft.setContinuity(c); setError('') } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">G0 · mantieni posizione dei bordi</option><option value="G1">G1 · mantieni anche tangenti esistenti</option></select></label>
         <p className="es-hint">{freeBoundary ? 'Puoi spostare i punti del bordo della superficie aperta. I punti bloccati manualmente restano fermi.' : 'I bordi restano bloccati. G1 conserva le tangenti originali; non corregge discontinuità preesistenti.'}</p>
         <div className="es-row">{axisNames.map((a, i) => <button key={a} data-test={`surface-axis-${i}`} aria-pressed={axis === i} onClick={() => setAxis(i)}>{a}</button>)}</div>
         <label>Trascinamento punti<select data-test="surface-drag-mode" value={dragMode} onChange={e => setDragMode(e.target.value as DragMode)}><option value="axis">Mondo · asse X/Y/Z</option><option value="screen">Piano dello schermo</option><option value="local">Locale · U/V/normale</option></select></label>
@@ -493,9 +506,9 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
           {noteError && <p role="alert">{noteError}</p>}
         </fieldset>}
         <label>Trasparenza superficie · {Math.round(transparency * 100)}%<input data-test="surface-transparency" type="range" min="0" max="0.9" step="0.05" value={transparency} onChange={e => setTransparency(Number(e.target.value))} /></label>
-        <div className="es-row"><button onClick={() => setSelected(net.poles.flatMap((_, i) => locked.includes(i) ? [] : [i]))}>Seleziona liberi</button><button onClick={() => setSelected([])}>Nessuno</button></div>
+        <div className="es-row"><button onClick={() => draft.setSelection(net.poles.flatMap((_, i) => locked.includes(i) ? [] : [i]))}>Seleziona liberi</button><button onClick={() => draft.setSelection([])}>Nessuno</button></div>
         <p data-test="surface-selection">{selected.length} selezionati · {editable.length} modificabili</p>
-        <div className="es-row"><button disabled={busy || !selected.length} onClick={() => commit(net, { locks: [...locks, ...selected] })}>Blocca punti</button><button disabled={busy || !selected.length} onClick={() => commit(net, { locks: locks.filter(i => !selected.includes(i)) })}>Sblocca punti</button></div>
+        <div className="es-row"><button disabled={busy || !selected.length} onClick={() => draft.setLocks([...locks, ...selected])}>Blocca punti</button><button disabled={busy || !selected.length} onClick={() => draft.setLocks(locks.filter(i => !selected.includes(i)))}>Sblocca punti</button></div>
         <label>Spostamento · mm<input type="number" step="0.1" value={distance} data-test="surface-distance" onChange={e => setDistance(Number(e.target.value))} /></label>
         <button data-test="surface-move" disabled={busy || !moveDirection || !Number.isFinite(distance)} onClick={() => { if (moveDirection) transform(p => p.map((x, i) => x + moveDirection[i] * distance) as Point) }}>Sposta lungo {axisNames[axis]}</button>
         <button disabled={busy || !editable.length} onClick={flatten}>Spiana sul piano dei tre angoli iniziali</button>
@@ -503,9 +516,9 @@ function SurfaceDialog({ close, applyWithNotes, runtime }: SurfaceOptions & { cl
         <button data-test="surface-smooth" disabled={busy || !editable.length} onClick={() => transform((p, i, n) => { const row = Math.floor(i / n.nv), col = i % n.nv, neighbors = [row > 0 ? i - n.nv : -1, row + 1 < n.nu ? i + n.nv : -1, col > 0 ? i - 1 : -1, col + 1 < n.nv ? i + 1 : -1].filter(j => j >= 0); return p.map((x, d) => x * (1 - smoothStrength) + neighbors.reduce((s, j) => s + n.poles[j][d], 0) / neighbors.length * smoothStrength) as Point })}>Levigatura locale · {Math.round(smoothStrength * 100)}%</button>
         <label>Fattore stiramento<input type="number" step="0.1" min="0.1" max="3" value={factor} onChange={e => setFactor(Number(e.target.value))} /></label>
         <button disabled={busy || !editable.length || !Number.isFinite(factor) || factor <= 0 || factor > 3} onClick={() => { const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factor : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
-        <div className="es-row"><button data-test="surface-undo" disabled={busy || !history.canUndo} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || !history.canRedo} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
+        <div className="es-row"><button data-test="surface-undo" disabled={busy || !draftState.canUndo} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || !draftState.canRedo} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => draft.restoreOriginal()}>Ripristina</button></div>
       </>}
-    </aside><main><SurfaceViewport mirrorAxis={mirrorAxis} mirrorOffset={mirrorOffset} mirrorPartners={partners} strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} stripBlocked={()=>stripPending.current} directStrip={directEdges && directEdges.revision===preview?.previewRevision && net===validNet && !busy && !calculating && !freeBoundary && !placingNote && !notes.length && !stripPaths ? {paths:directEdges.paths,axis,revision:directEdges.revision,begin:beginDirectStrip,abort:abortDirectStrip,unavailable:()=>setError('Direzione allineata alla vista: ruota il modello o scegli un altro asse.'),change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} hiddenPoles={faces[face]?.hiddenPoles ?? NO_HIDDEN_POLES} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} snap={snap} snapDistance={snapDistance} referenceBody={referenceBody} onReferenceCount={setReferenceCount} registerCancel={fn=>{cancelGesture.current=fn}} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={changePoles} />
+    </aside><main><SurfaceViewport mirrorAxis={mirrorAxis} mirrorOffset={mirrorOffset} mirrorPartners={partners} strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} stripBlocked={()=>stripPending.current} directStrip={directEdges && directEdges.revision===preview?.previewRevision && net===validNet && !busy && !calculating && !freeBoundary && !placingNote && !notes.length && !stripPaths ? {paths:directEdges.paths,axis,revision:directEdges.revision,begin:beginDirectStrip,abort:abortDirectStrip,unavailable:()=>setError('Direzione allineata alla vista: ruota il modello o scegli un altro asse.'),change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} hiddenPoles={faces[face]?.hiddenPoles ?? NO_HIDDEN_POLES} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} snap={snap} snapDistance={snapDistance} referenceBody={referenceBody} onReferenceCount={setReferenceCount} registerCancel={fn=>{cancelGesture.current=fn}} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => draft.setSelection(selectNetPoints([...draft.getSnapshot().selected], ids, multi))} onDrag={changePoles} />
       <div className="es-status" role="status" data-test="surface-status" data-preview-revision={preview?.previewRevision} data-preview-volume={preview?.volume}>{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error}${preview ? ' Vista: ultimo risultato valido.' : ''}` : validNet && preview ? `CAD valido · ${faces[face]?.openSheet ? 'superficie aperta' : `volume ${preview.volume.toFixed(3)} mm³`} · ${freeBoundary ? 'spostamento bordo' : 'scarto bordo'} ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
     <footer><span>{stripPaths?'Applica aggiunge la superficie cucita al progetto come nuovo corpo.':'Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.'}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={(!!stripPaths && (!stripResult || stripEdge>=0)) || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => stripPaths ? void applyStrip() : void finish(true)}>{stripPaths ? 'Applica superficie cucita' : 'Applica come nuovo corpo'}</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>
