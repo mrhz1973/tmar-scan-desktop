@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import assert from 'node:assert/strict'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { Vector3, PerspectiveCamera } from 'three'
+import { OcctKernel } from 'occt-wasm'
+import { launchApp } from '../../../scripts/e2e-lib.mjs'
+
+const root=resolve('plugins/tmar-edit-surface/evidence/perforated')
+mkdirSync(root,{recursive:true})
+const out=mkdtempSync(join(root,'run-')), k=await OcctKernel.init()
+const box=k.makeBox(48,48,10), drill=k.makeCylinder(3,14), positioned=k.translate(drill,12,12,-2)
+const shape=k.cut(box,positioned), step=k.exportStep(shape), input=join(out,'drilled-input.step')
+writeFileSync(input,step)
+const base=k.importStep(step), fs=k.getSubShapes(base,'face')
+const top=fs.findIndex(f=>{const b=k.getBoundingBox(f);return Math.abs(b.zmin-10)<1e-6 && Math.abs(b.zmax-10)<1e-6})
+assert(top>=0)
+const volume=k.getVolume(base)
+const {browser,page,consoleErrors}=await launchApp({url:process.env.APP_URL??'http://127.0.0.1:17531/',width:1440,height:1000})
+try {
+  await page.click('[data-test=workspace-reverse]')
+  await page.waitForSelector('[data-test=edit-surface-entry] button')
+  await page.click('[data-test=edit-surface-entry] button')
+  await (await page.$('[data-test=surface-step-file]')).uploadFile(input)
+  await page.waitForFunction(n=>document.querySelectorAll('[data-test=surface-face] option').length===n,{},fs.length+1)
+  await page.select('[data-test=surface-face]',String(top))
+  const ready=()=>page.waitForFunction(()=>document.querySelector('[data-test=surface-apply]')?.disabled===false)
+  await ready()
+  const r=await page.$eval('[data-test=edit-surface-viewport]',e=>e.getBoundingClientRect().toJSON())
+  const radius=Math.hypot(48,48,10)/2, center=new Vector3(24,24,5)
+  const cam=new PerspectiveCamera(40,r.width/r.height,radius/1000,radius*100)
+  cam.position.copy(center).add(new Vector3(1.5,-1.9,1.8).multiplyScalar(radius))
+  cam.up.set(0,0,1);cam.lookAt(center);cam.updateMatrixWorld()
+  const project=z=>{const q=new Vector3(36,36,z).project(cam);return [r.x+(1+q.x)*r.width/2,r.y+(1-q.y)*r.height/2]}
+  await page.mouse.move(...project(10));await page.mouse.down()
+  await page.mouse.move(...project(12),{steps:6});await page.mouse.up()
+  await ready()
+  assert.equal(await page.$eval('[data-test=surface-selection]',e=>e.textContent),'1 selezionati · 1 modificabili')
+  await page.screenshot({path:join(out,'edit-drilled-face.png')})
+  await page.evaluate(()=>document.addEventListener('click',e=>{
+    if(e.target instanceof HTMLAnchorElement && e.target.download.endsWith('.step')){
+      e.preventDefault();window.stepExport=fetch(e.target.href).then(r=>r.text())
+    }
+  },true))
+  const exportButton=await page.$$('.es-dialog button')
+  for(const button of exportButton) if(await button.evaluate(e=>e.textContent.startsWith('Esporta STEP'))) { await button.click();break }
+  await page.waitForFunction(()=>!!window.stepExport)
+  const result=await page.evaluate(()=>window.stepExport)
+  writeFileSync(join(out,'drilled-edit.step'),result)
+  const edited=k.importStep(result), faces=k.getSubShapes(edited,'face')
+  try {
+    assert(k.isValid(edited));assert.equal(faces.length,fs.length);assert(k.getVolume(edited)>volume+1)
+    const wires=k.getSubShapes(faces[top],'wire')
+    assert.equal(wires.length,2);wires.forEach(w=>k.release(w))
+    let maxRimError=0
+    for(let i=0;i<72;i++){
+      const angle=i*Math.PI/36,q={x:12+3*Math.cos(angle),y:12+3*Math.sin(angle),z:10}
+      const uv=k.uvFromPoint(faces[top],q),p=k.pointOnSurface(faces[top],uv.u,uv.v)
+      maxRimError=Math.max(maxRimError,Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z))
+    }
+    assert(maxRimError<1e-7);assert.deepEqual(consoleErrors,[])
+    const report={inputVolume:volume,editedVolume:k.getVolume(edited),faces:faces.length,wires:2,rimSamples:72,maxRimError}
+    writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));console.log(out, report)
+  } finally { faces.forEach(f=>k.release(f));k.release(edited) }
+} finally { await browser.close();[...fs,base,shape,positioned,drill,box].forEach(h=>k.release(h));k[Symbol.dispose]() }

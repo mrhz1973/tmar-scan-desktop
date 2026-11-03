@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { OcctKernel, type Mesh, type ShapeHandle } from 'occt-wasm'
-import { assertNet, enrichBicubic, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
+import { assertNet, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
 import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 
-export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean }
+export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; trimLocks: number[] }
 export interface Preview { mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
@@ -47,21 +47,24 @@ export class SurfaceEditorKernel {
     })
     this.infos = this.faces.map((face, index) => {
       let reason: string | null = null
-      try { this.netFor(index) } catch (e) { reason = e instanceof Error ? e.message : String(e) }
+      let trimLocks: number[] = []
+      try { trimLocks = this.netFor(index).trimLocks } catch (e) { reason = e instanceof Error ? e.message : String(e) }
       const record = this.records[this.recordsByFace[index]]
-      return { index, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
+      return { index, trimLocks, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
         enriched: !!record?.net && enrichBicubic(record.net) !== record.net }
     })
     return { faces: this.infos, preview: this.render(this.source) }
   }
-  private netFor(index: number): Net {
+  private netFor(index: number) {
     const face = this.faces[index], id = this.recordsByFace[index], r = this.records[id], k = this.kernel
     if (!face || !r) throw new Error('Superficie ambigua o condivisa: non modificabile.')
     if (this.recordsByFace.filter(n => n === id).length !== 1) throw new Error('Superficie condivisa da più facce.')
     if (r.kind !== 1 && !r.net) throw new Error('Prototipo: solo piani e B-spline non periodiche.')
-    const wires = k.getSubShapes(face, 'wire'), edges = k.getSubShapes(face, 'edge')
+    const wires = k.getSubShapes(face, 'wire'), outer = k.outerWire(face), edges = k.getSubShapes(outer, 'edge')
     try {
-      if (wires.length !== 1 || edges.length !== 4) throw new Error('Prototipo: serve una faccia rettangolare senza fori né trim interni.')
+      const inner = wires.filter(w => !k.isSame(w, outer))
+      if (edges.length !== 4) throw new Error('Serve un contorno esterno rettangolare a quattro bordi.')
+      if (inner.length && r.kind !== 1) throw new Error('I contorni interni sono supportati solo per una faccia piana.')
       const b = k.uvBounds(face), bounds: [number, number, number, number] = [b.uMin, b.uMax, b.vMin, b.vMax]
       if (bounds.some(x => !Number.isFinite(x)) || b.uMax <= b.uMin || b.vMax <= b.vMin) throw new Error('Dominio della faccia non valido.')
       const epsU = 1e-7 * Math.max(1, b.uMax - b.uMin), epsV = 1e-7 * Math.max(1, b.vMax - b.vMin)
@@ -77,15 +80,68 @@ export class SurfaceEditorKernel {
         return candidates.findIndex(Boolean)
       })
       if (sides.includes(-1) || new Set(sides).size !== 4) throw new Error('Bordi ritagliati non coincidenti con il dominio naturale: editing protetto non disponibile.')
-      const net = r.kind === 1 ? planeNet(r, bounds) : structuredClone(r.net!)
+      const net = inner.length ? perforatedPlaneNet(r, bounds) : r.kind === 1 ? planeNet(r, bounds) : structuredClone(r.net!)
       if (net.mu[0] !== net.du + 1 || net.mu.at(-1) !== net.du + 1 || net.mv[0] !== net.dv + 1 || net.mv.at(-1) !== net.dv + 1) throw new Error('Servono nodi estremi clamped.')
       if (Math.abs(net.ku[0] - b.uMin) > epsU || Math.abs(net.ku.at(-1)! - b.uMax) > epsU || Math.abs(net.kv[0] - b.vMin) > epsV || Math.abs(net.kv.at(-1)! - b.vMax) > epsV) throw new Error('Il trim non coincide con il dominio NURBS.')
       if (net.nu * net.nv > 1600) throw new Error('Reticolo oltre 1600 punti: non interattivo in questo prototipo.')
-      return net
-    } finally { [...wires, ...edges].forEach(h => k.release(h)) }
+      const trimLocks = new Set<number>()
+      if (inner.length) {
+        const expanded = (k: number[], m: number[]) => k.flatMap((x, i) => Array(m[i]).fill(x) as number[])
+        const us = expanded(net.ku, net.mu), vs = expanded(net.kv, net.mv)
+        for (const wire of inner) {
+          // Linear plane projection: extrema of an enclosing world box occur
+          // at its corners. Protect every basis function whose support touches
+          // this conservative UV box, preserving both position and tangent.
+          const box = k.getBoundingBox(wire, { useTriangulation: false })
+          const uv = [box.xmin,box.xmax].flatMap(x => [box.ymin,box.ymax].flatMap(y =>
+            [box.zmin,box.zmax].map(z => k.uvFromPoint(face,{x,y,z}))))
+          if (uv.some(q => !Number.isFinite(q.u) || !Number.isFinite(q.v))) throw new Error('Limite interno non determinato.')
+          const loU = Math.min(...uv.map(q=>q.u))-epsU, hiU = Math.max(...uv.map(q=>q.u))+epsU
+          const loV = Math.min(...uv.map(q=>q.v))-epsV, hiV = Math.max(...uv.map(q=>q.v))+epsV
+          for (let u=0; u<net.nu; u++) for (let v=0; v<net.nv; v++)
+            if (us[u]<=hiU && us[u+net.du+1]>=loU && vs[v]<=hiV && vs[v+net.dv+1]>=loV) trimLocks.add(u*net.nv+v)
+        }
+      }
+      return {net, trimLocks: [...trimLocks]}
+    } finally { [outer, ...wires, ...edges].forEach(h => k.release(h)) }
+  }
+  private checkPlanarTrims(before: ShapeHandle, after: ShapeHandle) {
+    const k = this.kernel
+    const traces = (face: ShapeHandle) => {
+      const outer = k.outerWire(face), wires = k.getSubShapes(face, 'wire')
+      try {
+        return wires.map(wire => {
+          const edges = k.getSubShapes(wire, 'edge')
+          try {
+            return { outer: k.isSame(wire,outer), edges: edges.map(edge => {
+              const {first,last} = k.curveParameters(edge)
+              return Array.from({length:33}, (_,i) => tuple(k.curvePointAtParam(edge,first+(last-first)*i/32)))
+            }) }
+          } finally { edges.forEach(h => k.release(h)) }
+        })
+      } finally { wires.forEach(h => k.release(h)); k.release(outer) }
+    }
+    const originals = traces(before), pending = traces(after)
+    for (const wire of originals) {
+      const match = pending.findIndex(candidate => {
+        if (wire.outer !== candidate.outer || wire.edges.length !== candidate.edges.length) return false
+        const edges = [...candidate.edges]
+        for (const line of wire.edges) {
+          const idx = edges.findIndex(trace =>
+            line.every((p,i) => dist(p,trace[i])<=1e-7) ||
+            line.every((p,i) => dist(p,trace[trace.length-1-i])<=1e-7))
+          if (idx < 0) return false
+          edges.splice(idx,1)
+        }
+        return true
+      })
+      if (match < 0) throw new Error('Conversione piana: contorno alterato.')
+      pending.splice(match,1)
+    }
+    if (pending.length) throw new Error('Conversione piana: contorno aggiunto.')
   }
   select(index: number) {
-    const net = enrichBicubic(this.netFor(index)), record = this.records[this.recordsByFace[index]], k = this.kernel
+    const net = enrichBicubic(this.netFor(index).net), record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
     if (record.kind === 1) {
       // STEP readers may omit planar pcurves (derived implicitly on a plane).
@@ -97,14 +153,23 @@ export class SurfaceEditorKernel {
         if (!k.isValid(prepared) || fs.length !== this.faces.length || this.count(prepared, 'solid') !== this.solids) throw new Error('Conversione piana esatta non qualificabile per questa faccia.')
         for (let f = 0; f < fs.length; f++) {
           const b = k.uvBounds(this.faces[f])
-          if (Math.abs(k.getSurfaceArea(fs[f]) - k.getSurfaceArea(this.faces[f])) > 1e-6) throw new Error('Conversione piana: area alterata.')
+          const area = k.getSurfaceArea(this.faces[f])
+          const perforated = f === index && this.infos[index].trimLocks.length > 0
+          // OCCT integrates trimmed splines numerically. Compare the actual
+          // trim curves too before allowing quadrature drift on this face.
+          if (perforated) this.checkPlanarTrims(this.faces[f],fs[f])
+          const areaTolerance = perforated ? Math.max(1e-6,area*1e-6) : 1e-6
+          if (Math.abs(k.getSurfaceArea(fs[f])-area)>areaTolerance) throw new Error('Conversione piana: area alterata.')
           for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
             const u = b.uMin + (b.uMax - b.uMin) * i / 4, v = b.vMin + (b.vMax - b.vMin) * j / 4
             if (dist(tuple(k.pointOnSurface(fs[f], u, v)), tuple(k.pointOnSurface(this.faces[f], u, v))) > 1e-7) throw new Error('Conversione piana: geometria o ordine delle facce alterato.')
           }
         }
         text = k.toBREP(prepared)
-        const found = surfaceTable(text).filter(r => r.net && JSON.stringify(r.net) === JSON.stringify(net))
+        const faceText = k.toBREP(fs[index])
+        const header = /^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/m.exec(faceText)
+        const target = header ? surfaceTable(faceText)[Number(header[1]) - 1] : undefined
+        const found = target?.net ? surfaceTable(text).filter(r => signature(r) === signature(target)) : []
         if (found.length !== 1) throw new Error('Impossibile identificare il reticolo convertito.')
         editRecord = found[0]
       } finally { fs.forEach(f => k.release(f)); k.release(prepared); k.release(converted) }
@@ -184,6 +249,9 @@ export class SurfaceEditorKernel {
   evaluate(net: Net, continuity: 'G0' | 'G1', exportStep = false) {
     if (!this.source || !this.originalNet || this.chosen < 0) throw new Error('Seleziona prima una faccia.')
     assertNet(this.originalNet, net, continuity)
+    for (const i of this.infos[this.chosen].trimLocks) {
+      if (net.poles[i].some((x,d) => x !== this.originalNet!.poles[i][d])) throw new Error('Polo protetto dal contorno interno.')
+    }
     const k = this.kernel, baseFace = this.faces[this.chosen], text = replaceSurface(this.editBrep, this.editRecord!, net)
     const edited = k.fromBREP(text), fs = k.getSubShapes(edited, 'face')
     try {

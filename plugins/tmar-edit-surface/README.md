@@ -147,3 +147,25 @@ lette dal link di download e reimportate in OCCT: sei facce valide, volumi posit
 Centro Z: 10 -> 10.5625 (quota +1 sui quattro poli) -> 11.007922811 mm
 (trascinamento); Undo e Redo riproducono i due stati. Scarto massimo su 36 campioni
 del bordo 1.78e-15 mm. Questa prova non qualifica le facce con fori o la duplicazione.
+
+### Face with an internal trim on an imported STEP plate
+
+For an analytic plane with a rectangular outer boundary and internal wires,
+the editor creates an exact bicubic plane with eight spans in each direction.
+Poles whose basis support touches the conservative UV bounds of an inner wire
+are protected in both the viewport and the kernel. This also preserves tangent
+directions at the hole. On a narrow face these bounds can leave little free area.
+The original single-wire plane preparation and its recipe fingerprint are unchanged.
+
+Validation uses OCCT solid checks, the outer boundary and matched 3D trim curves
+(33 samples per edge before/after planar conversion). The perforated face also
+has an area check with a one-part-per-million allowance for integration of a
+trimmed spline. The other faces keep the original absolute area check.
+The kernel test includes rejection of a protected-pole edit and replay on the
+original STEP. Curved NURBS input with internal trims is still unsupported.
+
+In the browser QA, a mouse drag on the imported 48 x 48 x 10 mm plate changed
+its volume from 22757.256661 to 22815.467778 cubic millimetres. Independent
+STEP reimport returned a valid seven-face solid with two wires on its edited
+face. All 72 sampled positions of the 6 mm hole rim matched the original.
+Evidence and before/after STEP: evidence/perforated/run-tYwpbn/.
