@@ -41,6 +41,27 @@ export function SurfaceViewport(props: Props) {
     const pickNet = (e: PointerEvent): number[] | null => {
       const p = current.current
       if (!p.net) return null
+      if (p.selectionMode === 'cells') {
+        if (!p.showNet) return null
+        hits(e, [])
+        // The cage may be nonplanar. Pick its nearest visible-depth half-quad
+        // but return the four poles, regardless of the internal diagonal.
+        const { nu, nv, poles } = p.net
+        const vertices = poles.map(x => new THREE.Vector3(...x))
+        const hit = new THREE.Vector3()
+        let best: number[] | null = null, nearest = Infinity
+        for (let u = 0; u < nu - 1; u++) for (let v = 0; v < nv - 1; v++) {
+          const a = u * nv + v, b = a + nv, c = b + 1, d = a + 1
+          for (const [j, k] of [[b, c], [c, d]]) {
+            if (!raycaster.ray.intersectTriangle(vertices[a], vertices[j], vertices[k], false, hit)) continue
+            const distance = hit.distanceToSquared(raycaster.ray.origin)
+            if (distance < nearest && Math.abs(hit.project(camera).z) <= 1) {
+              nearest = distance; best = [a, b, c, d]
+            }
+          }
+        }
+        return best
+      }
       if (p.selectionMode !== 'edges') {
         const point = hits(e, cage.children.filter(o => o.userData.point !== undefined))[0]
         if (point) return [point.object.userData.point as number]
