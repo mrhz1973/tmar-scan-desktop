@@ -1,0 +1,182 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+import { useEffect, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { runCommand } from '../../src/commands/registry'
+import { useCommandActivity } from '../../src/commands/activity'
+import { useStore } from '../../src/state/store'
+import { saveFile } from '../../src/app/exports'
+import { registerHistory } from '../../src/state/historyStore'
+import { reEditorOpen, useReverse } from '../reverse/state/reStore'
+import { bodyStepResult } from '../tmar-body-export/bodyExport'
+import { assertNet, boundaryLocked, type Net, type Point } from './brep'
+import type { FaceInfo, Preview } from './editorKernel'
+import type { Request } from './editor.worker'
+import { SurfaceViewport } from './SurfaceViewport'
+import './surface.css'
+type Payload = Request extends infer R ? R extends Request ? Omit<R, 'id'> : never : never
+
+export function EditSurface() {
+  const [open, setOpen] = useState(false)
+  const busy = useStore(s => s.busy), running = useCommandActivity(s => s.running !== null)
+  const re = useReverse(useShallow(s => ({ bodies: s.bodies, building: s.building, editing: reEditorOpen(s), playback: s.playback !== null })))
+  return <div className="group" data-test="edit-surface-entry"><button className="block" disabled={busy || running || re.building || re.editing || re.playback} onClick={() => setOpen(true)}>Edit Surface · punti CAD…</button>
+    {open && <SurfaceDialog close={() => setOpen(false)} />}</div>
+}
+function SurfaceDialog({ close }: { close: () => void }) {
+  const re = useReverse.getState(), model = useStore.getState()
+  const source = useRef({ version: re.buildVersion, features: re.features, file: model.fileName, alignment: model.appliedAlignment })
+  const [bodyId, setBodyId] = useState(re.bodies[0]?.id ?? '')
+  const [name, setName] = useState('superficie-modificata.step')
+  const loaded = useRef<{ step: string; name: string } | null>(null)
+  const [loadId, setLoadId] = useState(0)
+  const [faces, setFaces] = useState<FaceInfo[]>([]), [face, setFace] = useState(-1)
+  const [preview, setPreview] = useState<Preview | null>(null), [net, setNetState] = useState<Net | null>(null)
+  const netRef = useRef<Net | null>(null), base = useRef<Net | null>(null)
+  const history = useRef<Net[]>([]), at = useRef(-1), [, historyTick] = useState(0)
+  const [selected, setSelected] = useState<number[]>([]), [locks, setLocks] = useState<number[]>([])
+  const [continuity, setContinuity] = useState<'G0' | 'G1'>('G1'), [axis, setAxis] = useState(2)
+  const continuityRef = useRef(continuity); continuityRef.current = continuity
+  const [distance, setDistance] = useState(1), [factor, setFactor] = useState(1.1)
+  const [busy, setBusy] = useState(false), [calculating, setCalculating] = useState(false)
+  const [error, setError] = useState(''), [validNet, setValidNet] = useState<Net | null>(null)
+  const worker = useRef<Worker | null>(null), serial = useRef(0), mounted = useRef(true)
+  const requests = useRef(new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>())
+  const evaluateRunning = useRef(false), latest = useRef<{ net: Net; continuity: 'G0' | 'G1' } | null>(null)
+  useEffect(() => {
+    mounted.current = true
+    const w = new Worker(new URL('./editor.worker.ts', import.meta.url), { type: 'module' }); worker.current = w
+    w.onmessage = ({ data }) => { const p = requests.current.get(data.id); requests.current.delete(data.id); if (p) { if (data.error) p.reject(new Error(data.error)); else p.resolve(data.result) } }
+    w.onerror = () => { for (const p of requests.current.values()) p.reject(new Error('Motore CAD interrotto. Chiudi e riapri Edit Surface.')); requests.current.clear() }
+    return () => { mounted.current = false; w.terminate(); for (const p of requests.current.values()) p.reject(new Error('Editor chiuso.')); requests.current.clear() }
+  }, [])
+  const ask = <T,>(payload: Payload): Promise<T> => new Promise((resolve, reject) => {
+    if (!worker.current) { reject(new Error('Motore non pronto.')); return }
+    const id = ++serial.current; requests.current.set(id, { resolve: value => resolve(value as T), reject }); worker.current.postMessage({ ...payload, id })
+  })
+  const setNet = (n: Net | null) => { netRef.current = n; setNetState(n) }
+  const commit = (n: Net) => {
+    if (JSON.stringify(history.current[at.current]) !== JSON.stringify(n)) { history.current = history.current.slice(0, at.current + 1); history.current.push(structuredClone(n)); if (history.current.length > 60) history.current.shift(); at.current = history.current.length - 1 }
+    setNet(n); historyTick(v => v + 1)
+  }
+  const undo = (delta: number) => { const next = at.current + delta; if (next >= 0 && next < history.current.length) { at.current = next; setNet(structuredClone(history.current[next])); historyTick(v => v + 1) } }
+  const modalKeys = useRef({ busy, undo, close }); modalKeys.current = { busy, undo, close }
+  useEffect(() => {
+    const unregister = registerHistory({ blocked: () => true })
+    const onKey = (e: KeyboardEvent) => {
+      // The modal owns navigation/history even if focus remains on its opener.
+      e.stopImmediatePropagation()
+      const s = modalKeys.current, key = e.key.toLowerCase()
+      if ((e.ctrlKey || e.metaKey) && ['z', 'y'].includes(key) && !(e.target instanceof HTMLInputElement)) {
+        e.preventDefault(); if (!s.busy && !e.repeat) s.undo(key === 'y' || e.shiftKey ? 1 : -1)
+      }
+      if (e.key === 'Escape' && !s.busy) { e.preventDefault(); s.close() }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => { unregister(); window.removeEventListener('keydown', onKey, true) }
+  }, [])
+  useEffect(() => {
+    if (!net) return
+    latest.current = { net, continuity }; setCalculating(true); setValidNet(null)
+    let cancelled = false
+    const timer = setTimeout(() => {
+      const drain = async () => {
+        if (evaluateRunning.current || !latest.current) return
+        evaluateRunning.current = true
+        while (latest.current && mounted.current) {
+          const job = latest.current; latest.current = null
+          try {
+            const p = await ask<Preview>({ action: 'evaluate', ...job })
+            if (mounted.current && job.net === netRef.current && job.continuity === continuityRef.current) { setPreview(p); setError(''); setValidNet(job.net) }
+          } catch (e) { if (mounted.current && job.net === netRef.current && job.continuity === continuityRef.current) { setError(String((e as Error).message)); setValidNet(null) } }
+        }
+        evaluateRunning.current = false
+        if (mounted.current) setCalculating(false)
+      }
+      if (!cancelled) void drain()
+    }, 90)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [net, continuity])
+  const load = async (step: string, fileName: string) => {
+    setBusy(true); setError('')
+    try {
+      const result = await ask<{ faces: FaceInfo[]; preview: Preview }>({ action: 'open', step })
+      loaded.current = { step, name: fileName }; setLoadId(i => i + 1); setValidNet(null)
+      setNet(null); base.current = null; history.current = []; at.current = -1; setSelected([]); setLocks([]); setFace(-1)
+      setFaces(result.faces); setPreview(result.preview); setName(fileName.replace(/\.(step|stp)$/i, '') + '-edit.step')
+    } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
+  }
+  const loadBody = async () => {
+    setBusy(true); setError('')
+    try { const result = bodyStepResult(await runCommand('reverse.export.step', { bodies: [bodyId] })); await load(new TextDecoder().decode(result.file.bytes), result.file.name) }
+    catch (e) { setError((e as Error).message) } finally { setBusy(false) }
+  }
+  const chooseFace = async (index: number) => {
+    if (faces[index]?.reason) { setError(faces[index].reason!); return }
+    setBusy(true); setError('')
+    try { const n = await ask<Net>({ action: 'select', face: index }); base.current = structuredClone(n); setFace(index); history.current = []; at.current = -1; setSelected([]); setLocks([]); commit(n) }
+    catch (e) { setError((e as Error).message) } finally { setBusy(false) }
+  }
+  const locked = net ? net.poles.flatMap((_, i) => boundaryLocked(net, i, continuity) || locks.includes(i) ? [i] : []) : []
+  const editable = selected.filter(i => !locked.includes(i))
+  const transform = (fn: (p: Point, i: number, n: Net) => Point) => {
+    if (!net) return
+    const n = structuredClone(net); editable.forEach(i => { n.poles[i] = fn(net.poles[i], i, net) }); commit(n)
+  }
+  const flatten = () => {
+    if (!base.current) return
+    const n = base.current, a = n.poles[0], u = n.poles[(n.nu - 1) * n.nv].map((x, i) => x - a[i]), v = n.poles[n.nv - 1].map((x, i) => x - a[i])
+    const normal = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]], len = Math.hypot(...normal)
+    if (len < 1e-10) { setError('I tre angoli non definiscono un piano.'); return }
+    normal.forEach((x, i) => { normal[i] = x / len })
+    transform(p => { const d = p.reduce((s, x, i) => s + (x - a[i]) * normal[i], 0); return p.map((x, i) => x - d * normal[i]) as Point })
+  }
+  const finish = async (importBody: boolean) => {
+    if (!net || busy || calculating || validNet !== net) return
+    setBusy(true); setError('')
+    try {
+      const result = await ask<Preview & { step: string }>({ action: 'evaluate', net, continuity, exportStep: true })
+      if (importBody) {
+        const r = useReverse.getState(), m = useStore.getState(), s = source.current
+        if (r.buildVersion !== s.version || r.features !== s.features || m.fileName !== s.file || m.appliedAlignment !== s.alignment || reEditorOpen(r) || r.building) throw new Error('Il progetto è cambiato. Esporta il risultato STEP e riaprilo nel progetto aggiornato.')
+        await runCommand('reverse.import.step', { bytes: new TextEncoder().encode(result.step), name })
+        close()
+      } else saveFile(name, new Blob([result.step], { type: 'model/step' }))
+    } catch (e) { setError((e as Error).message) } finally { if (mounted.current) setBusy(false) }
+  }
+  return <div className="modalback es-back"><div role="dialog" aria-modal="true" aria-label="Edit Surface" className="es-dialog" data-test="edit-surface-dialog" onKeyDown={e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); e.stopPropagation(); if (!busy) undo(e.shiftKey ? 1 : -1) }
+    if (e.key === 'Escape') { e.stopPropagation(); if (!busy) close() }
+  }}>
+    <header><strong>Edit Surface · prototipo CAD</strong><button disabled={busy} onClick={close} aria-label="Chiudi Edit Surface">×</button></header>
+    <div className="es-content"><aside>
+      {!net && <><label>Corpo CAD<select value={bodyId} disabled={busy} onChange={e => setBodyId(Number(e.target.value))}>{re.bodies.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+        <button disabled={busy || !re.bodies.some(b => b.id === bodyId)} onClick={() => void loadBody()}>Carica corpo</button>
+        <label>Oppure apri STEP<input type="file" accept=".step,.stp" disabled={busy} data-test="surface-step-file" onChange={e => { const f = e.target.files?.[0]; if (f) void f.text().then(text => load(text, f.name)) }} /></label>
+        <p>Seleziona una faccia nel modello o nell’elenco.</p>
+        <select aria-label="Faccia CAD" data-test="surface-face" value={face} disabled={busy || !faces.length} onChange={e => void chooseFace(Number(e.target.value))}><option value={-1}>Scegli faccia…</option>{faces.map(f => <option key={f.index} value={f.index} disabled={!!f.reason}>Faccia {f.index + 1} · {f.kind}{f.reason ? ' · non supportata' : ''}</option>)}</select>
+        {faces.some(f => f.reason) && <details><summary>Facce non supportate</summary>{faces.filter(f => f.reason).map(f => <p key={f.index}>#{f.index + 1}: {f.reason}</p>)}</details>}
+      </>}
+      {net && <>
+        <p><strong>Faccia {face + 1} · {net.nu} × {net.nv} punti</strong><br/>{faces[face]?.converted ? 'Piano convertito esattamente in NURBS, senza fitting.' : 'Modifica diretta dei poli NURBS esistenti.'}</p>
+        <button disabled={busy || calculating} onClick={() => { if (loaded.current && window.confirm('Scartare questa bozza e scegliere un’altra faccia?')) void load(loaded.current.step, loaded.current.name) }}>Cambia faccia / corpo</button>
+        <label>Protezione bordi<select value={continuity} disabled={busy} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { assertNet(base.current!, net, c); setContinuity(c) } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">G0 · mantieni posizione dei bordi</option><option value="G1">G1 · mantieni anche tangenti esistenti</option></select></label>
+        <p className="es-hint">I bordi restano bloccati per proteggere il solido. G1 conserva le tangenti originali; non corregge discontinuità preesistenti.</p>
+        <div className="es-row">{['X', 'Y', 'Z'].map((a, i) => <button key={a} aria-pressed={axis === i} onClick={() => setAxis(i)}>{a}</button>)}</div>
+        <p>Clic: punto. Ctrl+clic: più punti. Trascina lungo l’asse scelto. Trascina lo sfondo per ruotare.</p>
+        <div className="es-row"><button onClick={() => setSelected(net.poles.flatMap((_, i) => locked.includes(i) ? [] : [i]))}>Seleziona liberi</button><button onClick={() => setSelected([])}>Nessuno</button></div>
+        <p data-test="surface-selection">{selected.length} selezionati · {editable.length} modificabili</p>
+        <div className="es-row"><button disabled={!selected.length} onClick={() => setLocks([...new Set([...locks, ...selected])])}>Blocca punti</button><button disabled={!selected.length} onClick={() => setLocks(locks.filter(i => !selected.includes(i)))}>Sblocca punti</button></div>
+        <label>Spostamento · mm<input type="number" step="0.1" value={distance} data-test="surface-distance" onChange={e => setDistance(Number(e.target.value))} /></label>
+        <button data-test="surface-move" disabled={busy || !editable.length || !Number.isFinite(distance)} onClick={() => transform(p => p.map((x, i) => x + (i === axis ? distance : 0)) as Point)}>Sposta lungo {['X', 'Y', 'Z'][axis]}</button>
+        <button disabled={busy || !editable.length} onClick={flatten}>Spiana sul piano dei tre angoli iniziali</button>
+        <button disabled={busy || !editable.length} onClick={() => transform((p, i, n) => { const row = Math.floor(i / n.nv), col = i % n.nv, neighbors = [row > 0 ? i - n.nv : -1, row + 1 < n.nu ? i + n.nv : -1, col > 0 ? i - 1 : -1, col + 1 < n.nv ? i + 1 : -1].filter(j => j >= 0); return p.map((x, d) => x / 2 + neighbors.reduce((s, j) => s + n.poles[j][d], 0) / neighbors.length / 2) as Point })}>Levigatura locale · 50%</button>
+        <label>Fattore stiramento<input type="number" step="0.1" min="0.1" max="3" value={factor} onChange={e => setFactor(Number(e.target.value))} /></label>
+        <button disabled={busy || !editable.length || !Number.isFinite(factor) || factor <= 0 || factor > 3} onClick={() => { const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factor : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
+        <div className="es-row"><button data-test="surface-undo" disabled={busy || at.current <= 0} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || at.current >= history.current.length - 1} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
+      </>}
+    </aside><main><SurfaceViewport key={loadId} preview={preview} net={net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} onFace={i => void chooseFace(i)} onPoint={(i, multi) => setSelected(s => multi ? s.includes(i) ? s.filter(j => j !== i) : [...s, i] : s.includes(i) ? s : [i])} onDrag={(poles, final) => { const n = { ...netRef.current!, poles }; if (final) commit(n); else setNet(n) }} />
+      <div className="es-status" role="status" data-test="surface-status">{busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · volume ${preview.volume.toFixed(3)} mm³ · scarto bordo ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
+    </main></div>
+    <footer><span>Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.</span><button disabled={busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={busy || calculating || !net || validNet !== net} onClick={() => void finish(true)}>Applica come nuovo corpo</button><button disabled={busy} onClick={close}>Annulla</button></footer>
+  </div></div>
+}
