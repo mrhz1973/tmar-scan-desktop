@@ -76,6 +76,7 @@ function ticket(test: Awaited<ReturnType<typeof setup>>) {
 function annotatedTicket(test: Awaited<ReturnType<typeof setup>>) {
   const state=test.session.getSnapshot()
   if(state.validation.kind!=='valid')throw Error('preview not valid')
+  if(typeof state.notesRevision!=='number' || !Number.isSafeInteger(state.notesRevision))throw Error('notes revision not valid')
   return { annotationVersion:1,operationId:'annotated-op-1',mode:'annotated-cad-copy',source:{...test.binding},
     stamp:{...state.validation.stamp},notesRevision:state.notesRevision }
 }
@@ -220,7 +221,7 @@ describe('WorkspaceSurfaceSession',()=>{
         expect(result.witnesses[0].finalStepSha256).toBe(sha(result.step))
         expect(result.witnesses[0].brepSha256).toBe(sha(new TextEncoder().encode(result.witnesses[0].brep)))
         expect(result.notes).toHaveLength(1)
-        const target=result.notes[0].target as {sourceUV:[number,number];resolvedAt:Point;orientedNormal:Point}
+        const target=result.notes[0].target as {sourceUV:readonly [number,number];resolvedAt:readonly number[];orientedNormal:readonly number[]}
         const q=k.pointOnSurface(witness,...target.sourceUV)
         expect(Math.hypot(q.x-target.resolvedAt[0],q.y-target.resolvedAt[1],q.z-target.resolvedAt[2])).toBeLessThan(1e-7)
         expect(target.orientedNormal.reduce((sum,n,i)=>sum+n*outward[i]/length,0)).toBeGreaterThan(.99)
