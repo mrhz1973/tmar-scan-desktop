@@ -2,6 +2,7 @@
 // The Reverse engineer workspace, as the app finds it: see
 // src/plugins/api.ts for what each part of this is to the app.
 
+import { installReverseEditorHost } from './app/workspaceEditorHost'
 import { registerBusy, registerCommands, registerMapReport, registerSectionLayers, registerSettle, registerSheetPlanes, registerStateSection, registerViewToggles, type ScanRulerPlugin } from '../../src/plugins/api'
 import { onScan } from '../../src/app/scanEvents'
 import { pick, registerHistory } from '../../src/state/historyStore'
@@ -66,6 +67,7 @@ const plugin: ScanRulerPlugin = {
   keyboard: reverseKeyboard,
   notices: ReverseNotices,
   install() {
+    installReverseEditorHost()
     registerProjectSection(reverseSection)
     // The notes pinned on the part for an agent: saved with the project,
     // let go with the scan, moved with the part.
@@ -195,7 +197,7 @@ const plugin: ScanRulerPlugin = {
       sections: [
         {
           key: 'reverse',
-          capture: () => pick(useReverse.getState(), ['features', 'rolledBack', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'elementsShown']),
+          capture: () => pick(useReverse.getState(), ['features', 'rolledBack', 'stepFiles', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'elementsShown']),
           // The feature list as it was, built again; whatever the sketch had
           // of its own history, and whatever was selected, goes. The
           // parameters come back with it, their table read again.

@@ -60,6 +60,8 @@ import { StatusStrip } from './ui/StatusStrip'
 import { BusyOverlay } from './ui/BusyOverlay'
 import { ImprintModal } from './ui/Imprint'
 import { SettingsModal } from './ui/SettingsModal'
+import { WorkspaceEditorDock } from './ui/WorkspaceEditorDock'
+import { useWorkspaceEditor } from './plugins/workspaceEditors'
 import { UnitsModal } from './ui/UnitsModal'
 import { SupportAsk, SupportCard } from './ui/SupportCard'
 import { ViewBar } from './ui/ViewBar'
@@ -120,6 +122,16 @@ const NO_RUNTIME: PluginRuntime = {}
 const CREASE_SETTLE_MS = 250
 
 export default function App() {
+  const embeddedEditorOpen = useWorkspaceEditor(s => s.phase !== 'closed')
+  useEffect(() => {
+    if (!embeddedEditorOpen) return
+    const panels = [...document.querySelectorAll<HTMLElement>('.mid > .panel')]
+    const previous = panels.map(panel => panel.inert)
+    panels.forEach(panel => { panel.inert = true })
+    const leave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', leave)
+    return () => { panels.forEach((panel, i) => { panel.inert = previous[i] }); window.removeEventListener('beforeunload', leave) }
+  }, [embeddedEditorOpen])
   const clientRef = useRef<MeshWorkerClient | null>(null)
   if (!clientRef.current) clientRef.current = new MeshWorkerClient()
   const sceneRef = useRef<SceneManager | null>(null)
@@ -1546,7 +1558,7 @@ export default function App() {
       .catch((e: unknown) => useStore.setState({ errorText: e instanceof Error ? e.message : String(e) }))
 
   return (
-    <div className="app">
+    <div className="app" data-editor-open={embeddedEditorOpen}>
       <TopBar
         recovery={recovery}
         onNewProject={() => void newProject()}
@@ -1858,6 +1870,7 @@ export default function App() {
             </div>
           )}
         </div>
+        <WorkspaceEditorDock />
       </div>
       <StatusStrip />
       {/* First of the windows: same height, so a question it comes up against
