@@ -6,7 +6,10 @@ import {join,resolve} from 'node:path'
 import {mkdirSync,mkdtempSync,readFileSync,writeFileSync} from 'node:fs'
 import assert from 'node:assert/strict'
 const project=process.argv.includes('--project')
+const moved=process.argv.includes('--moved')
+const hostSource=process.argv.includes('--host-source')
 const chain=project || process.argv.includes('--chain')
+assert(!moved || (project && hostSource), '--moved requires --project --host-source')
 const k=await OcctKernel.init(),box=k.makeBox(20,30,10),fs=k.getSubShapes(box,'face')
 const root=resolve('plugins/tmar-edit-surface/evidence/duplicate-edge');mkdirSync(root,{recursive:true})
 const out=mkdtempSync(join(root,'run-')), input=join(out,'sheet.step')
@@ -16,10 +19,15 @@ try {
   await page.click('[data-test=workspace-reverse]')
   await page.waitForSelector('[data-test=edit-surface-entry] button')
   if(project)await page.waitForFunction(()=>window.__re?.store.getState().kernelStatus==='ready',{timeout:60000})
-  if(project)await page.evaluate(async step=>{
-    const {runCommand}=await import('/src/commands/registry.ts')
+  if(project)await page.evaluate(async ({step,moved,hostSource})=>{
+    const {runCommand,listCommands}=await import('/src/commands/registry.ts')
+    if(hostSource && !listCommands().some(c=>c.name==='reverse.body.edit_source')) throw Error('Current CAD source command is absent')
     await runCommand('reverse.import.step',{bytes:new TextEncoder().encode(step),name:'Original sheet.step'})
-  },readFileSync(input,'utf8'))
+    if(moved) {
+      const body=window.__re.store.getState().bodies[0].id
+      await runCommand('reverse.feature.add',{feature:{kind:'moveBody',bodies:[body],translate:[40,0,0]}})
+    }
+  },{step:readFileSync(input,'utf8'),moved,hostSource})
   await page.click('[data-test=edit-surface-entry] button')
   if(project) await page.click('[data-test=surface-load-body]')
   else await (await page.$('[data-test=surface-step-file]')).uploadFile(input)
@@ -27,9 +35,10 @@ try {
   await page.select('[data-test=surface-face]','0');await page.waitForFunction(()=>document.querySelector('[data-test=strip-open]')?.disabled===false)
   await page.click('[data-test=strip-open]');await page.waitForSelector('[data-test=strip-axis-0]');await page.click('[data-test=strip-axis-0]')
   const r=await page.$eval('[data-test=edit-surface-viewport]',e=>e.getBoundingClientRect().toJSON())
-  const rad=Math.hypot(20,30)/2, c=new Vector3(10,15,10),camera=new PerspectiveCamera(40,r.width/r.height,rad/1000,rad*100)
+  const offset=moved?40:0
+  const rad=Math.hypot(20,30)/2, c=new Vector3(10+offset,15,10),camera=new PerspectiveCamera(40,r.width/r.height,rad/1000,rad*100)
   camera.position.copy(c).addScaledVector(new Vector3(1.5,-1.9,1.8),rad);camera.up.set(0,0,1);camera.lookAt(c);camera.updateMatrixWorld()
-  const xy=(x,z=10)=>{const q=new Vector3(x,15,z).project(camera);return[r.x+(1+q.x)*r.width/2,r.y+(1-q.y)*r.height/2]}
+  const xy=(x,z=10)=>{const q=new Vector3(x+offset,15,z).project(camera);return[r.x+(1+q.x)*r.width/2,r.y+(1-q.y)*r.height/2]}
   await page.mouse.move(...xy(20));await page.mouse.down();await page.mouse.move(...xy(25),{steps:8});await page.mouse.up()
   await page.waitForFunction(()=>document.querySelector('[data-test=strip-export]')?.disabled===false)
   const accepted=await page.$eval('[data-test=strip-result]',e=>e.textContent)
@@ -59,6 +68,8 @@ try {
   const shape=k.importStep(step), faces=k.getSubShapes(shape,'face')
   try{
     assert(k.isValid(shape));assert.equal(faces.length,chain?3:2)
+    const bounds=k.getBoundingBox(shape)
+    assert(Math.abs(bounds.xmin-offset)<1e-6, 'Editor must use the current placed CAD, including Move body')
     const areas=faces.map(f=>k.getSurfaceArea(f)).sort((a,b)=>a-b)
     assert(Math.abs(areas.at(-1)-600)<1e-7)
     assert(Math.abs(areas.at(-2)-150)<2)
@@ -118,7 +129,7 @@ try {
         await reopened.waitForFunction(()=>document.querySelectorAll('[data-test=surface-face] option').length===4)
         await reopened.select('[data-test=surface-face]','0')
         await reopened.waitForSelector('[data-test=strip-open]:enabled')
-        projectResult={sourceLoadedFromProject:true,reopenedEditableFaces:3,toolbarUndoEnabled:true,toolbarRedoEnabled:true,undoBodyCount:1,redoBodyCount:2,reopenedBodyAreas:measured}
+        projectResult={sourceLoadedFromProject:true,hostSource,moved,exportXmin:bounds.xmin,reopenedEditableFaces:3,toolbarUndoEnabled:true,toolbarRedoEnabled:true,undoBodyCount:1,redoBodyCount:2,reopenedBodyAreas:measured}
       }finally{await reopened.close()}
     }
     assert.deepEqual(consoleErrors,[])
