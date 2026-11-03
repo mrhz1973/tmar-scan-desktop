@@ -74,3 +74,13 @@ Revo Design Pro 8.0.123, QA document `modified-solid`: the imported solid displa
 - Preview is interactive and coalesced while dragging; exact frame rate and large-model latency have not been benchmarked.
 
 Next acceptance: integrate the isolated plugin, use a representative owner's STEP with an eligible NURBS face and verify protected adjacent geometry before broadening the supported trimming/topology domain.
+
+### Interaction controls checkpoint, 2026-11-03
+
+Added adjustable drag strength (5–100%), local smoothing strength (5–100%), control-net visibility and surface transparency. Numeric displacements remain exact. Axis and strength are captured at drag start; display changes preserve the camera and geometry.
+
+`tests/e2e-controls.mjs` passed against the real browser and independent STEP reimports in **10.325 s**, with zero console errors. The same mouse movement displaced the evaluated surface center by **0.2945899173967508 mm** at 100% and **0.14729495869850062 mm** at 50% (ratio 0.5000000000004251). Smoothing at 25% and 75% changed the center height from 11.5 mm to 11.125 mm and 10.375 mm respectively. All exported solids passed kernel validity checks. Hiding the net and enabling transparency changed the image without changing CAD status; restoring the display produced an identical canvas image. TypeScript passed; production build was not repeated for these controls.
+
+Evidence: `evidence/controls/run-OClKPs/result.json`, screenshots and five STEP exports. The half-drag screenshot was visually inspected. Earlier local runs failed in the test harness while collecting repeated download filenames; exports now use separate download directories. Those failures are not product success evidence.
+
+Additional bounded QS observation: New Freeform opened an Edit Surface panel containing Drag Strength, Control Net and transparency controls. This motivated the controls above, but their QS behavior was not functionally qualified. Closing that panel and Ctrl+Z did not remove the displayed Freeform item; the QA document was left unsaved. No claim of complete QS parity or native imported-face editing follows from this observation.

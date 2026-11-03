@@ -1,0 +1,54 @@
+{
+  "pass": true,
+  "base": {
+    "file": "base.step",
+    "center": {
+      "x": 10,
+      "y": 15,
+      "z": 11.5
+    },
+    "volume": 6225.005849983061
+  },
+  "full": {
+    "file": "100-percent-drag.step",
+    "center": {
+      "x": 10,
+      "y": 15,
+      "z": 11.79458991739675
+    },
+    "volume": 6269.195486489925
+  },
+  "half": {
+    "file": "50-percent-drag.step",
+    "center": {
+      "x": 10,
+      "y": 15,
+      "z": 11.6472949586985
+    },
+    "volume": 6247.100668236511
+  },
+  "fullDelta": 0.2945899173967508,
+  "halfDelta": 0.14729495869850062,
+  "dragRatio": 0.5000000000004251,
+  "smoothQuarter": {
+    "file": "25-percent-smoothing.step",
+    "center": {
+      "x": 10,
+      "y": 15,
+      "z": 11.125
+    },
+    "volume": 6168.754387487296
+  },
+  "smoothThreeQuarter": {
+    "file": "75-percent-smoothing.step",
+    "center": {
+      "x": 10,
+      "y": 15,
+      "z": 10.375
+    },
+    "volume": 6056.251462495766
+  },
+  "displayRestoredExactly": true,
+  "consoleErrors": [],
+  "elapsedMs": 10325.1534
+}
