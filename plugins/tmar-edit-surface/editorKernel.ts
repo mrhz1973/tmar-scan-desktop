@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { OcctKernel, type Mesh, type ShapeHandle } from 'occt-wasm'
-import { assertNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
+import { assertNet, enrichBicubic, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
 
-export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean }
+export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean }
 export interface Preview { mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
@@ -45,7 +45,9 @@ export class SurfaceEditorKernel {
     this.infos = this.faces.map((face, index) => {
       let reason: string | null = null
       try { this.netFor(index) } catch (e) { reason = e instanceof Error ? e.message : String(e) }
-      return { index, kind: k.surfaceType(face), reason, converted: this.records[this.recordsByFace[index]]?.kind === 1 }
+      const record = this.records[this.recordsByFace[index]]
+      return { index, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
+        enriched: !!record?.net && enrichBicubic(record.net) !== record.net }
     })
     return { faces: this.infos, preview: this.render(this.source) }
   }
@@ -80,7 +82,7 @@ export class SurfaceEditorKernel {
     } finally { [...wires, ...edges].forEach(h => k.release(h)) }
   }
   select(index: number) {
-    const net = this.netFor(index), record = this.records[this.recordsByFace[index]], k = this.kernel
+    const net = enrichBicubic(this.netFor(index)), record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
     if (record.kind === 1) {
       // STEP readers may omit planar pcurves (derived implicitly on a plane).
