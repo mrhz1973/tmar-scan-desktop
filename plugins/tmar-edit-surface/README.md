@@ -298,6 +298,15 @@ on the compiled application in an isolated tree using host revision
 asymmetric rational NURBS surface and refused free-boundary mode on a solid.
 Evidence: `evidence/free-boundary/compiled-20261103/`.
 
+In a separate source-host test on the same isolated host revision, Apply
+created a second CAD sheet, project Undo/Redo restored one/two bodies, and
+save/reopen preserved both. Independent STEP readback measured the original
+and edited maximum heights as 10 and 11.4005 mm. The reopened edited sheet
+could be loaded into Edit Surface again. The test used the application command
+interface to prepare the fixture; its edit, Apply and project controls used
+the visible UI. Evidence: `evidence/free-boundary/host-roundtrip-20261103/`.
+
 This is a bounded prototype, not general free-boundary editing or a claim of
 QUICKSURFACE equivalence. The new mode is not part of the versioned parametric
-recipe, and its host Apply/save/reopen path has not yet been qualified.
+recipe. Host save/reopen was qualified on the recorded fixture, not arbitrary
+projects or the compiled application.

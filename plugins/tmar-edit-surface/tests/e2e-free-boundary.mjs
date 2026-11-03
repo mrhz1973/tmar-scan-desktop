@@ -3,12 +3,13 @@
 import { launchApp } from '../../../scripts/e2e-lib.mjs'
 import { OcctKernel } from 'occt-wasm'
 import { PerspectiveCamera,Vector3 } from 'three'
-import { mkdirSync,mkdtempSync,writeFileSync } from 'node:fs'
+import { mkdirSync,mkdtempSync,readFileSync,writeFileSync } from 'node:fs'
 import { join,resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import assert from 'node:assert/strict'
 
 assert(process.env.APP_URL,'Supply an isolated application URL')
+const project=process.argv.includes('--project')
 const root=resolve('plugins/tmar-edit-surface/evidence/free-boundary');mkdirSync(root,{recursive:true})
 const out=mkdtempSync(join(root,'run-')), kernel=await OcctKernel.init()
 const box=kernel.makeBox(20,30,10), boxFaces=kernel.getSubShapes(box,'face')
@@ -17,8 +18,16 @@ const {browser,page,consoleErrors}=await launchApp({url:process.env.APP_URL,widt
 try{
   await page.click('[data-test=workspace-reverse]')
   await page.waitForSelector('[data-test=edit-surface-entry] button:enabled',{timeout:60000})
+  if(project){
+    await page.waitForFunction(()=>window.__re?.store.getState().kernelStatus==='ready',{timeout:60000})
+    await page.evaluate(async step=>{
+      const {runCommand}=await import('/src/commands/registry.ts')
+      await runCommand('reverse.import.step',{bytes:new TextEncoder().encode(step),name:'Original sheet.step'})
+    },readFileSync(input,'utf8'))
+  }
   await page.click('[data-test=edit-surface-entry] button')
-  await (await page.$('[data-test=surface-step-file]')).uploadFile(input)
+  if(project) await page.click('[data-test=surface-load-body]')
+  else await (await page.$('[data-test=surface-step-file]')).uploadFile(input)
   await page.waitForFunction(()=>document.querySelectorAll('[data-test=surface-face] option').length===2,{timeout:60000})
   await page.select('[data-test=surface-face]','0')
   await page.waitForSelector('[data-test=surface-free-boundary]:enabled',{timeout:60000})
@@ -74,9 +83,52 @@ try{
     },{timeout:60000})
     await page.click('[data-test=surface-redo]')
     await page.waitForFunction(s=>document.querySelector('[data-test=surface-status]')?.textContent===s,{timeout:60000},movedStatus)
+    let projectResult
+    if(project){
+      const bodyCount=(p,count)=>p.waitForFunction(n=>window.__re?.store.getState().bodies.length===n &&
+        !document.querySelector('[data-test=edit-surface-dialog]') && !window.__re.store.getState().building,{timeout:60000},count)
+      await page.click('[data-test=surface-apply]');await bodyCount(page,2)
+      await page.waitForSelector('[data-test=undo]:enabled');await page.click('[data-test=undo]');await bodyCount(page,1)
+      await page.waitForSelector('[data-test=redo]:enabled');await page.click('[data-test=redo]');await bodyCount(page,2)
+      await page.evaluate(()=>document.addEventListener('click',e=>{
+        if(e.target instanceof HTMLAnchorElement && e.target.download.endsWith('.scanruler')){
+          e.preventDefault();window.savedProject=fetch(e.target.href).then(r=>r.arrayBuffer()).then(b=>Array.from(new Uint8Array(b)))
+        }
+      },true))
+      await page.click('[data-test=save-project]');await page.waitForFunction(()=>!!window.savedProject)
+      const projectFile=join(out,'free-boundary.scanruler')
+      writeFileSync(projectFile,Buffer.from(await page.evaluate(()=>window.savedProject)))
+      const reopened=await browser.newPage()
+      try{
+        reopened.on('pageerror',e=>consoleErrors.push(e.message))
+        await reopened.goto(process.env.APP_URL);await reopened.waitForSelector('[data-test=project-input]')
+        await (await reopened.$('[data-test=project-input]')).uploadFile(projectFile)
+        await reopened.click('[data-test=workspace-reverse]');await bodyCount(reopened,2)
+        const restored=await reopened.evaluate(()=>{
+          const {features,stepFiles,bodies}=window.__re.store.getState()
+          if(bodies.length!==2 || !bodies.every(b=>b.surface))throw Error('Expected two restored CAD sheets')
+          return features.filter(f=>f.kind==='import').map(f=>stepFiles[f.file.key])
+        })
+        const readbacks=restored.map(source=>{
+          const body=kernel.importStep(source), surfaces=kernel.getSubShapes(body,'face'), solids=kernel.getSubShapes(body,'solid')
+          try{
+            assert(kernel.isValid(body));assert.equal(surfaces.length,1);assert.equal(solids.length,0)
+            return kernel.getBoundingBox(body).zmax
+          }finally{[...surfaces,...solids,body].forEach(h=>kernel.release(h))}
+        }).sort((a,b)=>a-b)
+        assert(Math.abs(readbacks[0]-10)<1e-5);assert(Math.abs(readbacks[1]-bounds.zmax)<1e-5)
+        await reopened.click('[data-test=edit-surface-entry] button')
+        const editedId=await reopened.evaluate(()=>window.__re.store.getState().bodies.at(-1).id)
+        await reopened.select('[data-test=surface-body]',String(editedId));await reopened.click('[data-test=surface-load-body]')
+        await reopened.waitForFunction(()=>document.querySelectorAll('[data-test=surface-face] option').length===2,{timeout:60000})
+        await reopened.select('[data-test=surface-face]','0')
+        await reopened.waitForSelector('[data-test=surface-free-boundary]:enabled',{timeout:60000})
+        projectResult={hostApply:true,undoBodyCount:1,redoBodyCount:2,reopenedBodyCount:2,zmax:readbacks,reopenedEditable:true}
+      }finally{await reopened.close()}
+    }
     assert.deepEqual(consoleErrors,[])
-    writeFileSync(join(out,'result.json'),JSON.stringify({pass:true,actualPointerDrag:true,lockedPoles:true,undoRedo:true,closedSolidCount:solids.length,faceCount:faces.length,surface:'bspline',bounds,movedStatus,consoleErrors},null,2))
-    console.log(JSON.stringify({out,bounds,movedStatus,consoleErrors}))
+    writeFileSync(join(out,'result.json'),JSON.stringify({pass:true,actualPointerDrag:true,lockedPoles:true,undoRedo:true,closedSolidCount:solids.length,faceCount:faces.length,surface:'bspline',bounds,movedStatus,projectResult,consoleErrors},null,2))
+    console.log(JSON.stringify({out,bounds,movedStatus,projectResult,consoleErrors}))
   }finally{[...faces,...solids,shape].forEach(h=>kernel.release(h))}
 }catch(error){writeFileSync(join(out,'failure.json'),JSON.stringify({error:String(error),stack:error.stack,consoleErrors},null,2));await page.screenshot({path:join(out,'failure.png')});throw error}
 finally{await browser.close();kernel[Symbol.dispose]()}
