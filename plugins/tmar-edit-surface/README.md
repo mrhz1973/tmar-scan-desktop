@@ -67,10 +67,10 @@ Revo Design Pro 8.0.123, QA document `modified-solid`: the imported solid displa
 
 ## Limits / next acceptance
 
-- Natural rectangular four-edge faces without internal trims; clamped nonperiodic NURBS, at most 1600 poles. Cylinders and arbitrary trimmed/holed faces are not editable here. Some mixed STEP/BREP representations are deliberately refused.
+- Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Periodic cylinders, arbitrary trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
 - One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.
 - OCCT validity, face/solid counts, positive volume, original boundary preservation, sampled normals and face intersections are checked. This is not exhaustive certification against every possible self-intersection; intersection edges and normals have sampled checks.
-- No qualification yet on arbitrary production STEP parts, touch input, multi-face continuity creation or full QUICKSURFACE equivalence. Project save/reopen is qualified on the recorded fixture only. Locks are not part of the local geometry undo history.
+- No qualification yet on arbitrary production STEP parts, touch input, multi-face continuity creation or full QUICKSURFACE equivalence. Project save/reopen is qualified on the recorded fixture only.
 - Preview is interactive and coalesced while dragging; exact frame rate and large-model latency have not been benchmarked.
 
 Next acceptance: integrate the isolated plugin, use a representative owner's STEP with an eligible NURBS face and verify protected adjacent geometry before broadening the supported trimming/topology domain.
@@ -350,3 +350,27 @@ rate guarantee or evidence of full QuickSurface parity.
 
 Evidence: `evidence/live-preview/baseline-20261103/`,
 `source-20261103/` and `compiled-20261103/`.
+
+### Local history for point locks and boundary modes
+
+Undo/Redo and Ctrl+Z/Ctrl+Y now follow the order of geometry edits, manual
+point locks, G0/G1 protection and free-boundary mode. Selection alone and a
+lock operation that changes nothing do not add history. Undoing a lock does
+not recalculate unchanged CAD or enable Apply while a geometry update is
+pending. A new action after Undo discards Redo. Changing the source or face
+starts a fresh history; if opening a STEP fails, old frames cannot be restored
+against the worker's new document. The error does not claim an old preview is
+visible after that preview has been cleared.
+
+Before the change, the compiled baseline had no Undo action after a point was
+locked. In source and compiled isolated UI tests, an imported STEP solid and
+a single-face STEP sheet passed mixed lock/move/mode Undo/Redo; the exported
+results reopened as valid CAD. The checks also cover G1 refusal when protected
+poles moved, redo branching, unchanged geometry for lock-only history, a
+delayed evaluation and a failed load. Worker delay and invalid STEP injection
+are test instrumentation. This does not establish QuickSurface parity or
+project-level persistence of the local editing history.
+
+Evidence: `evidence/history/baseline-20261103/`, `source-20261103/` and
+`compiled-20261103/`. The existing segment/cell selection and live-preview
+regressions also passed on the source fixture.
