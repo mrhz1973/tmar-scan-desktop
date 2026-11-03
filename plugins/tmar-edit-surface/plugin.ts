@@ -12,7 +12,7 @@ const plugin: ScanRulerPlugin = {
       blocked: () => useSurfaceDialogs.getState().count > 0,
       useWatch: () => useSurfaceDialogs(s => s.count > 0),
     })
-    registerPanelExtension({ id: 'tmar-edit-surface.open', slot: 'reverse.export', component: EditSurface, order: 10 })
+    registerPanelExtension({ id: 'tmar-edit-surface.open', slot: 'reverse.create.after-network', component: EditSurface, order: 10 })
   },
 }
 export default plugin

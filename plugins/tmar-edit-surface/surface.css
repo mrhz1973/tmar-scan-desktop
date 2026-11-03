@@ -1,3 +1,5 @@
+/* The wrapper keeps the existing entry selector; its button is one feature-grid cell. */
+.es-feature-entry { display: contents; }
 .es-back { z-index: 1500; }
 .es-dialog { width: min(1400px, 96vw); height: 90vh; display: flex; flex-direction: column; background: var(--bg, #252a2e); color: var(--text, #edf1f4); border: 1px solid #71828c; border-radius: 8px; overflow: hidden; }
 .es-dialog header, .es-dialog footer { display: flex; align-items: center; gap: 12px; padding: 12px; flex-shrink: 0; }

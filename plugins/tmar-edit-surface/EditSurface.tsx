@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { listCommands, runCommand } from '../../src/commands/registry'
 import { useCommandActivity } from '../../src/commands/activity'
@@ -17,6 +18,7 @@ import { SurfaceViewport, hasSurfaceZebra, type StripeSettings } from './Surface
 import { dragDirection, type DragMode } from './localFrame'
 import { mirrorPartners, mirrorEdit } from './symmetry'
 import { selectNetPoints, type NetSelectionMode } from './netSelection'
+import { EditSurfaceIcon } from './EditSurfaceIcon'
 import './surface.css'
 type Payload = Request extends infer R ? R extends Request ? Omit<R, 'id'> : never : never
 type PreviewJob = { net: Net; continuity: 'G0' | 'G1'; freeBoundary: boolean; epoch: number }
@@ -39,8 +41,16 @@ export function EditSurface({ applyWithNotes }: SurfaceOptions = {}) {
   const [open, setOpen] = useState(false)
   const busy = useStore(s => s.busy), running = useCommandActivity(s => s.running !== null)
   const re = useReverse(useShallow(s => ({ bodies: s.bodies, building: s.building, editing: reEditorOpen(s), playback: s.playback !== null })))
-  return <div className="group" data-test="edit-surface-entry"><button className="block" disabled={busy || running || re.building || re.editing || re.playback} onClick={() => setOpen(true)}>Edit Surface · punti CAD…</button>
-    {open && <SurfaceDialog applyWithNotes={applyWithNotes} close={() => setOpen(false)} />}</div>
+  return <div className="es-feature-entry" data-test="edit-surface-entry">
+    <button type="button" data-test="feature-edit-surface" aria-label="Edit Surface" aria-haspopup="dialog"
+      title="Modifica i poli della superficie CAD: carica un corpo del progetto oppure apri un file STEP."
+      disabled={busy || running || re.building || re.editing || re.playback} onClick={() => setOpen(true)}>
+      <EditSurfaceIcon />
+      <span>Edit Surface</span>
+    </button>
+    {/* Keep the modal outside the feature grid's button styles and scroll clipping. */}
+    {open && createPortal(<SurfaceDialog applyWithNotes={applyWithNotes} close={() => setOpen(false)} />, document.body)}
+  </div>
 }
 function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () => void }) {
   const re = useReverse.getState(), model = useStore.getState()

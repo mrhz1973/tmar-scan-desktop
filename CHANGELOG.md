@@ -7,6 +7,15 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Edit Surface feature tile - 2026-11-03
+
+- Move Edit Surface immediately after Patch network in the Create feature grid;
+  remove the old bottom-panel entry. Keep the original command name.
+- Draw a theme-aware quadrilateral control-net icon with nine pole markers,
+  using the existing icon frame, accent colours and feature-tile styling.
+- Keep the editor modal outside the grid through a portal so feature-button
+  styles and sidebar scrolling do not affect the editor. CAD logic is unchanged.
+
 ### TMAR current CAD editor source - 2026-11-03
 
 - Add read-only `reverse.body.edit_source` for one explicitly named current
