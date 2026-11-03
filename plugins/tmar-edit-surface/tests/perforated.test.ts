@@ -40,6 +40,24 @@ it('moves an imported planar STEP face while preserving its through hole', async
         expect(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)).toBeLessThan(1e-7)
         expect(Math.abs(n.z)).toBeGreaterThan(1-1e-9)
       }
+      const native = editor.open(exportResult.step!).faces.find(f=>!f.converted && f.trimLocks.length && !f.reason)
+      expect(native).toBeDefined()
+      const second = editor.select(native!.index)
+      expect(second.nu).toBe(net.nu)
+      expect(second.nv).toBe(net.nv)
+      const protectedPole = native!.trimLocks.find(i=>!boundaryLocked(second,i,'G1'))
+      expect(protectedPole).toBeDefined()
+      const unsafe = structuredClone(second); unsafe.poles[protectedPole!][2] += 0.25
+      expect(()=>editor.evaluate(unsafe,'G1')).toThrow(/protetto/)
+      const movable = second.poles.findIndex((_,i)=>!boundaryLocked(second,i,'G1') && !native!.trimLocks.includes(i))
+      expect(movable).toBeGreaterThan(-1)
+      second.poles[movable][2] += 1
+      const next = editor.evaluate(second,'G1')
+      const secondRecipe = await editor.createRecipe(second,'G1',[],'curved-plate')
+      expect(secondRecipe.preparation).toBe('native-nurbs')
+      const restored = await editor.replayRecipe(exportResult.step!,secondRecipe,'curved-plate')
+      expect(restored.valid).toBe(true)
+      expect(restored.volume).toBeCloseTo(next.volume,7)
     } finally { fs.forEach(f=>k.release(f)); k.release(reopened) }
   } finally { [drilled,positioned,tool,block].forEach(h=>k.release(h)); editor.dispose() }
 },60000)
