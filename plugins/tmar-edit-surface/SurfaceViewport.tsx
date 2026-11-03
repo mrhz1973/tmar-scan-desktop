@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { Preview } from './editorKernel'
 import type { Net, Point } from './brep'
 import { dragDirection, type DragMode } from './localFrame'
+import { bindStripDrag, drawStrip, type StripDrag } from './sheetDrag'
 import { netEdges, type NetSelectionMode } from './netSelection'
 
 export interface StripeSettings { orientation: 'horizontal' | 'vertical'; width: number; color: string }
@@ -17,6 +18,7 @@ const ZebraRenderer = Object.values(zebraModules)[0]
 export const hasSurfaceZebra = Boolean(ZebraRenderer)
 
 interface Props {
+  strip: StripDrag | null
   notePins: Point[]; placingNote: boolean; onNote: (point:Point|null)=>void
   preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; face: number
   axis: number; onFace: (i: number) => void; onPoints: (ids: number[], multi: boolean) => void
@@ -182,9 +184,10 @@ export function SurfaceViewport(props: Props) {
     renderer.domElement.addEventListener('pointermove', pointerMove, true)
     renderer.domElement.addEventListener('pointerup', pointerUp, true)
     renderer.domElement.addEventListener('pointercancel', cancel, true)
+    const unbindStrip=bindStripDrag(div,camera,()=>current.current.strip,()=>current.current.busy)
     const resize = new ResizeObserver(() => { const w = div.clientWidth, h = div.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix() }); resize.observe(div)
     renderer.setAnimationLoop(() => renderer.render(scene, camera))
-    return () => { resize.disconnect(); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
+    return () => { unbindStrip(); resize.disconnect(); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
   }, [])
   useEffect(() => {
     const s = sceneRef.current; if (!s || !props.preview) return
@@ -270,6 +273,12 @@ export function SurfaceViewport(props: Props) {
     state.scene.add(pins)
     return ()=>{pins.removeFromParent();pins.traverse(dispose)}
   },[props.notePins])
+  useEffect(()=>{
+    const state=sceneRef.current
+    if(!props.strip || !state)return
+    const group=drawStrip(props.strip);state.scene.add(group)
+    return ()=>{group.removeFromParent();group.traverse(dispose)}
+  },[props.strip])
   return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" />
 }
 function dispose(o: THREE.Object3D) { const m = o as THREE.Mesh; m.geometry?.dispose(); if (Array.isArray(m.material)) m.material.forEach(a => a.dispose()); else m.material?.dispose() }
