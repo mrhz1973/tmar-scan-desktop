@@ -297,6 +297,8 @@ on the compiled application in an isolated tree using host revision
 `8d12863`, without browser console errors. Kernel tests also exercised an
 asymmetric rational NURBS surface and refused free-boundary mode on a solid.
 Evidence: `evidence/free-boundary/compiled-20261103/`.
+Separate OCCT regressions also refused this mode on a single open face with a
+hole and on a sewn multi-face sheet, leaving their boundaries protected.
 
 In a separate source-host test on the same isolated host revision, Apply
 created a second CAD sheet, project Undo/Redo restored one/two bodies, and
