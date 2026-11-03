@@ -14,6 +14,8 @@ export interface BoundEditorSource {
 export interface OwnedEditorViewport {
   view: EditorViewportLease
   releaseCapture(): void
+  /** Host-only publication barrier; public editor/controller contract is unchanged. */
+  suspendReferenceNotifications(): () => void
   dispose(): void
 }
 export interface StagedEditorCopy {
@@ -187,6 +189,7 @@ function apply(): Promise<CommitReceipt> {
   session.operationId = ticket.operationId
   session.apply = Promise.resolve().then(async () => {
     let unfreeze: (() => void) | undefined, staged: StagedEditorCopy | undefined
+    let resumeReferences: (() => void) | undefined
     try {
       assertLive(session)
       unfreeze = controller.freeze(ticket)
@@ -207,6 +210,10 @@ function apply(): Promise<CommitReceipt> {
       if (current.validation.kind !== 'valid' || current.gesture !== 'idle' || current.draftNoteCount ||
           !sameDraft(ticket.stamp, current.current) || !samePreview(current.validation.stamp, ticket.stamp))
         throw new Error('La bozza è cambiata durante Applica.')
+      // The committed store will invalidate this old source lease. Keep its
+      // reference callbacks quiet until close, or until rollback restores it.
+      // Source/session/stamp checks below remain live throughout publication.
+      resumeReferences = session.view!.suspendReferenceNotifications()
       useWorkspaceEditor.setState({ phase: 'committing', canApply: false })
       // No await between final source check and publication.
       assertLive(session)
@@ -230,6 +237,12 @@ function apply(): Promise<CommitReceipt> {
       throw error
     } finally {
       try { staged?.dispose() } catch (error) { session.life.errors.push(error) }
+      // Successful close has disposed the notification queue. After a failed
+      // publication, the source is restored and the live draft can refresh.
+      try { resumeReferences?.() } catch (error) {
+        session.life.errors.push(error)
+        if (active === session) useWorkspaceEditor.setState({ error: errorText(error) })
+      }
       session.apply = undefined
     }
   })

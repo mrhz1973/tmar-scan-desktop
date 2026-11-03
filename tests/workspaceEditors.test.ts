@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EditorLifetime } from '../src/plugins/editorLifetime'
+import { EditorReferenceNotifications } from '../src/plugins/editorReferenceNotifications'
 import { configureWorkspaceEditorHost, registerWorkspaceEditor, useWorkspaceEditor, workspaceEditors, type WorkspaceEditorHost } from '../src/plugins/workspaceEditors'
 import type { EditorSnapshot, EditorViewportLease, PreparedCadCopy, WorkspaceEditorController, WorkspaceEditorContext, SourceBinding } from '../src/plugins/workspaceEditorTypes'
 
@@ -25,11 +26,17 @@ function fixture() {
     return { operationId, documentEpoch: 'document', artifactSha256, createdBodyIds: [2], historyActionId: operationId, mode: 'cad-copy' as const }
   })
   const stageDispose = vi.fn()
+  const references = new EditorReferenceNotifications()
   const adapter: WorkspaceEditorHost = {
     capabilities: { apiVersion: 1, enabled: true, commitKinds: ['cad-copy'] },
     readSource: vi.fn(async () => ({ binding: source, step: new Uint8Array([1,2,3]), assertCurrent,
       subscribe: (listener: () => void) => { sourceChanged = listener; return () => { sourceChanged = () => {} } } })),
-    viewport: vi.fn(() => ({ view: { onInterruption: () => () => {} } as unknown as EditorViewportLease, releaseCapture: release, dispose: vi.fn() })),
+    viewport: vi.fn(() => ({ view: {
+      onInterruption: () => () => {},
+      subscribeReferences: (fn: () => void) => references.subscribe(fn),
+      references: () => { assertCurrent(); return [] },
+    } as unknown as EditorViewportLease, releaseCapture: release,
+      suspendReferenceNotifications: () => references.suspend(), dispose: vi.fn(() => references.dispose()) })),
     stage: vi.fn(async () => ({ publish, dispose: stageDispose })),
   }
   const definition = { id: 'test-editor', apiVersion: 1 as const, workspace: 'reverse' as const, Parameters: () => null,
@@ -42,7 +49,8 @@ function fixture() {
   stops.push(registerWorkspaceEditor(definition), configureWorkspaceEditorHost(adapter))
   const patch = (data: Partial<EditorSnapshot>) => { snapshot = { ...snapshot, ...data }; changed() }
   return { adapter, definition, controller, publish, published, source, unfreeze, stageDispose, detach, release, dispose, patch,
-    get snapshot() { return snapshot }, get context() { return context }, invalidate: () => { valid = false; sourceChanged() } }
+    get snapshot() { return snapshot }, get context() { return context }, invalidate: () => { valid = false; sourceChanged() },
+    referenceChanged: (current: boolean) => { valid = current; references.notify() } }
 }
 describe('workspace editor lifecycle', () => {
   it('owns cleanup once in reverse order even when one throws', () => {
@@ -171,4 +179,48 @@ describe('workspace editor lifecycle', () => {
     expect(useWorkspaceEditor.getState().error).toBeNull()
   })
 
+})
+
+// A real viewport reference listener can run synchronously from the committed
+// store write. It must never re-enter the frozen controller with its OLD source.
+describe('workspace Apply reference notification boundary', () => {
+  it('does not re-enter old-source reference listeners during successful publication', async () => {
+    const f = fixture(), observed = vi.fn()
+    f.controller.attach = view => view.subscribeReferences(() => { view.references(); observed() })
+    const original = f.publish.getMockImplementation()!
+    f.publish.mockImplementation((operationId, hash) => {
+      const receipt = original(operationId, hash)
+      f.referenceChanged(false) // The source binding is superseded by adoption.
+      return receipt
+    })
+    await workspaceEditors.open('test-editor', { bodyId: 1 })
+    await expect(workspaceEditors.apply()).resolves.toMatchObject({ mode: 'cad-copy' })
+    expect(observed).not.toHaveBeenCalled()
+    expect(f.published).toHaveLength(1)
+    expect(useWorkspaceEditor.getState().phase).toBe('closed')
+  })
+  it('refreshes the restored source exactly once after failed publication, then permits retry', async () => {
+    const f = fixture(), observed = vi.fn()
+    f.controller.attach = view => view.subscribeReferences(() => { view.references(); observed(useWorkspaceEditor.getState().phase) })
+    f.publish.mockImplementationOnce(() => {
+      try { f.referenceChanged(false); throw Error('injected publication failure') }
+      finally { f.referenceChanged(true) } // Atomic rollback restores the source.
+    })
+    await workspaceEditors.open('test-editor', { bodyId: 1 })
+    await expect(workspaceEditors.apply()).rejects.toThrow('injected publication failure')
+    expect(observed).toHaveBeenCalledExactlyOnceWith('editing')
+    expect(useWorkspaceEditor.getState().canApply).toBe(true)
+    expect(f.unfreeze).toHaveBeenCalledTimes(1)
+    await expect(workspaceEditors.apply()).resolves.toMatchObject({ mode: 'cad-copy' })
+    expect(f.published).toHaveLength(1)
+  })
+  it('does not hide a real source replacement immediately before publication', async () => {
+    const f = fixture()
+    await workspaceEditors.open('test-editor', { bodyId: 1 })
+    const stop = useWorkspaceEditor.subscribe(state => { if (state.phase === 'committing') f.invalidate() })
+    try {
+      await expect(workspaceEditors.apply()).rejects.toThrow('stale source')
+      expect(f.publish).not.toHaveBeenCalled()
+    } finally { stop() }
+  })
 })
