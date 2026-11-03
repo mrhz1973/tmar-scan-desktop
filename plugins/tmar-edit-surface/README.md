@@ -327,3 +327,26 @@ worker evidence: `evidence/recipe/browser-free-boundary-v3.json` and
 
 This is the plugin-side recipe contract only. The host has not yet integrated
 the parametric feature or qualified recipe persistence in project history.
+
+### Live CAD preview during point dragging
+
+Point dragging schedules CAD evaluations while the pointer is still moving.
+Only one evaluation runs at a time; pending movements are coalesced into the
+latest request. A valid intermediate result may be displayed while dragging,
+but Apply, STEP export and note placement remain disabled until the result
+matches the current control net and continuity settings. Results belonging to
+an earlier source, face or mode cannot replace the current preview.
+
+On the 20 x 30 x 10 mm imported STEP fixture, the earlier implementation
+showed no updated CAD preview in 24 observations made while the mouse was
+held down. The updated source and the compiled isolated host both showed a
+changed, validated preview in 21 of 24 observations; after release the
+exported STEP independently reopened as a valid solid with the displayed
+volume. A test-only delay also checked that an obsolete failed calculation or
+an old G1 result cannot enable Apply or replace a G0 preview, and that closing
+the editor with an evaluation pending leaves it closed. A separate free-edge
+drag and STEP readback passed. These are bounded fixture results, not a frame
+rate guarantee or evidence of full QuickSurface parity.
+
+Evidence: `evidence/live-preview/baseline-20261103/`,
+`source-20261103/` and `compiled-20261103/`.

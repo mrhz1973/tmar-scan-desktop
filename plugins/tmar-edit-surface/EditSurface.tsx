@@ -19,6 +19,7 @@ import { mirrorPartners, mirrorEdit } from './symmetry'
 import { selectNetPoints, type NetSelectionMode } from './netSelection'
 import './surface.css'
 type Payload = Request extends infer R ? R extends Request ? Omit<R, 'id'> : never : never
+type PreviewJob = { net: Net; continuity: 'G0' | 'G1'; freeBoundary: boolean; epoch: number }
 
 interface StripState {step:string;addedArea:number;preview:Preview;paths:Point[][];moves:StripMove[]}
 interface Pin { anchor: DraftAnchor; at: Point; normal: Point }
@@ -88,18 +89,24 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   const [error, setError] = useState(''), [validNet, setValidNet] = useState<Net | null>(null)
   const worker = useRef<Worker | null>(null), serial = useRef(0), mounted = useRef(true)
   const requests = useRef(new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>())
-  const evaluateRunning = useRef(false), latest = useRef<{ net: Net; continuity: 'G0' | 'G1'; freeBoundary: boolean } | null>(null)
+  const evaluateRunning = useRef(false), evaluateTimer = useRef<ReturnType<typeof setTimeout> | null>(null), previewEpoch = useRef(0)
+  const latest = useRef<PreviewJob | null>(null)
   useEffect(() => {
     mounted.current = true
     const w = new Worker(new URL('./editor.worker.ts', import.meta.url), { type: 'module' }); worker.current = w
     w.onmessage = ({ data }) => { const p = requests.current.get(data.id); requests.current.delete(data.id); if (p) { if (data.error) p.reject(new Error(data.error)); else p.resolve(data.result) } }
     w.onerror = () => { for (const p of requests.current.values()) p.reject(new Error('Motore CAD interrotto. Chiudi e riapri Edit Surface.')); requests.current.clear() }
-    return () => { mounted.current = false; w.terminate(); for (const p of requests.current.values()) p.reject(new Error('Editor chiuso.')); requests.current.clear() }
+    return () => { mounted.current = false; previewEpoch.current++; latest.current = null; if (evaluateTimer.current !== null) clearTimeout(evaluateTimer.current); evaluateTimer.current = null; w.terminate(); for (const p of requests.current.values()) p.reject(new Error('Editor chiuso.')); requests.current.clear() }
   }, [])
   const ask = <T,>(payload: Payload): Promise<T> => new Promise((resolve, reject) => {
     if (!worker.current) { reject(new Error('Motore non pronto.')); return }
     const id = ++serial.current; requests.current.set(id, { resolve: value => resolve(value as T), reject }); worker.current.postMessage({ ...payload, id })
   })
+  const invalidatePreview = () => {
+    previewEpoch.current++; latest.current = null
+    if (evaluateTimer.current !== null) clearTimeout(evaluateTimer.current)
+    evaluateTimer.current = null; setCalculating(false); setValidNet(null)
+  }
   const setNet = (n: Net | null) => { netRef.current = n; setNetState(n) }
   const commit = (n: Net) => {
     if (JSON.stringify(history.current[at.current]) !== JSON.stringify(n)) { history.current = history.current.slice(0, at.current + 1); history.current.push(structuredClone(n)); if (history.current.length > 60) history.current.shift(); at.current = history.current.length - 1 }
@@ -125,29 +132,38 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
     return () => { window.removeEventListener('keydown', onKey, true); useSurfaceDialogs.setState(s => ({ count: s.count - 1 })) }
   }, [])
   useEffect(() => {
-    if (!net) return
-    latest.current = { net, continuity, freeBoundary }; setCalculating(true); setValidNet(null)
-    let cancelled = false
-    const timer = setTimeout(() => {
+    if (!net) { latest.current = null; return }
+    latest.current = { net, continuity, freeBoundary, epoch: previewEpoch.current }; setCalculating(true); setValidNet(null)
+    // Keep the first scheduled evaluation while the pointer moves. Replacing
+    // this timer on every movement starves the visible CAD preview.
+    if (evaluateRunning.current || evaluateTimer.current !== null) return
+    evaluateTimer.current = setTimeout(() => {
+      evaluateTimer.current = null
       const drain = async () => {
         if (evaluateRunning.current || !latest.current) return
         evaluateRunning.current = true
+        let last: PreviewJob | null = null
         while (latest.current && mounted.current) {
-          const job = latest.current; latest.current = null
+          const job = latest.current; latest.current = null; last = job
           try {
-            const p = await ask<Preview>({ action: 'evaluate', ...job })
-            if (mounted.current && job.net === netRef.current && job.continuity === continuityRef.current && job.freeBoundary === freeBoundaryRef.current) { setPreview(p); setError(''); setValidNet(job.net) }
-          } catch (e) { if (mounted.current && job.net === netRef.current && job.continuity === continuityRef.current && job.freeBoundary === freeBoundaryRef.current) { setError(String((e as Error).message)); setValidNet(null) } }
+            const p = await ask<Preview>({ action: 'evaluate', net: job.net, continuity: job.continuity, freeBoundary: job.freeBoundary })
+            const sameContext = job.epoch === previewEpoch.current && job.continuity === continuityRef.current && job.freeBoundary === freeBoundaryRef.current
+            if (mounted.current && sameContext) {
+              // A valid intermediate CAD result is useful during a drag, but
+              // only the exact current net may enable Apply or note picking.
+              setPreview(p)
+              if (job.net === netRef.current) { setError(''); setValidNet(job.net) }
+            }
+          } catch (e) { if (mounted.current && job.epoch === previewEpoch.current && job.net === netRef.current && job.continuity === continuityRef.current && job.freeBoundary === freeBoundaryRef.current) { setError(String((e as Error).message)); setValidNet(null) } }
         }
         evaluateRunning.current = false
-        if (mounted.current) setCalculating(false)
+        if (mounted.current && !latest.current && last?.epoch === previewEpoch.current && last.net === netRef.current && last.continuity === continuityRef.current && last.freeBoundary === freeBoundaryRef.current) setCalculating(false)
       }
-      if (!cancelled) void drain()
+      void drain()
     }, 90)
-    return () => { cancelled = true; clearTimeout(timer) }
   }, [net, continuity, freeBoundary])
   const load = async (step: string, fileName: string, expected?: { faces: number; surface: boolean; guard?: () => Promise<void> }) => {
-    setBusy(true); setError('')
+    invalidatePreview(); setBusy(true); setError('')
     try {
       const result = await ask<{ faces: FaceInfo[]; preview: Preview }>({ action: 'open', step })
       if (expected) {
@@ -225,7 +241,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   }
   const chooseFace = async (index: number) => {
     if (faces[index]?.reason) { setError(faces[index].reason!); return }
-    setBusy(true); setError('')
+    invalidatePreview(); setBusy(true); setError('')
     try { const n = await ask<Net>({ action: 'select', face: index }); base.current = structuredClone(n); setFace(index); setFreeBoundary(false); history.current = []; at.current = -1; setSelected([]); setLocks([]); commit(n) }
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
@@ -437,7 +453,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <div className="es-row"><button data-test="surface-undo" disabled={busy || at.current <= 0} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || at.current >= history.current.length - 1} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
       </>}
     </aside><main><SurfaceViewport mirrorAxis={mirrorAxis} mirrorOffset={mirrorOffset} mirrorPartners={partners} strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={changePoles} />
-      <div className="es-status" role="status" data-test="surface-status">{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · ${faces[face]?.openSheet ? 'superficie aperta' : `volume ${preview.volume.toFixed(3)} mm³`} · ${freeBoundary ? 'spostamento bordo' : 'scarto bordo'} ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
+      <div className="es-status" role="status" data-test="surface-status" data-preview-revision={preview?.previewRevision} data-preview-volume={preview?.volume}>{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · ${faces[face]?.openSheet ? 'superficie aperta' : `volume ${preview.volume.toFixed(3)} mm³`} · ${freeBoundary ? 'spostamento bordo' : 'scarto bordo'} ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
     <footer><span>{stripPaths?'Applica aggiunge la superficie cucita al progetto come nuovo corpo.':'Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.'}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={(!!stripPaths && (!stripResult || stripEdge>=0)) || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => stripPaths ? void applyStrip() : void finish(true)}>{stripPaths ? 'Applica superficie cucita' : 'Applica come nuovo corpo'}</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>
   </div></div>
