@@ -132,7 +132,9 @@ try {
     assert(file, `STEP export completed for ${label}`)
     const shape = kernel.importStep(readFileSync(join(dir, file), 'utf8'))
     const exportedFaces = kernel.getSubShapes(shape, 'face')
+    const exportedSolids = kernel.getSubShapes(shape, 'solid')
     try {
+      assert(kernel.isValid(shape) && exportedSolids.length === 1 && exportedFaces.length === 6, 'export remains a valid six-face CAD solid')
       const centers = exportedFaces.map(face => {
         const uv = kernel.uvBounds(face)
         return kernel.pointOnSurface(face, (uv.uMin + uv.uMax) / 2, (uv.vMin + uv.vMax) / 2)
@@ -140,6 +142,7 @@ try {
       return centers.reduce((top, point) => point.z > top.z ? point : top).z
     } finally {
       exportedFaces.forEach(face => kernel.release(face))
+      exportedSolids.forEach(solid => kernel.release(solid))
       kernel.release(shape)
       await statusReady()
     }
