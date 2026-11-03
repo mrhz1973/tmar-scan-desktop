@@ -94,6 +94,14 @@ host state. A host without this capability keeps the original behavior.
   reached the target, while Alt and snap-off preserved free movement; the
   Screen drag stayed in the camera plane. These checks cover one planar top
   face and do not establish the intended behavior for occluded targets.
+- Imported STEP bodies may contain extrusion or revolution supports alongside
+  an editable face. The BREP table reader now recognizes their embedded curve
+  record boundaries without modifying or enabling those supports. Independent
+  synthetic OCCT fixtures exercised a plane edit on each body, checked the
+  unchanged adjacent support record and reopened a valid solid. The extrusion
+  case also passed the isolated shared-view numeric move, pointer drag,
+  Undo/Redo and Apply workflow (`run-OASliT`), with both STEP bodies valid and
+  the input hash unchanged. This is not direct editing of those curved faces.
 - An isolated box test in the shared view selected a control pole, enabled
   symmetry, moved the reflected pair, checked preview-only transparency and
   Undo, then applied a valid modified solid copy (`run-n8jr0q`). The test must

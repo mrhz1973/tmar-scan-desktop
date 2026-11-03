@@ -20,10 +20,32 @@ export function surfaceTable(brep: string): RecordSpan[] {
   const take = () => { const t = tokens[cursor++]; if (!t || !Number.isFinite(t.value)) throw new Error('Record BREP non valido.'); return t.value }
   const integer = (min: number, max: number) => { const n = take(); if (!Number.isInteger(n) || n < min || n > max) throw new Error('Dimensione BREP non supportata.'); return n }
   const skip = (n: number) => { for (let i = 0; i < n; i++) take() }
+  // A revolution or extrusion stores its generating curve inline. Reading
+  // its record boundary allows other supported faces of the same body to be
+  // edited; it does not convert or enable editing of this support surface.
+  // OCCT BREP format: https://github.com/Open-Cascade-SAS/OCCT/wiki/brep_format
+  const curve3d = (depth = 0): void => {
+    if (depth > 16) throw new Error('Curva BREP annidata oltre il limite supportato.')
+    const kind = integer(1, 9)
+    if (kind <= 5) { skip([0, 6, 13, 14, 13, 14][kind]); return }
+    if (kind === 6) {
+      const rational = integer(0, 1), degree = integer(1, 25)
+      skip((degree + 1) * (rational ? 4 : 3)); return
+    }
+    if (kind === 7) {
+      const rational = integer(0, 1); integer(0, 1) // periodic flag
+      integer(1, 25) // degree
+      const poles = integer(2, 25000), knots = integer(2, 25000)
+      skip(poles * (rational ? 4 : 3) + 2 * knots); return
+    }
+    skip(kind === 8 ? 2 : 4)
+    curve3d(depth + 1)
+  }
   const record = (): RecordSpan => {
     const first = cursor, kind = integer(1, 11)
     let net: Net | undefined
     if (kind <= 5) skip([0, 12, 13, 14, 13, 14][kind])
+    else if (kind === 6 || kind === 7) { skip(kind === 6 ? 3 : 6); curve3d() }
     else if (kind === 9 || kind === 8) {
       const rational: [number, number] = [integer(0, 1), integer(0, 1)]
       const periodic = kind === 9 ? [integer(0, 1), integer(0, 1)] : [0, 0]
