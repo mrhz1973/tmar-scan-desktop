@@ -278,3 +278,26 @@ Evidence: `evidence/current-source/host-moved-20261103/`,
 `host-compiled-20261103/`, `host-stale-20261103/` and `run-9Xi77S/`.
 The integrated host remains a draft and the full QuickSurface comparison,
 annotated Apply and parametric feature integration are still open.
+
+### Move the free boundary of a single open face
+
+For an open sheet containing exactly one eligible face with a natural
+four-sided boundary and no holes, the editor offers an explicit option to
+move boundary poles. The four CAD edges are rebuilt as exact isocurves of the
+modified NURBS surface, and the resulting face is checked for validity and
+domain coverage. Manually locked poles remain protected. The normal G0/G1
+boundary protection is not active while this option is enabled. Solids,
+multi-face sheets and trimmed faces retain their previous protection.
+
+A browser test on an imported 20 x 30 mm STEP sheet selected two boundary
+poles, tested their locks, dragged them, checked Undo/Redo, and exported the
+result. Independent OCCT STEP reimport found one valid B-spline face and no
+solid; its highest point moved from 10 to 11.4005 mm. The same test passed
+on the compiled application in an isolated tree using host revision
+`8d12863`, without browser console errors. Kernel tests also exercised an
+asymmetric rational NURBS surface and refused free-boundary mode on a solid.
+Evidence: `evidence/free-boundary/compiled-20261103/`.
+
+This is a bounded prototype, not general free-boundary editing or a claim of
+QUICKSURFACE equivalence. The new mode is not part of the versioned parametric
+recipe, and its host Apply/save/reopen path has not yet been qualified.
