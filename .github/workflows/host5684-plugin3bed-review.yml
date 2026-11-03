@@ -1,0 +1,151 @@
+name: Exact host5684 plugin3bed review (no deployment)
+on:
+  push:
+    branches: [review/host5684-plugin3bed36f-20261104]
+    paths:
+      - .github/workflows/host5684-plugin3bed-review.yml
+      - review/pairing-5684f5f-3bed36f/**
+permissions:
+  contents: read
+concurrency:
+  group: review-host5684-plugin3bed
+  cancel-in-progress: false
+jobs:
+  isolated-pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: 5684f5f27eaaa6ee460eef2300b010eb622b4507
+          path: host
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: 3bed36f70167b350b87a6615ff22a79dfa6da9e3
+          path: plugin-source
+          sparse-checkout: plugins/tmar-edit-surface
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          sparse-checkout: review/pairing-5684f5f-3bed36f
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.16.0
+      - name: Pair immutable revisions and record production-file hashes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,pathlib,shutil,subprocess
+          root=pathlib.Path.cwd();h=root/'host';p=root/'plugin-source';o=root/'pair-results';o.mkdir()
+          head=lambda r:subprocess.check_output(['git','rev-parse','HEAD'],cwd=r,text=True).strip()
+          assert head(h)=='5684f5f27eaaa6ee460eef2300b010eb622b4507'
+          assert head(p)=='3bed36f70167b350b87a6615ff22a79dfa6da9e3'
+          files=subprocess.check_output(['git','ls-files','-z'],cwd=h).split(b'\0')
+          names=[x.decode() for x in files if x and (x.startswith(b'src/') or x.startswith(b'plugins/')) and not x.startswith(b'plugins/tmar-edit-surface/')]
+          before={n:hashlib.sha256((h/n).read_bytes()).hexdigest() for n in names}
+          shutil.rmtree(h/'plugins/tmar-edit-surface')
+          shutil.copytree(p/'plugins/tmar-edit-surface',h/'plugins/tmar-edit-surface')
+          after={n:hashlib.sha256((h/n).read_bytes()).hexdigest() for n in names}
+          assert before==after,'Host production files must remain unchanged'
+          plugin={str(f.relative_to(p)):hashlib.sha256(f.read_bytes()).hexdigest() for f in (p/'plugins/tmar-edit-surface').rglob('*') if f.is_file()}
+          assert all(hashlib.sha256((h/n).read_bytes()).hexdigest()==sha for n,sha in plugin.items())
+          tools=root/'tooling/review/pairing-5684f5f-3bed36f'
+          shutil.copyfile(tools/'compiled-note-roundtrip.mjs',h/'plugins/reverse/scripts/e2e-pairing-compiled-notes.mjs')
+          shutil.copyfile(tools/'make-mixed-fixture.mjs',h/'plugins/reverse/scripts/make-pairing-mixed-fixture.mjs')
+          manifest={'host':head(h),'plugin':head(p),'review':head(root/'tooling'),'hostSourceSha256':before,'pluginFilesSha256':plugin,'qaToolsSha256':{f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in tools.iterdir() if f.is_file()}}
+          (o/'snapshot.json').write_text(json.dumps(manifest,indent=2))
+          print('Exact published pair; no host or plugin production sources patched.')
+          PY
+      - name: Install exact locked dependencies without lifecycle scripts
+        working-directory: host
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check TypeScript and pinned OCCT
+        working-directory: host
+        run: |
+          node -e "const p=require('./node_modules/occt-wasm/package.json'); if(p.version!=='5.7.1')process.exit(1); console.log('occt-wasm',p.version)"
+          node node_modules/typescript/bin/tsc --noEmit
+      - name: Targeted BREP, orientation, annotation and real-session regressions
+        working-directory: host
+        shell: bash
+        run: |
+          mapfile -t host_tests < <(find plugins/reverse/tests -maxdepth 1 -name 'annotated*.test.ts' -type f | sort)
+          test ${#host_tests[@]} -ge 2
+          node node_modules/vitest/vitest.mjs run "${host_tests[@]}" plugins/tmar-edit-surface/tests/mixed-support-step.test.ts plugins/tmar-edit-surface/tests/note-orientation.test.ts plugins/tmar-edit-surface/tests/workspaceSession.test.ts --reporter=default --reporter=json --outputFile=../pair-results/targeted-tests.json
+      - name: Compile the exact paired production app
+        working-directory: host
+        run: npm run build
+      - name: Generate only synthetic mixed-support fixture
+        working-directory: host
+        env:
+          SCANRULER_ISOLATED: '1'
+        run: OUT_DIR="$GITHUB_WORKSPACE/pair-results/fixtures" node plugins/reverse/scripts/make-pairing-mixed-fixture.mjs
+      - name: Real controller source tests and compiled native note roundtrip
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,time,urllib.request
+          root=pathlib.Path.cwd();host=root/'host';out=root/'pair-results'
+          env=os.environ.copy();env.update({'SCANRULER_ISOLATED':'1','CHROME':'/usr/bin/google-chrome'})
+          def run_server(port,compiled,fn):
+              url=f'http://127.0.0.1:{port}/';e={**env,'APP_URL':url}
+              args=['node','node_modules/vite/bin/vite.js']+(['preview'] if compiled else [])+['--host','127.0.0.1','--port',str(port),'--strictPort']
+              with (out/f'server-{port}.log').open('w') as log:
+                  server=subprocess.Popen(args,cwd=host,env=e,stdout=log,stderr=subprocess.STDOUT)
+                  try:
+                      for _ in range(100):
+                          if server.poll() is not None:raise RuntimeError('Owned QA server stopped')
+                          try:
+                              with urllib.request.urlopen(url,timeout=1) as r:
+                                  if r.status==200:break
+                          except Exception:time.sleep(.2)
+                      else:raise TimeoutError('Owned QA server startup')
+                      fn(e)
+                  finally:
+                      server.terminate()
+                      try:server.wait(timeout=10)
+                      except subprocess.TimeoutExpired:server.kill();server.wait()
+          def source(e):
+              a=out/'source-annotated';a.mkdir()
+              subprocess.run(['node','plugins/tmar-edit-surface/tests/e2e-workspace-annotated.mjs'],cwd=host,env={**e,'EDIT_SURFACE_QA_OUT':str(a)},check=True,timeout=300)
+              m=out/'source-mixed';m.mkdir()
+              subprocess.run(['node','plugins/tmar-edit-surface/tests/e2e-workspace-integration.mjs'],cwd=host,env={**e,'EDIT_SURFACE_QA_OUT':str(m),'STEP_FILE':str(out/'fixtures/mixed-extrusion.step')},check=True,timeout=300)
+          run_server(17723,False,source)
+          results=list((out/'source-annotated').glob('*/result.json'));assert len(results)==1
+          assert json.loads(results[0].read_text())['verdict']=='PASS'
+          def compiled(e):
+              target=out/'compiled-notes';target.mkdir()
+              subprocess.run(['node','plugins/reverse/scripts/e2e-pairing-compiled-notes.mjs'],cwd=host,env={**e,'OUT_DIR':str(target),'SHOT_DIR':str(target),'SOURCE_REPORT':str(results[0])},check=True,timeout=300)
+          run_server(17724,True,compiled)
+          original=json.loads((out/'snapshot.json').read_text())
+          import hashlib
+          for name,digest in original['hostSourceSha256'].items():assert hashlib.sha256((host/name).read_bytes()).hexdigest()==digest,name
+          for name,digest in original['pluginFilesSha256'].items():assert hashlib.sha256((host/name).read_bytes()).hexdigest()==digest,name
+          (out/'final-source-integrity.json').write_text(json.dumps({'hostAndPluginProductionSourcesUnchanged':True,'host':original['host'],'plugin':original['plugin']},indent=2))
+          PY
+      - name: Retain bounded evidence, not profiles or secrets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host5684-plugin3bed-review
+          path: |
+            pair-results/snapshot.json
+            pair-results/final-source-integrity.json
+            pair-results/targeted-tests.json
+            pair-results/server-*.log
+            pair-results/fixtures/*.json
+            pair-results/fixtures/*.step
+            pair-results/source-annotated/**/result.json
+            pair-results/source-annotated/**/*.png
+            pair-results/source-annotated/**/downloads/*.scanruler
+            pair-results/source-mixed/**/result.json
+            pair-results/source-mixed/**/*.png
+            pair-results/compiled-notes/result.json
+            pair-results/compiled-notes/*.png
+            pair-results/compiled-notes/downloads/*.scanruler
+            pair-results/compiled-notes/downloads/*.step
+          if-no-files-found: error
+          retention-days: 14
