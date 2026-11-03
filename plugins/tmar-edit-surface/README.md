@@ -169,3 +169,21 @@ its volume from 22757.256661 to 22815.467778 cubic millimetres. Independent
 STEP reimport returned a valid seven-face solid with two wires on its edited
 face. All 72 sampled positions of the 6 mm hole rim matched the original.
 Evidence and before/after STEP: evidence/perforated/run-tYwpbn/.
+
+### Second edit after reopening a perforated curved STEP
+
+The exported plate above can be reopened as a native clamped NURBS. For a
+curved face the editor now bounds each nonempty knot span by its active
+positive-weight control hull in 3D. Where the enclosing boxes of a span and
+an internal wire overlap, every influencing pole is protected. This leaves
+the original trim and tangent in place while allowing edits elsewhere. The
+conservative bound can lock more points than strictly necessary. The existing
+rectangular outer-boundary and nonperiodic-surface restrictions still apply.
+
+The browser test with `--reopen` loaded the actual preceding export, moved a
+second pole, and exported the result again. Independent reimport returned a
+valid seven-face solid with two wires on the edited face. Volume increased
+from 22815.467778 to 22873.205669 cubic millimetres. All 72 checked rim
+positions matched the original hole. The kernel regression also rejects a
+protected-pole edit and replays the second edit as a native NURBS recipe.
+Evidence: evidence/perforated/run-lOxVW8/.

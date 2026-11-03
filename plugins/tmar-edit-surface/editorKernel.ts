@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { OcctKernel, type Mesh, type ShapeHandle } from 'occt-wasm'
+import { OcctKernel, type Mesh, type BoundingBox, type ShapeHandle } from 'occt-wasm'
 import { assertNet, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
 import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 
@@ -7,6 +7,38 @@ export interface FaceInfo { index: number; kind: string; reason: string | null; 
 export interface Preview { mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
+// On each nonempty knot span a positive-weight NURBS lies inside the
+// convex hull of the active poles. A disjoint world-space box rules out
+// contact with a trim even where the surface folds in parameter space.
+function lockCurvedTrim(net: Net, box: BoundingBox, locked: Set<number>) {
+  const expanded = (knots: number[], counts: number[]) =>
+    knots.flatMap((value, i) => Array<number>(counts[i]).fill(value))
+  const us = expanded(net.ku, net.mu), vs = expanded(net.kv, net.mv)
+  let touchesTrim = false
+  const padding = 1e-6
+  for (let u = net.du; u < net.nu; u++) {
+    if (us[u] === us[u+1]) continue
+    for (let v = net.dv; v < net.nv; v++) {
+      if (vs[v] === vs[v+1]) continue
+      const active: number[] = []
+      const min = [Infinity,Infinity,Infinity], max = [-Infinity,-Infinity,-Infinity]
+      for (let i = u-net.du; i <= u; i++) for (let j = v-net.dv; j <= v; j++) {
+        const id = i*net.nv+j, pole = net.poles[id]
+        active.push(id)
+        for (let d=0; d<3; d++) {
+          min[d] = Math.min(min[d],pole[d])
+          max[d] = Math.max(max[d],pole[d])
+        }
+      }
+      if (min[0] > box.xmax+padding || max[0] < box.xmin-padding ||
+          min[1] > box.ymax+padding || max[1] < box.ymin-padding ||
+          min[2] > box.zmax+padding || max[2] < box.zmin-padding) continue
+      touchesTrim = true
+      for (const id of active) locked.add(id)
+    }
+  }
+  if (!touchesTrim) throw new Error('Il foro non ricade nel reticolo: modifica non disponibile.')
+}
 export class SurfaceEditorKernel {
   private source: ShapeHandle | null = null
   private faces: ShapeHandle[] = []
@@ -64,7 +96,6 @@ export class SurfaceEditorKernel {
     try {
       const inner = wires.filter(w => !k.isSame(w, outer))
       if (edges.length !== 4) throw new Error('Serve un contorno esterno rettangolare a quattro bordi.')
-      if (inner.length && r.kind !== 1) throw new Error('I contorni interni sono supportati solo per una faccia piana.')
       const b = k.uvBounds(face), bounds: [number, number, number, number] = [b.uMin, b.uMax, b.vMin, b.vMax]
       if (bounds.some(x => !Number.isFinite(x)) || b.uMax <= b.uMin || b.vMax <= b.vMin) throw new Error('Dominio della faccia non valido.')
       const epsU = 1e-7 * Math.max(1, b.uMax - b.uMin), epsV = 1e-7 * Math.max(1, b.vMax - b.vMin)
@@ -80,7 +111,9 @@ export class SurfaceEditorKernel {
         return candidates.findIndex(Boolean)
       })
       if (sides.includes(-1) || new Set(sides).size !== 4) throw new Error('Bordi ritagliati non coincidenti con il dominio naturale: editing protetto non disponibile.')
-      const net = inner.length ? perforatedPlaneNet(r, bounds) : r.kind === 1 ? planeNet(r, bounds) : structuredClone(r.net!)
+      const net = r.kind === 1
+        ? (inner.length ? perforatedPlaneNet(r, bounds) : planeNet(r, bounds))
+        : enrichBicubic(structuredClone(r.net!))
       if (net.mu[0] !== net.du + 1 || net.mu.at(-1) !== net.du + 1 || net.mv[0] !== net.dv + 1 || net.mv.at(-1) !== net.dv + 1) throw new Error('Servono nodi estremi clamped.')
       if (Math.abs(net.ku[0] - b.uMin) > epsU || Math.abs(net.ku.at(-1)! - b.uMax) > epsU || Math.abs(net.kv[0] - b.vMin) > epsV || Math.abs(net.kv.at(-1)! - b.vMax) > epsV) throw new Error('Il trim non coincide con il dominio NURBS.')
       if (net.nu * net.nv > 1600) throw new Error('Reticolo oltre 1600 punti: non interattivo in questo prototipo.')
@@ -89,10 +122,13 @@ export class SurfaceEditorKernel {
         const expanded = (k: number[], m: number[]) => k.flatMap((x, i) => Array(m[i]).fill(x) as number[])
         const us = expanded(net.ku, net.mu), vs = expanded(net.kv, net.mv)
         for (const wire of inner) {
-          // Linear plane projection: extrema of an enclosing world box occur
-          // at its corners. Protect every basis function whose support touches
-          // this conservative UV box, preserving both position and tangent.
           const box = k.getBoundingBox(wire, { useTriangulation: false })
+          if (!Object.values(box).every(Number.isFinite)) throw new Error('Limite interno non determinato.')
+          if (r.kind !== 1) {
+            lockCurvedTrim(net, box, trimLocks)
+            continue
+          }
+          // A linear plane projection reaches its extrema at box corners.
           const uv = [box.xmin,box.xmax].flatMap(x => [box.ymin,box.ymax].flatMap(y =>
             [box.zmin,box.zmax].map(z => k.uvFromPoint(face,{x,y,z}))))
           if (uv.some(q => !Number.isFinite(q.u) || !Number.isFinite(q.v))) throw new Error('Limite interno non determinato.')
@@ -102,6 +138,7 @@ export class SurfaceEditorKernel {
             if (us[u]<=hiU && us[u+net.du+1]>=loU && vs[v]<=hiV && vs[v+net.dv+1]>=loV) trimLocks.add(u*net.nv+v)
         }
       }
+      if (inner.length && trimLocks.size === net.poles.length) throw new Error('Tutti i poli influenzano un contorno interno.')
       return {net, trimLocks: [...trimLocks]}
     } finally { [outer, ...wires, ...edges].forEach(h => k.release(h)) }
   }
@@ -141,7 +178,7 @@ export class SurfaceEditorKernel {
     if (pending.length) throw new Error('Conversione piana: contorno aggiunto.')
   }
   select(index: number) {
-    const net = enrichBicubic(this.netFor(index).net), record = this.records[this.recordsByFace[index]], k = this.kernel
+    const net = this.netFor(index).net, record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
     if (record.kind === 1) {
       // STEP readers may omit planar pcurves (derived implicitly on a plane).
