@@ -66,6 +66,17 @@ host state. A host without this capability keeps the original behavior.
   note was re-resolved after a surface move, and an unannotated Apply remained
   blocked until the note was removed. A subsequent ordinary Apply made one valid
   CAD copy and one history action. This did not test annotated persistence.
+- An isolated experimental host snapshot, based on `27c75c3` and its verified
+  uncommitted V1 runtime, was tested with plugin `130d12b` and a QA-only fix for
+  the host's double reversal of face normals. On a synthetic box STEP the real
+  controller deformed a reversed face with Zebra and a note active. Apply,
+  Undo, Redo, native Save/Load and verification of the reopened CAD, note UUID,
+  face binding, outward normal and source visibility passed (`annotated-edit-CwugH8`,
+  14 checks). The positive and negative normal cases were also tested in the
+  real kernel. The first run checked before asynchronous note revalidation;
+  the successful run explicitly waited for it; the versioned test repeated
+  the same scenario successfully (`annotated-edit-T0KZUH`). This is source-app evidence,
+  not qualification of a published host or packaged desktop release.
 - Separate isolated source-app snap cases used a synthetic scan and a second
   synthetic CAD body. In both, the pole snapped from Z=10 to Z=12 mm; Alt and
   disabling snapping left the same approximately Z=11.5 mm free movement.
@@ -126,6 +137,10 @@ screenshots and browser profiles belong outside the app checkout.
 `tests/e2e-workspace-export-step.mjs` covers the local export and note guard.
 `tests/e2e-workspace-g1.mjs` and `tests/e2e-workspace-strip-handle.mjs` cover
 the sampled G1 boundary and the handle on their respective synthetic fixtures.
+`tests/e2e-workspace-annotated.mjs` is the isolated real-controller annotated
+Save/Load scenario; it needs an annotated-capable host with the corrected
+oriented-normal handling, `SCANRULER_ISOLATED=1`, `APP_URL` fixed to
+`http://127.0.0.1:17723/` and an absolute output folder outside the checkout.
 
 ## Not yet qualified
 
