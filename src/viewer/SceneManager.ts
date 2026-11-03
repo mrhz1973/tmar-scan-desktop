@@ -416,7 +416,8 @@ export class SceneManager {
   /** Who currently owns the plain left-drag. The brush and the grips both need
    *  it and must not fight over handing it back — the navigator is told once,
    *  from whether anyone is holding it at all. */
-  private dragClaims = new Set<'paint' | 'handle' | 'gizmo' | 'layer'>()
+  private editorInput: SceneLayer | null = null
+  private dragClaims = new Set<'paint' | 'handle' | 'gizmo' | 'layer' | 'editor'>()
 
   onPick: ((hit: PickHit) => void) | null = null
   onHover: ((hit: PickHit | null) => void) | null = null
@@ -652,6 +653,8 @@ export class SceneManager {
    *  aside for both. While a marking gesture is live the grips never get a
    *  look-in: that one asked first. */
   private handlePointerDown(e: PointerEvent): boolean {
+    // Editor ownership also precedes the navigation gizmo and secondary pointers.
+    if (this.editorInput) return this.editorInput.pointerDown?.(e) ?? false
     // The gizmo corner is a button before it is anything else: tested here
     // rather than read off the hover, because a finger has no hover.
     if (e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
@@ -723,6 +726,7 @@ export class SceneManager {
   /** A click that survived the drag threshold: whatever of the layers' and
    *  the viewport's own takes it, else a surface pick. */
   private handleClick(x: number, y: number, ctrlKey = false): void {
+    if (this.editorInput) { this.editorInput.click?.(x, y, ctrlKey); return }
     // What the arrow keys stepped to under the cursor takes the click first.
     const stepped = this.cyclingLayer({ x, y })
     if (stepped?.click?.(x, y, ctrlKey)) return
@@ -767,6 +771,7 @@ export class SceneManager {
    * there takes the step. True when one did.
    */
   cycleUnderCursor(step: 1 | -1): boolean {
+    if (this.editorInput) return this.hoverAt ? (this.editorInput.cycle?.(this.hoverAt, step, false) ?? false) : false
     const at = this.hoverAt
     if (!at) return false
     // A measured element before the layer would take the click: the
@@ -834,6 +839,7 @@ export class SceneManager {
 
   /** Light what is under a client point — or, with null, nothing. */
   private hoverUnder(at: { x: number; y: number } | null): void {
+    if (this.editorInput) { this.editorInput.hover?.(at, false); return }
     // The gizmo's arrows light under the cursor and take the plain left-drag
     // off the camera while one is under it, the way the grips do: a press on
     // an arrow is a click on a button, not the start of an orbit.
@@ -2109,7 +2115,7 @@ export class SceneManager {
 
   /** Take the plain left-drag away from the camera, or give it back, for one
    *  reason among several. The navigator only ever hears the total. */
-  private claimDrag(reason: 'paint' | 'handle' | 'gizmo' | 'layer', on: boolean): void {
+  private claimDrag(reason: 'paint' | 'handle' | 'gizmo' | 'layer' | 'editor', on: boolean): void {
     const had = this.dragClaims.size > 0
     if (on) this.dragClaims.add(reason)
     else this.dragClaims.delete(reason)
@@ -3065,6 +3071,23 @@ export class SceneManager {
   }
 
   // ---- the plugins' layers -----------------------------------------------------
+
+  /** Exclusive edit input; rendering layers remain mounted. No global visibility change. */
+  leaseEditorInput(layer: SceneLayer): () => void {
+    if (this.editorInput || this.marking.pointerGesture() !== null) throw new Error('The viewport already has an active interaction.')
+    this.hoverUnder(null)
+    this.editorInput = layer
+    this.claimDrag('editor', true)
+    let held = true
+    return () => {
+      if (!held) return
+      held = false
+      if (this.editorInput === layer) this.editorInput = null
+      this.claimDrag('editor', false)
+      this.hoverDirty = true
+      this.invalidate()
+    }
+  }
 
   /** Add a plugin's layer — see sceneLayers.ts. The returned function takes
    *  it away again, disposing it. */

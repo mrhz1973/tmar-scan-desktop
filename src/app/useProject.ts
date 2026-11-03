@@ -4,6 +4,7 @@
 // things have to happen in on load — scan, its alignment, reference, image,
 // then the stores, then everything that is measured rather than stored.
 
+import { workspaceEditors } from '../plugins/workspaceEditors'
 import { meshUnitsOf } from '../core/meshUnits'
 import { useRef, type RefObject } from 'react'
 import type { ElementKind } from '../core/types'
@@ -67,12 +68,13 @@ export function useProject({
   const projectClient = useRef<ProjectClient | null>(null)
   const client = () => (projectClient.current ??= new ProjectClient())
   const capture = () => collectProject(sources.current, elementScope.current, APP_VERSION)
-  const recovery = useRecovery(capture, () => imports.busy || useStore.getState().busy, (file) => openProject(file, true))
+  const recovery = useRecovery(capture, () => imports.busy || useStore.getState().busy || workspaceEditors.active(), (file) => openProject(file, true))
 
   /** The session as a project file, and the session marked saved — what
    *  Save Project downloads and project.save hands back. */
   const packProject = () => imports.run(async (): Promise<PackedProject> => {
     const store = useStore.getState()
+    if (workspaceEditors.active()) { const error = 'Concludi Edit Surface con Applica o Annulla prima di salvare.'; store.setError(error); return { error } }
     if (!projectHasContent(sources.current)) return { error: 'There is nothing to save yet — no scan, image or work.' }
     store.setError(null)
     useStore.setState({ busy: true, statusText: 'Saving project…' })

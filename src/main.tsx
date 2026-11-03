@@ -5,11 +5,13 @@ import './styles.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { installWorkspaceEditorIntegration } from './plugins/workspaceEditorIntegration'
 import { installPlugins } from './plugins/registry'
 
 // Before anything renders: what the plugins register is part of the app
 // from its first frame.
 installPlugins()
+installWorkspaceEditorIntegration()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

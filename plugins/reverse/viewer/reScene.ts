@@ -62,6 +62,19 @@ export class ReScene {
   private dimmedBodies = new Set<number>()
   /** Bodies a feature's preview stands in for — see setBodyPreview. */
   private replacedBodies = new Set<number>()
+  private editorMasks = new Map<symbol, number>()
+  private editorMasked(id: number): boolean { return [...this.editorMasks.values()].includes(id) }
+  /** Scoped rendering mask, independent of the shared feature-preview slot. */
+  leaseBodyRenderMask(id: number): () => void {
+    const token = Symbol(); this.editorMasks.set(token, id)
+    const refresh = () => {
+      for (const [bodyId, mesh] of this.bodyMeshes) (mesh.material as THREE.Material).visible = !this.replacedBodies.has(bodyId) && !this.editorMasked(bodyId)
+      this.bodyPicks.setEditorMasked([...this.editorMasks.values()])
+      this.showOverlaps(); this.recap(); this.host.invalidate()
+    }
+    refresh()
+    return () => { if (this.editorMasks.delete(token)) refresh() }
+  }
   /** What two solid bodies share where they run into each other — see
    *  setOverlaps. */
   private overlaps: { a: number; b: number; mesh: THREE.Mesh }[] = []
@@ -313,7 +326,7 @@ export class ReScene {
       // cast at once a turn, and a tree for it would cost more than that.
       navTargets: () => {
         const targets: THREE.Object3D[] = []
-        for (const [id, mesh] of this.bodyMeshes) if (mesh.visible && !this.replacedBodies.has(id)) targets.push(withBoundsTree(mesh))
+        for (const [id, mesh] of this.bodyMeshes) if (mesh.visible && !this.replacedBodies.has(id) && !this.editorMasked(id)) targets.push(withBoundsTree(mesh))
         if (this.bodyPreview && this.replacedBodies.size > 0) targets.push(this.bodyPreview)
         return targets
       },
@@ -608,7 +621,7 @@ export class ReScene {
   ): void {
     const replaces = mesh ? (options.replaces ?? []) : []
     this.replacedBodies = new Set(replaces)
-    for (const [id, body] of this.bodyMeshes) (body.material as THREE.Material).visible = !this.replacedBodies.has(id)
+    for (const [id, body] of this.bodyMeshes) (body.material as THREE.Material).visible = !this.replacedBodies.has(id) && !this.editorMasked(id)
     this.showOverlaps()
     this.bodyPicks.setPreviewEdges(replaces, mesh && options.edges ? mesh : null)
     // The ghost's material is kept from one preview to the next, its
@@ -715,7 +728,7 @@ export class ReScene {
         const material = new THREE.MeshStandardMaterial({ color: item.color, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })
         applyFinish(material, this.host.theme())
         this.dressBody(material, item.id)
-        material.visible = !this.replacedBodies.has(item.id)
+        material.visible = !this.replacedBodies.has(item.id) && !this.editorMasked(item.id)
         material.clippingPlanes = this.host.clipPlanes()
         mesh = new THREE.Mesh(geometry, material)
         mesh.renderOrder = 2
@@ -783,7 +796,7 @@ export class ReScene {
   private showOverlaps(): void {
     const shown = (id: number) => {
       const body = this.bodyMeshes.get(id)
-      return body !== undefined && body.visible && !this.replacedBodies.has(id) && !this.dimmedBodies.has(id)
+      return body !== undefined && body.visible && !this.replacedBodies.has(id) && !this.editorMasked(id) && !this.dimmedBodies.has(id)
     }
     for (const o of this.overlaps) o.mesh.visible = !this.bodiesFaint && shown(o.a) && shown(o.b)
   }

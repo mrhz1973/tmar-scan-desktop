@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect } from 'react'
+import { workspaceEditors } from '../../src/plugins/workspaceEditors'
 import { create } from 'zustand'
 import { usePrefs } from '../../src/state/prefsStore'
 import { useStore } from '../../src/state/store'
@@ -26,6 +27,7 @@ export const useNoteShortcut = create<{ key: string; setKey: (key: string) => vo
   },
 }))
 export function canArmNote(): string | null {
+  if (workspaceEditors.active()) return 'Concludi Edit Surface prima di aggiungere una nota al progetto.'
   const workspace = useShell.getState().workspace, re = useReverse.getState(), model = useStore.getState()
   if (workspace !== 'reverse' && !noteWorkspace(workspace)) return 'Open a workspace with local notes to add a note.'
   if (useNotes.getState().editing) return 'Save or cancel the open note first.'
