@@ -74,3 +74,23 @@ it('moves an open-sheet corner through the editor and rejects free edges on soli
     expect(()=>editor.evaluate(editor.select(0),'G0',false,true)).toThrow(/sola faccia aperta/)
   }finally{boxFaces.forEach(f=>k.release(f));k.release(box);editor.dispose()}
 },60000)
+
+it('rejects free-edge mode for a single open STEP face with a hole',async()=>{
+  const editor=await SurfaceEditorKernel.load(), k=editor.kernel
+  const block=k.makeBox(48,48,10), tool=k.makeCylinder(3,14)
+  const positioned=k.translate(tool,12,12,-2), drilled=k.cut(block,positioned)
+  const faces=k.getSubShapes(drilled,'face')
+  try{
+    const top=faces.find(face=>{
+      const bounds=k.uvBounds(face), wires=k.getSubShapes(face,'wire')
+      try {return wires.length===2 && Math.abs(k.pointOnSurface(face,(bounds.uMin+bounds.uMax)/2,(bounds.vMin+bounds.vMax)/2).z-10)<1e-7}
+      finally {wires.forEach(w=>k.release(w))}
+    })
+    expect(top).toBeDefined()
+    const opened=editor.open(k.exportStep(top!))
+    expect(opened.faces).toHaveLength(1)
+    expect(opened.faces[0].openSheet).toBe(true)
+    expect(opened.faces[0].freeBoundary).toBe(false)
+    expect(()=>editor.evaluate(editor.select(0),'G0',false,true)).toThrow(/sola faccia aperta/)
+  }finally{faces.forEach(f=>k.release(f));[drilled,positioned,tool,block].forEach(h=>k.release(h));editor.dispose()}
+},60000)
