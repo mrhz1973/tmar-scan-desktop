@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// OCCT V3 ASCII surface table. Coordinates alone change; topology and pcurves
-// stay byte-for-byte intact. Unsupported records fail closed, never guessed.
+// OCCT V3 ASCII surface table. Edits replace one support-surface record;
+// knot insertion can refine its control net exactly before pole movement.
+// This adapter leaves topology/pcurve records intact; unsupported records fail closed.
 export type Point = [number, number, number]
 export interface Net {
   nu: number; nv: number; du: number; dv: number
@@ -65,6 +66,23 @@ export function planeNet(r: RecordSpan, bounds: [number, number, number, number]
 export function boundaryLocked(n: Net, index: number, continuity: 'G0' | 'G1'): boolean {
   const i = Math.floor(index / n.nv), j = index % n.nv, rings = continuity === 'G1' ? 2 : 1
   return Math.min(i, j, n.nu - 1 - i, n.nv - 1 - j) < rings
+}
+// Exact midpoint knot insertion in homogeneous coordinates. A bicubic Bezier
+// patch has no free poles when both boundary rings are locked for G1. Inserting
+// one knot in each direction exposes one interior pole without fitting or
+// changing its geometry, parameter domain, degree or boundary derivatives.
+export function enrichBicubic(n: Net): Net {
+  if (n.nu !== 4 || n.nv !== 4 || n.du !== 3 || n.dv !== 3 ||
+      n.ku.length !== 2 || n.kv.length !== 2 ||
+      n.mu.join() !== '4,4' || n.mv.join() !== '4,4') return n
+  const homogeneous = n.poles.map((p, i) => [...p.map(x => x * n.weights[i]), n.weights[i]])
+  const insert = (row: number[][]) => [row[0], ...row.slice(0, 3).map((p, i) => p.map((x, d) => (x + row[i + 1][d]) / 2)), row[3]]
+  const alongV = Array.from({ length: 4 }, (_, u) => insert(homogeneous.slice(u * 4, u * 4 + 4)))
+  const columns = Array.from({ length: 5 }, (_, v) => insert(alongV.map(row => row[v])))
+  const points = Array.from({ length: 25 }, (_, i) => columns[i % 5][Math.floor(i / 5)])
+  const midpoint = (knots: number[]) => [knots[0], knots[0] + (knots[1] - knots[0]) / 2, knots[1]]
+  return { ...n, nu: 5, nv: 5, poles: points.map(p => p.slice(0, 3).map(x => x / p[3]) as Point),
+    weights: points.map(p => p[3]), ku: midpoint(n.ku), kv: midpoint(n.kv), mu: [4, 1, 4], mv: [4, 1, 4] }
 }
 export function assertNet(base: Net, n: Net, continuity: 'G0' | 'G1') {
   if (n.poles.length !== base.poles.length || JSON.stringify({ ...base, poles: [] }) !== JSON.stringify({ ...n, poles: [] })) throw new Error('Grado, nodi, pesi e parametrizzazione devono restare invariati.')
