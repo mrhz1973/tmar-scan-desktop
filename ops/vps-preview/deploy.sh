@@ -34,6 +34,20 @@ if [ -f "$CURRENT/.tmar-revision" ] && [ "$(cat "$CURRENT/.tmar-revision")" = "$
   exit 0
 fi
 
+FAILED="$BASE/failed-sha"
+if [ -f "$FAILED" ] && [ "$(cat "$FAILED")" = "$sha" ] &&
+   [ "${TMAR_FORCE_RETRY:-0}" != "1" ]; then
+  echo "SKIP_KNOWN_FAILED_CANDIDATE: $sha (operator may remove failed-sha after fixing cause)"
+  exit 0
+fi
+stage=""
+cleanup() {
+  rc=$?
+  if [ -n "$stage" ] && [ -d "$stage" ]; then rm -rf -- "$stage"; fi
+  if [ "$rc" -ne 0 ]; then printf '%s\n' "$sha" > "$FAILED"; fi
+}
+trap cleanup EXIT
+
 echo "CANDIDATE: $sha"
 git -C "$SRC" checkout --detach --force "$sha"
 cd "$SRC"
@@ -72,8 +86,6 @@ npm run build
 test -s dist/index.html
 
 stage=$(mktemp -d "$RELEASES/.build-$sha.XXXXXXXX")
-cleanup() { if [ -n "${stage:-}" ] && [ -d "$stage" ]; then rm -rf -- "$stage"; fi; }
-trap cleanup EXIT
 
 cp -a dist/. "$stage/"
 mkdir -p "$stage/samples/tmar-tests"
@@ -102,4 +114,5 @@ mv -Tf "$BASE/.next-current" "$CURRENT"
 
 # The static HTTP service resolves the current symlink at request time.
 # Reload is not required and no active CAD workspace is contacted.
+rm -f "$FAILED"
 echo "PUBLISHED: $sha"
