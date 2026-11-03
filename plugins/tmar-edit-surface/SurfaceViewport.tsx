@@ -4,12 +4,13 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { Preview } from './editorKernel'
 import type { Net, Point } from './brep'
+import { dragDirection, type DragMode } from './localFrame'
 
 interface Props {
   preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; face: number
   axis: number; onFace: (i: number) => void; onPoint: (i: number, multi: boolean) => void
   onDrag: (poles: Point[], final: boolean) => void; busy: boolean
-  dragStrength: number; showNet: boolean; transparency: number; dragMode: 'axis' | 'screen'
+  dragStrength: number; showNet: boolean; transparency: number; dragMode: DragMode
 }
 export function SurfaceViewport(props: Props) {
   const host = useRef<HTMLDivElement>(null), current = useRef(props)
@@ -27,7 +28,7 @@ export function SurfaceViewport(props: Props) {
     const light = new THREE.DirectionalLight(0xffffff, 3); light.position.set(2, 5, 4); scene.add(light)
     const body = new THREE.Group(), cage = new THREE.Group(); scene.add(body, cage)
     const state = { scene, body, cage, camera, controls, radius: 1, fitted: false }; sceneRef.current = state
-    let drag: { index: number; start: Point[]; ids: number[]; x: number; y: number; sx: number; sy: number; axis: number; strength: number; screen: { plane: THREE.Plane; start: THREE.Vector3 } | null } | null = null
+    let drag: { index: number; start: Point[]; ids: number[]; x: number; y: number; sx: number; sy: number; direction: Point; strength: number; screen: { plane: THREE.Plane; start: THREE.Vector3 } | null } | null = null
     let down = { x: 0, y: 0 }
     const raycaster = new THREE.Raycaster()
     const hits = (e: PointerEvent, objects: THREE.Object3D[]) => {
@@ -44,7 +45,10 @@ export function SurfaceViewport(props: Props) {
       const p = current.current, index = point.object.userData.point as number
       p.onPoint(index, e.ctrlKey || e.metaKey)
       if (!p.net || p.locked.includes(index) || e.ctrlKey || e.metaKey) return
-      const origin = new THREE.Vector3(...p.net.poles[index]), end = origin.clone(); end.setComponent(p.axis, end.getComponent(p.axis) + state.radius)
+      const anchor = p.selected.includes(index) ? p.selected.find(i => !p.locked.includes(i))! : index
+      const direction = dragDirection(p.net, anchor, p.dragMode, p.axis)
+      if (!direction) return
+      const origin = new THREE.Vector3(...p.net.poles[index]), end = origin.clone().addScaledVector(new THREE.Vector3(...direction), state.radius)
       // Keep camera depth fixed. The initial ray hit accounts for grabbing off-center.
       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), origin)
       const start = raycaster.ray.intersectPlane(plane, new THREE.Vector3())
@@ -53,7 +57,7 @@ export function SurfaceViewport(props: Props) {
       origin.project(camera); end.project(camera)
       const r = div.getBoundingClientRect(), sx = (end.x - origin.x) * r.width / 2 / state.radius, sy = -(end.y - origin.y) * r.height / 2 / state.radius
       if (!screen && sx * sx + sy * sy < 0.1) return
-      drag = { index, start: structuredClone(p.net.poles), ids: p.selected.includes(index) ? p.selected.filter(i => !p.locked.includes(i)) : [index], x: e.clientX, y: e.clientY, sx, sy, axis: p.axis, strength: p.dragStrength, screen }
+      drag = { index, start: structuredClone(p.net.poles), ids: p.selected.includes(index) ? p.selected.filter(i => !p.locked.includes(i)) : [index], x: e.clientX, y: e.clientY, sx, sy, direction, strength: p.dragStrength, screen }
       renderer.domElement.setPointerCapture(e.pointerId); div.style.cursor = 'grabbing'
     }
     const dragPoles = (e: PointerEvent): Point[] => {
@@ -67,7 +71,7 @@ export function SurfaceViewport(props: Props) {
         return poles
       }
       const delta = ((e.clientX - d.x) * d.sx + (e.clientY - d.y) * d.sy) / (d.sx * d.sx + d.sy * d.sy)
-      d.ids.forEach(i => { poles[i][d.axis] += delta * d.strength })
+      d.ids.forEach(i => { poles[i] = poles[i].map((x, j) => x + d.direction[j] * delta * d.strength) as Point })
       return poles
     }
     const pointerMove = (e: PointerEvent) => {
@@ -115,17 +119,28 @@ export function SurfaceViewport(props: Props) {
   }, [props.preview, props.face, props.transparency])
   useEffect(() => {
     const s = sceneRef.current; if (!s) return
-    s.cage.children.forEach(dispose); s.cage.clear()
+    s.cage.traverse(dispose); s.cage.clear()
     const n = props.net; if (!n) return
     n.poles.forEach((p, i) => {
       const color = props.selected.includes(i) ? '#ffcf35' : props.locked.includes(i) ? '#89939c' : '#58f3d0'
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(s.radius * 0.012, 10, 8), new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false })); mesh.position.set(...p); mesh.userData.point = i; mesh.renderOrder = 5; s.cage.add(mesh)
     })
+    const anchor = props.selected.find(i => !props.locked.includes(i))
+    if (anchor !== undefined && props.dragMode !== 'screen') {
+      const direction = dragDirection(n, anchor, props.dragMode, props.axis)
+      if (direction) {
+        const arrow = new THREE.ArrowHelper(new THREE.Vector3(...direction), new THREE.Vector3(...n.poles[anchor]), s.radius * 0.22, 0xffcf35, s.radius * 0.045, s.radius * 0.025)
+        // ArrowHelper shares default geometry globally; this viewport owns only its clones.
+        arrow.line.geometry = arrow.line.geometry.clone(); arrow.cone.geometry = arrow.cone.geometry.clone()
+        arrow.traverse(o => { const m = o as THREE.Mesh; if (m.material && !Array.isArray(m.material)) { m.material.depthTest = false; m.material.depthWrite = false }; o.renderOrder = 6 })
+        s.cage.add(arrow)
+      }
+    }
     if (!props.showNet) return // Hide the connecting cage, retain editable poles.
     const lines: number[] = []
     for (let i = 0; i < n.nu; i++) for (let j = 0; j < n.nv; j++) { const at = i * n.nv + j; if (i + 1 < n.nu) lines.push(...n.poles[at], ...n.poles[at + n.nv]); if (j + 1 < n.nv) lines.push(...n.poles[at], ...n.poles[at + 1]) }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); const line = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#95e7ea', depthTest: false, transparent: true, opacity: 0.6 })); line.renderOrder = 4; s.cage.add(line)
-  }, [props.net, props.selected, props.locked, props.showNet])
+  }, [props.net, props.selected, props.locked, props.showNet, props.dragMode, props.axis])
   return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" />
 }
 function dispose(o: THREE.Object3D) { const m = o as THREE.Mesh; m.geometry?.dispose(); if (Array.isArray(m.material)) m.material.forEach(a => a.dispose()); else m.material?.dispose() }
