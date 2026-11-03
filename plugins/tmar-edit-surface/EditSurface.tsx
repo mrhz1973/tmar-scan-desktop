@@ -5,7 +5,7 @@ import { runCommand } from '../../src/commands/registry'
 import { useCommandActivity } from '../../src/commands/activity'
 import { useStore } from '../../src/state/store'
 import { saveFile } from '../../src/app/exports'
-import { registerHistory } from '../../src/state/historyStore'
+import { create } from 'zustand'
 import { reEditorOpen, useReverse } from '../reverse/state/reStore'
 import { bodyStepResult } from '../tmar-body-export/bodyExport'
 import { assertNet, boundaryLocked, type Net, type Point } from './brep'
@@ -26,6 +26,10 @@ export interface SurfaceNoteCommit {
   notes: { draftId:string; anchor:DraftAnchor; text: string; at: Point; normal: Point; u: number; v: number }[]
 }
 interface SurfaceOptions { applyWithNotes?: (edit: SurfaceNoteCommit) => Promise<void> }
+
+// The host subscribes before its toolbar mounts. Notify it when the modal
+// takes ownership of keyboard history and when project undo becomes available.
+export const useSurfaceDialogs = create(() => ({ count: 0 }))
 
 export function EditSurface({ applyWithNotes }: SurfaceOptions = {}) {
   const [open, setOpen] = useState(false)
@@ -98,7 +102,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   const undo = (delta: number) => { const next = at.current + delta; if (next >= 0 && next < history.current.length) { at.current = next; setNet(structuredClone(history.current[next])); historyTick(v => v + 1) } }
   const modalKeys = useRef({ busy, undo, close }); modalKeys.current = { busy, undo:stripPaths?stripUndo:undo, close:cancel }
   useEffect(() => {
-    const unregister = registerHistory({ blocked: () => true })
+    useSurfaceDialogs.setState(s => ({ count: s.count + 1 }))
     const onKey = (e: KeyboardEvent) => {
       // The modal owns navigation/history even if focus remains on its opener.
       e.stopImmediatePropagation()
@@ -109,7 +113,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
       if (e.key === 'Escape' && !s.busy) { e.preventDefault(); s.close() }
     }
     window.addEventListener('keydown', onKey, true)
-    return () => { unregister(); window.removeEventListener('keydown', onKey, true) }
+    return () => { window.removeEventListener('keydown', onKey, true); useSurfaceDialogs.setState(s => ({ count: s.count - 1 })) }
   }, [])
   useEffect(() => {
     if (!net) return
