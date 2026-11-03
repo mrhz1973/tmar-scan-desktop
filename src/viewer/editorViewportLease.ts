@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import * as THREE from 'three'
 import { EditorLifetime } from '../plugins/editorLifetime'
+import { EditorReferenceNotifications } from '../plugins/editorReferenceNotifications'
 import type { EditorViewportLease, ReferenceDescriptor, Vec3 } from '../plugins/workspaceEditorTypes'
 import type { OwnedEditorViewport } from '../plugins/workspaceEditors'
 import type { SceneManager } from './SceneManager'
@@ -38,6 +39,8 @@ export function createEditorViewportLease(scene: SceneManager, adapter: EditorSc
   Object.assign(root.style, { position: 'absolute', inset: '0', pointerEvents: 'none', overflow: 'hidden' })
   host.container.appendChild(root)
   life.own(() => root.remove())
+  const referenceNotifications = new EditorReferenceNotifications()
+  life.own(() => referenceNotifications.dispose())
   let disposed = false, capture: number | null = null
   const layers = new Set<SceneLayer>(), frames = new Set<(time: number) => void>()
   const handlers = new Set<Parameters<EditorViewportLease['onCapturedPointer']>[0]>()
@@ -141,7 +144,7 @@ export function createEditorViewportLease(scene: SceneManager, adapter: EditorSc
     onInterruption: fn => { current(); interruptions.add(fn); return life.own(() => { interruptions.delete(fn) }) },
     onFrame: fn => { current(); frames.add(fn); return life.own(() => { frames.delete(fn) }) },
     references: () => { current(); return adapter.references() },
-    subscribeReferences: fn => { current(); return life.own(adapter.subscribeReferences(fn)) },
+    subscribeReferences: fn => { current(); return life.own(referenceNotifications.subscribe(fn)) },
     maskSourceForPreview: () => { current(); return life.own(adapter.maskSource()) },
     capturePointer: id => {
       current()
@@ -160,8 +163,11 @@ export function createEditorViewportLease(scene: SceneManager, adapter: EditorSc
     group.visible = adapter.sourceVisible(); root.hidden = !group.visible
     if (!group.visible && capture !== null) interrupt('blur')
     host.invalidate()
+    referenceNotifications.notify()
   }))
-  return { view, releaseCapture, dispose: () => {
+  return { view, releaseCapture,
+    suspendReferenceNotifications: () => { current(); return referenceNotifications.suspend() },
+    dispose: () => {
     if (disposed) return
     disposed = true
     interrupt('dispose')
