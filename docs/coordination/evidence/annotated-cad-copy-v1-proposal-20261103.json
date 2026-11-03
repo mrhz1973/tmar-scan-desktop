@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-03",
+  "base": "a28c747591e740d62f3b1f90330f145141c77de1",
+  "scope": "Design-only annotation transaction proposal; no runtime API or capability change",
+  "environment": { "os": "Linux sandbox", "typescript": "5.8.3" },
+  "typecheck": { "command": "tsc --strict --noEmit --skipLibCheck --target ES2022 --module ESNext --lib ES2022,DOM docs/coordination/annotated-cad-copy-v1.type-probe.ts", "result": "PASS", "expectedTypeRejections": 6 },
+  "expectedTypeRejections": ["ordinary copy ticket mode", "metres", "world frame", "empty note list", "missing face witness", "unsupported scan target"],
+  "runtimeImplemented": false,
+  "kernelIdentityMatchTested": false,
+  "browserTested": false,
+  "projectRoundtripTested": false,
+  "hostCapability": "cad-copy unchanged",
+  "frozenHostChanged": false,
+  "editSurfaceChanged": false
+}
