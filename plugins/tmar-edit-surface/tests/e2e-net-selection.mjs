@@ -34,6 +34,13 @@ try {
   const clickText = async text => {for(const b of await page.$$('.es-dialog button')) if(await b.evaluate((e,t) => e.textContent===t,text)){await b.click();return} throw Error('Missing '+text)}
   const selected = async (total, free=total) => page.waitForFunction(([t,f]) => document.querySelector('[data-test=surface-selection]')?.textContent===`${t} selezionati · ${f} modificabili`, {}, [total, free])
   await ready(); await page.select('[data-test=surface-continuity]', 'G0'); await ready()
+  const selectionAddedNoHistory = async () => {
+    // Undo must reach the preceding G1 setting, rather than a selection step.
+    await page.click('[data-test=surface-undo]')
+    assert.equal(await page.$eval('[data-test=surface-continuity]',e=>e.value),'G1'); await ready()
+    await page.click('[data-test=surface-redo]')
+    assert.equal(await page.$eval('[data-test=surface-continuity]',e=>e.value),'G0'); await ready()
+  }
   const r=await page.$eval('[data-test=edit-surface-viewport]',e=>{const b=e.getBoundingClientRect();return{x:b.x,y:b.y,width:b.width,height:b.height}})
   const center=bounds.getCenter(new THREE.Vector3()),radius=bounds.getSize(new THREE.Vector3()).length()/2
   const camera=new THREE.PerspectiveCamera(40,r.width/r.height,radius/1000,radius*100)
@@ -56,11 +63,11 @@ try {
     await clickText('Nessuno')
     await page.click('[data-test=surface-control-net]'); await click(project(centroid())); await selected(0)
     await page.click('[data-test=surface-control-net]'); await click(project(centroid())); await selected(4)
-    assert(await page.$eval('[data-test=surface-undo]',e=>e.disabled))
+    await selectionAddedNoHistory()
   } else {
   await page.select('[data-test=surface-selection-mode]', 'points'); await click(edge); await selected(0)
   await page.select('[data-test=surface-selection-mode]', 'edges'); await click(edge); await selected(2)
-  assert(await page.$eval('[data-test=surface-undo]',e=>e.disabled), 'Selection alone must not create an undo step')
+  await selectionAddedNoHistory(); await selected(2)
   await page.keyboard.down('Control'); await click(adjacent); await page.keyboard.up('Control'); await selected(3)
   await page.keyboard.down('Control'); await click(adjacent); await page.keyboard.up('Control'); await selected(1)
   await clickText('Nessuno'); await selected(0)
@@ -85,10 +92,13 @@ try {
   await selected(1)
   await click(edge); await selected(2)
   await clickText('Blocca punti'); await selected(2,0)
+  const lockedPreview=await page.$eval('[data-test=surface-status]',e=>({revision:e.dataset.previewRevision,text:e.textContent}))
   await page.mouse.move(edge.x,edge.y)
   assert.equal(await page.$eval('[data-test=edit-surface-viewport]',e=>e.style.cursor),'not-allowed')
   await page.mouse.down(); await page.mouse.move(edge.x,edge.y-20,{steps:5}); await page.mouse.up()
-  assert(await page.$eval('[data-test=surface-undo]',e=>e.disabled), 'Locked segment must not deform')
+  assert.deepEqual(await page.$eval('[data-test=surface-status]',e=>({revision:e.dataset.previewRevision,text:e.textContent})),lockedPreview,'Locked segment must not deform')
+  await page.click('[data-test=surface-undo]'); await selected(2)
+  await page.click('[data-test=surface-redo]'); await selected(2,0)
   await clickText('Sblocca punti'); await selected(2)
   }
   const cdp=await page.createCDPSession()
