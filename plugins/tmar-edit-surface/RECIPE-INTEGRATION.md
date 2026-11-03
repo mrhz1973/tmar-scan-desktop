@@ -103,3 +103,10 @@ The owner requires editing in the existing viewport, with the scan, other bodies
 The host currently dispatches existing gizmo/marking/grip handlers before plugin layers; `claimDrag` only takes navigation drag. A surface-edit session therefore needs an exclusive, scoped interaction lease that refuses or suspends conflicting gestures and always restores input, capture, cursor and hover on completion, cancellation or failure.
 
 The host body-preview slot is shared and its setter resets materials across bodies. Surface editing needs an exclusive preview lease, preserving and restoring the actual prior visibility of each affected body and tracking changes while the preview is active. Do not silently replace another tool's preview. The host should reject stale asynchronous updates after project body, build or alignment changes. No host code or live session is changed by this plugin checkpoint.
+
+
+### Partial resource ownership checkpoint
+
+`SurfaceRuntime` now owns `SurfaceWorkerClient`, `PreviewQueue` and `SurfaceHistory` and is created on explicit editor entry. Its disposal is idempotent and ignores late worker replies; the existing dialog still owns other draft, note and strip state. This is a preparation step, not `createEditSurfaceSession`, a complete persistent controller, `freeze`, `prepareApply`, a main-scene layer or a host capability.
+
+A source-only synthetic-project test holds an actual export-evaluation response until the editor has unmounted, then delivers it to the old callback. No host body, feature or STEP file appears. This does not cover an import already placed on the command queue: source/session must be checked by the host immediately before mutation, under its transaction gate. See `tests/e2e-close-during-apply.mjs` and `evidence/main-view-preparation/session-close-source.json`.

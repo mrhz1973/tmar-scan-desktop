@@ -483,3 +483,12 @@ Evidence: `evidence/duplicate-edge/direct-host-20261103/`,
 The existing prototype now uses the same reusable control-cage drawing and screen-space segment/cell picker intended for the shared viewport. The picker supports orthographic and perspective cameras and a separate part-to-world transform; its isolated tests do not prove host interaction or occlusion by other objects. The current editor is still a separate dialog.
 
 With an imported synthetic 20 × 30 × 10 mm STEP solid, the source UI passed the point/segment and cell gesture checks; the compiled UI passed the cell check. Both paths exported and reimported valid six-face CAD, including the changed cell and Undo/Redo states; no console errors were recorded. TypeScript and 18 focused tests passed. Reports and a compiled-UI screenshot are in `evidence/main-view-preparation/`. These tests do not establish main-view integration, large-scan performance, QuickSurface equivalence or real-project acceptance.
+
+
+### Session and drag preparation
+
+The prototype now groups its worker, local geometry history and coalesced preview queue in a session-owned `SurfaceRuntime`; panel state and the full draft remain in the dialog, so this is **not yet** the host workspace controller. The shared drag calculation accepts orthographic or perspective projection and rigid part transforms; the current prototype still runs in its own perspective viewport. A pointer other than the one that started a drag is ignored, and Escape releases its capture immediately.
+
+On synthetic CAD, the source and compiled prototype passed scan-snap/Alt/off, Escape and the second-pointer checks; the final compiled prototype showed a changed valid preview during 20 of 24 observations while dragging. Source checks also covered screen-plane and local-normal motion, open-boundary editing, and Zebra draft notes. A source-only isolated test delivered a real worker reply after closing the editor and observed no project body, feature or STEP-file insertion. Reports are in `evidence/main-view-preparation/`; results are bounded to these fixtures and are not a release or main-viewport qualification.
+
+The current Apply path can still enqueue a host import after its last source check. A command already queued or started is **not** cancelled by closing this prototype. The coordinator must complete the host-side execution-time guard and atomic transaction before integrated Apply is qualified. Notes in the current prototype remain draft-only unless a compatible host callback is installed.

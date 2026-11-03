@@ -48,6 +48,7 @@ const { browser, page, consoleErrors } = await launchApp({
   width: 1440,
   height: 1000,
 })
+page.on('pageerror', error => console.error('PAGE_ERROR_STACK:', error.stack))
 try {
   if (process.env.CAD_PROJECT) {
     await page.waitForSelector('[data-test=project-input]')
@@ -108,13 +109,17 @@ try {
   camera.updateMatrixWorld()
   const origin = new THREE.Vector3(pole.x, pole.y, pole.z)
   const projected = origin.clone().project(camera)
-  const end = origin.clone().add(new THREE.Vector3(0, 0, radius)).project(camera)
   const from = [rect.x + (projected.x + 1) * rect.width / 2, rect.y + (1 - projected.y) * rect.height / 2]
-  const sx = (end.x - projected.x) * rect.width / 2 / radius
-  const sy = -(end.y - projected.y) * rect.height / 2 / radius
+  // The target is the actual projection of a +1.5 mm point on the axis.
+  // Perspective projection is not a fixed number of pixels per millimetre.
   const delta = 1.5
-  const to = [from[0] + sx * delta, from[1] + sy * delta]
+  const target = origin.clone().add(new THREE.Vector3(0, 0, delta)).project(camera)
+  const to = [rect.x + (target.x + 1) * rect.width / 2, rect.y + (1 - target.y) * rect.height / 2]
   assert(Math.hypot(to[0] - from[0], to[1] - from[1]) >= 4, 'synthetic drag exceeds pointer slack')
+
+  await page.$eval('[data-test=edit-surface-viewport]', container => {
+    container.addEventListener('pointerdown', event => { container.dataset.testPointer = String(event.pointerId) }, true)
+  })
 
   await page.mouse.click(...from)
   await page.waitForFunction(() => document.querySelector('[data-test=surface-selection]')?.textContent.includes('1 selezionati · 1 modificabili'), { timeout: 10000 })
@@ -172,7 +177,19 @@ try {
       assert.equal(await page.$eval('[data-test=edit-surface-viewport]', e => e.dataset.snapKind), '', 'Alt or the checkbox suppresses snapping during the drag')
     }
     if (cancel) {
+      const hasCapture = () => page.$eval('[data-test=edit-surface-viewport]', container =>
+        container.querySelector('canvas').hasPointerCapture(Number(container.dataset.testPointer)))
+      assert.equal(await hasCapture(), true, 'active pole drag captures the pointer')
+      await page.$eval('[data-test=edit-surface-viewport]', container => {
+        const canvas = container.querySelector('canvas')
+        // A second pointer must neither move nor commit the first pointer's drag.
+        for (const type of ['pointermove', 'pointerup', 'pointercancel'])
+          canvas.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 999, pointerType: 'touch',
+            clientX: 10, clientY: 10, button: 0, buttons: type === 'pointermove' ? 1 : 0 }))
+      })
+      assert.equal(await hasCapture(), true, 'a different pointer cannot finish or cancel the active drag')
       await page.keyboard.press('Escape')
+      assert.equal(await hasCapture(), false, 'Escape releases pointer capture immediately')
       await page.mouse.up()
       if (alt) await page.keyboard.up('Alt')
       return
@@ -217,7 +234,7 @@ try {
   assert(Math.abs(snappedZ - 10.5) < 0.02, `snapped center follows the 2 mm reference: ${snappedZ}`)
   assert.deepEqual(consoleErrors, [])
 
-  const report = { pass: true, isolatedUrl: process.env.APP_URL, faceIndex, centerPole: [pole.x, pole.y, pole.z], snappedZ, altZ, disabledZ, escapeKeptDialogOpen: true, consoleErrors }
+  const report = { pass: true, isolatedUrl: process.env.APP_URL, faceIndex, centerPole: [pole.x, pole.y, pole.z], snappedZ, altZ, disabledZ, escapeKeptDialogOpen: true, escapeReleasedCapture: true, ignoresOtherPointers: true, consoleErrors }
   writeFileSync(join(out, 'result.json'), JSON.stringify(report, null, 2))
   console.log(JSON.stringify({ out, ...report }, null, 2))
 } catch (error) {

@@ -8,6 +8,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import type { Preview } from './editorKernel'
 import type { Net, Point } from './brep'
 import { dragDirection, type DragMode } from './localFrame'
+import { createDragFrame, type DragFrame } from './dragFrame'
 import { bindStripDrag, drawStrip, pickSheetEdge, type DirectStrip, type StripDrag } from './sheetDrag'
 import type { NetSelectionMode } from './netSelection'
 import { pickNetAt } from './netPicking'
@@ -68,9 +69,16 @@ export function SurfaceViewport(props: Props) {
     const light = new THREE.DirectionalLight(0xffffff, 3); light.position.set(2, 5, 4); scene.add(light)
     const body = new THREE.Group(), references = new THREE.Group(), cage = new THREE.Group(), hover = new THREE.Group(); scene.add(references, body, cage, hover)
     const state = { scene, body, references, cage, hover, hoverKey: '', camera, controls, radius: 1, fitted: false }; sceneRef.current = state
-    let drag: { index: number; start: Point[]; ids: number[]; x: number; y: number; sx: number; sy: number; direction: Point; strength: number; started: boolean; screen: { plane: THREE.Plane; start: THREE.Vector3 } | null } | null = null
+    let drag: { index: number; pointerId: number; start: Point[]; last: Point[]; ids: number[]; x: number; y: number; direction: Point; strength: number; started: boolean; screen: boolean; frame: DragFrame } | null = null
     let down = { x: 0, y: 0 }
     const raycaster = new THREE.Raycaster()
+    const releaseCapture = (id: number) => {
+      try { if (renderer.domElement.hasPointerCapture(id)) renderer.domElement.releasePointerCapture(id) }
+      catch (error) {
+        // A lost/cancelled pointer can disappear between the browser checks.
+        if (!(error instanceof DOMException && error.name === 'NotFoundError')) throw error
+      }
+    }
     const netFrame = new THREE.Matrix4() // This prototype keeps the net in the scene frame.
     const hits = (e: PointerEvent, objects: THREE.Object3D[]) => {
       const r = renderer.domElement.getBoundingClientRect()
@@ -137,6 +145,7 @@ export function SurfaceViewport(props: Props) {
       return anchor
     }
     const pointerDown = (e: PointerEvent) => {
+      if (drag) { e.stopImmediatePropagation(); return } // A second pointer cannot replace the active gesture.
       down = { x: e.clientX, y: e.clientY }
       if (e.button !== 0 || current.current.busy) return
       if (current.current.placingNote) return
@@ -161,17 +170,13 @@ export function SurfaceViewport(props: Props) {
       const direction = dragDirection(p.net, anchor, p.dragMode, p.axis)
       if (!direction) return
       const origin = picked.reduce((v, i) => v.add(new THREE.Vector3(...p.net!.poles[i])), new THREE.Vector3()).multiplyScalar(1 / picked.length)
-      const end = origin.clone().addScaledVector(new THREE.Vector3(...direction), state.radius)
-      hits(e, []) // Edge picking projects segments; refresh the ray for screen dragging.
-      // Keep camera depth fixed. The initial ray hit accounts for grabbing off-center.
-      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), origin)
-      const start = raycaster.ray.intersectPlane(plane, new THREE.Vector3())
-      const screen = p.dragMode === 'screen' && start ? { plane, start } : null
-      if (p.dragMode === 'screen' && !screen) return
-      origin.project(camera); end.project(camera)
-      const r = div.getBoundingClientRect(), sx = (end.x - origin.x) * r.width / 2 / state.radius, sy = -(end.y - origin.y) * r.height / 2 / state.radius
-      if (!screen && sx * sx + sy * sy < 0.1) return
-      drag = { index, start: structuredClone(p.net.poles), ids, x: e.clientX, y: e.clientY, sx, sy, direction, strength: p.dragStrength, screen, started: false }
+      const frame = createDragFrame({ camera, partWorld: netFrame, rect: div.getBoundingClientRect(),
+        anchor: origin.toArray() as Point, clientX: e.clientX, clientY: e.clientY,
+        ...(p.dragMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction }) })
+      if (!frame) return
+      const start = structuredClone(p.net.poles)
+      drag = { index, pointerId: e.pointerId, start, last: start, ids, x: e.clientX, y: e.clientY,
+        direction, strength: p.dragStrength, screen: p.dragMode === 'screen', frame, started: false }
       div.style.cursor = 'grabbing'
     }
     const showSnap = (hit: SnapHit | null) => {
@@ -185,16 +190,9 @@ export function SurfaceViewport(props: Props) {
     }
     const dragPoles = (e: PointerEvent): Point[] => {
       const d = drag!, poles = structuredClone(d.start)
-      let delta: THREE.Vector3
-      if (d.screen) {
-        hits(e, []) // Update the pointer ray, without letting the body occlude the handle.
-        const hit = raycaster.ray.intersectPlane(d.screen.plane, new THREE.Vector3())
-        if (!hit) return poles
-        delta = hit.sub(d.screen.start).multiplyScalar(d.strength)
-      } else {
-        const distance = ((e.clientX - d.x) * d.sx + (e.clientY - d.y) * d.sy) / (d.sx * d.sx + d.sy * d.sy)
-        delta = new THREE.Vector3(...d.direction).multiplyScalar(distance * d.strength)
-      }
+      const displacement = d.frame.deltaAt(e.clientX, e.clientY)
+      if (!displacement) return d.last
+      let delta = new THREE.Vector3(...displacement).multiplyScalar(d.strength)
       const p=current.current
       let snapHit: SnapHit | null = null
       let snapFailed=false
@@ -220,10 +218,12 @@ export function SurfaceViewport(props: Props) {
         snapFeedback.current.style.display='block'
       }
       d.ids.forEach(i => { poles[i] = poles[i].map((x, j) => x + delta.getComponent(j)) as Point })
+      d.last = poles
       return poles
     }
     const pointerMove = (e: PointerEvent) => {
       if (drag) {
+        if (e.pointerId !== drag.pointerId) { e.stopImmediatePropagation(); return }
         e.stopImmediatePropagation()
         if (!drag.started && Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<4) return
         drag.started=true; showHover(null); current.current.onDrag(dragPoles(e), false); return
@@ -235,6 +235,7 @@ export function SurfaceViewport(props: Props) {
       div.style.cursor = picked ? (picked.every(i => current.current.locked.includes(i)) ? 'not-allowed' : 'grab') : 'crosshair'
     }
     const pointerUp = (e: PointerEvent) => {
+      if (drag && e.pointerId !== drag.pointerId) { e.stopImmediatePropagation(); return }
       if (drag) { e.stopImmediatePropagation(); if (drag.started) current.current.onDrag(dragPoles(e), true); drag = null; showSnap(null) }
       else if (current.current.placingNote && !current.current.busy && e.button===0 && Math.hypot(e.clientX-down.x,e.clientY-down.y)<3) {
         const hit=hits(e,body.children)[0]
@@ -243,18 +244,21 @@ export function SurfaceViewport(props: Props) {
       else if (e.button === 0 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 3 && !pickNet(e)) {
         const hit = hits(e, body.children)[0]; if (hit && !current.current.net && !current.current.busy) current.current.onFace(hit.object.userData.face)
       }
-      if (renderer.domElement.hasPointerCapture(e.pointerId)) renderer.domElement.releasePointerCapture(e.pointerId)
+      releaseCapture(e.pointerId)
       controls.enabled = true; div.style.cursor = 'crosshair'
     }
     const cancelGesture = () => {
       if (!drag) return false
-      if (drag.started) current.current.onDrag(drag.start, false)
-      drag = null; showSnap(null); showHover(null); controls.enabled = true; div.style.cursor = 'crosshair'
+      const cancelled = drag; drag = null
+      releaseCapture(cancelled.pointerId)
+      if (cancelled.started) current.current.onDrag(cancelled.start, false)
+      showSnap(null); showHover(null); controls.enabled = true; div.style.cursor = 'crosshair'
       return true
     }
     const cancel = (e: PointerEvent) => {
+      if (drag && e.pointerId !== drag.pointerId) { e.stopImmediatePropagation(); return }
       cancelGesture()
-      if (renderer.domElement.hasPointerCapture(e.pointerId)) renderer.domElement.releasePointerCapture(e.pointerId)
+      releaseCapture(e.pointerId)
       showHover(null); controls.enabled = true; div.style.cursor = 'crosshair'
     }
     const pointerLeave = () => showHover(null)
@@ -262,10 +266,13 @@ export function SurfaceViewport(props: Props) {
     renderer.domElement.addEventListener('pointermove', pointerMove, true)
     renderer.domElement.addEventListener('pointerup', pointerUp, true)
     renderer.domElement.addEventListener('pointercancel', cancel, true)
+    renderer.domElement.addEventListener('lostpointercapture', cancel, true)
     renderer.domElement.addEventListener('pointerleave', pointerLeave)
+    window.addEventListener('blur', cancelGesture)
     const stripBinding=bindStripDrag(div,camera,()=>current.current.strip,()=>current.current.busy || current.current.stripBlocked(),()=>current.current.directStrip)
     current.current.registerCancel(()=>cancelGesture() || stripBinding.cancel())
-    const resize = new ResizeObserver(() => { const w = div.clientWidth, h = div.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix() }); resize.observe(div)
+    let lastWidth = div.clientWidth, lastHeight = div.clientHeight
+    const resize = new ResizeObserver(() => { const w = div.clientWidth, h = div.clientHeight; if (drag && (w !== lastWidth || h !== lastHeight)) cancelGesture(); lastWidth = w; lastHeight = h; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix() }); resize.observe(div)
     renderer.setAnimationLoop(() => {
       references.children.forEach(o=>{ if (typeof o.userData.isCurrent==='function') o.visible=o.userData.isCurrent() })
       renderer.render(scene, camera)
@@ -285,7 +292,7 @@ export function SurfaceViewport(props: Props) {
         }
       }
     })
-    return () => { current.current.registerCancel(()=>false); stripBinding.dispose(); resize.disconnect(); renderer.domElement.removeEventListener('pointerleave', pointerLeave); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
+    return () => { current.current.registerCancel(()=>false); stripBinding.dispose(); resize.disconnect(); window.removeEventListener('blur', cancelGesture); renderer.domElement.removeEventListener('pointerleave', pointerLeave); if (drag) releaseCapture(drag.pointerId); drag = null; stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
   }, [])
   // Clear stale handles before the restored canvas can receive the next click.
   useLayoutEffect(() => { setEdgeHandle(null) }, [props.directStrip?.revision])
