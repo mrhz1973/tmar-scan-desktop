@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Isolated shared-workspace QA of the D handle. Uses only a synthetic STEP
 // sheet and its own browser profile. Does not apply a change to a project.
+// Set STRIP_TEST_AXIS to X, Y or Z for the axis to verify.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -13,11 +14,14 @@ const root=process.env.EDIT_SURFACE_QA_OUT
 assert(root && isAbsolute(root),'Evidence folder must be absolute')
 const rel=relative(resolve(process.cwd()),resolve(root))
 assert(rel && (rel==='..'||rel.startsWith('..'+sep)||isAbsolute(rel)),'Evidence must be outside the checkout')
+const requestedAxis=process.env.STRIP_TEST_AXIS
+assert(['X','Y','Z'].includes(requestedAxis),'STRIP_TEST_AXIS must be X, Y or Z')
+const axisIndex={X:0,Y:1,Z:2}[requestedAxis]
 mkdirSync(root,{recursive:true})
-const out=mkdtempSync(join(root,'strip-handle-')),downloads=join(out,'downloads')
+const out=mkdtempSync(join(root,'strip-handle-'+requestedAxis.toLowerCase()+'-')),downloads=join(out,'downloads')
 mkdirSync(downloads)
 process.env.SHOT_DIR=out
-const report={scope:'isolated shared view, synthetic single-face STEP, D handle',verdict:'INCOMPLETE',
+const report={scope:'isolated shared view, synthetic single-face STEP, D handle',requestedAxis,verdict:'INCOMPLETE',
   checks:[],notTested:['Apply or publication to project','user data','other STEP topologies']}
 const persist=()=>writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2))
 const check=(condition,label)=>{assert(condition,label);report.checks.push(label);persist();console.log('PASS',label)}
@@ -89,7 +93,7 @@ try {
 
   // Choose an axis normal to an outer boundary in the sheet's plane. Project
   // that actual 3-D displacement into the shared viewport; do not fake rays.
-  const target=await page.evaluate(()=>{
+  const target=await page.evaluate(requested=>{
     const q=window.stripHandleQa,state=q.useWorkspaceEditor.getState().controller.getViewState()
     const paths=state.strip.paths,points=paths.flat(),group=q.scene.layerHost().partGroup
     const canvas=q.scene.layerHost().canvas,rect=canvas.getBoundingClientRect(),camera=q.scene.layerHost().camera()
@@ -104,10 +108,13 @@ try {
     paths.forEach((path,edge)=>{
       if(path.length!==2)return
       const [a,b]=path,anchor=a.map((v,i)=>(v+b[i])/2)
-      for(const axis of [0,1]){
-        if(high[axis]-low[axis]<1e-6 || Math.abs(a[axis]-b[axis])>1e-7)continue
-        const sign=anchor[axis]>center[axis]?1:-1,finish=[...anchor]
-        finish[axis]+=sign*3
+      const axis=requested
+      // The chosen direction must not be parallel to this edge. For X/Y,
+      // extend outwards in the plane; for Z, either normal direction is safe.
+      if(Math.abs(a[axis]-b[axis])>1e-7) return
+      const signs=high[axis]-low[axis]<1e-6 ? [1,-1] : [anchor[axis]>center[axis]?1:-1]
+      for(const sign of signs){
+        const finish=[...anchor];finish[axis]+=sign*3
         const from=project(anchor),to=project(finish),dx=to[0]-from[0],dy=to[1]-from[1]
         const hx=Math.max(rect.left+14,Math.min(rect.right-14,from[0]+32))
         const hy=Math.max(rect.top+14,Math.min(rect.bottom-14,from[1]-32))
@@ -119,8 +126,8 @@ try {
       }
     })
     return choices[0]??null
-  })
-  assert(target,'No visible outward axis and boundary for the D handle')
+  },axisIndex)
+  assert(target,'The requested axis is geometrically degenerate or not visible for a free edge in this view')
   report.target=target
   await page.select('[data-test=surface-strip-axis]',String(target.axis))
   await page.select('[data-test=surface-strip-edge]',String(target.edge))
@@ -158,7 +165,7 @@ try {
         ghostOffset:p&&p.count>=3?[p.getX(2)-p.getX(1),p.getY(2)-p.getY(1),p.getZ(2)-p.getZ(1)]:null,
         center:rect?[rect.left+rect.width/2,rect.top+rect.height/2]:null}
     })
-    assert.equal(observed.axis,target.axis)
+    assert.equal(observed.axis,axisIndex)
     assert.equal(observed.selected,target.edge)
     assert(observed.delta[target.axis]*target.sign>0.1,'Drag did not move outwards on the selected axis')
     assert(observed.delta.every((value,i)=>i===target.axis||Math.abs(value)<1e-7),'Drag moved outside the chosen axis')

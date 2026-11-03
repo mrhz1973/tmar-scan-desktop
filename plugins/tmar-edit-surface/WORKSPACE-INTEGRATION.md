@@ -71,10 +71,11 @@ notes are not written by this first `cad-copy` contract.
 - In strip mode a D handle now uses the X/Y/Z direction selected in the panel;
   dragging the edge itself still moves in the screen plane. A real-pointer
   synthetic-sheet test verified the X handle, preview, Escape, Undo/Redo and
-  reimport of a valid two-face sewn STEP (`strip-handle-xlmyGT`). The Y/Z
-  interactions, other sheet shapes and complete QS gesture equivalence remain
-  unqualified. The handle appears after entering strip mode and selecting an
-  edge; it is not the legacy editor's immediate D entry.
+  reimport of a valid two-face sewn STEP (`strip-handle-xlmyGT`); equivalent
+  Y and Z checks passed (`strip-handle-y-RAr0AU`, `strip-handle-z-0PFBpA`).
+  Other sheet shapes and complete QS gesture equivalence remain unqualified.
+  The handle appears after entering strip mode and selecting an edge; it is not
+  the legacy editor's immediate D entry.
 - The local STEP export was downloaded and reimported as a valid edited solid;
   the source body retained its CAD geometry and topology and no project history
   was added (`workspace-export-step-A22rAX`). With a draft note present, export
