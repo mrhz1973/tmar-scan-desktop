@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[Unit]
+Description=TMAR ScanRuler preview: check main every 15 minutes
+
+[Timer]
+OnBootSec=4min
+OnUnitInactiveSec=15min
+RandomizedDelaySec=60s
+Unit=tmar-preview-build.service
+
+[Install]
+WantedBy=timers.target

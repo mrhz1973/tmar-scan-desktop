@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[Unit]
+Description=TMAR ScanRuler static preview (Docker bridge only)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=tmar-preview
+Group=tmar-preview
+WorkingDirectory=/opt/tmar-scanruler-preview
+ExecStart=/usr/bin/python3 -m http.server 8095 --bind 172.20.0.1 --directory /opt/tmar-scanruler-preview/current
+Restart=on-failure
+RestartSec=4s
+MemoryMax=256M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/opt/tmar-scanruler-preview
+InaccessiblePaths=/etc/goi-ors /opt/tecnoone-preview /root
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
