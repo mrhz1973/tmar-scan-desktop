@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { OcctKernel, type Mesh, type ShapeHandle } from 'occt-wasm'
 import { assertNet, enrichBicubic, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
+import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 
 export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean }
 export interface Preview { mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
@@ -17,6 +18,7 @@ export class SurfaceEditorKernel {
   private editBrep = ''
   private editRecord: RecordSpan | null = null
   private solids = 0
+  private revision = 0
   infos: FaceInfo[] = []
   constructor(readonly kernel: OcctKernel) {}
   static async load(wasm?: string) { return new SurfaceEditorKernel(await OcctKernel.init(wasm ? { wasm } : undefined)) }
@@ -106,8 +108,71 @@ export class SurfaceEditorKernel {
         editRecord = found[0]
       } finally { fs.forEach(f => k.release(f)); k.release(prepared); k.release(converted) }
     }
+    this.revision++
     this.chosen = index; this.originalNet = structuredClone(net); this.editBrep = text; this.editRecord = editRecord
     return net
+  }
+  private preparation(): SurfaceEditRecipe['preparation'] {
+    const info = this.infos[this.chosen]
+    return info.converted ? 'plane-to-bicubic' : info.enriched ? 'bicubic-midpoint-refinement' : 'native-nurbs'
+  }
+  /** Persist only after exact CAD validation. The host supplies its stable body ID. */
+  async createRecipe(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string): Promise<SurfaceEditRecipe> {
+    if (!this.originalNet || !this.source) throw new Error('Seleziona prima una faccia.')
+    const base = structuredClone(this.originalNet), next = structuredClone(net), rev = this.revision
+    assertNet(base, next, continuity)
+    const recipe: SurfaceEditRecipe = {
+      schema: 'tmar.surface-edit', version: 1, engine: 'occt-wasm-5.7.1/brep-v3',
+      source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids },
+      faceIndex: this.chosen, preparation: this.preparation(), baseNetSha256: '', continuity,
+      edits: next.poles.flatMap((point, index) => point.some((x, d) => x !== base.poles[index][d]) ? [{ index, point: [...point] as Point }] : []),
+      lockedPoles: [...lockedPoles],
+    }
+    ;[recipe.source.brepSha256, recipe.baseNetSha256] = await Promise.all([sha256(this.brep), sha256(JSON.stringify(base))])
+    if (this.revision !== rev) throw new Error('Sorgente cambiata durante il salvataggio della ricetta.')
+    const checked = readRecipe(recipe)
+    if (checked.lockedPoles.some(i => i >= base.poles.length)) throw new Error('Blocco di un polo inesistente.')
+    this.evaluate(next, continuity)
+    return checked
+  }
+  private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false) {
+    const recipe = readRecipe(value)
+    if (recipe.source.bodyId !== bodyId) throw new Error('Corpo sorgente diverso dalla ricetta.')
+    const opened = this.open(step), rev = this.revision
+    const fingerprint = await sha256(this.brep)
+    if (this.revision !== rev) throw new Error('Sorgente cambiata durante il ripristino.')
+    if (fingerprint !== recipe.source.brepSha256 || this.faces.length !== recipe.source.faceCount || this.solids !== recipe.source.solidCount) throw new Error('Geometria sorgente cambiata: ricollegare esplicitamente la modifica della superficie.')
+    const net = this.select(recipe.faceIndex), selectedRevision = this.revision
+    const baseFingerprint = await sha256(JSON.stringify(net))
+    if (this.revision !== selectedRevision) throw new Error('Faccia cambiata durante il ripristino.')
+    if (baseFingerprint !== recipe.baseNetSha256 || this.preparation() !== recipe.preparation) throw new Error('Base NURBS o raffinamento diverso dalla ricetta.')
+    if ([...recipe.edits.map(e => e.index), ...recipe.lockedPoles].some(i => i >= net.poles.length)) throw new Error('La ricetta contiene un polo inesistente.')
+    for (const edit of recipe.edits) net.poles[edit.index] = [...edit.point]
+    const preview = this.evaluate(net, recipe.continuity, exportStep)
+    return { faces: opened.faces, net, preview, continuity: recipe.continuity, lockedPoles: recipe.lockedPoles }
+  }
+  /** Validate in isolation; failed restores leave the current edit untouched. */
+  async restoreRecipe(step: string, recipe: unknown, bodyId: string) {
+    const temporary = new SurfaceEditorKernel(this.kernel), rev = this.revision
+    try {
+      const result = await temporary.prepareRecipe(step, recipe, bodyId)
+      if (this.revision !== rev) throw new Error('Sessione cambiata durante il ripristino.')
+      this.clear()
+      this.source = temporary.source; this.faces = temporary.faces
+      this.brep = temporary.brep; this.records = temporary.records; this.recordsByFace = temporary.recordsByFace
+      this.chosen = temporary.chosen; this.originalNet = temporary.originalNet
+      this.editBrep = temporary.editBrep; this.editRecord = temporary.editRecord
+      this.solids = temporary.solids; this.infos = temporary.infos
+      // Transfer handle ownership without disposing the shared OCCT runtime.
+      temporary.source = null; temporary.faces = []
+      return result
+    } finally { temporary.clear() }
+  }
+  /** Rebuild from upstream STEP without changing the interactive editing session. */
+  async replayRecipe(step: string, recipe: unknown, bodyId: string) {
+    const temporary = new SurfaceEditorKernel(this.kernel)
+    try { return (await temporary.prepareRecipe(step, recipe, bodyId, true)).preview }
+    finally { temporary.clear() }
   }
   private render(shape: ShapeHandle): Preview {
     const k = this.kernel, faces = k.getSubShapes(shape, 'face')
@@ -164,6 +229,6 @@ export class SurfaceEditorKernel {
       return { ...this.render(edited), volume, maxBoundaryError, minimumNormalDot, step }
     } finally { fs.forEach(f => k.release(f)); k.release(edited) }
   }
-  clear() { this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null }
+  clear() { this.revision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null }
   dispose() { this.clear(); this.kernel[Symbol.dispose]() }
 }
