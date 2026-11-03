@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { runCommand } from '../../src/commands/registry'
 import { useCommandActivity } from '../../src/commands/activity'
@@ -14,6 +14,7 @@ import type { DraftAnchor, FaceInfo, Preview } from './editorKernel'
 import type { Request } from './editor.worker'
 import { SurfaceViewport, hasSurfaceZebra, type StripeSettings } from './SurfaceViewport'
 import { dragDirection, type DragMode } from './localFrame'
+import { mirrorPartners, mirrorEdit } from './symmetry'
 import { selectNetPoints, type NetSelectionMode } from './netSelection'
 import './surface.css'
 type Payload = Request extends infer R ? R extends Request ? Omit<R, 'id'> : never : never
@@ -77,6 +78,8 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   }
   const [zebra, setZebra] = useState(false)
   const [stripes, setStripes] = useState<StripeSettings>({ orientation:'horizontal', width:3, color:'#5388b1' })
+  const [symmetry, setSymmetry] = useState(false)
+  const [mirrorAxis, setMirrorAxis] = useState(0), [mirrorOffset, setMirrorOffset] = useState(0)
   const [showNet, setShowNet] = useState(true), [transparency, setTransparency] = useState(0)
   const [busy, setBusy] = useState(false), [calculating, setCalculating] = useState(false)
   const [error, setError] = useState(''), [validNet, setValidNet] = useState<Net | null>(null)
@@ -142,7 +145,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
     try {
       const result = await ask<{ faces: FaceInfo[]; preview: Preview }>({ action: 'open', step })
       setNotes([]); setPlacingNote(false); setNoteError(''); loaded.current = { step, name: fileName }; setLoadId(i => i + 1); setValidNet(null)
-      setNet(null); base.current = null; history.current = []; at.current = -1; setSelected([]); setLocks([]); setFace(-1)
+      setSymmetry(false); setNet(null); base.current = null; history.current = []; at.current = -1; setSelected([]); setLocks([]); setFace(-1)
       setFaces(result.faces); setPreview(result.preview); setName(fileName.replace(/\.(step|stp)$/i, '') + '-edit.step')
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
@@ -161,9 +164,18 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   const editable = selected.filter(i => !locked.includes(i))
   const moveDirection = net && editable.length ? dragDirection(net, editable[0], dragMode, axis) : null
   const axisNames = dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']
+  const committed = history.current[at.current]
+  const partners = useMemo(() => symmetry && committed ? mirrorPartners(committed.poles, mirrorAxis, mirrorOffset) : null, [committed, symmetry, mirrorAxis, mirrorOffset])
+  const changePoles = (poles: Point[], final: boolean) => {
+    if (!committed) return
+    try {
+      const changed = { ...committed, poles: partners ? mirrorEdit(committed.poles, poles, partners, mirrorAxis, mirrorOffset, locked) : poles }
+      if (final) commit(changed); else setNet(changed)
+    } catch (e) { setNet(committed); setError((e as Error).message) }
+  }
   const transform = (fn: (p: Point, i: number, n: Net) => Point) => {
     if (!net) return
-    const n = structuredClone(net); editable.forEach(i => { n.poles[i] = fn(net.poles[i], i, net) }); commit(n)
+    const n = structuredClone(net); editable.forEach(i => { n.poles[i] = fn(net.poles[i], i, net) }); changePoles(n.poles, true)
   }
   const flatten = () => {
     if (!base.current) return
@@ -297,6 +309,20 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         {dragMode === 'local' && editable.length > 0 && !moveDirection && <p role="alert">Riferimento locale non definito in questo punto. Scegli un altro punto o il riferimento mondo.</p>}
         <label>Intensità trascinamento · {Math.round(dragStrength * 100)}%<input data-test="surface-drag-strength" type="range" min="0.05" max="1" step="0.05" value={dragStrength} onChange={e => setDragStrength(Number(e.target.value))} /></label>
         <p className="es-hint">Riduce lo spostamento durante il trascinamento per modifiche fini. Le quote numeriche restano esatte.</p>
+        <fieldset><legend>Simmetria dei poli</legend>
+          <label><input data-test="surface-symmetry" type="checkbox" checked={symmetry} onChange={e=>setSymmetry(e.target.checked)}/> Modifica anche il polo speculare</label>
+          {symmetry && <><label>Piano<select value={mirrorAxis} onChange={e=>setMirrorAxis(Number(e.target.value))}><option value={0}>YZ</option><option value={1}>XZ</option><option value={2}>XY</option></select></label>
+            <label>Posizione lungo {['X','Y','Z'][mirrorAxis]} (mm)<input data-test="surface-mirror-offset" type="number" step="any" defaultValue={mirrorOffset} onBlur={e=>{
+              if(Number.isFinite(e.target.valueAsNumber))setMirrorOffset(e.target.valueAsNumber)
+              else e.target.value=String(mirrorOffset)
+            }} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}/></label>
+            <p>I poli sul piano scorrono lungo il piano. La coppia deve appartenere alla faccia attiva ed essere libera.</p>
+            <button data-test="surface-project-poles" disabled={busy || !editable.length} onClick={()=>{
+              const placed=structuredClone(net)
+              editable.forEach(i=>{placed.poles[i][mirrorAxis]=mirrorOffset})
+              commit(placed)
+            }}>Porta i poli selezionati sul piano</button></>}
+        </fieldset>
         <button data-test="surface-control-net" aria-pressed={showNet} onClick={() => setShowNet(v => !v)}>{showNet ? 'Nascondi reticolo' : 'Mostra reticolo'}</button>
         {hasSurfaceZebra && <>
           <button data-test="surface-zebra" aria-pressed={zebra} onClick={() => setZebra(v=>!v)}>Zebra</button>
@@ -330,7 +356,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <button disabled={busy || !editable.length || !Number.isFinite(factor) || factor <= 0 || factor > 3} onClick={() => { const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factor : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
         <div className="es-row"><button data-test="surface-undo" disabled={busy || at.current <= 0} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || at.current >= history.current.length - 1} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
       </>}
-    </aside><main><SurfaceViewport strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={(poles, final) => { const n = { ...netRef.current!, poles }; if (final) commit(n); else setNet(n) }} />
+    </aside><main><SurfaceViewport strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={changePoles} />
       <div className="es-status" role="status" data-test="surface-status">{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · volume ${preview.volume.toFixed(3)} mm³ · scarto bordo ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
     <footer><span>{stripPaths?'Applica aggiunge la superficie cucita al progetto come nuovo corpo.':'Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.'}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={(!!stripPaths && (!stripResult || stripEdge>=0)) || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => stripPaths ? void applyStrip() : void finish(true)}>{stripPaths ? 'Applica superficie cucita' : 'Applica come nuovo corpo'}</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>

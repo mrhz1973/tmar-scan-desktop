@@ -6,8 +6,9 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync, renam
 import { resolve, join } from 'node:path'
 import assert from 'node:assert/strict'
 import { launchApp } from '../../../scripts/e2e-lib.mjs'
-const cells = process.argv.includes('--cells')
-const root = resolve('plugins/tmar-edit-surface/evidence', cells ? 'cell-selection' : 'net-selection')
+const symmetric = process.argv.includes('--symmetry')
+const cells = symmetric || process.argv.includes('--cells')
+const root = resolve('plugins/tmar-edit-surface/evidence', symmetric ? 'symmetry' : cells ? 'cell-selection' : 'net-selection')
 mkdirSync(root, { recursive: true })
 const out = mkdtempSync(join(root, 'run-')), started = performance.now(), kernel = await OcctKernel.init()
 const input = resolve('plugins/tmar-edit-surface/evidence/input-solid.step')
@@ -43,6 +44,11 @@ try {
   const edge=segment(11,12), adjacent=segment(12,13)
   const group=cells ? [6,11,12,7] : [11,12]
   const centroid=()=>group.reduce((v,i)=>v.add(poles[i]),new THREE.Vector3()).divideScalar(group.length)
+  if(symmetric){
+    await page.click('[data-test=surface-symmetry]')
+    const offset=await page.$('[data-test=surface-mirror-offset]')
+    await offset.click({clickCount:3});await offset.type(String(center.x));await offset.press('Tab')
+  }
   if(cells){
     await page.select('[data-test=surface-selection-mode]', 'cells')
     const corner=project(poles[0].clone().lerp(poles[6],.5))
@@ -125,7 +131,7 @@ try {
   await page.click('[data-test=surface-move]'); await changed(before)
   const numeric=await exportState(cells?'numeric-cell':'numeric-two-poles')
   // Tensor cubic basis at the middle: N1*N2 + N2*N2 = .125+.25.
-  assert(Math.abs(numeric.center[2]-base.center[2]-(cells ? 0.5625 : 0.375))<1e-8)
+  assert(Math.abs(numeric.center[2]-base.center[2]-(symmetric ? 0.75 : cells ? 0.5625 : 0.375))<1e-8)
   for(const index of group) poles[index].z+=1
   const from=project(centroid()),to=project(centroid().add(new THREE.Vector3(0,0,1)))
   const previous=await status();await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:8});await page.mouse.up();await changed(previous)
