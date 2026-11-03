@@ -247,3 +247,34 @@ and 119.996 mm2 and two shared edges. The separate kernel check reopens the
 three-face STEP, adds another strip and measures 930 mm2 across four faces on
 the exact numerical fixture. The UI test exercises STEP export, not host Apply.
 Evidence: evidence/duplicate-edge/run-u6mbbR/ (production).
+
+### Loading the current CAD body
+
+On a host registering `reverse.body.edit_source`, Carica corpo reads the
+selected built CAD body, including a moved open sheet. The host's body key and
+build version are checked again after this editor's worker opens the STEP.
+If the document changes during the read, the editor refuses the stale result
+and clears the old face list. The host's general STEP export policy is unchanged.
+
+On older hosts without this command, the existing export path remains available.
+The archived STEP fallback is restricted to a single unmodified imported sheet;
+its resource key is checked before opening it. This fallback does not establish
+a general way to read sheets modified by later project features.
+
+The integration fixture combined the coordinator's host revision `8d12863`
+with this plugin in an isolated source tree. A 20 x 30 mm sheet was imported
+and moved +40 mm in X. Carica corpo opened the moved geometry, two strips were
+created, and host Undo/Redo plus project save/reopen passed. Independent OCCT
+readback found Xmin 39.9999999 mm, one original face and three sewn faces.
+The compiled application separately reopened both bodies using the buttons in
+the saved project and exported valid CAD at the moved coordinates. A separate
+test held the editor worker's open request while the host really moved the
+body. The stale read was refused; after reopening, the moved STEP read back at
+X=40..60 mm. On the older host, a valid but mismatched STEP stored under the old
+resource key was refused. The worker delay and resource corruption are test
+instrumentation; the host move and CAD operations use the real runtime.
+
+Evidence: `evidence/current-source/host-moved-20261103/`,
+`host-compiled-20261103/`, `host-stale-20261103/` and `run-9Xi77S/`.
+The integrated host remains a draft and the full QuickSurface comparison,
+annotated Apply and parametric feature integration are still open.

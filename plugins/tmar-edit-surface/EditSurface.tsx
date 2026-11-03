@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { runCommand } from '../../src/commands/registry'
+import { listCommands, runCommand } from '../../src/commands/registry'
 import { useCommandActivity } from '../../src/commands/activity'
 import { useStore } from '../../src/state/store'
 import { saveFile } from '../../src/app/exports'
 import { create } from 'zustand'
 import { reEditorOpen, useReverse } from '../reverse/state/reStore'
+import { stepFileKey } from '../reverse/core/features'
 import { bodyStepResult } from '../tmar-body-export/bodyExport'
 import { assertNet, boundaryLocked, type Net, type Point } from './brep'
 import type { StripMove } from './sheetExtension'
@@ -41,7 +42,7 @@ export function EditSurface({ applyWithNotes }: SurfaceOptions = {}) {
 }
 function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () => void }) {
   const re = useReverse.getState(), model = useStore.getState()
-  const source = useRef({ version: re.buildVersion, features: re.features, file: model.fileName, alignment: model.appliedAlignment })
+  const source = useRef({ version: re.buildVersion, features: re.features, rolledBack: re.rolledBack, stepFiles: re.stepFiles, parameters: re.parameters, file: model.fileName, alignment: model.appliedAlignment })
   const [bodyId, setBodyId] = useState(re.bodies[0]?.id ?? '')
   const [name, setName] = useState('superficie-modificata.step')
   const loaded = useRef<{ step: string; name: string } | null>(null)
@@ -143,19 +144,26 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
     }, 90)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [net, continuity])
-  const load = async (step: string, fileName: string, expectedSheetFaces?: number) => {
+  const load = async (step: string, fileName: string, expected?: { faces: number; surface: boolean; guard?: () => Promise<void> }) => {
     setBusy(true); setError('')
     try {
       const result = await ask<{ faces: FaceInfo[]; preview: Preview }>({ action: 'open', step })
-      if (expectedSheetFaces !== undefined) {
+      if (expected) {
         checkProject()
-        if (result.faces.length !== expectedSheetFaces || !result.faces.every(f=>f.openSheet))
-          throw new Error('Lo STEP archiviato non identifica una sola superficie aperta del progetto.')
+        await expected.guard?.()
+        checkProject()
+        if (result.faces.length !== expected.faces || !result.faces.every(f => f.openSheet === expected.surface))
+          throw new Error('Il CAD ricevuto non corrisponde al corpo selezionato nel progetto.')
       }
       setNotes([]); setPlacingNote(false); setNoteError(''); loaded.current = { step, name: fileName }; setLoadId(i => i + 1); setValidNet(null)
       setSymmetry(false); setNet(null); base.current = null; history.current = []; at.current = -1; setSelected([]); setLocks([]); setFace(-1)
       setFaces(result.faces); setPreview(result.preview); setName(fileName.replace(/\.(step|stp)$/i, '') + '-edit.step')
-    } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
+    } catch (e) {
+      // Opening a STEP replaces the worker's document even if its validation
+      // fails. Do not keep a face list from the previous worker document.
+      loaded.current = null; setFaces([]); setPreview(null); setNet(null)
+      setFace(-1); setValidNet(null); setError((e as Error).message)
+    } finally { setBusy(false) }
   }
   const loadBody = async () => {
     setBusy(true); setError('')
@@ -163,9 +171,35 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
       checkProject()
       const state = useReverse.getState(), body = state.bodies.find(b=>b.id===bodyId)
       if (!body) throw new Error('Scegli un corpo CAD del progetto.')
+      if (listCommands().some(command => command.name === 'reverse.body.edit_source')) {
+        const result = await runCommand('reverse.body.edit_source', { body: body.id, expectedBuildVersion: source.current.version })
+        const read = result as { version?: number; source?: { bodyId?: number; bodyKey?: string; buildVersion?: number; kind?: string; faces?: number; closed?: boolean; units?: string; coordinateFrame?: string } }
+        const origin = read?.source
+        if (read?.version !== 1 || origin?.bodyId !== body.id || !origin.bodyKey || origin.buildVersion !== source.current.version ||
+            origin.kind !== (body.surface ? 'surface' : 'solid') || origin.faces !== body.faces || origin.closed !== body.closed ||
+            origin.units !== 'mm' || origin.coordinateFrame !== 'part') {
+          throw new Error('Il CAD ricevuto non identifica il corpo corrente del progetto.')
+        }
+        checkProject()
+        const { file } = bodyStepResult(result)
+        await load(new TextDecoder().decode(file.bytes), file.name, {
+          faces: origin.faces,
+          surface: origin.kind === 'surface',
+          guard: async () => {
+            // Opening the editor's worker is asynchronous too. The host key
+            // must still identify the same built body after that operation.
+            const checked = await runCommand('reverse.body.edit_source', {
+              body: body.id, expectedKey: origin.bodyKey, expectedBuildVersion: origin.buildVersion,
+            }) as { source?: { bodyId?: number; bodyKey?: string; buildVersion?: number } }
+            if (checked.source?.bodyId !== body.id || checked.source.bodyKey !== origin.bodyKey || checked.source.buildVersion !== origin.buildVersion)
+              throw new Error('Il corpo CAD è cambiato durante l’apertura.')
+          },
+        })
+        return
+      }
       try {
         const result = bodyStepResult(await runCommand('reverse.export.step', { bodies: [body.id] }))
-        await load(new TextDecoder().decode(result.file.bytes), result.file.name)
+        await load(new TextDecoder().decode(result.file.bytes), result.file.name, { faces: body.faces, surface: !!body.surface })
       } catch (err) {
         if (!body.surface || !(err instanceof Error) || !err.message.includes('there is no body to write')) throw err
         // The public STEP exporter intentionally omits ordinary sheets. Use the
@@ -181,7 +215,8 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
           throw new Error('Il progetto non espone lo STEP corrente di questa superficie. Apri uno STEP aggiornato della superficie.')
         const step = state.stepFiles[sourceImport.file.key]
         if (!step) throw new Error('Il progetto non contiene il file STEP della superficie.')
-        await load(step,sourceImport.file.name,body.faces)
+        if (stepFileKey(step) !== sourceImport.file.key) throw new Error('Il file STEP conservato nel progetto non corrisponde al riferimento della superficie.')
+        await load(step,sourceImport.file.name,{ faces: body.faces, surface: true })
       }
     }
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
@@ -271,7 +306,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   }
   const checkProject = () => {
         const r = useReverse.getState(), m = useStore.getState(), s = source.current
-        if (r.buildVersion !== s.version || r.features !== s.features || m.fileName !== s.file || m.appliedAlignment !== s.alignment || reEditorOpen(r) || r.building) throw new Error('Il progetto è cambiato. Esporta il risultato STEP e riaprilo nel progetto aggiornato.')
+        if (r.buildVersion !== s.version || r.features !== s.features || r.rolledBack !== s.rolledBack || r.stepFiles !== s.stepFiles || r.parameters !== s.parameters || m.fileName !== s.file || m.appliedAlignment !== s.alignment || reEditorOpen(r) || r.building) throw new Error('Il progetto è cambiato. Esporta il risultato STEP e riaprilo nel progetto aggiornato.')
   }
   const stripName=name.replace(/\.step$/i,'-striscia.step')
   const applyStrip = async () => {
