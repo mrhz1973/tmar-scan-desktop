@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { SurfaceEditorKernel } from './editorKernel'
+import { SurfaceEditorKernel, type DraftAnchor } from './editorKernel'
 import wasmUrl from 'occt-wasm/dist/occt-wasm.wasm?url'
-import type { Net } from './brep'
+import type { Net, Point } from './brep'
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
+  | { action: 'notePick'; point: Point; previewRevision: number }
+  | { action: 'noteResolve'; anchor: DraftAnchor; previewRevision: number }
   | { action: 'evaluate'; net: Net; continuity: 'G0' | 'G1'; exportStep?: boolean }
   | { action: 'createRecipe'; net: Net; continuity: 'G0' | 'G1'; lockedPoles: number[]; bodyId: string }
   | { action: 'restoreRecipe' | 'replayRecipe'; step: string; recipe: unknown; bodyId: string }
@@ -19,6 +21,8 @@ self.onmessage = (event: MessageEvent<Request>) => {
       switch (req.action) {
         case 'open': result = editor.open(req.step); break
         case 'select': result = editor.select(req.face); break
+        case 'notePick': result = editor.anchorFromPick(req.point,req.previewRevision); break
+        case 'noteResolve': result = editor.resolveAnchor(req.anchor,req.previewRevision); break
         case 'evaluate': result = editor.evaluate(req.net, req.continuity, req.exportStep); break
         case 'createRecipe': result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId); break
         case 'restoreRecipe': result = await editor.restoreRecipe(req.step, req.recipe, req.bodyId); break

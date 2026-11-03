@@ -18,8 +18,21 @@ it('moves an imported planar STEP face while preserving its through hole', async
     const blocked = info.trimLocks.find(i => !boundaryLocked(net,i,'G1'))!
     const bad = structuredClone(net); bad.poles[blocked][2] += 1
     expect(()=>editor.evaluate(bad,'G1')).toThrow(/protetto/)
+    const startPreview = editor.evaluate(net,'G1')
+    const original = structuredClone(net)
+    // Pin to the flat plate, close to the pole which is about to move.
+    const seed = net.poles[free]
+    const pin = editor.anchorFromPick(seed,startPreview.previewRevision)
+    expect(pin.at[2]).toBeCloseTo(10,9)
+    expect(()=>editor.anchorFromPick([12,12,10],startPreview.previewRevision)).toThrow(/foro/)
+    expect(()=>editor.anchorFromPick([seed[0],seed[1],16],startPreview.previewRevision)).toThrow(/distante/)
     net.poles[free][2] += 2
     const exportResult = editor.evaluate(net,'G1',true)
+    expect(()=>editor.resolveAnchor(pin.anchor,startPreview.previewRevision)).toThrow(/cambiata/)
+    const movedPin = editor.resolveAnchor(pin.anchor,exportResult.previewRevision)
+    expect(movedPin.at[2]).toBeGreaterThan(pin.at[2]+0.1)
+    const restoredPin = editor.resolveAnchor(pin.anchor,editor.evaluate(original,'G1').previewRevision)
+    expect(restoredPin.at).toEqual(pin.at)
     const recipe = await editor.createRecipe(net,'G1',[],'drilled-plate')
     const replayed = await editor.replayRecipe(step,recipe,'drilled-plate')
     expect(replayed.valid).toBe(true)
@@ -43,6 +56,8 @@ it('moves an imported planar STEP face while preserving its through hole', async
       const native = editor.open(exportResult.step!).faces.find(f=>!f.converted && f.trimLocks.length && !f.reason)
       expect(native).toBeDefined()
       const second = editor.select(native!.index)
+      const reselected = editor.evaluate(second,'G1')
+      expect(()=>editor.resolveAnchor(pin.anchor,reselected.previewRevision)).toThrow(/estraneo/)
       expect(second.nu).toBe(net.nu)
       expect(second.nv).toBe(net.nv)
       const protectedPole = native!.trimLocks.find(i=>!boundaryLocked(second,i,'G1'))
