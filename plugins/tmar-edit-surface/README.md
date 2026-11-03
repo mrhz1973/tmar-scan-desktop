@@ -96,3 +96,13 @@ Follow-up QS inspection reopened Edit Surface on the existing QA Freeform item. 
 ### Explicit coordinates and shared runtime, 2026-11-03
 
 Recipe version 2 declares millimetres and the imported STEP coordinate frame; experimental version 1 is rejected, without implicit migration. Injected kernels are borrowed and remain usable after editor disposal; editor-created kernels remain owned. Three kernel tests passed (3.57 s total), including a STEP metre-unit fixture normalized to mm and a borrowed-runtime lifetime check. TypeScript passed. This does not qualify host history or recipe persistence. See `RECIPE-INTEGRATION.md`.
+
+### Screen-plane drag checkpoint, 2026-11-03
+
+Added a choice between world-axis dragging and dragging in the camera plane. Screen dragging captures the plane and pointer offset at the start, preserves camera depth, respects pole locks and applies the selected drag strength. Numeric displacement and stretching still use the chosen X/Y/Z axis.
+
+Bounded QS comparison on the separate `modified-solid` QA document: created a rectangular Freeform face, displayed Control Net, moved a corner and used Ctrl+Z to restore it. Selected Manipulator → Screen, moved the corner diagonally, then used Ctrl+Z to restore the rectangle again. The observed Screen manipulator follows the display. This is an actual Freeform interaction check; it does not qualify imported STEP pole editing in QS, Local mode, or complete parity. The original imported solid was preserved; the QA document remains unsaved.
+
+`tests/e2e-screen-drag.mjs` passed in **8.170 s**, with zero browser errors. It imports a STEP solid, edits its top face using real mouse input, exports five STEP states and checks them independently in OCCT. Screen dragging changes the evaluated surface center by (-0.2928728, -0.0740030, +0.1659463) mm; the component along the view direction is **1.24e-13 mm**, numerical roundoff. Undo restores the original center and Redo restores the edited center. At 50% strength each displacement component is halved. Every exported solid is valid. TypeScript passed. Screenshot inspected; evidence in `evidence/screen-drag/run-MfDDsc/`. Production build and packaged desktop delivery were not repeated for this incremental checkpoint.
+
+The first test launch failed before application interaction because the isolated browser could not start under the restricted launcher; the approved rerun produced the recorded passing result. No active user CAD session was used for this browser test.

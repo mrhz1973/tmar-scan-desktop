@@ -9,7 +9,7 @@ interface Props {
   preview: Preview | null; net: Net | null; selected: number[]; locked: number[]; face: number
   axis: number; onFace: (i: number) => void; onPoint: (i: number, multi: boolean) => void
   onDrag: (poles: Point[], final: boolean) => void; busy: boolean
-  dragStrength: number; showNet: boolean; transparency: number
+  dragStrength: number; showNet: boolean; transparency: number; dragMode: 'axis' | 'screen'
 }
 export function SurfaceViewport(props: Props) {
   const host = useRef<HTMLDivElement>(null), current = useRef(props)
@@ -27,7 +27,7 @@ export function SurfaceViewport(props: Props) {
     const light = new THREE.DirectionalLight(0xffffff, 3); light.position.set(2, 5, 4); scene.add(light)
     const body = new THREE.Group(), cage = new THREE.Group(); scene.add(body, cage)
     const state = { scene, body, cage, camera, controls, radius: 1, fitted: false }; sceneRef.current = state
-    let drag: { index: number; start: Point[]; ids: number[]; x: number; y: number; sx: number; sy: number; axis: number; strength: number } | null = null
+    let drag: { index: number; start: Point[]; ids: number[]; x: number; y: number; sx: number; sy: number; axis: number; strength: number; screen: { plane: THREE.Plane; start: THREE.Vector3 } | null } | null = null
     let down = { x: 0, y: 0 }
     const raycaster = new THREE.Raycaster()
     const hits = (e: PointerEvent, objects: THREE.Object3D[]) => {
@@ -45,14 +45,28 @@ export function SurfaceViewport(props: Props) {
       p.onPoint(index, e.ctrlKey || e.metaKey)
       if (!p.net || p.locked.includes(index) || e.ctrlKey || e.metaKey) return
       const origin = new THREE.Vector3(...p.net.poles[index]), end = origin.clone(); end.setComponent(p.axis, end.getComponent(p.axis) + state.radius)
+      // Keep camera depth fixed. The initial ray hit accounts for grabbing off-center.
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), origin)
+      const start = raycaster.ray.intersectPlane(plane, new THREE.Vector3())
+      const screen = p.dragMode === 'screen' && start ? { plane, start } : null
+      if (p.dragMode === 'screen' && !screen) return
       origin.project(camera); end.project(camera)
       const r = div.getBoundingClientRect(), sx = (end.x - origin.x) * r.width / 2 / state.radius, sy = -(end.y - origin.y) * r.height / 2 / state.radius
-      if (sx * sx + sy * sy < 0.1) return
-      drag = { index, start: structuredClone(p.net.poles), ids: p.selected.includes(index) ? p.selected.filter(i => !p.locked.includes(i)) : [index], x: e.clientX, y: e.clientY, sx, sy, axis: p.axis, strength: p.dragStrength }
+      if (!screen && sx * sx + sy * sy < 0.1) return
+      drag = { index, start: structuredClone(p.net.poles), ids: p.selected.includes(index) ? p.selected.filter(i => !p.locked.includes(i)) : [index], x: e.clientX, y: e.clientY, sx, sy, axis: p.axis, strength: p.dragStrength, screen }
       renderer.domElement.setPointerCapture(e.pointerId); div.style.cursor = 'grabbing'
     }
     const dragPoles = (e: PointerEvent): Point[] => {
-      const d = drag!, poles = structuredClone(d.start), delta = ((e.clientX - d.x) * d.sx + (e.clientY - d.y) * d.sy) / (d.sx * d.sx + d.sy * d.sy)
+      const d = drag!, poles = structuredClone(d.start)
+      if (d.screen) {
+        hits(e, []) // Update the pointer ray, without letting the body occlude the handle.
+        const hit = raycaster.ray.intersectPlane(d.screen.plane, new THREE.Vector3())
+        if (!hit) return poles
+        const delta = hit.sub(d.screen.start).multiplyScalar(d.strength)
+        d.ids.forEach(i => { poles[i] = poles[i].map((x, j) => x + delta.getComponent(j)) as Point })
+        return poles
+      }
+      const delta = ((e.clientX - d.x) * d.sx + (e.clientY - d.y) * d.sy) / (d.sx * d.sx + d.sy * d.sy)
       d.ids.forEach(i => { poles[i][d.axis] += delta * d.strength })
       return poles
     }
