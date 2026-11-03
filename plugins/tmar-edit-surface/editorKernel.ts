@@ -3,9 +3,9 @@ import { OcctKernel, type Mesh, type BoundingBox, type ShapeHandle } from 'occt-
 import { assertNet, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
 import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 
-import { extendSheet, sheetEdgePaths } from './sheetExtension'
+import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 
-export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; singleSheet: boolean; trimLocks: number[] }
+export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; trimLocks: number[] }
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
@@ -72,6 +72,7 @@ export class SurfaceEditorKernel {
   private revision = 0
   private previewRevision = 0
   private validatedFace: ShapeHandle | null = null
+  private validatedSheetBrep: string | null = null
   infos: FaceInfo[] = []
   /** Injected kernels are borrowed; load() creates an editor-owned runtime. */
   constructor(readonly kernel: OcctKernel, private readonly ownsKernel = false) {}
@@ -98,12 +99,14 @@ export class SurfaceEditorKernel {
       const ids = this.records.flatMap((r, i) => signature(r) === signature(record) ? [i] : [])
       return ids.length === 1 ? ids[0] : -1
     })
+    const sourceKind=k.getShapeType(this.source)
+    const openSheet=this.solids===0 && (sourceKind==='face' || sourceKind==='shell')
     this.infos = this.faces.map((face, index) => {
       let reason: string | null = null
       let trimLocks: number[] = []
       try { trimLocks = this.netFor(index).trimLocks } catch (e) { reason = e instanceof Error ? e.message : String(e) }
       const record = this.records[this.recordsByFace[index]]
-      return { index, trimLocks, singleSheet:this.solids===0 && this.faces.length===1, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
+      return { index, trimLocks, openSheet, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
         enriched: !!record?.net && enrichBicubic(record.net) !== record.net }
     })
     return { faces: this.infos, preview: this.render(this.source) }
@@ -313,6 +316,7 @@ export class SurfaceEditorKernel {
       this.editBrep = temporary.editBrep; this.editRecord = temporary.editRecord
       this.solids = temporary.solids; this.infos = temporary.infos
       // Transfer handle ownership without disposing the shared OCCT runtime.
+      this.validatedSheetBrep=temporary.validatedSheetBrep
       this.validatedFace = temporary.validatedFace; temporary.validatedFace = null
       result.preview.previewRevision = ++this.previewRevision
       temporary.source = null; temporary.faces = []
@@ -326,6 +330,7 @@ export class SurfaceEditorKernel {
     finally { temporary.clear() }
   }
   private releasePreviewFace() {
+    this.validatedSheetBrep=null
     if (this.validatedFace !== null) this.kernel.release(this.validatedFace)
     this.validatedFace = null
   }
@@ -334,14 +339,41 @@ export class SurfaceEditorKernel {
       throw new Error('Anteprima cambiata. Scegli il punto sulla faccia aggiornata.')
     return this.validatedFace
   }
-  private sheetFace(revision:number) {
+  private withSheet<T>(revision:number,read:(sheet:ShapeHandle)=>T):T {
     const face=this.noteFace(revision)
-    if (!this.infos[this.chosen]?.singleSheet) throw new Error('La duplicazione richiede una superficie aperta con una sola faccia.')
-    return face
+    if (!this.infos[this.chosen]?.openSheet) throw new Error('La duplicazione richiede una superficie aperta.')
+    if (!this.validatedSheetBrep) return read(face)
+    const sheet=this.kernel.fromBREP(this.validatedSheetBrep)
+    try {return read(sheet)} finally {this.kernel.release(sheet)}
   }
-  sheetEdges(revision:number) { return sheetEdgePaths(this.kernel,this.sheetFace(revision)) }
-  duplicateSheetEdge(revision:number,edge:number,delta:Point) {
-    return extendSheet(this.kernel,this.sheetFace(revision),edge,delta)
+  sheetEdges(revision:number) { return this.withSheet(revision,s=>sheetEdgePaths(this.kernel,s)) }
+  duplicateSheetEdge(revision:number,edge:number,delta:Point,previous:StripMove[]=[],expectedPath?:Point[]) {
+    return this.withSheet(revision,s=>this.extendSequence(s,edge,delta,previous,expectedPath))
+  }
+  private extendSequence(shape:ShapeHandle,edge:number,delta:Point,previous:StripMove[],expectedPath?:Point[]) {
+    const k=this.kernel, source=shape
+    if(previous.length>=64) throw new Error('Raggiunto il limite di 64 estensioni per bozza.')
+    try {
+      let addedArea=0
+      const moves:StripMove[]=[]
+      for(const move of [...previous,{edge,delta,path:expectedPath}]){
+        const paths=sheetEdgePaths(k,shape)
+        let index=move.edge
+        if(move.path){
+          const path=move.path
+          const matches=paths.flatMap((p,i)=>p.length===path.length && (
+            p.every((q,j)=>dist(q,path[j])<1e-7) || p.every((q,j)=>dist(q,path[p.length-1-j])<1e-7))?[i]:[])
+          if(matches.length!==1)throw new Error('Il bordo libero non è più identificabile.')
+          index=matches[0]
+        }
+        const next=extendSheet(k,shape,index,move.delta)
+        if(shape!==source)k.release(shape)
+        shape=next.shell;addedArea=next.addedArea
+        moves.push({edge:index,delta:move.delta,path:paths[index]})
+      }
+      return {step:k.exportStep(shape),addedArea,totalArea:k.getSurfaceArea(shape),
+        paths:sheetEdgePaths(k,shape),preview:this.render(shape),moves}
+    } finally {if(shape!==source)k.release(shape)}
   }
   finalFaceWitness(previewRevision: number) {
     const face = this.noteFace(previewRevision)
@@ -428,6 +460,7 @@ export class SurfaceEditorKernel {
       const step = exportStep ? k.exportStep(edited) : undefined
       const preview = this.render(edited)
       // Transfer this one subshape handle. The finally block releases the others.
+      if(this.infos[this.chosen].openSheet && fs.length>1)this.validatedSheetBrep=text
       this.validatedFace = fs.splice(this.chosen,1)[0]
       return { ...preview, volume, maxBoundaryError, minimumNormalDot, step, previewRevision: ++this.previewRevision }
     } finally { fs.forEach(f => k.release(f)); k.release(edited) }

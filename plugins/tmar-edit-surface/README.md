@@ -227,3 +227,23 @@ the original face remained 600 mm2. Undo/Redo and independent reimport
 confirmed two valid faces with one shared topological edge. The test also
 covers overlap refusal and refusal on closed solids.
 Evidence: evidence/duplicate-edge/run-PU4ViG/.
+
+### Consecutive free-edge extensions
+
+Duplica bordo libero keeps the accepted shell visible and exposes its remaining
+outer boundary edges after each drag. An edge shared by two faces is no longer
+a handle. Local undo and redo restore the accepted geometry, its handles and its
+STEP export together. The chain is rebuilt from the validated working sheet,
+matching a recorded edge path and refusing ambiguous or missing matches. A
+chain is limited to 64 moves, with the initial state and up to 11 recent
+snapshots retained for local undo. Imported open shells with multiple faces
+can be extended after selecting an eligible working face.
+
+Browser QA in development and production used a 20 x 30 mm sheet, a horizontal
+drag of about 5 mm and a second drag of about 4 mm in Z on the newly created
+edge. Undo of the second drag returned to two faces. Redo restored three.
+Independent reimport found one valid sheet with face areas 600.000, 149.960
+and 119.996 mm2 and two shared edges. The separate kernel check reopens the
+three-face STEP, adds another strip and measures 930 mm2 across four faces on
+the exact numerical fixture. The UI test exercises STEP export, not host Apply.
+Evidence: evidence/duplicate-edge/run-u6mbbR/ (production).
