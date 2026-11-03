@@ -26,7 +26,8 @@ try {
   }
   await page.evaluate(()=>{document.documentElement.dataset.theme='dark'})
   await page.click('[data-test=tmar-build-version]');await page.waitForSelector('[data-test=tmar-build-details]')
-  check((await page.$eval('[data-test=tmar-build-details]',e=>e.innerText)).includes(label),'Settings repeats the same number')
+  // Settings headings use text-transform: uppercase; compare the rendered wording case-insensitively.
+  check((await page.$eval('[data-test=tmar-build-details]',e=>e.innerText)).toLowerCase().includes(label.toLowerCase()),'Settings repeats the same number')
   check(!(await page.$eval('[data-test=tmar-technical-details]',e=>e.open)),'Technical details initially collapsed')
   await page.click('[data-test=tmar-technical-details] summary')
   check((await page.$eval('[aria-label="TMAR source revision"]',e=>e.value))===before.revision,'Expanding details reveals the exact commit')
