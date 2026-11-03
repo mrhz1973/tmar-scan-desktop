@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { Preview } from './editorKernel'
@@ -167,13 +167,15 @@ export function SurfaceViewport(props: Props) {
       material.needsUpdate = true
     })
   }, [props.preview, props.face, props.transparency])
-  useEffect(() => {
+  useLayoutEffect(() => {
     const s = sceneRef.current; if (!s) return
     s.cage.traverse(dispose); s.cage.clear()
     const n = props.net; if (!n) return
     n.poles.forEach((p, i) => {
       const color = props.selected.includes(i) ? '#ffcf35' : props.locked.includes(i) ? '#89939c' : '#58f3d0'
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(s.radius * 0.012, 10, 8), new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false })); mesh.position.set(...p); mesh.userData.point = i; mesh.renderOrder = 5; s.cage.add(mesh)
+      // Picking can run before the next render after the cage is rebuilt.
+      mesh.updateWorldMatrix(true, false)
     })
     const anchor = props.selected.find(i => !props.locked.includes(i))
     if (anchor !== undefined && props.dragMode !== 'screen') {
