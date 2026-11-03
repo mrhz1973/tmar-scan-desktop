@@ -9,6 +9,12 @@ const project=process.argv.includes('--project')
 const moved=process.argv.includes('--moved')
 const hostSource=process.argv.includes('--host-source')
 const chain=project || process.argv.includes('--chain')
+const direct=process.argv.includes('--direct')
+const cancelFirst=process.argv.includes('--cancel')
+const pending=process.argv.includes('--pending')
+const reject=process.argv.includes('--reject')
+assert(!cancelFirst || direct, '--cancel requires --direct')
+assert(!reject || (direct && !pending), '--reject requires --direct without --pending')
 assert(!moved || (project && hostSource), '--moved requires --project --host-source')
 const k=await OcctKernel.init(),box=k.makeBox(20,30,10),fs=k.getSubShapes(box,'face')
 const root=resolve('plugins/tmar-edit-surface/evidence/duplicate-edge');mkdirSync(root,{recursive:true})
@@ -33,13 +39,90 @@ try {
   else await (await page.$('[data-test=surface-step-file]')).uploadFile(input)
   await page.waitForFunction(()=>document.querySelectorAll('[data-test=surface-face] option').length===2)
   await page.select('[data-test=surface-face]','0');await page.waitForFunction(()=>document.querySelector('[data-test=strip-open]')?.disabled===false)
-  await page.click('[data-test=strip-open]');await page.waitForSelector('[data-test=strip-axis-0]');await page.click('[data-test=strip-axis-0]')
+  if(direct) {
+    await page.click('[data-test=surface-axis-0]')
+    await page.waitForFunction(()=>Number(document.querySelector('[data-test=edit-surface-viewport]')?.dataset.directEdges)>0)
+  } else {
+    await page.click('[data-test=strip-open]');await page.waitForSelector('[data-test=strip-axis-0]');await page.click('[data-test=strip-axis-0]')
+  }
   const r=await page.$eval('[data-test=edit-surface-viewport]',e=>e.getBoundingClientRect().toJSON())
   const offset=moved?40:0
   const rad=Math.hypot(20,30)/2, c=new Vector3(10+offset,15,10),camera=new PerspectiveCamera(40,r.width/r.height,rad/1000,rad*100)
   camera.position.copy(c).addScaledVector(new Vector3(1.5,-1.9,1.8),rad);camera.up.set(0,0,1);camera.lookAt(c);camera.updateMatrixWorld()
   const xy=(x,z=10)=>{const q=new Vector3(x+offset,15,z).project(camera);return[r.x+(1+q.x)*r.width/2,r.y+(1-q.y)*r.height/2]}
-  await page.mouse.move(...xy(20));await page.mouse.down();await page.mouse.move(...xy(25),{steps:8});await page.mouse.up()
+  if(pending)await page.evaluate(()=>{
+    const original=Worker.prototype.postMessage
+    window.stripCalls=0;window.heldStrip=null;window.holdStrip=true
+    Worker.prototype.postMessage=function(message,...rest){
+      if(message?.action==='duplicateSheetEdge'){
+        window.stripCalls++
+        if(window.holdStrip){window.heldStrip={worker:this,message,rest};return}
+      }
+      return original.call(this,message,...rest)
+    }
+    window.releaseStrip=()=>{const h=window.heldStrip;window.holdStrip=false;original.call(h.worker,h.message,...h.rest)}
+  })
+  if(reject)await page.evaluate(()=>{
+    const original=Worker.prototype.postMessage
+    window.rejectNextStrip=true
+    Worker.prototype.postMessage=function(message,...rest){
+      if(window.rejectNextStrip && message?.action==='duplicateSheetEdge'){
+        window.rejectNextStrip=false
+        return original.call(this,{...message,delta:[0,0,0]},...rest)
+      }
+      return original.call(this,message,...rest)
+    }
+  })
+  if(direct) {
+    const selectHandle=async()=>{
+      await page.waitForFunction(()=>Number(document.querySelector('[data-test=edit-surface-viewport]')?.dataset.directEdges)>0)
+      await page.mouse.click(...xy(20));await page.waitForSelector('[data-test=strip-direct-handle]',{visible:true})
+      const h=await page.$eval('[data-test=strip-direct-handle]',e=>e.getBoundingClientRect().toJSON())
+      return [h.x+h.width/2,h.y+h.height/2]
+    }
+    const restored=async()=>{
+      await page.waitForSelector('[data-test=surface-axis-0]')
+      assert.equal(await page.$('[data-test=strip-export]'),null,'An aborted D gesture must return to the face editor')
+      if(pending)assert.equal(await page.evaluate(()=>window.stripCalls),0)
+    }
+    let start=await selectHandle(),a=xy(20),b=xy(25)
+    if(await page.$('[data-test=surface-zebra]')){
+      await page.click('[data-test=surface-zebra]');await page.click('[data-test=surface-note-add]')
+      assert.equal(await page.$('[data-test=strip-direct-handle]'),null,'D must not intercept note placement')
+      await page.click('[data-test=surface-note-add]');await page.click('[data-test=surface-zebra]')
+      start=await selectHandle()
+    }
+    await page.mouse.click(...start);await restored()
+    if(cancelFirst) {
+      start=await selectHandle()
+      await page.mouse.move(...start);await page.mouse.down()
+      await page.mouse.move(start[0]+b[0]-a[0],start[1]+b[1]-a[1],{steps:8})
+      await page.waitForFunction(()=>document.querySelector('[data-test=strip-result]')?.textContent==='Anteprima striscia')
+      await page.$eval('[data-test=edit-surface-viewport]',div=>div.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:1,pointerType:'mouse'})))
+      await page.mouse.up();await restored()
+    }
+    start=await selectHandle()
+    await page.screenshot({path:join(out,'direct-handle.png')})
+    await page.mouse.move(...start);await page.mouse.down()
+    await page.mouse.move(start[0]+b[0]-a[0],start[1]+b[1]-a[1],{steps:8})
+    await page.waitForFunction(()=>document.querySelector('[data-test=strip-result]')?.textContent==='Anteprima striscia')
+    await page.screenshot({path:join(out,'direct-preview.png')});await page.mouse.up()
+  } else {
+    await page.mouse.move(...xy(20));await page.mouse.down();await page.mouse.move(...xy(25),{steps:8});await page.mouse.up()
+  }
+  if(reject) {
+    await page.waitForFunction(()=>document.querySelector('[data-test=surface-status]')?.textContent.includes('diverso da zero'))
+    assert(await page.$eval('[data-test=strip-export]',e=>e.disabled))
+    assert(await page.$eval('[data-test=strip-undo]',e=>e.disabled))
+    await page.mouse.move(...xy(20));await page.mouse.down();await page.mouse.move(...xy(25),{steps:8});await page.mouse.up()
+  }
+  if(pending) {
+    await page.waitForFunction(()=>window.heldStrip!==null)
+    assert(await page.$eval('[data-test=strip-undo]',e=>e.disabled))
+    await page.mouse.move(...xy(20));await page.mouse.down();await page.mouse.move(...xy(25),{steps:5});await page.mouse.up()
+    assert.equal(await page.evaluate(()=>window.stripCalls),1,'A pending operation must block a second drag')
+    await page.evaluate(()=>window.releaseStrip())
+  }
   await page.waitForFunction(()=>document.querySelector('[data-test=strip-export]')?.disabled===false)
   const accepted=await page.$eval('[data-test=strip-result]',e=>e.textContent)
   await page.click('[data-test=strip-undo]')
@@ -134,6 +217,6 @@ try {
     }
     assert.deepEqual(consoleErrors,[])
     console.log(out,areas)
-    writeFileSync(join(out,'result.json'),JSON.stringify({valid:true,areas,sharedEdges,chain,consoleErrors,projectResult}))
+    writeFileSync(join(out,'result.json'),JSON.stringify({valid:true,areas,sharedEdges,chain,direct,cancelFirst,pending,reject,consoleErrors,projectResult}))
   }finally{faces.forEach(f=>k.release(f));k.release(shape)}
 }catch(error){console.error('Edit Surface QA:',error,await page.evaluate(()=>({kernel:window.__re?.store.getState().kernelStatus,bodies:window.__re?.store.getState().bodies.length,status:document.querySelector('[data-test=surface-status]')?.textContent,dialog:document.querySelector('.es-dialog')?.innerText?.slice(-900)})));throw error}finally{await browser.close();k[Symbol.dispose]()}
