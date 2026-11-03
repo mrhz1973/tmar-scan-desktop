@@ -4,8 +4,10 @@ import type { Point } from './brep'
 /** A strict replay recipe, not an automatic topological naming algorithm. */
 export interface SurfaceEditRecipe {
   schema: 'tmar.surface-edit'
-  version: 1
+  version: 2
   engine: 'occt-wasm-5.7.1/brep-v3'
+  units: 'mm'
+  coordinateFrame: 'imported-step'
   source: { bodyId: string; brepSha256: string; faceCount: number; solidCount: number }
   faceIndex: number
   preparation: 'plane-to-bicubic' | 'bicubic-midpoint-refinement' | 'native-nurbs'
@@ -25,7 +27,8 @@ export function readRecipe(value: unknown): SurfaceEditRecipe {
   const r = value as SurfaceEditRecipe | null
   const integer = (n: unknown, min: number, max: number) => typeof n === 'number' && Number.isInteger(n) && n >= min && n <= max
   const digest = (s: unknown) => typeof s === 'string' && /^[a-f0-9]{64}$/.test(s)
-  if (!r || r.schema !== 'tmar.surface-edit' || r.version !== 1 || r.engine !== 'occt-wasm-5.7.1/brep-v3'
+  if (!r || r.schema !== 'tmar.surface-edit' || r.version !== 2 || r.engine !== 'occt-wasm-5.7.1/brep-v3'
+    || r.units !== 'mm' || r.coordinateFrame !== 'imported-step'
     || !r.source || typeof r.source.bodyId !== 'string' || !r.source.bodyId.trim() || r.source.bodyId.length > 1024
     || !digest(r.source.brepSha256) || !integer(r.source.faceCount, 1, 1000000) || !integer(r.source.solidCount, 0, 1)
     || !integer(r.faceIndex, 0, r.source.faceCount - 1) || !digest(r.baseNetSha256)

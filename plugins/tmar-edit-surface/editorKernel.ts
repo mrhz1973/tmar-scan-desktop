@@ -20,8 +20,9 @@ export class SurfaceEditorKernel {
   private solids = 0
   private revision = 0
   infos: FaceInfo[] = []
-  constructor(readonly kernel: OcctKernel) {}
-  static async load(wasm?: string) { return new SurfaceEditorKernel(await OcctKernel.init(wasm ? { wasm } : undefined)) }
+  /** Injected kernels are borrowed; load() creates an editor-owned runtime. */
+  constructor(readonly kernel: OcctKernel, private readonly ownsKernel = false) {}
+  static async load(wasm?: string) { return new SurfaceEditorKernel(await OcctKernel.init(wasm ? { wasm } : undefined), true) }
   private count(s: ShapeHandle, type: 'solid' | 'shell' | 'face') { const a = this.kernel.getSubShapes(s, type); const n = a.length; a.forEach(h => this.kernel.release(h)); return n }
   open(step: string) {
     this.clear()
@@ -122,7 +123,8 @@ export class SurfaceEditorKernel {
     const base = structuredClone(this.originalNet), next = structuredClone(net), rev = this.revision
     assertNet(base, next, continuity)
     const recipe: SurfaceEditRecipe = {
-      schema: 'tmar.surface-edit', version: 1, engine: 'occt-wasm-5.7.1/brep-v3',
+      schema: 'tmar.surface-edit', version: 2, engine: 'occt-wasm-5.7.1/brep-v3',
+      units: 'mm', coordinateFrame: 'imported-step',
       source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids },
       faceIndex: this.chosen, preparation: this.preparation(), baseNetSha256: '', continuity,
       edits: next.poles.flatMap((point, index) => point.some((x, d) => x !== base.poles[index][d]) ? [{ index, point: [...point] as Point }] : []),
@@ -230,5 +232,5 @@ export class SurfaceEditorKernel {
     } finally { fs.forEach(f => k.release(f)); k.release(edited) }
   }
   clear() { this.revision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null }
-  dispose() { this.clear(); this.kernel[Symbol.dispose]() }
+  dispose() { this.clear(); if (this.ownsKernel) this.kernel[Symbol.dispose]() }
 }
