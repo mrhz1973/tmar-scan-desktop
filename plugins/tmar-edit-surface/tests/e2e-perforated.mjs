@@ -6,7 +6,8 @@ import { Vector3, PerspectiveCamera, Box3, BufferAttribute } from 'three'
 import { OcctKernel } from 'occt-wasm'
 import { launchApp, pixelDiff } from '../../../scripts/e2e-lib.mjs'
 
-const zebra=process.argv.includes('--zebra')
+const note=process.argv.includes('--note')
+const zebra=note || process.argv.includes('--zebra')
 const chamfer=process.argv.includes('--chamfer')
 const reopen=process.argv.includes('--reopen')
 const root=resolve('plugins/tmar-edit-surface/evidence',chamfer?'trimmed-outer':'perforated')
@@ -73,8 +74,28 @@ try {
   cam.position.copy(center).add(new Vector3(1.5,-1.9,1.8).multiplyScalar(radius))
   cam.up.set(0,0,1);cam.lookAt(center);cam.updateMatrixWorld()
   const project=z=>{const q=new Vector3(chamfer?30:36,(chamfer||reopen)?30:36,z).project(cam);return [r.x+(1+q.x)*r.width/2,r.y+(1-q.y)*r.height/2]}
+  const noteText='Controllare il raccordo vicino al foro'
+  let noteStart, noteEnd
+  if(note){
+    await page.click('[data-test=surface-note-add]')
+    await page.mouse.click(...project(10))
+    await page.waitForSelector('[data-test=surface-note-text]')
+    await page.type('[data-test=surface-note-text]',noteText)
+    noteStart=await page.$eval('[data-test=surface-note-position]',e=>e.textContent)
+    assert(await page.$eval('[data-test=surface-apply]',e=>e.disabled))
+  }
   await page.mouse.move(...project(10));await page.mouse.down()
   await page.mouse.move(...project(12),{steps:6});await page.mouse.up()
+  if(note){
+    await page.waitForFunction(start=>{
+      const label=document.querySelector('[data-test=surface-note-position]')?.textContent
+      return label?.endsWith(' mm') && label!==start
+    },{},noteStart)
+    noteEnd=await page.$eval('[data-test=surface-note-position]',e=>e.textContent)
+    assert.equal(await page.$eval('[data-test=surface-note-text]',e=>e.value),noteText)
+    await page.screenshot({path:join(out,'zebra-note.png')})
+    for(const b of await page.$$('.es-dialog button')) if(await b.evaluate(e=>e.textContent==='Rimuovi nota 1')){await b.click();break}
+  }
   await ready()
   assert.equal(await page.$eval('[data-test=surface-selection]',e=>e.textContent),'1 selezionati · 1 modificabili')
   await page.screenshot({path:join(out,'edit-drilled-face.png')})
@@ -115,7 +136,7 @@ try {
       } finally {edges.forEach(e=>k.release(e));k.release(outer)}
     }
     assert(maxRimError<1e-7);assert.deepEqual(consoleErrors,[])
-    const report={reopen,...(zebra?{zebraPixelDifferences:differences}:{}),...(chamfer?{outerEdges:5,chamferSamples:33,maxChamferError}:{}),inputVolume:volume,editedVolume:k.getVolume(edited),faces:faces.length,wires:2,rimSamples:72,maxRimError}
+    const report={reopen,...(note?{noteStart,noteEnd}:{}),...(zebra?{zebraPixelDifferences:differences}:{}),...(chamfer?{outerEdges:5,chamferSamples:33,maxChamferError}:{}),inputVolume:volume,editedVolume:k.getVolume(edited),faces:faces.length,wires:2,rimSamples:72,maxRimError}
     writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));console.log(out, report)
   } finally { faces.forEach(f=>k.release(f));k.release(edited) }
 } finally { await browser.close();[...fs,base].forEach(h=>k.release(h));k[Symbol.dispose]() }
