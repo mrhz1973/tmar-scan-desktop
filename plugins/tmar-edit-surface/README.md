@@ -1,5 +1,17 @@
 # Edit Surface — CAD prototype checkpoint
 
+### Scan/CAD snapping and direct-handle correction, 2026-11-03
+
+When a body is loaded from the project, the editor can show the visible scan and other visible CAD bodies as translucent references. The magnet is on by default with a 1 mm adjustable reach; Alt temporarily disables it. During a pole drag it searches along the chosen world/local axis, or along the view direction for screen-plane movement, and labels a successful hit. Other faces of the edited body are also candidates; the edited face is excluded. Hidden project references are excluded. A STEP opened directly outside the project has no verified project coordinate relationship, so only its own other faces are offered as references; import it and load the project body to use the scan and other bodies. Reference hits use displayed tessellation; **a NURBS pole is generally not a point on the resulting surface**. Locked poles and existing geometry validation remain in force. No assertion of exact surface-to-scan contact or global G1 is made.
+
+The visible scan geometry/BVH is borrowed without disposal; CAD references use wrappers around the existing immutable buffers. No host project geometry is modified during the drag. If a reference changes or disappears it ceases to be a candidate. This is independent of the Patch Network editor and does not qualify its snap or vertical movement.
+
+The direct edge-duplication handle is offset and joined to its anchor by a leader; it is hidden while free-boundary editing is active, where the explicit duplication button remains available. Its drag is calibrated at the original edge anchor. Pole dragging now starts after four pixels; Escape during an active pole drag restores the original draft instead of closing the editor.
+
+Actual Chrome pointer/STEP readback tests passed in an isolated source host and in its compiled build for a 20×30×10 mm box and separate scan or CAD references at +2 mm. The sampled edited surface centre was **10.500 mm** with snap, and **10.375 mm** with Alt or snap off; the latter are not measurements of scanner accuracy. Escape restored the original draft in the scan fixture. Seven snap unit tests and two edge-picker unit tests passed, as did TypeScript and the compiled build. The unmodified free-boundary regression and the D/cancel/pending/chained-extension test passed in the source host; compiled D retesting is still pending. Evidence and compact synthetic projects are in `evidence/snap/`; scripts are `tests/e2e-snap.mjs` and `tests/e2e-snap-cad.mjs`.
+
+Not yet qualified: a broad range of user projects, screen-plane/local-direction snapping, exact B-rep edges/vertices as targets, large-scan latency, changing reference visibility while the dialog remains open, or QuickSurface parity. The QS window was not capturable in this run. The compiled test initially timed out because it used a dev-only hook; the successful compiled runs above use the public project/UI path. The test host temporarily ran out of disk space; only known inactive browser-test profiles were removed, and Windows-blocked files were left untouched.
+
 2026-11-03 · branch `codex/edit-surface` · base `e90b4c68f16792faffcfa0423fca6b606dba703a`.
 
 ## What works

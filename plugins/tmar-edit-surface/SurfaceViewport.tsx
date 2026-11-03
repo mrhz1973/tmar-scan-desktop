@@ -10,6 +10,10 @@ import type { Net, Point } from './brep'
 import { dragDirection, type DragMode } from './localFrame'
 import { bindStripDrag, drawStrip, pickSheetEdge, type DirectStrip, type StripDrag } from './sheetDrag'
 import { netEdges, type NetSelectionMode } from './netSelection'
+import { sceneOf } from '../../src/commands/host'
+import { reSceneOf } from '../reverse/viewer/reScene'
+import { withBoundsTree } from '../reverse/viewer/bodyPicks'
+import { snapAlong, type SnapHit } from './snap'
 
 export interface StripeSettings { orientation: 'horizontal' | 'vertical'; width: number; color: string }
 type LayerOptions = StripeSettings & { target: 'visible'; selectedIds: number[] }
@@ -30,19 +34,25 @@ interface Props {
   dragStrength: number; showNet: boolean; transparency: number; dragMode: DragMode
   stripes: StripeSettings | null
   selectionMode: NetSelectionMode
+  snap: boolean; snapDistance: number; referenceBody: number | null
+  onReferenceCount: (count: number) => void
+  registerCancel: (fn: () => boolean) => void
 }
 export function SurfaceViewport(props: Props) {
   const host = useRef<HTMLDivElement>(null), current = useRef(props)
   const handle = useRef<HTMLButtonElement>(null)
+  const handleLeader = useRef<HTMLDivElement>(null)
+  const snapFeedback = useRef<HTMLDivElement>(null)
   const [edgeHandle, setEdgeHandleState] = useState<{edge:number; anchor:Point}|null>(null)
   const edgeHandleRef = useRef(edgeHandle)
   const setEdgeHandle = (value:{edge:number; anchor:Point}|null) => {
     if(handle.current) handle.current.style.visibility='hidden'
+    if(handleLeader.current) handleLeader.current.style.visibility='hidden'
     edgeHandleRef.current=value;setEdgeHandleState(value)
   }
   current.current = props
   const stripeLayer = useRef<StripeLayer | null>(null)
-  const sceneRef = useRef<{ scene: THREE.Scene; body: THREE.Group; cage: THREE.Group; hover: THREE.Group; hoverKey: string; camera: THREE.PerspectiveCamera; controls: OrbitControls; radius: number; fitted: boolean } | null>(null)
+  const sceneRef = useRef<{ scene: THREE.Scene; body: THREE.Group; references: THREE.Group; cage: THREE.Group; hover: THREE.Group; hoverKey: string; camera: THREE.PerspectiveCamera; controls: OrbitControls; radius: number; fitted: boolean } | null>(null)
   useEffect(() => {
     const div = host.current!, scene = new THREE.Scene()
     scene.background = new THREE.Color('#26343e')
@@ -54,9 +64,9 @@ export function SurfaceViewport(props: Props) {
     controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }
     scene.add(new THREE.HemisphereLight(0xffffff, 0x46505e, 2))
     const light = new THREE.DirectionalLight(0xffffff, 3); light.position.set(2, 5, 4); scene.add(light)
-    const body = new THREE.Group(), cage = new THREE.Group(), hover = new THREE.Group(); scene.add(body, cage, hover)
-    const state = { scene, body, cage, hover, hoverKey: '', camera, controls, radius: 1, fitted: false }; sceneRef.current = state
-    let drag: { index: number; start: Point[]; ids: number[]; x: number; y: number; sx: number; sy: number; direction: Point; strength: number; screen: { plane: THREE.Plane; start: THREE.Vector3 } | null } | null = null
+    const body = new THREE.Group(), references = new THREE.Group(), cage = new THREE.Group(), hover = new THREE.Group(); scene.add(references, body, cage, hover)
+    const state = { scene, body, references, cage, hover, hoverKey: '', camera, controls, radius: 1, fitted: false }; sceneRef.current = state
+    let drag: { index: number; start: Point[]; ids: number[]; x: number; y: number; sx: number; sy: number; direction: Point; strength: number; started: boolean; screen: { plane: THREE.Plane; start: THREE.Vector3 } | null } | null = null
     let down = { x: 0, y: 0 }
     const raycaster = new THREE.Raycaster()
     const hits = (e: PointerEvent, objects: THREE.Object3D[]) => {
@@ -194,25 +204,63 @@ export function SurfaceViewport(props: Props) {
       origin.project(camera); end.project(camera)
       const r = div.getBoundingClientRect(), sx = (end.x - origin.x) * r.width / 2 / state.radius, sy = -(end.y - origin.y) * r.height / 2 / state.radius
       if (!screen && sx * sx + sy * sy < 0.1) return
-      drag = { index, start: structuredClone(p.net.poles), ids, x: e.clientX, y: e.clientY, sx, sy, direction, strength: p.dragStrength, screen }
+      drag = { index, start: structuredClone(p.net.poles), ids, x: e.clientX, y: e.clientY, sx, sy, direction, strength: p.dragStrength, screen, started: false }
       div.style.cursor = 'grabbing'
+    }
+    const showSnap = (hit: SnapHit | null) => {
+      div.dataset.snapKind = hit?.kind ?? ''
+      const label=snapFeedback.current
+      if (!label) return
+      if (!hit) { label.style.display='none'; return }
+      const p=hit.point.clone().project(camera), rect=div.getBoundingClientRect()
+      label.style.left=((p.x+1)*rect.width/2)+'px'; label.style.top=((1-p.y)*rect.height/2)+'px'
+      label.textContent='●  Agganciato: '+hit.label; label.style.display='block'
     }
     const dragPoles = (e: PointerEvent): Point[] => {
       const d = drag!, poles = structuredClone(d.start)
+      let delta: THREE.Vector3
       if (d.screen) {
         hits(e, []) // Update the pointer ray, without letting the body occlude the handle.
         const hit = raycaster.ray.intersectPlane(d.screen.plane, new THREE.Vector3())
         if (!hit) return poles
-        const delta = hit.sub(d.screen.start).multiplyScalar(d.strength)
-        d.ids.forEach(i => { poles[i] = poles[i].map((x, j) => x + delta.getComponent(j)) as Point })
-        return poles
+        delta = hit.sub(d.screen.start).multiplyScalar(d.strength)
+      } else {
+        const distance = ((e.clientX - d.x) * d.sx + (e.clientY - d.y) * d.sy) / (d.sx * d.sx + d.sy * d.sy)
+        delta = new THREE.Vector3(...d.direction).multiplyScalar(distance * d.strength)
       }
-      const delta = ((e.clientX - d.x) * d.sx + (e.clientY - d.y) * d.sy) / (d.sx * d.sx + d.sy * d.sy)
-      d.ids.forEach(i => { poles[i] = poles[i].map((x, j) => x + d.direction[j] * delta * d.strength) as Point })
+      const p=current.current
+      let snapHit: SnapHit | null = null
+      let snapFailed=false
+      if (p.snap && !e.altKey && Number.isFinite(p.snapDistance) && p.snapDistance>0 && p.snapDistance<=1000) {
+        const refs=references.children.filter(o=>typeof o.userData.isCurrent!=='function' || o.userData.isCurrent()) as THREE.Mesh[]
+        // Exclude the edited face itself: otherwise it immediately attracts its own poles.
+        const neighbours=body.children.filter(o=>o.userData.face!==p.face) as THREE.Mesh[]
+        try {
+          const targets=[...refs,...neighbours]
+          targets.forEach(target=>{ if (!target.userData.borrowedGeometry) withBoundsTree(target) })
+          const candidate=new THREE.Vector3(...d.start[d.index]).add(delta)
+          const direction=d.screen ? camera.getWorldDirection(new THREE.Vector3()) : new THREE.Vector3(...d.direction)
+          snapHit=snapAlong(candidate,direction,p.snapDistance,targets)
+          if (snapHit) delta=snapHit.point.clone().sub(new THREE.Vector3(...d.start[d.index]))
+        } catch { snapFailed=true }
+      }
+      showSnap(snapHit)
+      if (snapFailed && snapFeedback.current) {
+        div.dataset.snapKind='error'
+        snapFeedback.current.textContent='Magnete non disponibile per questo riferimento'
+        snapFeedback.current.style.left=(e.clientX-div.getBoundingClientRect().left)+'px'
+        snapFeedback.current.style.top=(e.clientY-div.getBoundingClientRect().top)+'px'
+        snapFeedback.current.style.display='block'
+      }
+      d.ids.forEach(i => { poles[i] = poles[i].map((x, j) => x + delta.getComponent(j)) as Point })
       return poles
     }
     const pointerMove = (e: PointerEvent) => {
-      if (drag) { showHover(null); e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), false); return }
+      if (drag) {
+        e.stopImmediatePropagation()
+        if (!drag.started && Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<4) return
+        drag.started=true; showHover(null); current.current.onDrag(dragPoles(e), false); return
+      }
       if (current.current.placingNote || current.current.busy || current.current.strip) { showHover(null); div.style.cursor='crosshair'; return }
       if (pickArrow(e) !== null) { showHover(null); div.style.cursor='grab'; return }
       const picked = pickNet(e)
@@ -220,7 +268,7 @@ export function SurfaceViewport(props: Props) {
       div.style.cursor = picked ? (picked.every(i => current.current.locked.includes(i)) ? 'not-allowed' : 'grab') : 'crosshair'
     }
     const pointerUp = (e: PointerEvent) => {
-      if (drag) { e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), true); drag = null }
+      if (drag) { e.stopImmediatePropagation(); if (drag.started) current.current.onDrag(dragPoles(e), true); drag = null; showSnap(null) }
       else if (current.current.placingNote && !current.current.busy && e.button===0 && Math.hypot(e.clientX-down.x,e.clientY-down.y)<3) {
         const hit=hits(e,body.children)[0]
         current.current.onNote(hit?.object.userData.face===current.current.face ? hit.point.toArray() as Point : null)
@@ -231,9 +279,15 @@ export function SurfaceViewport(props: Props) {
       if (renderer.domElement.hasPointerCapture(e.pointerId)) renderer.domElement.releasePointerCapture(e.pointerId)
       controls.enabled = true; div.style.cursor = 'crosshair'
     }
+    const cancelGesture = () => {
+      if (!drag) return false
+      if (drag.started) current.current.onDrag(drag.start, false)
+      drag = null; showSnap(null); showHover(null); controls.enabled = true; div.style.cursor = 'crosshair'
+      return true
+    }
+    current.current.registerCancel(cancelGesture)
     const cancel = (e: PointerEvent) => {
-      if (drag) current.current.onDrag(drag.start, false)
-      drag = null
+      cancelGesture()
       if (renderer.domElement.hasPointerCapture(e.pointerId)) renderer.domElement.releasePointerCapture(e.pointerId)
       showHover(null); controls.enabled = true; div.style.cursor = 'crosshair'
     }
@@ -246,16 +300,25 @@ export function SurfaceViewport(props: Props) {
     const unbindStrip=bindStripDrag(div,camera,()=>current.current.strip,()=>current.current.busy || current.current.stripBlocked(),()=>current.current.directStrip)
     const resize = new ResizeObserver(() => { const w = div.clientWidth, h = div.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix() }); resize.observe(div)
     renderer.setAnimationLoop(() => {
+      references.children.forEach(o=>{ if (typeof o.userData.isCurrent==='function') o.visible=o.userData.isCurrent() })
       renderer.render(scene, camera)
       const button=handle.current, selected=edgeHandleRef.current
       if (button && selected) {
         const p=new THREE.Vector3(...selected.anchor).project(camera), r=div.getBoundingClientRect()
         const x=(p.x+1)*r.width/2, y=(1-p.y)*r.height/2
-        button.style.left=x+'px';button.style.top=y+'px'
-        button.style.visibility=Math.abs(p.z)<=1 && x>=0 && x<=r.width && y>=0 && y<=r.height ? 'visible' : 'hidden'
+        const hx=x+(x+52<r.width?36:-36), hy=y+(y>52?-32:32)
+        const visible=Math.abs(p.z)<=1 && x>=0 && x<=r.width && y>=0 && y<=r.height && hx>=14 && hx<=r.width-14 && hy>=14 && hy<=r.height-14
+        button.style.left=hx+'px';button.style.top=hy+'px';button.style.visibility=visible?'visible':'hidden'
+        const leader=handleLeader.current
+        if (leader) {
+          leader.style.left=x+'px';leader.style.top=y+'px'
+          leader.style.width=Math.hypot(hx-x,hy-y)+'px'
+          leader.style.transform=`rotate(${Math.atan2(hy-y,hx-x)}rad)`
+          leader.style.visibility=visible?'visible':'hidden'
+        }
       }
     })
-    return () => { unbindStrip(); resize.disconnect(); renderer.domElement.removeEventListener('pointerleave', pointerLeave); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
+    return () => { current.current.registerCancel(()=>false); unbindStrip(); resize.disconnect(); renderer.domElement.removeEventListener('pointerleave', pointerLeave); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
   }, [])
   useEffect(() => { setEdgeHandle(null) }, [props.directStrip?.revision])
   useEffect(() => {
@@ -264,12 +327,52 @@ export function SurfaceViewport(props: Props) {
     props.preview.faceMeshes.forEach((m, i) => {
       const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.BufferAttribute(m.positions, 3)); geometry.setAttribute('normal', new THREE.BufferAttribute(m.normals, 3)); geometry.setIndex(new THREE.BufferAttribute(m.indices, 1))
       const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: i === props.face ? '#6ebde4' : '#a4acb0', metalness: 0.05, roughness: 0.55, side: THREE.DoubleSide })); mesh.userData.face = i; s.body.add(mesh)
+      mesh.userData.snapKind='cad'; mesh.userData.snapLabel=`Faccia CAD ${i+1}`
     })
     if (!s.fitted) {
       const box = new THREE.Box3().setFromObject(s.body), center = box.getCenter(new THREE.Vector3()), r = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.1)
       s.radius = r; s.camera.position.copy(center).add(new THREE.Vector3(1.5, -1.9, 1.8).multiplyScalar(r)); s.camera.up.set(0, 0, 1); s.camera.near = r / 1000; s.camera.far = r * 100; s.camera.updateProjectionMatrix(); s.controls.target.copy(center); s.controls.update(); s.fitted = true
     }
   }, [props.preview, props.face])
+  useEffect(() => {
+    const s=sceneRef.current
+    if (!s) return
+    s.references.children.forEach(dispose); s.references.clear()
+    const owner=props.referenceBody === null ? null : sceneOf()
+    if (!owner || !props.snap) { props.onReferenceCount(0); return }
+    const part=owner.layerHost().partGroup
+    part.updateWorldMatrix(true,true)
+    const inverse=part.matrixWorld.clone().invert()
+    const add=(sourceGeometry:THREE.BufferGeometry, matrix:THREE.Matrix4, kind:'scan'|'cad', label:string, isCurrent:()=>boolean) => {
+      // Scan already has a BVH. For CAD, build any needed BVH on our own
+      // geometry wrapper, sharing the immutable buffers without touching host state.
+      const geometry=kind==='scan' ? sourceGeometry : new THREE.BufferGeometry()
+      if (geometry!==sourceGeometry) {
+        geometry.setAttribute('position',sourceGeometry.getAttribute('position'))
+        const normal=sourceGeometry.getAttribute('normal'); if (normal) geometry.setAttribute('normal',normal)
+        geometry.setIndex(sourceGeometry.getIndex())
+        geometry.boundingBox=sourceGeometry.boundingBox?.clone() ?? null
+        geometry.boundingSphere=sourceGeometry.boundingSphere?.clone() ?? null
+      }
+      const material=new THREE.MeshStandardMaterial({color:kind==='scan'?'#c9bd9a':'#91a7bd',transparent:true,opacity:0.28,depthWrite:false,side:THREE.DoubleSide})
+      const mesh=new THREE.Mesh(geometry,material)
+      mesh.matrix.copy(matrix);mesh.matrixAutoUpdate=false;mesh.userData.borrowedGeometry=kind==='scan'
+      mesh.userData.snapKind=kind;mesh.userData.snapLabel=label;mesh.userData.isCurrent=isCurrent
+      s.references.add(mesh);mesh.updateWorldMatrix(true,false)
+    }
+    const scan=owner.scanShown() ? owner.scanGeometry() : null
+    if (scan) add(scan,new THREE.Matrix4(),'scan','Scansione',()=>sceneOf()===owner && owner.scanShown() && owner.scanGeometry()===scan)
+    const scene=reSceneOf(owner)
+    for (const [id,mesh] of scene.bodyMeshes) {
+      const shown=()=>mesh.visible && (Array.isArray(mesh.material) ? mesh.material.some(m=>m.visible) : mesh.material.visible)
+      if (id===props.referenceBody || !shown() || !(mesh.geometry instanceof THREE.BufferGeometry)) continue
+      mesh.updateWorldMatrix(true,false)
+      const geometry=mesh.geometry, matrix=inverse.clone().multiply(mesh.matrixWorld)
+      add(geometry,matrix,'cad',`Corpo CAD ${id}`,()=>sceneOf()===owner && scene.bodyMeshes.get(id)===mesh && shown() && mesh.geometry===geometry)
+    }
+    props.onReferenceCount(s.references.children.length)
+    return ()=>{s.references.children.forEach(dispose);s.references.clear()}
+  },[props.referenceBody,props.snap])
   useEffect(() => {
     const s = sceneRef.current; if (!s) return
     if (props.stripes && ZebraRenderer) {
@@ -375,9 +478,10 @@ export function SurfaceViewport(props: Props) {
     return ()=>{group.removeFromParent();group.traverse(dispose)}
   },[props.strip])
   return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" data-hidden-poles={props.hiddenPoles.length} data-direct-edges={props.directStrip?.paths.length ?? 0}>
-    {edgeHandle && props.directStrip && !props.busy && <button ref={handle} type="button" className="es-direct-handle" style={{visibility:'hidden'}}
-      data-test="strip-direct-handle" data-strip-direct-edge={edgeHandle.edge} aria-label="Trascina per duplicare il bordo libero"
-      title="Trascina per duplicare il bordo libero">D</button>}
+    <div ref={snapFeedback} className="es-snap-feedback" data-test="surface-snap-feedback" style={{display:'none'}} />
+    {edgeHandle && props.directStrip && !props.busy && <><div ref={handleLeader} className="es-direct-leader" style={{visibility:'hidden'}} /><button ref={handle} type="button" className="es-direct-handle" style={{visibility:'hidden'}}
+      data-test="strip-direct-handle" data-strip-direct-edge={edgeHandle.edge} data-strip-direct-anchor={edgeHandle.anchor.join(',')} aria-label="Trascina per duplicare il bordo libero"
+      title="Trascina per duplicare il bordo libero">D</button></>}
   </div>
 }
-function dispose(o: THREE.Object3D) { const m = o as THREE.Mesh; m.geometry?.dispose(); if (Array.isArray(m.material)) m.material.forEach(a => a.dispose()); else m.material?.dispose() }
+function dispose(o: THREE.Object3D) { const m = o as THREE.Mesh; if (!m.userData.borrowedGeometry) m.geometry?.dispose(); if (Array.isArray(m.material)) m.material.forEach(a => a.dispose()); else m.material?.dispose() }

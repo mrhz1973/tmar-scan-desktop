@@ -48,7 +48,11 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   const source = useRef({ version: re.buildVersion, features: re.features, rolledBack: re.rolledBack, stepFiles: re.stepFiles, parameters: re.parameters, file: model.fileName, alignment: model.appliedAlignment })
   const [bodyId, setBodyId] = useState(re.bodies[0]?.id ?? '')
   const [name, setName] = useState('superficie-modificata.step')
-  const loaded = useRef<{ step: string; name: string } | null>(null)
+  const loaded = useRef<{ step: string; name: string; bodyId: number | null } | null>(null)
+  const [referenceBody, setReferenceBody] = useState<number | null>(null)
+  const [snap, setSnap] = useState(true), [snapDistance, setSnapDistance] = useState(1)
+  const [referenceCount, setReferenceCount] = useState(0)
+  const cancelGesture = useRef<() => boolean>(() => false)
   const [loadId, setLoadId] = useState(0)
   const [faces, setFaces] = useState<FaceInfo[]>([]), [face, setFace] = useState(-1)
   const [preview, setPreview] = useState<Preview | null>(null), [net, setNetState] = useState<Net | null>(null)
@@ -137,7 +141,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
     applyFrame(next); historyTick(v => v + 1)
   }
   const undo = (delta: number) => { const next = at.current + delta; if (next >= 0 && next < history.current.length) { at.current = next; applyFrame(history.current[next]); historyTick(v => v + 1) } }
-  const modalKeys = useRef({ busy, undo, close }); modalKeys.current = { busy, undo:stripPaths?stripUndo:undo, close:cancel }
+  const modalKeys = useRef({ busy, undo, close, cancelGesture: () => cancelGesture.current() }); modalKeys.current = { busy, undo:stripPaths?stripUndo:undo, close:cancel, cancelGesture: () => cancelGesture.current() }
   useEffect(() => {
     useSurfaceDialogs.setState(s => ({ count: s.count + 1 }))
     const onKey = (e: KeyboardEvent) => {
@@ -150,7 +154,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
       if ((e.ctrlKey || e.metaKey) && ['z', 'y'].includes(key) && !(e.target instanceof HTMLInputElement)) {
         e.preventDefault(); if (!s.busy && !e.repeat) s.undo(key === 'y' || e.shiftKey ? 1 : -1)
       }
-      if (e.key === 'Escape' && !s.busy) { e.preventDefault(); s.close() }
+      if (e.key === 'Escape' && !s.busy) { e.preventDefault(); if (!s.cancelGesture()) s.close() }
     }
     window.addEventListener('keydown', onKey, true)
     return () => { window.removeEventListener('keydown', onKey, true); useSurfaceDialogs.setState(s => ({ count: s.count - 1 })) }
@@ -186,7 +190,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
       void drain()
     }, 90)
   }, [net, continuity, freeBoundary])
-  const load = async (step: string, fileName: string, expected?: { faces: number; surface: boolean; guard?: () => Promise<void> }) => {
+  const load = async (step: string, fileName: string, expected?: { faces: number; surface: boolean; guard?: () => Promise<void> }, bodyRef: number | null = null) => {
     invalidatePreview(); setBusy(true); setError('')
     try {
       const result = await ask<{ faces: FaceInfo[]; preview: Preview }>({ action: 'open', step })
@@ -197,13 +201,13 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         if (result.faces.length !== expected.faces || !result.faces.every(f => f.openSheet === expected.surface))
           throw new Error('Il CAD ricevuto non corrisponde al corpo selezionato nel progetto.')
       }
-      setNotes([]); setPlacingNote(false); setNoteError(''); loaded.current = { step, name: fileName }; setLoadId(i => i + 1); setValidNet(null)
+      setNotes([]); setPlacingNote(false); setNoteError(''); loaded.current = { step, name: fileName, bodyId: bodyRef }; setReferenceBody(bodyRef); setLoadId(i => i + 1); setValidNet(null)
       setSymmetry(false); freeBoundaryRef.current = false; setFreeBoundary(false); setNet(null); base.current = null; history.current = []; at.current = -1; setSelected([]); locksRef.current = []; setLocks([]); setFace(-1)
       setFaces(result.faces); setPreview(result.preview); setName(fileName.replace(/\.(step|stp)$/i, '') + '-edit.step')
     } catch (e) {
       // Opening a STEP replaces the worker's document even if its validation
       // fails. Do not restore a frame from the previous worker document.
-      loaded.current = null; setFaces([]); setPreview(null); setNet(null)
+      loaded.current = null; setReferenceBody(null); setFaces([]); setPreview(null); setNet(null)
       base.current = null; history.current = []; at.current = -1; setSelected([])
       locksRef.current = []; setLocks([]); freeBoundaryRef.current = false; setFreeBoundary(false)
       continuityRef.current = 'G1'; setContinuity('G1'); historyTick(v => v + 1)
@@ -239,12 +243,12 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
             if (checked.source?.bodyId !== body.id || checked.source.bodyKey !== origin.bodyKey || checked.source.buildVersion !== origin.buildVersion)
               throw new Error('Il corpo CAD è cambiato durante l’apertura.')
           },
-        })
+        }, body.id)
         return
       }
       try {
         const result = bodyStepResult(await runCommand('reverse.export.step', { bodies: [body.id] }))
-        await load(new TextDecoder().decode(result.file.bytes), result.file.name, { faces: body.faces, surface: !!body.surface })
+        await load(new TextDecoder().decode(result.file.bytes), result.file.name, { faces: body.faces, surface: !!body.surface }, body.id)
       } catch (err) {
         if (!body.surface || !(err instanceof Error) || !err.message.includes('there is no body to write')) throw err
         // The public STEP exporter intentionally omits ordinary sheets. Use the
@@ -261,7 +265,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         const step = state.stepFiles[sourceImport.file.key]
         if (!step) throw new Error('Il progetto non contiene il file STEP della superficie.')
         if (stepFileKey(step) !== sourceImport.file.key) throw new Error('Il file STEP conservato nel progetto non corrisponde al riferimento della superficie.')
-        await load(step,sourceImport.file.name,{ faces: body.faces, surface: true })
+        await load(step,sourceImport.file.name,{ faces: body.faces, surface: true },body.id)
       }
     }
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
@@ -433,9 +437,9 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <p><strong>Faccia {face + 1} · {net.nu} × {net.nv} punti</strong><br/>{faces[face]?.converted ? 'Piano convertito esattamente in NURBS, senza fitting.' : 'Modifica diretta dei poli NURBS esistenti.'}</p>
         {!!faces[face]?.trimLocks.length && <p className="es-hint">I punti che influenzano i contorni ritagliati sono protetti. {faces[face]?.hiddenPoles.length ? 'I punti protetti esterni alla faccia sono nascosti. ' : ''}Trascina un punto libero per deformare la faccia.</p>}
         {faces[face]?.enriched && <p className="es-hint">Reticolo arricchito da 4×4 a 5×5 senza modificare la forma. Il punto centrale resta libero anche con protezione G1.</p>}
-        <button disabled={busy || calculating} onClick={() => { if (loaded.current && window.confirm('Scartare questa bozza e scegliere un’altra faccia?')) void load(loaded.current.step, loaded.current.name) }}>Cambia faccia / corpo</button>
+        <button disabled={busy || calculating} onClick={() => { if (loaded.current && window.confirm('Scartare questa bozza e scegliere un’altra faccia?')) void load(loaded.current.step, loaded.current.name, undefined, loaded.current.bodyId) }}>Cambia faccia / corpo</button>
         {faces[face]?.openSheet && <button data-test="strip-open" disabled={busy || calculating || validNet!==net || !!notes.length} onClick={()=>void beginStrip()}>Duplica bordo libero…</button>}
-        {directEdges && <p className="es-hint">Per duplicare un bordo libero, cliccalo e trascina la maniglia D lungo l'asse scelto.</p>}
+        {directEdges && <p className="es-hint">{freeBoundary ? 'Per duplicare un bordo usa il pulsante dedicato. La maniglia D è nascosta mentre modifichi i bordi.' : "Per duplicare un bordo libero, cliccalo e trascina la maniglia D lungo l'asse scelto."}</p>}
         {faces[face]?.freeBoundary && <label><input data-test="surface-free-boundary" type="checkbox" checked={freeBoundary} disabled={busy || calculating} onChange={e => {
           if (!e.target.checked) {
             try { assertNet(base.current!, net, continuity) }
@@ -447,6 +451,12 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <p className="es-hint">{freeBoundary ? 'Puoi spostare i punti del bordo della superficie aperta. I punti bloccati manualmente restano fermi.' : 'I bordi restano bloccati. G1 conserva le tangenti originali; non corregge discontinuità preesistenti.'}</p>
         <div className="es-row">{axisNames.map((a, i) => <button key={a} data-test={`surface-axis-${i}`} aria-pressed={axis === i} onClick={() => setAxis(i)}>{a}</button>)}</div>
         <label>Trascinamento punti<select data-test="surface-drag-mode" value={dragMode} onChange={e => setDragMode(e.target.value as DragMode)}><option value="axis">Mondo · asse X/Y/Z</option><option value="screen">Piano dello schermo</option><option value="local">Locale · U/V/normale</option></select></label>
+        <fieldset><legend>Magnete · Snap mode</legend>
+          <label className="es-inline-check"><input data-test="surface-snap" type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Aggancia i punti ai riferimenti vicini</label>
+          {snap && <><label>Portata · mm<input data-test="surface-snap-distance" type="number" min="0.001" max="1000" step="0.1" value={Number.isFinite(snapDistance) ? snapDistance : ''} onChange={e=>setSnapDistance(e.target.valueAsNumber)} /></label>
+            {(!Number.isFinite(snapDistance) || snapDistance<=0 || snapDistance>1000) && <p role="alert">Inserisci una portata tra 0,001 e 1000 mm per attivare l'aggancio.</p>}
+            <p className="es-hint" data-test="surface-snap-info">{referenceBody === null ? 'STEP aperto fuori dal progetto: per usare scansione e altri corpi, importa il CAD nel progetto e caricalo da qui. ' : `${referenceCount} riferimenti visibili tra scansione e altri corpi CAD. `}I riferimenti nascosti nel progetto sono esclusi. Sono utilizzabili anche le altre facce dello stesso corpo. Tieni premuto Alt per sospendere il magnete. L'aggancio usa la rappresentazione visualizzata; i poli non sono necessariamente punti della superficie.</p></>}
+        </fieldset>
         <details><summary>Filtri di selezione del reticolo</summary><label>Selezione<select data-test="surface-selection-mode" value={selectionMode} onChange={e => setSelectionMode(e.target.value as NetSelectionMode)}><option value="auto">Diretta · punti, segmenti e celle</option><option value="points">Solo punti</option><option value="edges">Solo segmenti</option><option value="cells">Solo celle</option><option value="mixed">Punti e segmenti</option></select></label></details>
         <p className="es-hint">Passa sul reticolo: l'elemento evidenziato si seleziona con un clic. Punti, segmenti e celle selezionano rispettivamente uno, due o quattro poli. Ctrl+clic aggiunge o toglie dalla selezione. I poli bloccati restano fermi. Se il reticolo è nascosto, solo i punti sono selezionabili.</p>
         <p>{dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.' : dragMode === 'local' ? 'U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. Trascina la freccia gialla o imposta una quota.' : 'Trascina la freccia gialla lungo l’asse scelto.'} Pulsante centrale: ruota; destro: sposta la vista; rotella: zoom. Lo stiramento usa sempre X/Y/Z.</p>
@@ -504,7 +514,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <button disabled={busy || !editable.length || !Number.isFinite(factor) || factor <= 0 || factor > 3} onClick={() => { const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factor : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
         <div className="es-row"><button data-test="surface-undo" disabled={busy || at.current <= 0} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || at.current >= history.current.length - 1} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
       </>}
-    </aside><main><SurfaceViewport mirrorAxis={mirrorAxis} mirrorOffset={mirrorOffset} mirrorPartners={partners} strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} stripBlocked={()=>stripPending.current} directStrip={directEdges && directEdges.revision===preview?.previewRevision && net===validNet && !busy && !calculating && !placingNote && !notes.length && !stripPaths ? {paths:directEdges.paths,axis,revision:directEdges.revision,begin:beginDirectStrip,abort:abortDirectStrip,unavailable:()=>setError('Direzione allineata alla vista: ruota il modello o scegli un altro asse.'),change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} hiddenPoles={faces[face]?.hiddenPoles ?? NO_HIDDEN_POLES} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={changePoles} />
+    </aside><main><SurfaceViewport mirrorAxis={mirrorAxis} mirrorOffset={mirrorOffset} mirrorPartners={partners} strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} stripBlocked={()=>stripPending.current} directStrip={directEdges && directEdges.revision===preview?.previewRevision && net===validNet && !busy && !calculating && !freeBoundary && !placingNote && !notes.length && !stripPaths ? {paths:directEdges.paths,axis,revision:directEdges.revision,begin:beginDirectStrip,abort:abortDirectStrip,unavailable:()=>setError('Direzione allineata alla vista: ruota il modello o scegli un altro asse.'),change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} hiddenPoles={faces[face]?.hiddenPoles ?? NO_HIDDEN_POLES} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} snap={snap} snapDistance={snapDistance} referenceBody={referenceBody} onReferenceCount={setReferenceCount} registerCancel={fn=>{cancelGesture.current=fn}} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={changePoles} />
       <div className="es-status" role="status" data-test="surface-status" data-preview-revision={preview?.previewRevision} data-preview-volume={preview?.volume}>{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error}${preview ? ' Vista: ultimo risultato valido.' : ''}` : validNet && preview ? `CAD valido · ${faces[face]?.openSheet ? 'superficie aperta' : `volume ${preview.volume.toFixed(3)} mm³`} · ${freeBoundary ? 'spostamento bordo' : 'scarto bordo'} ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
     <footer><span>{stripPaths?'Applica aggiunge la superficie cucita al progetto come nuovo corpo.':'Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.'}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={(!!stripPaths && (!stripResult || stripEdge>=0)) || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => stripPaths ? void applyStrip() : void finish(true)}>{stripPaths ? 'Applica superficie cucita' : 'Applica come nuovo corpo'}</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>

@@ -69,11 +69,11 @@ export function drawStrip(tool:StripDrag) {
 
 export function bindStripDrag(div:HTMLDivElement,camera:THREE.Camera,getTool:()=>StripDrag|null,blocked:()=>boolean,
   getDirect:()=>DirectStrip|null=()=>null){
-  let drag:{id:number;edge:number;axis:number;hit:THREE.Vector3;start:number;change:StripDrag['change'];direct:DirectStrip|null}|null=null
+  let drag:{id:number;edge:number;axis:number;hit:THREE.Vector3;start:number;offsetX:number;offsetY:number;change:StripDrag['change'];direct:DirectStrip|null}|null=null
   const raycaster=new THREE.Raycaster()
-  const axisParameter=(e:PointerEvent,hit:THREE.Vector3,axis:number)=>{
+  const axisParameter=(x:number,y:number,hit:THREE.Vector3,axis:number)=>{
     const rect=div.getBoundingClientRect()
-    raycaster.setFromCamera(new THREE.Vector2((e.clientX-rect.left)*2/rect.width-1,1-(e.clientY-rect.top)*2/rect.height),camera)
+    raycaster.setFromCamera(new THREE.Vector2((x-rect.left)*2/rect.width-1,1-(y-rect.top)*2/rect.height),camera)
     const ray=raycaster.ray, offset=ray.origin.clone().sub(hit), cosine=ray.direction.getComponent(axis)
     const denominator=1-cosine*cosine
     return denominator<1e-6?null:(offset.getComponent(axis)-cosine*offset.dot(ray.direction))/denominator
@@ -86,20 +86,27 @@ export function bindStripDrag(div:HTMLDivElement,camera:THREE.Camera,getTool:()=
     if(!tool)return
     const forced=handle ? Number(handle.dataset.stripDirectEdge) : -1
     if(handle && (!direct || !Number.isInteger(forced) || forced<0))return
-    const picked=pickSheetEdge(tool.paths,camera,div.getBoundingClientRect(),e.clientX,e.clientY,forced,handle?Infinity:8)
+    const values=handle?.dataset.stripDirectAnchor?.split(',').map(Number)
+    const anchor=values?.length===3 && values.every(Number.isFinite) ? new THREE.Vector3(...values as [number,number,number]) : null
+    const picked=anchor && forced<tool.paths.length ? {edge:forced,hit:anchor} : pickSheetEdge(tool.paths,camera,div.getBoundingClientRect(),e.clientX,e.clientY,forced,handle?Infinity:8)
     if(!picked)return
     const {edge,hit}=picked
-    const start=axisParameter(e,hit,tool.axis)
+    const rect=div.getBoundingClientRect(), projection=hit.clone().project(camera)
+    // The visible D is offset from the edge; subtract the offset before
+    // computing its motion, so it behaves as if grabbed at the real edge.
+    const offsetX=handle ? e.clientX-(rect.left+(projection.x+1)*rect.width/2) : 0
+    const offsetY=handle ? e.clientY-(rect.top+(1-projection.y)*rect.height/2) : 0
+    const start=axisParameter(e.clientX-offsetX,e.clientY-offsetY,hit,tool.axis)
     if(start===null){direct?.unavailable();return}
     if(direct && !direct.begin())return
     e.stopPropagation();e.preventDefault();div.setPointerCapture(e.pointerId)
-    drag={id:e.pointerId,edge,axis:tool.axis,hit,start,change:tool.change,direct}
+    drag={id:e.pointerId,edge,axis:tool.axis,hit,start,offsetX,offsetY,change:tool.change,direct}
   }
   const update=(e:PointerEvent,final:boolean)=>{
     if(!drag||e.pointerId!==drag.id)return
     e.stopPropagation()
     const d=drag, v:Point=[0,0,0]
-    const position=axisParameter(e,d.hit,d.axis)
+    const position=axisParameter(e.clientX-d.offsetX,e.clientY-d.offsetY,d.hit,d.axis)
     if(position!==null)v[d.axis]=position-d.start
     if(final){
       drag=null;div.releasePointerCapture(e.pointerId)
