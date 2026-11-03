@@ -15,6 +15,7 @@
 // tests. Owns the kernel handles: a build's shapes are released once no
 // kept build holds them.
 
+import type { BodyEditSource } from './buildTypes'
 import type { NominalSurface } from '../../../src/core/deviation/surface'
 import { emptyHit } from '../../../src/core/deviation/surface'
 import type { Vec3 } from '../../../src/core/types'
@@ -4635,6 +4636,20 @@ export class Builder {
     }
     if (!shared || (2 * shared.volume) / shared.area < OVERLAP_MIN_THICKNESS) return null
     return { volume: shared.volume, mesh: shared.mesh }
+  }
+
+  /** Read exactly ONE current body, ordinary sheets included. No alias
+   * fallback, deliverable filter, solidification or exportStepMended repair. */
+  bodyEditSource(id: number, expectedKey: string): BodyEditSource {
+    const body = this.bodies.get(id)
+    if (!body) throw new KernelError(`There is no current CAD body ${id}.`)
+    const shown = this.shown.get(body)
+    if (!shown || shown.id !== id || shown.key !== expectedKey)
+      throw new KernelError('The CAD body changed before its editor source was read.')
+    return {
+      bodyId: id, bodyKey: shown.key, text: this.kernel.exportStep([body.shape]),
+      surface: Boolean(body.surface), faces: shown.faces, closed: shown.closed,
+    }
   }
 
   /** One STEP file of the given bodies — the solids, and a patch network's

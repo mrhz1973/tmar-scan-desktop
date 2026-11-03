@@ -1,0 +1,137 @@
+{
+  "error": "AssertionError [ERR_ASSERTION]: A validated CAD preview must update before the mouse is released",
+  "before": {
+    "revision": 1,
+    "volume": 6000,
+    "text": "CAD valido · volume 6000.000 mm³ · scarto bordo 3.6e-15 mm"
+  },
+  "after": {
+    "revision": 3,
+    "volume": 6092.091596374792,
+    "text": "CAD valido · volume 6092.092 mm³ · scarto bordo 4.0e-15 mm"
+  },
+  "observed": [
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    },
+    {
+      "revision": 1,
+      "volume": 6000,
+      "text": "Aggiornamento e verifica CAD…"
+    }
+  ],
+  "consoleErrors": [],
+  "note": "Local stack path omitted; original test output retained locally."
+}
