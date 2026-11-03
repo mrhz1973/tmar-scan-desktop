@@ -1,0 +1,78 @@
+name: Annotated host archive audit (review only)
+on:
+  push:
+    branches: [review/annotated-host-archive-audit-20261103]
+    paths: [.github/workflows/annotated-host-archive-audit.yml]
+permissions:
+  contents: read
+jobs:
+  archive-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Verify original bytes, CRC and safe members without executing bundle code
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re, stat, zipfile
+          root = pathlib.Path.cwd()
+          source = root / 'review/annotated-host-review-20261103.zip'
+          expected = '2d740932429b19d5fa719ebf7d37501095f289b13485cd87ff216e5578286220'
+          digest = hashlib.sha256(source.read_bytes()).hexdigest()
+          assert digest == expected, ('ZIP SHA256 mismatch', digest)
+          out = root / '_archive_audit'
+          out.mkdir(exist_ok=False)
+          report = {'scope': 'Archive integrity only; no runtime test, integration or release', 'archiveCommit': 'c9a9f3453bb941d06e7e64d83df9b03344a9a299', 'baseCommit': '27c75c3364511dd77e2ec0c5b8f314f529df6291', 'zipSha256': digest, 'members': [], 'fileHashes': {}}
+          with zipfile.ZipFile(source) as z:
+              infos = z.infolist()
+              assert len(infos) == 50, ('Unexpected member count', len(infos))
+              assert len({i.filename for i in infos}) == len(infos), 'Duplicate member'
+              assert sum(i.file_size for i in infos) < 20_000_000, 'Archive larger than review limit'
+              assert z.testzip() is None, 'CRC error'
+              for i in infos:
+                  path = pathlib.PurePosixPath(i.filename)
+                  assert not path.is_absolute() and '..' not in path.parts and '\\' not in i.filename and ':' not in i.filename, ('Unsafe path', i.filename)
+                  assert not stat.S_ISLNK(i.external_attr >> 16), ('Symlink member', i.filename)
+                  assert not any(p in {'.git', '.env', 'node_modules', 'owned-browser-profile'} for p in path.parts), ('Excluded path', i.filename)
+                  destination = out.joinpath(*path.parts)
+                  if i.is_dir():
+                      destination.mkdir(parents=True, exist_ok=True)
+                      continue
+                  data = z.read(i)
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  destination.write_bytes(data)
+                  report['members'].append({'path': i.filename, 'bytes': len(data), 'crc32': f'{i.CRC:08x}'})
+                  report['fileHashes'][i.filename] = hashlib.sha256(data).hexdigest()
+          sums = out / 'SHA256SUMS.txt'
+          assert sums.is_file(), 'Missing supplied hash manifest'
+          checked = []
+          for line in sums.read_text(encoding='utf-8-sig').splitlines():
+              if not line.strip() or line.lstrip().startswith('#'):
+                  continue
+              match = re.fullmatch(r'([0-9a-fA-F]{64})\s+\*?(.+)', line)
+              assert match, ('Unrecognized hash line', line)
+              value, name = match.groups()
+              rel = pathlib.PurePosixPath(name)
+              assert not rel.is_absolute() and '..' not in rel.parts and '\\' not in name, ('Unsafe manifest path', name)
+              target = out.joinpath(*rel.parts)
+              assert target.is_file(), ('Manifest file missing', name)
+              assert hashlib.sha256(target.read_bytes()).hexdigest() == value.lower(), ('Member digest mismatch', name)
+              checked.append(name)
+          report['suppliedHashesChecked'] = checked
+          report['verdict'] = 'PASS'
+          (out / 'coordinator-integrity-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+          print(json.dumps({'zipSha256': digest, 'crc': 'PASS', 'members': len(report['members']), 'checkedDigests': len(checked), 'verdict': 'PASS'}))
+          print((out / 'README.md').read_text(encoding='utf-8'))
+          PY
+      - name: Retain original ZIP and integrity result for independent review
+        uses: actions/upload-artifact@v4
+        with:
+          name: annotated-host-review-original-and-integrity
+          path: |
+            review/annotated-host-review-20261103.zip
+            _archive_audit/coordinator-integrity-report.json
+          if-no-files-found: error
+          retention-days: 7
