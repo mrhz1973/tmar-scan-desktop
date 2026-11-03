@@ -2,6 +2,9 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { Line2 } from 'three/examples/jsm/lines/Line2.js'
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import type { Preview } from './editorKernel'
 import type { Net, Point } from './brep'
 import { dragDirection, type DragMode } from './localFrame'
@@ -32,7 +35,7 @@ export function SurfaceViewport(props: Props) {
   const host = useRef<HTMLDivElement>(null), current = useRef(props)
   current.current = props
   const stripeLayer = useRef<StripeLayer | null>(null)
-  const sceneRef = useRef<{ scene: THREE.Scene; body: THREE.Group; cage: THREE.Group; camera: THREE.PerspectiveCamera; controls: OrbitControls; radius: number; fitted: boolean } | null>(null)
+  const sceneRef = useRef<{ scene: THREE.Scene; body: THREE.Group; cage: THREE.Group; hover: THREE.Group; hoverKey: string; camera: THREE.PerspectiveCamera; controls: OrbitControls; radius: number; fitted: boolean } | null>(null)
   useEffect(() => {
     const div = host.current!, scene = new THREE.Scene()
     scene.background = new THREE.Color('#26343e')
@@ -40,11 +43,12 @@ export function SurfaceViewport(props: Props) {
     div.appendChild(renderer.domElement)
     const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 10000), controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = false
-    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
+    // Left belongs to picking and editing even when the pointer misses a handle.
+    controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }
     scene.add(new THREE.HemisphereLight(0xffffff, 0x46505e, 2))
     const light = new THREE.DirectionalLight(0xffffff, 3); light.position.set(2, 5, 4); scene.add(light)
-    const body = new THREE.Group(), cage = new THREE.Group(); scene.add(body, cage)
-    const state = { scene, body, cage, camera, controls, radius: 1, fitted: false }; sceneRef.current = state
+    const body = new THREE.Group(), cage = new THREE.Group(), hover = new THREE.Group(); scene.add(body, cage, hover)
+    const state = { scene, body, cage, hover, hoverKey: '', camera, controls, radius: 1, fitted: false }; sceneRef.current = state
     let drag: { index: number; start: Point[]; ids: number[]; x: number; y: number; sx: number; sy: number; direction: Point; strength: number; screen: { plane: THREE.Plane; start: THREE.Vector3 } | null } | null = null
     let down = { x: 0, y: 0 }
     const raycaster = new THREE.Raycaster()
@@ -57,8 +61,30 @@ export function SurfaceViewport(props: Props) {
       const p = current.current
       if (!p.net) return null
       const hidden = new Set(p.hiddenPoles)
-      if (p.selectionMode === 'cells') {
-        if (!p.showNet) return null
+      if (p.selectionMode !== 'edges' && p.selectionMode !== 'cells') {
+        const point = hits(e, cage.children.filter(o => o.userData.point !== undefined))[0]
+        if (point) return [point.object.userData.point as number]
+      }
+      if (!p.showNet || p.selectionMode === 'points') return null
+      if (p.selectionMode !== 'cells') {
+        const r = renderer.domElement.getBoundingClientRect()
+        const projected = p.net.poles.map(q => new THREE.Vector3(...q).project(camera))
+        let best: number[] | null = null, distance = 7 // CSS pixels, independent of zoom.
+        for (const [a, b] of netEdges(p.net)) {
+          if (hidden.has(a) || hidden.has(b)) continue
+          const pa = projected[a], pb = projected[b]
+          if (Math.abs(pa.z) > 1 || Math.abs(pb.z) > 1) continue
+          const ax = r.left + (pa.x + 1) * r.width / 2, ay = r.top + (1 - pa.y) * r.height / 2
+          const dx = (pb.x - pa.x) * r.width / 2, dy = -(pb.y - pa.y) * r.height / 2
+          const length2 = dx * dx + dy * dy
+          if (length2 < 1) continue
+          const t = Math.max(0, Math.min(1, ((e.clientX - ax) * dx + (e.clientY - ay) * dy) / length2))
+          const d = Math.hypot(e.clientX - ax - t * dx, e.clientY - ay - t * dy)
+          if (d < distance) { distance = d; best = [a, b] }
+        }
+        if (best) return best
+      }
+      if (p.selectionMode === 'cells' || p.selectionMode === 'auto') {
         hits(e, [])
         // The cage may be nonplanar. Pick its nearest visible-depth half-quad
         // but return the four poles, regardless of the internal diagonal.
@@ -79,27 +105,31 @@ export function SurfaceViewport(props: Props) {
         }
         return best
       }
-      if (p.selectionMode !== 'edges') {
-        const point = hits(e, cage.children.filter(o => o.userData.point !== undefined))[0]
-        if (point) return [point.object.userData.point as number]
+      return null
+    }
+    const showHover = (ids: number[] | null) => {
+      const net = current.current.net, key = net && ids ? ids.join(',') : ''
+      if (key === state.hoverKey) return
+      state.hoverKey = key
+      hover.traverse(dispose); hover.clear()
+      div.dataset.hoverKind = ids?.length === 1 ? 'point' : ids?.length === 2 ? 'edge' : ids?.length === 4 ? 'cell' : ''
+      if (!net || !ids?.length) return
+      const points = ids.map(i => new THREE.Vector3(...net.poles[i]))
+      if (ids.length === 1) {
+        const marker = new THREE.Mesh(new THREE.SphereGeometry(state.radius * 0.017, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff9d20, depthTest: false, depthWrite: false }))
+        marker.position.copy(points[0]); marker.renderOrder = 7; hover.add(marker)
+      } else {
+        const path = ids.length === 4 ? [...points, points[0]] : points
+        const lineGeometry = new LineGeometry()
+        lineGeometry.setPositions(path.flatMap(p => p.toArray()))
+        const line = new Line2(lineGeometry, new LineMaterial({ color: 0xff9d20, linewidth: 4, depthTest: false, depthWrite: false }))
+        line.renderOrder = 7; hover.add(line)
+        if (ids.length === 4) {
+          const g = new THREE.BufferGeometry().setFromPoints([points[0],points[1],points[2],points[0],points[2],points[3]])
+          const fill = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xff9d20, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthTest: false, depthWrite: false }))
+          fill.renderOrder = 6; hover.add(fill)
+        }
       }
-      if (p.selectionMode === 'points' || !p.showNet) return null
-      const r = renderer.domElement.getBoundingClientRect()
-      const projected = p.net.poles.map(q => new THREE.Vector3(...q).project(camera))
-      let best: number[] | null = null, distance = 7 // CSS pixels, independent of zoom.
-      for (const [a, b] of netEdges(p.net)) {
-        if (hidden.has(a) || hidden.has(b)) continue
-        const pa = projected[a], pb = projected[b]
-        if (Math.abs(pa.z) > 1 || Math.abs(pb.z) > 1) continue
-        const ax = r.left + (pa.x + 1) * r.width / 2, ay = r.top + (1 - pa.y) * r.height / 2
-        const dx = (pb.x - pa.x) * r.width / 2, dy = -(pb.y - pa.y) * r.height / 2
-        const length2 = dx * dx + dy * dy
-        if (length2 < 1) continue
-        const t = Math.max(0, Math.min(1, ((e.clientX - ax) * dx + (e.clientY - ay) * dy) / length2))
-        const d = Math.hypot(e.clientX - ax - t * dx, e.clientY - ay - t * dy)
-        if (d < distance) { distance = d; best = [a, b] }
-      }
-      return best
     }
     const pickArrow = (e: PointerEvent) => {
       const p=current.current, net=p.net
@@ -130,6 +160,10 @@ export function SurfaceViewport(props: Props) {
       const picked = arrow !== null ? [arrow] : pickNet(e)
       if (!picked) return
       e.stopImmediatePropagation(); controls.enabled = false
+      // Also capture selection-only gestures, including locked poles and Ctrl
+      // clicks, so a release outside the canvas cannot leave navigation off.
+      // Synthetic pointer events can have no active pointer to capture.
+      try { renderer.domElement.setPointerCapture(e.pointerId) } catch { /* selection remains usable */ }
       const p = current.current
       if (arrow === null) p.onPoints(picked, e.ctrlKey || e.metaKey)
       if (!p.net || e.ctrlKey || e.metaKey || picked.every(i => p.locked.includes(i))) return
@@ -149,7 +183,7 @@ export function SurfaceViewport(props: Props) {
       const r = div.getBoundingClientRect(), sx = (end.x - origin.x) * r.width / 2 / state.radius, sy = -(end.y - origin.y) * r.height / 2 / state.radius
       if (!screen && sx * sx + sy * sy < 0.1) return
       drag = { index, start: structuredClone(p.net.poles), ids, x: e.clientX, y: e.clientY, sx, sy, direction, strength: p.dragStrength, screen }
-      renderer.domElement.setPointerCapture(e.pointerId); div.style.cursor = 'grabbing'
+      div.style.cursor = 'grabbing'
     }
     const dragPoles = (e: PointerEvent): Point[] => {
       const d = drag!, poles = structuredClone(d.start)
@@ -166,14 +200,15 @@ export function SurfaceViewport(props: Props) {
       return poles
     }
     const pointerMove = (e: PointerEvent) => {
-      if (drag) { e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), false); return }
-      if (current.current.placingNote) { div.style.cursor='crosshair'; return }
-      if (pickArrow(e) !== null) { div.style.cursor='grab'; return }
+      if (drag) { showHover(null); e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), false); return }
+      if (current.current.placingNote || current.current.busy || current.current.strip) { showHover(null); div.style.cursor='crosshair'; return }
+      if (pickArrow(e) !== null) { showHover(null); div.style.cursor='grab'; return }
       const picked = pickNet(e)
+      showHover(picked)
       div.style.cursor = picked ? (picked.every(i => current.current.locked.includes(i)) ? 'not-allowed' : 'grab') : 'crosshair'
     }
     const pointerUp = (e: PointerEvent) => {
-      if (drag) { e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), true); drag = null; renderer.domElement.releasePointerCapture(e.pointerId) }
+      if (drag) { e.stopImmediatePropagation(); current.current.onDrag(dragPoles(e), true); drag = null }
       else if (current.current.placingNote && !current.current.busy && e.button===0 && Math.hypot(e.clientX-down.x,e.clientY-down.y)<3) {
         const hit=hits(e,body.children)[0]
         current.current.onNote(hit?.object.userData.face===current.current.face ? hit.point.toArray() as Point : null)
@@ -181,17 +216,25 @@ export function SurfaceViewport(props: Props) {
       else if (e.button === 0 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 3 && !pickNet(e)) {
         const hit = hits(e, body.children)[0]; if (hit && !current.current.net && !current.current.busy) current.current.onFace(hit.object.userData.face)
       }
+      if (renderer.domElement.hasPointerCapture(e.pointerId)) renderer.domElement.releasePointerCapture(e.pointerId)
       controls.enabled = true; div.style.cursor = 'crosshair'
     }
-    const cancel = () => { if (drag) current.current.onDrag(drag.start, false); drag = null; controls.enabled = true }
+    const cancel = (e: PointerEvent) => {
+      if (drag) current.current.onDrag(drag.start, false)
+      drag = null
+      if (renderer.domElement.hasPointerCapture(e.pointerId)) renderer.domElement.releasePointerCapture(e.pointerId)
+      showHover(null); controls.enabled = true; div.style.cursor = 'crosshair'
+    }
+    const pointerLeave = () => showHover(null)
     renderer.domElement.addEventListener('pointerdown', pointerDown, true)
     renderer.domElement.addEventListener('pointermove', pointerMove, true)
     renderer.domElement.addEventListener('pointerup', pointerUp, true)
     renderer.domElement.addEventListener('pointercancel', cancel, true)
+    renderer.domElement.addEventListener('pointerleave', pointerLeave)
     const unbindStrip=bindStripDrag(div,camera,()=>current.current.strip,()=>current.current.busy)
     const resize = new ResizeObserver(() => { const w = div.clientWidth, h = div.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix() }); resize.observe(div)
     renderer.setAnimationLoop(() => renderer.render(scene, camera))
-    return () => { unbindStrip(); resize.disconnect(); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
+    return () => { unbindStrip(); resize.disconnect(); renderer.domElement.removeEventListener('pointerleave', pointerLeave); stripeLayer.current?.dispose(); stripeLayer.current = null; renderer.setAnimationLoop(null); controls.dispose(); scene.traverse(dispose); renderer.dispose(); div.removeChild(renderer.domElement); sceneRef.current = null }
   }, [])
   useEffect(() => {
     const s = sceneRef.current; if (!s || !props.preview) return
@@ -237,6 +280,8 @@ export function SurfaceViewport(props: Props) {
   useLayoutEffect(() => {
     const s = sceneRef.current; if (!s) return
     s.cage.traverse(dispose); s.cage.clear()
+    s.hover.traverse(dispose); s.hover.clear(); s.hoverKey = ''
+    if (host.current) host.current.dataset.hoverKind = ''
     const n = props.net; if (!n) return
     const hidden = new Set(props.hiddenPoles)
     const mirrored = new Set<number>()

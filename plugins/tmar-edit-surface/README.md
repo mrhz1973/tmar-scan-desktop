@@ -403,3 +403,28 @@ The conservative trim protection may leave few or no editable poles on some
 faces. Periodic and analytic cylindrical surfaces remain unsupported by this
 path. These results do not establish QUICKSURFACE parity, universal G1
 continuity, or qualification on arbitrary customer STEP files.
+
+### Direct control-net selection and navigation
+
+The default mode now picks the control net directly in the order point,
+segment, then cell. A hovered item is highlighted before the click; Ctrl-click
+adds or removes its poles. Optional selection filters remain available under
+an expandable section. Hidden or protected poles retain their existing rules.
+Left drag on empty space no longer turns the model. Middle drag rotates,
+right drag pans and the wheel zooms in this editor. Pointer capture also
+covers a locked or selection-only gesture, so releasing outside the canvas
+does not leave navigation disabled.
+
+On the imported STEP test solid, the previous compiled baseline had Points as
+its default and left-dragging empty space changed the view. The source and
+compiled tests now confirm the direct default, visible point/segment/cell
+hover, selection and Ctrl toggle, pole drag and Undo, cancellation, release
+outside the canvas and all three navigation gestures. Existing segment and
+cell regressions passed; note placement while Zebra is enabled also passed in
+the source app. TypeScript and the isolated production build passed. Evidence:
+`evidence/direct-selection/baseline-20261103/`, `source-20261103/` and
+`compiled-20261103/`. The displayed screenshots were inspected.
+
+These checks use a small test net; responsiveness on large control nets,
+parity of every QS gesture and the direct D handle for duplicating a free edge
+remain unqualified. The prior separate free-edge command remains available.
