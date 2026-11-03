@@ -21,7 +21,8 @@ try {
     await runCommand('reverse.import.step',{bytes:new TextEncoder().encode(step),name:'Original sheet.step'})
   },readFileSync(input,'utf8'))
   await page.click('[data-test=edit-surface-entry] button')
-  await (await page.$('[data-test=surface-step-file]')).uploadFile(input)
+  if(project) await page.click('[data-test=surface-load-body]')
+  else await (await page.$('[data-test=surface-step-file]')).uploadFile(input)
   await page.waitForFunction(()=>document.querySelectorAll('[data-test=surface-face] option').length===2)
   await page.select('[data-test=surface-face]','0');await page.waitForFunction(()=>document.querySelector('[data-test=strip-open]')?.disabled===false)
   await page.click('[data-test=strip-open]');await page.waitForSelector('[data-test=strip-axis-0]');await page.click('[data-test=strip-axis-0]')
@@ -110,7 +111,14 @@ try {
         }).sort((a,b)=>a.length-b.length)
         assert.deepEqual(measured.map(xs=>xs.length),[1,3]);assert(Math.abs(measured[0][0]-600)<1e-7)
         for(let i=0;i<areas.length;i++)assert(Math.abs(measured[1][i]-areas[i])<1e-6)
-        projectResult={toolbarUndoEnabled:true,toolbarRedoEnabled:true,undoBodyCount:1,redoBodyCount:2,reopenedBodyAreas:measured}
+        await reopened.click('[data-test=edit-surface-entry] button')
+        const copyId=await reopened.evaluate(()=>window.__re.store.getState().bodies.find(b=>b.faces===3).id)
+        await reopened.select('[data-test=surface-body]',String(copyId))
+        await reopened.click('[data-test=surface-load-body]')
+        await reopened.waitForFunction(()=>document.querySelectorAll('[data-test=surface-face] option').length===4)
+        await reopened.select('[data-test=surface-face]','0')
+        await reopened.waitForSelector('[data-test=strip-open]:enabled')
+        projectResult={sourceLoadedFromProject:true,reopenedEditableFaces:3,toolbarUndoEnabled:true,toolbarRedoEnabled:true,undoBodyCount:1,redoBodyCount:2,reopenedBodyAreas:measured}
       }finally{await reopened.close()}
     }
     assert.deepEqual(consoleErrors,[])

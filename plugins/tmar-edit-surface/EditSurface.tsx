@@ -143,10 +143,15 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
     }, 90)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [net, continuity])
-  const load = async (step: string, fileName: string) => {
+  const load = async (step: string, fileName: string, expectedSheetFaces?: number) => {
     setBusy(true); setError('')
     try {
       const result = await ask<{ faces: FaceInfo[]; preview: Preview }>({ action: 'open', step })
+      if (expectedSheetFaces !== undefined) {
+        checkProject()
+        if (result.faces.length !== expectedSheetFaces || !result.faces.every(f=>f.openSheet))
+          throw new Error('Lo STEP archiviato non identifica una sola superficie aperta del progetto.')
+      }
       setNotes([]); setPlacingNote(false); setNoteError(''); loaded.current = { step, name: fileName }; setLoadId(i => i + 1); setValidNet(null)
       setSymmetry(false); setNet(null); base.current = null; history.current = []; at.current = -1; setSelected([]); setLocks([]); setFace(-1)
       setFaces(result.faces); setPreview(result.preview); setName(fileName.replace(/\.(step|stp)$/i, '') + '-edit.step')
@@ -154,7 +159,31 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   }
   const loadBody = async () => {
     setBusy(true); setError('')
-    try { const result = bodyStepResult(await runCommand('reverse.export.step', { bodies: [bodyId] })); await load(new TextDecoder().decode(result.file.bytes), result.file.name) }
+    try {
+      checkProject()
+      const state = useReverse.getState(), body = state.bodies.find(b=>b.id===bodyId)
+      if (!body) throw new Error('Scegli un corpo CAD del progetto.')
+      try {
+        const result = bodyStepResult(await runCommand('reverse.export.step', { bodies: [body.id] }))
+        await load(new TextDecoder().decode(result.file.bytes), result.file.name)
+      } catch (err) {
+        if (!body.surface || !(err instanceof Error) || !err.message.includes('there is no body to write')) throw err
+        // The public STEP exporter intentionally omits ordinary sheets. Use the
+        // archived import only when its sole body is still the selected shape.
+        // A later operation may preserve an id while replacing the geometry.
+        checkProject()
+        const index = state.features.findIndex(f => {
+          const made = state.results[f.id]
+          return f.kind==='import' && !f.suppressed && made?.status==='ok' && made.bodies?.length===1 && made.bodies[0]===body.id
+        })
+        const sourceImport = state.features[index]
+        if (sourceImport?.kind!=='import' || state.features.slice(index+1).some(f=>!f.suppressed && f.kind!=='import' && f.kind!=='sketch'))
+          throw new Error('Il progetto non espone lo STEP corrente di questa superficie. Apri uno STEP aggiornato della superficie.')
+        const step = state.stepFiles[sourceImport.file.key]
+        if (!step) throw new Error('Il progetto non contiene il file STEP della superficie.')
+        await load(step,sourceImport.file.name,body.faces)
+      }
+    }
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
   const chooseFace = async (index: number) => {
@@ -282,8 +311,8 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
   }}>
     <header><strong>Edit Surface · prototipo CAD</strong><button disabled={busy} onClick={cancel} aria-label="Chiudi Edit Surface">×</button></header>
     <div className="es-content"><aside>
-      {!net && <><label>Corpo CAD<select value={bodyId} disabled={busy} onChange={e => setBodyId(Number(e.target.value))}>{re.bodies.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
-        <button disabled={busy || !re.bodies.some(b => b.id === bodyId)} onClick={() => void loadBody()}>Carica corpo</button>
+      {!net && <><label>Corpo CAD<select data-test="surface-body" value={bodyId} disabled={busy} onChange={e => setBodyId(Number(e.target.value))}>{re.bodies.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+        <button data-test="surface-load-body" disabled={busy || !re.bodies.some(b => b.id === bodyId)} onClick={() => void loadBody()}>Carica corpo</button>
         <label>Oppure apri STEP<input type="file" accept=".step,.stp" disabled={busy} data-test="surface-step-file" onChange={e => { const f = e.target.files?.[0]; if (f) void f.text().then(text => load(text, f.name)) }} /></label>
         <p>Seleziona una faccia nel modello o nell’elenco.</p>
         <select aria-label="Faccia CAD" data-test="surface-face" value={face} disabled={busy || !faces.length} onChange={e => void chooseFace(Number(e.target.value))}><option value={-1}>Scegli faccia…</option>{faces.map(f => <option key={f.index} value={f.index} disabled={!!f.reason}>Faccia {f.index + 1} · {f.kind}{f.reason ? ' · non supportata' : ''}</option>)}</select>
