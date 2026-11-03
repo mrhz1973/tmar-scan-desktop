@@ -14,6 +14,12 @@ served directory.
   are deliberately excluded. Existing users are never reloaded by the server.
 - GitHub's `ci.yml` exists but initially had **zero recorded workflow runs**;
   do not claim CI protection until an actual successful run is verified.
+- Temporary **known docs-only exception**: the existing `main` file
+  `scripts/capture-tmar-gallery.mjs:11` imports
+  `../plugins/tmar-mesh-review/scripts/fixture.mjs`, and the plugin boundary
+  checker reports exactly one violation. VPS preview logs and accepts only
+  this exact known gallery-script finding, while rejecting any other boundary
+  violation; remediation on `main` remains required before declaring CI green.
 - Every 15 minutes, `tmar-preview-build.timer` checks for a newer commit.
   The unprivileged `tmar-preview` user builds a *candidate* in a separate
   directory; it changes the `current` symlink only on successful tests/build.
