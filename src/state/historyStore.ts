@@ -9,6 +9,7 @@
 // or an editor holds work, and a new scan, reference or image starts afresh.
 
 import { create } from 'zustand'
+import { atomicNotifications, withAtomicNotifications } from './atomicNotifications'
 import { draftHolds, useStore } from './store'
 import { flatDraftHolds, useFlat } from './flatStore'
 import { useDeviation } from './deviationStore'
@@ -110,12 +111,16 @@ function comparedByIdentity(key: string): boolean {
   return false
 }
 
-/** Operation-owned display delta; never a whole visibility-store snapshot.
- * Called synchronously after the geometry snapshot is restored. Not serialized. */
+/** Operation-scoped visibility remains separate from the optional annotated-note delta. */
 export interface HistoryRestoreEffect { undo(): void; redo(): void }
-interface Entry { restoreEffect?: HistoryRestoreEffect; operationId?: string; before: HistoryPatch; after: HistoryPatch; label: string; workspace: Workspace; group: number }
+export interface HistoryDelta {
+  preflight(redo: boolean): void;
+  apply(redo: boolean): void;
+  rollback(): void;
+}
+interface Entry { restoreEffect?: HistoryRestoreEffect; delta?: HistoryDelta; operationId?: string; before: HistoryPatch; after: HistoryPatch; label: string; workspace: Workspace; group: number }
 interface HistoryState { past: Entry[]; future: Entry[]; restoring: boolean; importing: boolean; revision: number }
-export const useHistory = create<HistoryState>(() => ({ past: [], future: [], restoring: false, importing: false, revision: 0 }))
+export const useHistory = create<HistoryState>()(withAtomicNotifications<HistoryState>(() => ({ past: [], future: [], restoring: false, importing: false, revision: 0 })))
 const LIMIT = 64
 const actionLabels: Record<string, string> = {
   commitDraft: 'save element', commitDimension: 'save dimension', commitDim: 'save dimension',
@@ -153,7 +158,7 @@ export function clearHistory(): void {
 const sameValue = (a: unknown, b: unknown) => a === b ||
   (Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((value, index) => value === b[index]))
 const same = (a: object, b: object) => Object.keys(a).every((k) => sameValue((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
-function record(before: HistorySnapshot, after: HistorySnapshot, label: string, workspace: Workspace, generation: number, operationId?: string, restoreEffect?: HistoryRestoreEffect) {
+function record(before: HistorySnapshot, after: HistorySnapshot, label: string, workspace: Workspace, generation: number, operationId?: string, restoreEffect?: HistoryRestoreEffect, delta?: HistoryDelta) {
   if (generation !== epoch) return // A source replacement starts another document.
   const keys = Object.keys(before).filter((key) =>
     comparedByIdentity(key) ? before[key] !== after[key] : !same(before[key] as object, after[key] as object))
@@ -161,7 +166,7 @@ function record(before: HistorySnapshot, after: HistorySnapshot, label: string, 
   const previous = pick(before, keys), next = pick(after, keys)
   useHistory.setState((state) => {
     const last = state.past.at(-1)
-    const entry = { before: previous, after: next, label, workspace, group, ...(operationId ? { operationId } : {}), ...(restoreEffect ? { restoreEffect } : {}) }
+    const entry = { before: previous, after: next, label, workspace, group, ...(operationId ? { operationId } : {}), ...(restoreEffect ? { restoreEffect } : {}), ...(delta ? { delta } : {}) }
     if (group && !state.future.length && last?.group === group && last.workspace === workspace) {
       return { past: [...state.past.slice(0, -1), { ...last, before: { ...previous, ...last.before }, after: { ...last.after, ...next } }], future: [] }
     }
@@ -181,23 +186,26 @@ export function historyAction<T>(label: string, job: () => T): T {
 /** Publish an already staged synchronous edit and record it only on success.
  * The caller's rollback restores its non-history resources and store snapshot.
  * Never call this around asynchronous work or partially validated geometry. */
-export function historyAtomic<T>(label: string, publish: () => T, rollback: () => void, operationId?: string, restoreEffect?: HistoryRestoreEffect): T {
+export function historyAtomic<T>(label: string, publish: () => T, rollback: () => void, operationId?: string, restoreEffect?: HistoryRestoreEffect, delta?: HistoryDelta): T {
   if (depth || paused || useHistory.getState().restoring || useHistory.getState().importing)
     throw new Error('A history transaction is already active.')
   const before = captureHistory(), history = useHistory.getState()
   const workspace = useShell.getState().workspace, generation = epoch, previousGroup = group
   group = 0
   depth++
-  try {
+  const transaction = delta ? atomicNotifications : <R>(job:()=>R):R=>job()
+  try { return transaction(() => {
+    try {
     const result = publish()
     if (result && typeof (result as { then?: unknown }).then === 'function') throw new Error('Atomic publication must be synchronous.')
     if (epoch !== generation) throw new Error('Document changed during atomic publication.')
-    record(before, captureHistory(), label, workspace, generation, operationId, restoreEffect)
+    record(before, captureHistory(), label, workspace, generation, operationId, restoreEffect, delta)
     return result
-  } catch (error) {
-    try { rollback() } finally { useHistory.setState(history, true) }
-    throw error
-  } finally { depth--; group = previousGroup }
+    } catch (error) {
+      try { rollback() } finally { useHistory.setState(history, true) }
+      throw error
+    }
+  }) } finally { depth--; group = previousGroup }
 }
 
 /** Async geometry commands must complete before their after-state is recorded. */
@@ -264,12 +272,22 @@ async function travel(redo: boolean): Promise<void> {
     await hooks.runRestore(async () => {
       await hooks.beforeRestore(patch)
       for (const p of participants) await p.beforeRestore?.(patch)
-      apply(patch)
-      if (redo) entry.restoreEffect?.redo(); else entry.restoreEffect?.undo()
+      entry.delta?.preflight(redo)
+      const historyBefore=useHistory.getState()
+      const transaction=entry.delta?atomicNotifications:<R>(job:()=>R):R=>job()
+      transaction(()=>{
+        try {
+          apply(patch)
+          entry.delta?.apply(redo)
+          if (redo) entry.restoreEffect?.redo(); else entry.restoreEffect?.undo()
+          useHistory.setState((s) => redo
+            ? { future: s.future.slice(0, -1), past: [...s.past, entry], revision: s.revision + 1 }
+            : { past: s.past.slice(0, -1), future: [...s.future, entry], revision: s.revision + 1 })
+        } catch(error) {
+          apply(previous);entry.delta?.rollback();useHistory.setState(historyBefore,true);throw error
+        }
+      })
       useShell.getState().setWorkspace(entry.workspace)
-      useHistory.setState((s) => redo
-        ? { future: s.future.slice(0, -1), past: [...s.past, entry], revision: s.revision + 1 }
-        : { past: s.past.slice(0, -1), future: [...s.future, entry], revision: s.revision + 1 })
       await hooks.afterRestore(patch, previous)
       for (const p of participants) await p.afterRestore?.(patch, previous)
       useStore.getState().setStatus(`${redo ? 'Redone' : 'Undone'}: ${entry.label}.`)

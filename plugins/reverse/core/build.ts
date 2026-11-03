@@ -4640,6 +4640,14 @@ export class Builder {
 
   /** Read exactly ONE current body, ordinary sheets included. No alias
    * fallback, deliverable filter, solidification or exportStepMended repair. */
+  verifyAnnotatedNotes(id:number,expectedKey:string,brep:string,notes:readonly import('../../../src/plugins/annotatedCopyTypes').DraftCopyFaceNoteV1[]) {
+    const body=this.bodies.get(id),shown=body&&this.shown.get(body)
+    if(!body||!shown||shown.key!==expectedKey)throw new KernelError('Stale body for annotated publication.')
+    const verified=this.kernel.verifyAnnotationFace(body.shape,brep,notes)
+    const face=this.topology(body,meshDeflection(this.diagonal(body))).faces.find(f=>f.hash===verified.hash)
+    if(!face)throw new KernelError('Verified face is not in destination topology.')
+    return {...verified,face:face.fingerprint}
+  }
   bodyEditSource(id: number, expectedKey: string): BodyEditSource {
     const body = this.bodies.get(id)
     if (!body) throw new KernelError(`There is no current CAD body ${id}.`)

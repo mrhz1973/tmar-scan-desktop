@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Optional editor host. No dependency on any named plugin or second renderer.
 import { create } from 'zustand'
+import type { AnnotatedTicketV1 } from './annotatedCopyTypes'
+import { validateAnnotatedCopy } from './annotatedCopyValidation'
 import { EditorLifetime, abortIfNeeded, editorSha256 } from './editorLifetime'
 import type { ApplyTicket, CommitReceipt, EditorCapabilities, EditorSnapshot, EditorViewportLease, ExitReason, PreparedCadCopy, PreviewStamp, SourceBinding, WorkspaceEditorController, WorkspaceEditorDefinition } from './workspaceEditorTypes'
 export type * from './workspaceEditorTypes'
@@ -29,6 +31,7 @@ export interface WorkspaceEditorHost {
   readSource(bodyId: number, signal: AbortSignal): Promise<BoundEditorSource>
   viewport(source: BoundEditorSource): OwnedEditorViewport
   stage(source: BoundEditorSource, prepared: PreparedCadCopy, signal: AbortSignal, display?: EditorApplyDisplayOptions): Promise<StagedEditorCopy>
+  stageAnnotated?(source: BoundEditorSource, prepared: Awaited<ReturnType<typeof validateAnnotatedCopy>>, signal: AbortSignal, display?: EditorApplyDisplayOptions): Promise<StagedEditorCopy>
 }
 export type EditorPhase = 'closed' | 'opening' | 'editing' | 'preparing' | 'committing' | 'closing'
 export interface WorkspaceEditorState {
@@ -87,7 +90,9 @@ function refresh(session: Session): void {
   }
   const snapshot = session.controller?.getSnapshot() ?? null
   const phase = useWorkspaceEditor.getState().phase
-  const canApply = !!snapshot && phase === 'editing' && snapshot.gesture === 'idle' && snapshot.draftNoteCount === 0 &&
+  const annotated = !!snapshot && snapshot.draftNoteCount > 0 && Number.isSafeInteger(snapshot.notesRevision) && (snapshot.notesRevision??-1)>=0 &&
+    !!session.controller?.prepareAnnotatedApply && !!session.controller?.freezeAnnotated && !!session.adapter.stageAnnotated && session.adapter.capabilities.annotationVersion === 1 && session.adapter.capabilities.commitKinds.includes('annotated-cad-copy')
+  const canApply = !!snapshot && phase === 'editing' && snapshot.gesture === 'idle' && (snapshot.draftNoteCount === 0 || annotated) &&
     snapshot.validation.kind === 'valid' && sameDraft(snapshot.validation.stamp, snapshot.current) &&
     snapshot.current.sessionId === session.id && snapshot.current.sourceEpoch === session.source?.binding.sourceEpoch &&
     session.adapter.capabilities.commitKinds.includes('cad-copy')
@@ -188,29 +193,43 @@ function apply(): Promise<CommitReceipt> {
   const display = Object.freeze({ hideSourceAfterApply: useWorkspaceEditor.getState().hideSourceAfterApply })
   const snapshot = controller.getSnapshot()
   if (snapshot.validation.kind !== 'valid') return Promise.reject(new Error('Geometria non valida.'))
-  const ticket: ApplyTicket = Object.freeze({ operationId: crypto.randomUUID(), source: source.binding, stamp: Object.freeze({ ...snapshot.validation.stamp }), mode: 'cad-copy' })
+  const common={operationId:crypto.randomUUID(),source:source.binding,stamp:Object.freeze({...snapshot.validation.stamp})}
+  const ticket:ApplyTicket|AnnotatedTicketV1=Object.freeze(snapshot.draftNoteCount>0
+    ? {...common,annotationVersion:1 as const,mode:'annotated-cad-copy' as const,notesRevision:snapshot.notesRevision!}
+    : {...common,mode:'cad-copy' as const})
+  const unchangedNotes=(s:EditorSnapshot)=>s.draftNoteCount===snapshot.draftNoteCount && (ticket.mode==='cad-copy'||s.notesRevision===ticket.notesRevision)
   session.operationId = ticket.operationId
   session.apply = Promise.resolve().then(async () => {
     let unfreeze: (() => void) | undefined, staged: StagedEditorCopy | undefined
     let resumeReferences: (() => void) | undefined
     try {
       assertLive(session)
-      unfreeze = controller.freeze(ticket)
+      unfreeze = ticket.mode==='cad-copy'?controller.freeze(ticket):controller.freezeAnnotated!(ticket)
       useWorkspaceEditor.setState({ phase: 'preparing', canApply: false, error: null })
-      const supplied = await controller.prepareApply(ticket, session.abort.signal)
-      assertLive(session)
-      // Runtime checks are mandatory; a plugin is not made safe by TypeScript alone.
-      if (supplied.kind !== 'cad-copy' || supplied.operationId !== ticket.operationId || supplied.draftNoteCount !== 0 ||
-          supplied.units !== 'mm' || supplied.coordinateFrame !== 'part' || !sameSource(supplied.source, ticket.source) ||
-          !samePreview(supplied.stamp, ticket.stamp) || !(supplied.step instanceof Uint8Array) || !supplied.step.byteLength ||
-          typeof supplied.name !== 'string' || !supplied.name.trim()) throw new Error('Pacchetto CAD non coerente con la bozza convalidata.')
-      const prepared = { ...supplied, source: ticket.source, stamp: ticket.stamp, step: supplied.step.slice() }
-      const hash = await editorSha256(prepared.step)
-      assertLive(session)
-      staged = await session.adapter.stage(source, prepared, session.abort.signal, display)
+      let hash:string
+      if(ticket.mode==='annotated-cad-copy') {
+        const supplied=await controller.prepareAnnotatedApply!(ticket,session.abort.signal)
+        assertLive(session)
+        const plan=await validateAnnotatedCopy(supplied,ticket)
+        assertLive(session)
+        if(plan.prepared.notes.length!==snapshot.draftNoteCount)throw new Error('Il pacchetto non conserva tutte le note della bozza.')
+        hash=plan.artifactSha256
+        staged=await session.adapter.stageAnnotated!(source,plan,session.abort.signal,display)
+      } else {
+        const supplied = await controller.prepareApply(ticket, session.abort.signal)
+        assertLive(session)
+        if (supplied.kind !== 'cad-copy' || supplied.operationId !== ticket.operationId || supplied.draftNoteCount !== 0 ||
+            supplied.units !== 'mm' || supplied.coordinateFrame !== 'part' || !sameSource(supplied.source, ticket.source) ||
+            !samePreview(supplied.stamp, ticket.stamp) || !(supplied.step instanceof Uint8Array) || !supplied.step.byteLength ||
+            typeof supplied.name !== 'string' || !supplied.name.trim()) throw new Error('Pacchetto CAD non coerente con la bozza convalidata.')
+        const prepared = { ...supplied, source: ticket.source, stamp: ticket.stamp, step: supplied.step.slice() }
+        hash = await editorSha256(prepared.step)
+        assertLive(session)
+        staged = await session.adapter.stage(source, prepared, session.abort.signal, display)
+      }
       assertLive(session)
       const current = controller.getSnapshot()
-      if (current.validation.kind !== 'valid' || current.gesture !== 'idle' || current.draftNoteCount ||
+      if (current.validation.kind !== 'valid' || current.gesture !== 'idle' || !unchangedNotes(current) ||
           !sameDraft(ticket.stamp, current.current) || !samePreview(current.validation.stamp, ticket.stamp))
         throw new Error('La bozza è cambiata durante Applica.')
       // The committed store will invalidate this old source lease. Keep its
@@ -221,7 +240,7 @@ function apply(): Promise<CommitReceipt> {
       // No await between final source check and publication.
       assertLive(session)
       const final = controller.getSnapshot()
-      if (final.validation.kind !== 'valid' || final.gesture !== 'idle' || final.draftNoteCount ||
+      if (final.validation.kind !== 'valid' || final.gesture !== 'idle' || !unchangedNotes(final) ||
           !sameDraft(ticket.stamp, final.current) || !samePreview(final.validation.stamp, ticket.stamp))
         throw new Error('La bozza è cambiata prima della pubblicazione.')
       const receipt = staged.publish(ticket.operationId, hash)

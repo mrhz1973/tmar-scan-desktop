@@ -251,3 +251,71 @@ describe('host-owned Apply display choice', () => {
     expect(f.adapter.stage).not.toHaveBeenCalled();expect(f.publish).not.toHaveBeenCalled()
   })
 })
+
+async function enableAnnotatedFixture(f: ReturnType<typeof fixture>) {
+  const { editorSha256 } = await import('../src/plugins/editorLifetime')
+  f.adapter.capabilities = { apiVersion: 1, enabled: true, annotationVersion: 1, commitKinds: ['cad-copy', 'annotated-cad-copy'] }
+  f.controller.freezeAnnotated = vi.fn(() => f.unfreeze)
+  f.controller.prepareAnnotatedApply = vi.fn(async ticket => {
+    const step = new TextEncoder().encode('ISO-10303-21; mocked manager artifact'), brep = 'mocked manager witness'
+    const stepHash = await editorSha256(step), witnessHash = await editorSha256(new TextEncoder().encode(brep))
+    return { annotationVersion: 1 as const, kind: 'annotated-cad-copy' as const, operationId: ticket.operationId,
+      source: ticket.source, stamp: ticket.stamp, notesRevision: ticket.notesRevision, units: 'mm' as const,
+      coordinateFrame: 'part' as const, name: 'manager-annotation.step', step,
+      witnesses: [{key:'face',kind:'occt-face-brep' as const,brep,brepSha256:witnessHash,finalStepSha256:stepHash,stamp:ticket.stamp,diagnosticFaceIndex:0}],
+      notes: [{draftId:'note',text:'Keep all text',target:{kind:'copy-face' as const,witnessKey:'face',sourceUV:[0,0],resolvedAt:[0,0,0],orientedNormal:[0,0,1],resolvedStamp:ticket.stamp}}],
+    } as import('../src/plugins/annotatedCopyTypes').PreparedAnnotatedCopyV1
+  })
+  f.adapter.stageAnnotated = vi.fn(async () => ({
+    publish: (operationId: string, artifactSha256: string) => ({ ...f.publish(operationId, artifactSha256), mode: 'annotated-cad-copy' as const, annotationVersion: 1 as const }),
+    dispose: f.stageDispose,
+  }))
+  f.patch({ draftNoteCount: 1, notesRevision: 7 })
+}
+
+describe('annotated workspace contract negotiation', () => {
+  it('keeps notes blocked without BOTH host and controller support; no plain-copy fallback', async () => {
+    const f = fixture(); await workspaceEditors.open('test-editor', { bodyId: 1 })
+    f.adapter.capabilities = { apiVersion: 1, enabled: true, annotationVersion: 1, commitKinds: ['cad-copy', 'annotated-cad-copy'] }
+    f.patch({ draftNoteCount: 1, notesRevision: 1 })
+    expect(useWorkspaceEditor.getState().canApply).toBe(false)
+    await expect(workspaceEditors.apply()).rejects.toThrow()
+    expect(f.controller.prepareApply).not.toHaveBeenCalled(); expect(f.publish).not.toHaveBeenCalled()
+  })
+  it('requires explicit annotation version negotiation', async () => {
+    const f = fixture(); await workspaceEditors.open('test-editor', { bodyId: 1 }); await enableAnnotatedFixture(f)
+    f.adapter.capabilities = { apiVersion: 1, enabled: true, commitKinds: ['cad-copy', 'annotated-cad-copy'] }
+    f.patch({ revision: 2 }); expect(useWorkspaceEditor.getState().canApply).toBe(false)
+  })
+  it('rejects a changed notesRevision while preparation is awaiting', async () => {
+    const f = fixture(); await workspaceEditors.open('test-editor', { bodyId: 1 }); await enableAnnotatedFixture(f)
+    const original = f.controller.prepareAnnotatedApply!, gate = deferred<void>(), started = deferred<void>()
+    f.controller.prepareAnnotatedApply = async (ticket, signal) => { started.resolve(); await gate.promise; return original(ticket, signal) }
+    const pending = workspaceEditors.apply(), refused = expect(pending).rejects.toThrow('bozza')
+    await started.promise; f.patch({ notesRevision: 8 }); gate.resolve(); await refused
+    expect(f.publish).not.toHaveBeenCalled(); expect(f.unfreeze).toHaveBeenCalledTimes(1)
+  })
+  it('requires the package to include every draft note', async () => {
+    const f = fixture(); await workspaceEditors.open('test-editor', { bodyId: 1 }); await enableAnnotatedFixture(f)
+    f.patch({ draftNoteCount: 2 })
+    await expect(workspaceEditors.apply()).rejects.toThrow('tutte le note')
+    expect(f.adapter.stageAnnotated).not.toHaveBeenCalled(); expect(f.publish).not.toHaveBeenCalled()
+  })
+  it('coalesces annotated double Apply and keeps the display option with its transaction', async () => {
+    const f = fixture(); await workspaceEditors.open('test-editor', { bodyId: 1 }); await enableAnnotatedFixture(f)
+    workspaceEditors.setHideSourceAfterApply(true)
+    const a = workspaceEditors.apply(), b = workspaceEditors.apply()
+    expect(a).toBe(b); const receipt = await a
+    expect(receipt.mode).toBe('annotated-cad-copy'); expect(f.published).toHaveLength(1)
+    expect(f.adapter.stageAnnotated).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), { hideSourceAfterApply: true })
+    expect(f.controller.prepareApply).not.toHaveBeenCalled()
+  })
+  it('refuses a prepared annotated result after session cancellation', async () => {
+    const f = fixture(); await workspaceEditors.open('test-editor', { bodyId: 1 }); await enableAnnotatedFixture(f)
+    const original = f.adapter.stageAnnotated!, gate = deferred<void>(), started = deferred<void>()
+    f.adapter.stageAnnotated = async (...args) => { const staged = await original(...args); started.resolve(); await gate.promise; return staged }
+    const pending = workspaceEditors.apply(), refused = expect(pending).rejects.toThrow()
+    await started.promise; await workspaceEditors.cancel(); gate.resolve(); await refused
+    expect(f.publish).not.toHaveBeenCalled(); expect(f.stageDispose).toHaveBeenCalledTimes(1)
+  })
+})

@@ -102,6 +102,18 @@ const FROM_FILE = 'Notes with fromFile: true came with the project file, not fro
 /** A note with what it is on, found on the bodies as they stand — and, on
  *  the scan or where its picks are gone, the body face nearest its pin. */
 export function noteOut(note: Note, s: ReverseSession | null = reverseSession()): Json {
+  if(note.attachment){
+    const target=note.on.length===1&&note.on[0].kind==='face'?note.on[0]:null
+    const faces=target?s?.topologies.get(target.body)?.faces??[]:[]
+    const candidates=target?faces.map((face,index)=>({face,index})).filter(({face})=>{
+      const a=face.fingerprint,b=target.face
+      return a.kind===b.kind&&a.origin===b.origin&&Math.abs(a.area-b.area)<Math.max(1e-7,b.area*1e-7)&&Math.hypot(...a.centroid.map((v,i)=>v-b.centroid[i]))<1e-5&&Math.hypot(...a.dir.map((v,i)=>v-b.dir[i]))<1e-5
+    }):[]
+    const valid=note.attachment.status==='verified'&&s?.buildState()==='built'&&candidates.length===1
+    return {id:note.id,text:note.text,at:note.at,...(note.normal?{normal:note.normal}:{}),...(note.done?{done:true}:{}),...(note.reply?{reply:note.reply}:{}),...(note.fromFile?{fromFile:true}:{}),
+      attachment:{...note.attachment,status:valid?'verified':'unresolved'},
+      on:valid&&target?[{face:{bodyId:target.body,...strip(faceOut(candidates[0].face,candidates[0].index,s?.meshes.get(target.body)))}}]:[{face:{gone:true,bodyId:target?.body??null,reason:'Annotated face identity is unresolved; no nearest-face fallback.'}}]}
+  }
   const on = note.on.map((t) => targetOut(s, t))
   const lost = on.every((o) => 'scan' in o || (Object.values(o)[0] as Json).gone === true)
   const nearest = lost ? nearestOut(s, note.at) : null

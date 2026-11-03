@@ -10,6 +10,7 @@
 // it.
 
 import { create } from 'zustand'
+import { withAtomicNotifications } from '../../../src/state/atomicNotifications'
 import type { Vec2 } from '../../../src/core/flat/types'
 import type { Vec3 } from '../../../src/core/types'
 import type { EdgeInfo, FaceInfo, FeatureResult } from '../core/build'
@@ -552,7 +553,7 @@ export interface ReState {
   addDraftFaces: (bodyId: number, faces: FaceInfo[]) => void
 }
 
-export const useReverse = create<ReState>()((set, get) => ({
+export const useReverse = create<ReState>()(withAtomicNotifications((set, get) => ({
   kernelStatus: 'idle',
   kernelMessage: null,
   kernelVersion: null,
@@ -988,7 +989,7 @@ export const useReverse = create<ReState>()((set, get) => ({
       return { selection: selectionOf(next, at) }
     }),
   ...featureSlice(set, get),
-}))
+})))
 
 export { arcThrough }
 

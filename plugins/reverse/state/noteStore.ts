@@ -9,6 +9,7 @@
 // person answers here.
 
 import { create } from 'zustand'
+import { withAtomicNotifications } from '../../../src/state/atomicNotifications'
 import type { Rigid } from '../../../src/core/deviation/rigid'
 import { moveNote, type Note } from '../core/notes'
 
@@ -62,7 +63,7 @@ interface NotesState {
   load: (notes: Note[]) => void
 }
 
-export const useNotes = create<NotesState>((set, get) => ({
+export const useNotes = create<NotesState>()(withAtomicNotifications((set, get) => ({
   notes: [],
   nextId: 1,
   placing: false,
@@ -124,4 +125,4 @@ export const useNotes = create<NotesState>((set, get) => ({
     }),
   moveAll: (m) => set((s) => (s.notes.length > 0 ? { notes: s.notes.map((n) => moveNote(n, m)) } : {})),
   load: (notes) => set({ notes, nextId: notes.reduce((m, n) => Math.max(m, n.id + 1), 1), placing: false, editing: null }),
-}))
+})))

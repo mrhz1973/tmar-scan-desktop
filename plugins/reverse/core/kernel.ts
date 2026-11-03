@@ -19,6 +19,8 @@
 // Apache-2.0. Both are loaded as separate, replaceable files — the JS glue
 // and the wasm binary — and the product says so in its imprint.
 
+import { verifyCopyFace } from './kernelAnnotatedNotes'
+import type { DraftCopyFaceNoteV1 } from '../../../src/plugins/annotatedCopyTypes'
 import { computeVertexNormals } from '../../../src/core/geometry/normals'
 import type { Vec3 } from '../../../src/core/types'
 import { addScaled, cross, dot, len, normalize, scale, sub } from '../../../src/core/vec'
@@ -325,6 +327,9 @@ function oddEdgeText(e: StepEdge): string {
 }
 
 export class ReKernel {
+  verifyAnnotationFace(shape: Shape, brep:string, notes:readonly DraftCopyFaceNoteV1[]) {
+    return run('Verifying annotated CAD face',()=>verifyCopyFace(this.occt,shape,brep,notes))
+  }
   private readonly occt: OcctLike
   /** What the kernel said when it first trapped inside its WebAssembly, or
    *  null: once set it is broken, and is let go (reService.ts). */

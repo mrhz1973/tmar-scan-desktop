@@ -699,6 +699,7 @@ export function stepFileKey(text: string): string {
  *  in the file, named after its part where the file names it. A file of
  *  faces with no solid comes in as a surface body. */
 export interface ImportFeature extends FeatureFlags {
+  annotationSource?: {version:1;featureUuid:string;stepSha256:string;witnessSha256:string;faceBrep:string}
   id: number
   kind: 'import'
   name: string
