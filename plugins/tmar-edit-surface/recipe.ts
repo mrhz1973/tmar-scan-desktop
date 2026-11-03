@@ -2,9 +2,8 @@
 import type { Point } from './brep'
 
 /** A strict replay recipe, not an automatic topological naming algorithm. */
-export interface SurfaceEditRecipe {
+interface SurfaceEditRecipeBase {
   schema: 'tmar.surface-edit'
-  version: 2
   engine: 'occt-wasm-5.7.1/brep-v3'
   units: 'mm'
   coordinateFrame: 'imported-step'
@@ -18,6 +17,12 @@ export interface SurfaceEditRecipe {
   lockedPoles: number[]
 }
 
+/** v2 keeps protected boundaries. v3 explicitly permits the eligible natural free rim. */
+export type SurfaceEditRecipe = SurfaceEditRecipeBase & (
+  | { version: 2; boundaryMode?: never }
+  | { version: 3; boundaryMode: 'free-natural' }
+)
+
 export async function sha256(text: string): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
   return Array.from(new Uint8Array(bytes), x => x.toString(16).padStart(2, '0')).join('')
@@ -27,7 +32,12 @@ export function readRecipe(value: unknown): SurfaceEditRecipe {
   const r = value as SurfaceEditRecipe | null
   const integer = (n: unknown, min: number, max: number) => typeof n === 'number' && Number.isInteger(n) && n >= min && n <= max
   const digest = (s: unknown) => typeof s === 'string' && /^[a-f0-9]{64}$/.test(s)
-  if (!r || r.schema !== 'tmar.surface-edit' || r.version !== 2 || r.engine !== 'occt-wasm-5.7.1/brep-v3'
+  const hasOwn = (key: string) => Object.prototype.hasOwnProperty.call(r, key)
+  const validBoundaryMode = !!r && !hasOwn('freeBoundary') && (
+    (r.version === 2 && !hasOwn('boundaryMode')) ||
+    (r.version === 3 && r.boundaryMode === 'free-natural' && r.source?.faceCount === 1 && r.source?.solidCount === 0)
+  )
+  if (!r || r.schema !== 'tmar.surface-edit' || !validBoundaryMode || r.engine !== 'occt-wasm-5.7.1/brep-v3'
     || r.units !== 'mm' || r.coordinateFrame !== 'imported-step'
     || !r.source || typeof r.source.bodyId !== 'string' || !r.source.bodyId.trim() || r.source.bodyId.length > 1024
     || !digest(r.source.brepSha256) || !integer(r.source.faceCount, 1, 1000000) || !integer(r.source.solidCount, 0, 1)

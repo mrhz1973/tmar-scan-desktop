@@ -6,9 +6,9 @@
 
 All requests carry an `id`; replies carry `{id, result}` or `{id, error}`. The worker processes requests sequentially.
 
-- `createRecipe`: after `open` and `select`, pass `net`, `continuity`, `lockedPoles`, and the host's stable `bodyId`. Returns a JSON-safe `SurfaceEditRecipe` after CAD validation.
+- `createRecipe`: after `open` and `select`, pass `net`, `continuity`, `lockedPoles`, the host's stable `bodyId`, and optionally `freeBoundary: true` only for the eligible free-boundary mode. Returns a JSON-safe `SurfaceEditRecipe` after CAD validation.
 - `replayRecipe`: pass the original upstream `step`, saved `recipe`, and `bodyId`. Returns the validated preview including `step` for rebuilding the host feature. Does not alter the worker's interactive session.
-- `restoreRecipe`: same inputs as replay. Returns `{faces, net, preview, continuity, lockedPoles}` and adopts the validated source/face as the interactive base. Restore the returned net and locks in the UI. Failed restoration preserves the previous session.
+- `restoreRecipe`: same inputs as replay. Returns `{faces, net, preview, continuity, freeBoundary, lockedPoles}` and adopts the validated source/face as the interactive base. Restore the returned net, boundary mode and locks in the UI. Failed restoration preserves the previous session.
 
 The upstream input is the source before this surface edit, not the previously edited result. The exact imported BREP SHA-256, face/solid counts, face index, prepared NURBS SHA-256 and preparation type must match. This is deliberately strict: equivalent STEP exports can serialize differently and may require explicit reattachment. No automatic topological remapping is attempted. Engine/schema mismatches are rejected.
 
@@ -19,6 +19,27 @@ Pole edits use absolute positions relative to the prepared base net, not accumul
 Recipe version **2** explicitly records `units: "mm"` and `coordinateFrame: "imported-step"`. Coordinates are absolute positions in the CAD frame returned by OCCT STEP import, which normalizes supported source length units to millimetres. They are not display/world transforms or screen coordinates. The host must supply the same upstream STEP coordinate frame and apply display transforms separately.
 
 Experimental version 1 recipes are rejected explicitly; there is no silent unit/frame assumption or automatic migration. Recreate the recipe from the verified upstream source when adopting version 2.
+
+## Free-boundary recipes
+
+Version 2 remains the unchanged protected-boundary format. Explicit free mode
+uses version **3** with `boundaryMode: "free-natural"`; older readers refuse
+the unknown version instead of silently treating it as protected. Version 3
+requires one open face with the eligible natural four-sided contour and no
+holes; replay rechecks actual CAD eligibility as well as all source and net
+fingerprints. Unknown modes, a boundary-mode field on v2, or a `freeBoundary`
+alias inside a serialized recipe are rejected. Existing v2 callers need no
+new argument. Individual locks may include boundary poles and restore at the
+edited positions. The saved G0/G1 choice is retained for returning to protected
+mode; it does not claim boundary continuity while free mode is active.
+
+Kernel and browser-worker tests cover v2 compatibility, v3 JSON replay,
+manual boundary locks, a rational NURBS, invalid mode and source rejection,
+and refusal of free mode on a solid or a face with a hole. The browser worker
+passed on source and on the worker from an isolated production build. Reports:
+`evidence/recipe/browser-free-boundary-v3.json` and
+`evidence/recipe/browser-free-boundary-v3-compiled.json`. This contract is not
+yet connected to a host feature, project history or project persistence.
 
 `new SurfaceEditorKernel(kernel)` borrows the caller's runtime. `dispose()` releases only the editor's handles. `SurfaceEditorKernel.load()` owns its runtime and disposes it. Replay/restore use temporary editors sharing that runtime and release their own handles. No React, DOM or host store is required by the kernel API.
 
