@@ -9,3 +9,7 @@
 /* Initial safety: model tree stays visible but cannot start competing tools. */
 .app[data-editor-open='true'] .mid > .panel { pointer-events: none; }
 @media (max-width: 900px) { .workspace-editor-dock { flex-basis: 270px; min-width: 220px; } }
+
+.workspace-editor-copy-visibility { display: flex; align-items: flex-start; gap: 7px; line-height: 1.35; }
+.workspace-editor-copy-visibility input { flex: 0 0 auto; margin: 2px 0 0; }
+.workspace-editor-copy-visibility span { min-width: 0; overflow-wrap: anywhere; }

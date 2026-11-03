@@ -350,7 +350,7 @@ export function applyReversePart(p: ReversePart | undefined, ctx?: RestoreContex
   if (prepared) useReverse.setState((s) => ({ ...prepared, buildVersion: s.buildVersion + 1 }))
 }
 
-const PERSISTED = ['features', 'rolledBack', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'overlapsShown', 'elementsShown', 'stepFiles'] as const
+const PERSISTED = ['features', 'rolledBack', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'overlapsShown', 'elementsShown', 'stepFiles', 'hiddenBodies'] as const
 const DRAFTS = ['sketchDraft', 'extrudeDraft', 'revolveDraft', 'featureDraft'] as const
 
 export const reverseSection: ProjectSection<ReversePart> = {

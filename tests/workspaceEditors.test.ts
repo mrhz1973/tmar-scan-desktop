@@ -224,3 +224,30 @@ describe('workspace Apply reference notification boundary', () => {
     } finally { stop() }
   })
 })
+
+
+describe('host-owned Apply display choice', () => {
+  it('defaults to hiding the source and freezes the choice before asynchronous Apply', async () => {
+    const f=fixture();await workspaceEditors.open('test-editor',{bodyId:1})
+    expect(useWorkspaceEditor.getState().hideSourceAfterApply).toBe(true)
+    const waiting=deferred<void>(),prepare=f.controller.prepareApply
+    f.controller.prepareApply=async(ticket,signal)=>{await waiting.promise;return prepare(ticket,signal)}
+    const pending=workspaceEditors.apply()
+    expect(workspaceEditors.setHideSourceAfterApply(false)).toBe(false)
+    waiting.resolve();await pending
+    expect(f.adapter.stage).toHaveBeenCalledWith(expect.anything(),expect.anything(),expect.anything(),{hideSourceAfterApply:true})
+  })
+  it('can retain both bodies without modifying the plugin ticket or geometry package', async () => {
+    const f=fixture();await workspaceEditors.open('test-editor',{bodyId:1})
+    expect(workspaceEditors.setHideSourceAfterApply(false)).toBe(true)
+    expect(useWorkspaceEditor.getState().hideSourceAfterApply).toBe(false)
+    await workspaceEditors.apply()
+    expect(f.adapter.stage).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({kind:'cad-copy',draftNoteCount:0}),expect.anything(),{hideSourceAfterApply:false})
+    expect(workspaceEditors.setHideSourceAfterApply(true)).toBe(false)
+  })
+  it('does not publish a source visibility change when the user cancels', async () => {
+    const f=fixture();await workspaceEditors.open('test-editor',{bodyId:1})
+    workspaceEditors.setHideSourceAfterApply(false);await workspaceEditors.cancel()
+    expect(f.adapter.stage).not.toHaveBeenCalled();expect(f.publish).not.toHaveBeenCalled()
+  })
+})

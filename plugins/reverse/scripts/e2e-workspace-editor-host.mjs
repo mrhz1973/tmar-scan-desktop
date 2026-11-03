@@ -45,6 +45,9 @@ try {
       history:q.history.useHistory.getState().past.length,count:document.querySelectorAll('.viewport canvas').length}
   })
   await page.evaluate(()=>window.qa.workspaceEditors.open('qa-host-probe',{bodyId:window.qa.id}))
+  // This legacy scenario explicitly retains both bodies; the new visibility
+  // policy has its own real-plugin source and compiled UI regression.
+  await page.evaluate(()=>window.qa.workspaceEditors.setHideSourceAfterApply(false))
   await page.waitForSelector('[data-test="probe-parameters"]')
   await pause()
   const entered=await page.evaluate(()=>{

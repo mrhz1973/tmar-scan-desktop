@@ -748,9 +748,13 @@ export function createReverseSession({
   /** Build an immutable copy candidate in a DIFFERENT kernel. Nothing enters the
    * project before all CAD validation finishes. The tested kernel is adopted,
    * avoiding a second fallible rebuild after publication. */
-  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal) => {
+  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal, display?: Readonly<{ hideSourceBodyId: number }>) => {
     assertCurrent(); abortIfNeeded(signal)
     const before = useReverse.getState(), originalClient = requireClient()
+    // Host-derived identity, not an arbitrary ID from the plugin payload.
+    const hideSourceBodyId = display?.hideSourceBodyId
+    if (hideSourceBodyId !== undefined && (!Number.isSafeInteger(hideSourceBodyId) || !before.bodies.some(b => b.id === hideSourceBodyId)))
+      throw new Error('Corpo sorgente da nascondere non disponibile.')
     if (running || scheduled || holding || before.building || before.playback ||
         before.sketchDraft || before.featureDraft || before.extrudeDraft || before.revolveDraft)
       throw new Error('Concludi la costruzione o la bozza CAD corrente.')
@@ -801,6 +805,12 @@ export function createReverseSession({
           if (client !== originalClient) throw new Error('Il kernel sorgente è cambiato.')
           const live = useReverse.getState(), oldMeshes = new Map(meshes), oldTopologies = new Map(topologies), oldLanded = landed
           const nextVersion = live.buildVersion + 1
+          const hiddenBodies = hideSourceBodyId === undefined || live.hiddenBodies.includes(hideSourceBodyId)
+            ? live.hiddenBodies : [...live.hiddenBodies, hideSourceBodyId]
+          const restoreEffect = hideSourceBodyId === undefined ? undefined : {
+            undo: () => useReverse.getState().setBodiesVisible([hideSourceBodyId], !live.hiddenBodies.includes(hideSourceBodyId)),
+            redo: () => useReverse.getState().setBodiesVisible([hideSourceBodyId], false),
+          }
           const restore = () => {
             client = originalClient; landed = oldLanded
             meshes.clear(); oldMeshes.forEach((m, id) => meshes.set(id, m))
@@ -814,13 +824,13 @@ export function createReverseSession({
               client = candidate; landed = nextVersion
               meshes.clear(); topologies.clear()
               for (const body of answer.bodies) { meshes.set(body.id, body.mesh); topologies.set(body.id, body.topology) }
-              const bodies = nameBodies(answer.bodies.map(b => ({ id: b.id, name: b.name, visible: !live.hiddenBodies.includes(b.id), volume: b.volume,
+              const bodies = nameBodies(answer.bodies.map(b => ({ id: b.id, name: b.name, visible: !hiddenBodies.includes(b.id), volume: b.volume,
                 faces: b.faces, closed: b.closed, triangles: b.triangles, surface: b.surface, ...(b.box ? { box: b.box } : {}), ...(b.label ? { label: b.label } : {}) })), features, live.bodyStyles)
-              useReverse.setState({ features, stepFiles: files, nextFeatureId: feature.id + 1,
+              useReverse.setState({ features, stepFiles: files, hiddenBodies, nextFeatureId: feature.id + 1,
                 nextOfKind: { ...live.nextOfKind, import: (live.nextOfKind.import ?? 0) + 1 },
                 buildVersion: nextVersion, bodiesVersion: live.bodiesVersion + 1, building: false, buildError: null,
                 bodies, results: Object.fromEntries(withStepsSaid(answer.results, built).map(result => [result.id, result])) })
-            }, restore, operationId)
+            }, restore, operationId, restoreEffect)
             adopted = true
           } finally { adoptingEditor = false }
           candidate.onFailure = why => { if (client === candidate) { useReverse.getState().failBuild(why); useReverse.getState().setKernel('unavailable', why) } }
