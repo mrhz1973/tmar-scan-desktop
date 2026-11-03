@@ -3,7 +3,9 @@ import { OcctKernel, type Mesh, type BoundingBox, type ShapeHandle } from 'occt-
 import { assertNet, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
 import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 
-export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; trimLocks: number[] }
+import { extendSheet, sheetEdgePaths } from './sheetExtension'
+
+export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; singleSheet: boolean; trimLocks: number[] }
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
@@ -101,7 +103,7 @@ export class SurfaceEditorKernel {
       let trimLocks: number[] = []
       try { trimLocks = this.netFor(index).trimLocks } catch (e) { reason = e instanceof Error ? e.message : String(e) }
       const record = this.records[this.recordsByFace[index]]
-      return { index, trimLocks, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
+      return { index, trimLocks, singleSheet:this.solids===0 && this.faces.length===1, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
         enriched: !!record?.net && enrichBicubic(record.net) !== record.net }
     })
     return { faces: this.infos, preview: this.render(this.source) }
@@ -331,6 +333,15 @@ export class SurfaceEditorKernel {
     if (this.validatedFace === null || previewRevision !== this.previewRevision)
       throw new Error('Anteprima cambiata. Scegli il punto sulla faccia aggiornata.')
     return this.validatedFace
+  }
+  private sheetFace(revision:number) {
+    const face=this.noteFace(revision)
+    if (!this.infos[this.chosen]?.singleSheet) throw new Error('La duplicazione richiede una superficie aperta con una sola faccia.')
+    return face
+  }
+  sheetEdges(revision:number) { return sheetEdgePaths(this.kernel,this.sheetFace(revision)) }
+  duplicateSheetEdge(revision:number,edge:number,delta:Point) {
+    return extendSheet(this.kernel,this.sheetFace(revision),edge,delta)
   }
   finalFaceWitness(previewRevision: number) {
     const face = this.noteFace(previewRevision)

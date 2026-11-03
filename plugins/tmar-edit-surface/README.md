@@ -210,3 +210,20 @@ the spline quadrature differed from analytic disk area by 0.002631 mm2 on a
 one and ten ppm undergo an independent check using the converted wire on the
 original plane (1e-6 mm2 tolerance) and 144 inside/outside classifications.
 Larger differences remain a refusal.
+
+### Duplicate a free outer edge on an open CAD sheet
+
+On an editable single-face STEP sheet, Duplica bordo libero exposes X/Y/Z
+dragging of a highlighted outer edge. The preview follows the pointer. On
+release the worker extrudes the exact edge, rejects degeneracy, overlap or
+sampled intersection away from the original seam, and sews and validates the
+two faces. Undo/Redo restores the accepted strip proposal. Export writes that
+sewn sheet. This is a single strip proposal relative to the working face;
+chained extensions, mesh snapping and project-history Apply are not qualified.
+
+A 20 by 30 mm rectangular STEP sheet produced an added area of 150 mm2 for
+a 5 mm numeric kernel test. The real viewport drag produced 149.959599 mm2;
+the original face remained 600 mm2. Undo/Redo and independent reimport
+confirmed two valid faces with one shared topological edge. The test also
+covers overlap refusal and refusal on closed solids.
+Evidence: evidence/duplicate-edge/run-PU4ViG/.
