@@ -4,8 +4,9 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Vector3, PerspectiveCamera, Box3, BufferAttribute } from 'three'
 import { OcctKernel } from 'occt-wasm'
-import { launchApp } from '../../../scripts/e2e-lib.mjs'
+import { launchApp, pixelDiff } from '../../../scripts/e2e-lib.mjs'
 
+const zebra=process.argv.includes('--zebra')
 const chamfer=process.argv.includes('--chamfer')
 const reopen=process.argv.includes('--reopen')
 const root=resolve('plugins/tmar-edit-surface/evidence',chamfer?'trimmed-outer':'perforated')
@@ -44,6 +45,24 @@ try {
   const ready=()=>page.waitForFunction(()=>document.querySelector('[data-test=surface-apply]')?.disabled===false)
   await ready()
   const r=await page.$eval('[data-test=edit-surface-viewport]',e=>e.getBoundingClientRect().toJSON())
+  const differences={}
+  const shot = async () => {
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))
+    return page.screenshot({clip:{x:r.x,y:r.y,width:r.width,height:r.height-55},encoding:'base64'})
+  }
+  if(zebra){
+    const normal=await shot()
+    await page.click('[data-test=surface-zebra]')
+    const horizontal=await shot()
+    differences.enable=await pixelDiff(page,normal,horizontal)
+    await page.click('.es-dialog details:has([data-test=surface-zebra-direction]) summary')
+    await page.select('[data-test=surface-zebra-direction]','vertical')
+    differences.orientation=await pixelDiff(page,horizontal,await shot())
+    await page.click('[data-test=surface-zebra]')
+    differences.restore=await pixelDiff(page,normal,await shot())
+    assert(differences.enable>1 && differences.orientation>1 && differences.restore<0.1,JSON.stringify(differences))
+    await page.click('[data-test=surface-zebra]')
+  }
   const bounds=new Box3()
   for(const f of fs) {
     const mesh=k.tessellate(f,{linearDeflection:.08,angularDeflection:.15})
@@ -96,7 +115,7 @@ try {
       } finally {edges.forEach(e=>k.release(e));k.release(outer)}
     }
     assert(maxRimError<1e-7);assert.deepEqual(consoleErrors,[])
-    const report={reopen,...(chamfer?{outerEdges:5,chamferSamples:33,maxChamferError}:{}),inputVolume:volume,editedVolume:k.getVolume(edited),faces:faces.length,wires:2,rimSamples:72,maxRimError}
+    const report={reopen,...(zebra?{zebraPixelDifferences:differences}:{}),...(chamfer?{outerEdges:5,chamferSamples:33,maxChamferError}:{}),inputVolume:volume,editedVolume:k.getVolume(edited),faces:faces.length,wires:2,rimSamples:72,maxRimError}
     writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));console.log(out, report)
   } finally { faces.forEach(f=>k.release(f));k.release(edited) }
 } finally { await browser.close();[...fs,base].forEach(h=>k.release(h));k[Symbol.dispose]() }
