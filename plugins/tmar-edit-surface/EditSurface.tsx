@@ -12,6 +12,7 @@ import { assertNet, boundaryLocked, type Net, type Point } from './brep'
 import type { FaceInfo, Preview } from './editorKernel'
 import type { Request } from './editor.worker'
 import { SurfaceViewport } from './SurfaceViewport'
+import { dragDirection, type DragMode } from './localFrame'
 import './surface.css'
 type Payload = Request extends infer R ? R extends Request ? Omit<R, 'id'> : never : never
 
@@ -38,7 +39,7 @@ function SurfaceDialog({ close }: { close: () => void }) {
   const continuityRef = useRef(continuity); continuityRef.current = continuity
   const [distance, setDistance] = useState(1), [factor, setFactor] = useState(1.1)
   const [dragStrength, setDragStrength] = useState(1), [smoothStrength, setSmoothStrength] = useState(0.5)
-  const [dragMode, setDragMode] = useState<'axis' | 'screen'>('axis')
+  const [dragMode, setDragMode] = useState<DragMode>('axis')
   const [showNet, setShowNet] = useState(true), [transparency, setTransparency] = useState(0)
   const [busy, setBusy] = useState(false), [calculating, setCalculating] = useState(false)
   const [error, setError] = useState(''), [validNet, setValidNet] = useState<Net | null>(null)
@@ -121,6 +122,8 @@ function SurfaceDialog({ close }: { close: () => void }) {
   }
   const locked = net ? net.poles.flatMap((_, i) => boundaryLocked(net, i, continuity) || locks.includes(i) ? [i] : []) : []
   const editable = selected.filter(i => !locked.includes(i))
+  const moveDirection = net && editable.length ? dragDirection(net, editable[0], dragMode, axis) : null
+  const axisNames = dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']
   const transform = (fn: (p: Point, i: number, n: Net) => Point) => {
     if (!net) return
     const n = structuredClone(net); editable.forEach(i => { n.poles[i] = fn(net.poles[i], i, net) }); commit(n)
@@ -165,9 +168,10 @@ function SurfaceDialog({ close }: { close: () => void }) {
         <button disabled={busy || calculating} onClick={() => { if (loaded.current && window.confirm('Scartare questa bozza e scegliere un’altra faccia?')) void load(loaded.current.step, loaded.current.name) }}>Cambia faccia / corpo</button>
         <label>Protezione bordi<select value={continuity} disabled={busy} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { assertNet(base.current!, net, c); setContinuity(c) } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">G0 · mantieni posizione dei bordi</option><option value="G1">G1 · mantieni anche tangenti esistenti</option></select></label>
         <p className="es-hint">I bordi restano bloccati per proteggere il solido. G1 conserva le tangenti originali; non corregge discontinuità preesistenti.</p>
-        <div className="es-row">{['X', 'Y', 'Z'].map((a, i) => <button key={a} aria-pressed={axis === i} onClick={() => setAxis(i)}>{a}</button>)}</div>
-        <label>Trascinamento punti<select data-test="surface-drag-mode" value={dragMode} onChange={e => setDragMode(e.target.value as 'axis' | 'screen')}><option value="axis">Asse X/Y/Z scelto</option><option value="screen">Piano dello schermo</option></select></label>
-        <p>Clic: punto. Ctrl+clic: più punti. {dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità.' : 'Trascina lungo l’asse scelto.'} Trascina lo sfondo per ruotare. Le quote e lo stiramento usano sempre l’asse X/Y/Z scelto.</p>
+        <div className="es-row">{axisNames.map((a, i) => <button key={a} data-test={`surface-axis-${i}`} aria-pressed={axis === i} onClick={() => setAxis(i)}>{a}</button>)}</div>
+        <label>Trascinamento punti<select data-test="surface-drag-mode" value={dragMode} onChange={e => setDragMode(e.target.value as DragMode)}><option value="axis">Mondo · asse X/Y/Z</option><option value="screen">Piano dello schermo</option><option value="local">Locale · U/V/normale</option></select></label>
+        <p>Clic: punto. Ctrl+clic: più punti. {dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.' : dragMode === 'local' ? 'U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. La freccia indica il verso positivo. Trascina un punto o imposta una quota.' : 'Trascina lungo l’asse scelto.'} Trascina lo sfondo per ruotare. Lo stiramento usa sempre X/Y/Z.</p>
+        {dragMode === 'local' && editable.length > 0 && !moveDirection && <p role="alert">Riferimento locale non definito in questo punto. Scegli un altro punto o il riferimento mondo.</p>}
         <label>Intensità trascinamento · {Math.round(dragStrength * 100)}%<input data-test="surface-drag-strength" type="range" min="0.05" max="1" step="0.05" value={dragStrength} onChange={e => setDragStrength(Number(e.target.value))} /></label>
         <p className="es-hint">Riduce lo spostamento durante il trascinamento per modifiche fini. Le quote numeriche restano esatte.</p>
         <button data-test="surface-control-net" aria-pressed={showNet} onClick={() => setShowNet(v => !v)}>{showNet ? 'Nascondi reticolo' : 'Mostra reticolo'}</button>
@@ -176,7 +180,7 @@ function SurfaceDialog({ close }: { close: () => void }) {
         <p data-test="surface-selection">{selected.length} selezionati · {editable.length} modificabili</p>
         <div className="es-row"><button disabled={!selected.length} onClick={() => setLocks([...new Set([...locks, ...selected])])}>Blocca punti</button><button disabled={!selected.length} onClick={() => setLocks(locks.filter(i => !selected.includes(i)))}>Sblocca punti</button></div>
         <label>Spostamento · mm<input type="number" step="0.1" value={distance} data-test="surface-distance" onChange={e => setDistance(Number(e.target.value))} /></label>
-        <button data-test="surface-move" disabled={busy || !editable.length || !Number.isFinite(distance)} onClick={() => transform(p => p.map((x, i) => x + (i === axis ? distance : 0)) as Point)}>Sposta lungo {['X', 'Y', 'Z'][axis]}</button>
+        <button data-test="surface-move" disabled={busy || !moveDirection || !Number.isFinite(distance)} onClick={() => { if (moveDirection) transform(p => p.map((x, i) => x + moveDirection[i] * distance) as Point) }}>Sposta lungo {axisNames[axis]}</button>
         <button disabled={busy || !editable.length} onClick={flatten}>Spiana sul piano dei tre angoli iniziali</button>
         <label>Intensità levigatura · {Math.round(smoothStrength * 100)}%<input data-test="surface-smooth-strength" type="range" min="0.05" max="1" step="0.05" value={smoothStrength} onChange={e => setSmoothStrength(Number(e.target.value))} /></label>
         <button data-test="surface-smooth" disabled={busy || !editable.length} onClick={() => transform((p, i, n) => { const row = Math.floor(i / n.nv), col = i % n.nv, neighbors = [row > 0 ? i - n.nv : -1, row + 1 < n.nu ? i + n.nv : -1, col > 0 ? i - 1 : -1, col + 1 < n.nv ? i + 1 : -1].filter(j => j >= 0); return p.map((x, d) => x * (1 - smoothStrength) + neighbors.reduce((s, j) => s + n.poles[j][d], 0) / neighbors.length * smoothStrength) as Point })}>Levigatura locale · {Math.round(smoothStrength * 100)}%</button>
