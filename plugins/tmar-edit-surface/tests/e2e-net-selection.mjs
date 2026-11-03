@@ -146,7 +146,24 @@ try {
   let maxBorderError=0
   for(const result of [numeric,dragged,undone,redone]) for(let i=0;i<base.border.length;i++) maxBorderError=Math.max(maxBorderError,new THREE.Vector3(...result.border[i]).distanceTo(new THREE.Vector3(...base.border[i])))
   assert(maxBorderError<1e-6);assert.deepEqual(consoleErrors,[])
-  const report={pass:true,selectionChecks:cells?['corner cell: 4 selected, 1 free','hidden cells unpickable','interior cell: 4 free','selection creates no undo']:['points excludes segments','segment selects two poles','Ctrl add/remove shared endpoints','hidden net unpickable','mixed prioritizes poles','mixed picks pole before next frame','locked segment cannot drag','selection creates no undo'],base,numeric,dragged,undone,redone,maxBorderError,consoleErrors,elapsedMs:performance.now()-started}
+  let projection
+  if(symmetric){
+    assert.match(await page.$eval('[data-test=surface-mirror-feedback]', e=>e.textContent),/hanno un corrispondente/)
+    await page.select('[data-test=surface-mirror-plane]','2')
+    const input=await page.$('[data-test=surface-mirror-offset]')
+    await input.focus();await page.keyboard.down('Control');await input.press('a');await page.keyboard.up('Control');await input.type('10');await input.press('Enter')
+    assert(await input.evaluate(e=>document.activeElement!==e))
+    assert.equal(await input.evaluate(e=>e.valueAsNumber),10)
+    assert.match(await page.$eval('[data-test=surface-mirror-feedback]', e=>e.textContent),/senza corrispondente/)
+    const previous=await status()
+    await page.click('[data-test=surface-project-poles]');await changed(previous)
+    projection=await exportState('placed-on-xy')
+    assert(projection.center[2]<redone.center[2] && projection.center[2]>base.center[2])
+    for(let i=0;i<base.border.length;i++)assert(new THREE.Vector3(...projection.border[i]).distanceTo(new THREE.Vector3(...base.border[i]))<1e-6)
+    const placedStatus=await status();await page.click('[data-test=surface-undo]');await changed(placedStatus)
+    assert.equal(await status(),previous)
+  }
+  const report={pass:true,projection,selectionChecks:cells?['corner cell: 4 selected, 1 free','hidden cells unpickable','interior cell: 4 free','selection creates no undo']:['points excludes segments','segment selects two poles','Ctrl add/remove shared endpoints','hidden net unpickable','mixed prioritizes poles','mixed picks pole before next frame','locked segment cannot drag','selection creates no undo'],base,numeric,dragged,undone,redone,maxBorderError,consoleErrors,elapsedMs:performance.now()-started}
   writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({out,pass:report.pass,selectionChecks:report.selectionChecks,elapsedMs:report.elapsedMs,maxBorderError,consoleErrors,centers:[base,numeric,dragged,undone,redone].map(({file,center,volume})=>({file,center,volume}))},null,2))
 } catch(e) { writeFileSync(join(out,'failure.json'),JSON.stringify({error:String(e),stack:e.stack},null,2));await page.screenshot({path:join(out,'failure.png')});throw e }
 finally {await browser.close();kernel[Symbol.dispose]()}

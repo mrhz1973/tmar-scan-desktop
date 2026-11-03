@@ -108,6 +108,9 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
     useSurfaceDialogs.setState(s => ({ count: s.count + 1 }))
     const onKey = (e: KeyboardEvent) => {
       // The modal owns navigation/history even if focus remains on its opener.
+      if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.dataset.test === 'surface-mirror-offset') {
+        e.preventDefault(); e.target.blur()
+      }
       e.stopImmediatePropagation()
       const s = modalKeys.current, key = e.key.toLowerCase()
       if ((e.ctrlKey || e.metaKey) && ['z', 'y'].includes(key) && !(e.target instanceof HTMLInputElement)) {
@@ -311,11 +314,15 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <p className="es-hint">Riduce lo spostamento durante il trascinamento per modifiche fini. Le quote numeriche restano esatte.</p>
         <fieldset><legend>Simmetria dei poli</legend>
           <label><input data-test="surface-symmetry" type="checkbox" checked={symmetry} onChange={e=>setSymmetry(e.target.checked)}/> Modifica anche il polo speculare</label>
-          {symmetry && <><label>Piano<select value={mirrorAxis} onChange={e=>setMirrorAxis(Number(e.target.value))}><option value={0}>YZ</option><option value={1}>XZ</option><option value={2}>XY</option></select></label>
+          {symmetry && <><label>Piano<select data-test="surface-mirror-plane" value={mirrorAxis} onChange={e=>setMirrorAxis(Number(e.target.value))}><option value={0}>YZ</option><option value={1}>XZ</option><option value={2}>XY</option></select></label>
             <label>Posizione lungo {['X','Y','Z'][mirrorAxis]} (mm)<input data-test="surface-mirror-offset" type="number" step="any" defaultValue={mirrorOffset} onBlur={e=>{
               if(Number.isFinite(e.target.valueAsNumber))setMirrorOffset(e.target.valueAsNumber)
               else e.target.value=String(mirrorOffset)
-            }} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}/></label>
+            }}/></label>
+            <p data-test="surface-mirror-feedback" role="status">Viola: piano e poli speculari. Giallo: selezione.
+              {editable.length > 0 && partners && (editable.some(i => partners[i] < 0 || locked.includes(partners[i]))
+                ? ' La selezione contiene un polo senza corrispondente libero.'
+                : ' Tutti i poli selezionati liberi hanno un corrispondente.')}</p>
             <p>I poli sul piano scorrono lungo il piano. La coppia deve appartenere alla faccia attiva ed essere libera.</p>
             <button data-test="surface-project-poles" disabled={busy || !editable.length} onClick={()=>{
               const placed=structuredClone(net)
@@ -356,7 +363,7 @@ function SurfaceDialog({ close, applyWithNotes }: SurfaceOptions & { close: () =
         <button disabled={busy || !editable.length || !Number.isFinite(factor) || factor <= 0 || factor > 3} onClick={() => { const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factor : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
         <div className="es-row"><button data-test="surface-undo" disabled={busy || at.current <= 0} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || at.current >= history.current.length - 1} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => commit(structuredClone(base.current!))}>Ripristina</button></div>
       </>}
-    </aside><main><SurfaceViewport strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={changePoles} />
+    </aside><main><SurfaceViewport mirrorAxis={mirrorAxis} mirrorOffset={mirrorOffset} mirrorPartners={partners} strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => setSelected(s => selectNetPoints(s, ids, multi))} onDrag={changePoles} />
       <div className="es-status" role="status" data-test="surface-status">{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error} Vista: ultimo risultato valido.` : validNet && preview ? `CAD valido · volume ${preview.volume.toFixed(3)} mm³ · scarto bordo ${preview.maxBoundaryError.toExponential(1)} mm` : 'Apri un corpo STEP e scegli una faccia.'}</div>
     </main></div>
     <footer><span>{stripPaths?'Applica aggiunge la superficie cucita al progetto come nuovo corpo.':'Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.'}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={(!!stripPaths && (!stripResult || stripEdge>=0)) || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => stripPaths ? void applyStrip() : void finish(true)}>{stripPaths ? 'Applica superficie cucita' : 'Applica come nuovo corpo'}</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>
