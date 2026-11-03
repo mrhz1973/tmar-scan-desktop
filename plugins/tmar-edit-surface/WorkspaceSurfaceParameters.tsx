@@ -111,6 +111,18 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         title={!state.canBeginStrip ? 'Serve una superficie aperta a una sola faccia con anteprima valida e senza note.' : 'Duplica un bordo della superficie aperta.'}
         onClick={() => attempt(() => controller.beginStrip())}>Duplica bordo libero</button>}
       {!strip && <>
+      {state.canBeginStrip && <label>Direzione CAD per il bordo D
+        <select data-test="surface-direct-strip-axis" value={state.directStripAxis} disabled={disabled}
+          onChange={e => attempt(() => controller.setDirectStripAxis(Number(e.target.value) as 0 | 1 | 2))}>
+          <option value={0}>X</option><option value={1}>Y</option><option value={2}>Z</option>
+        </select>
+        <span>Clicca un bordo libero per mostrare D. Questa direzione è indipendente da U/V/N dei poli.</span>
+      </label>}
+      {state.directStripError && <div role="alert" data-test="surface-direct-strip-error">
+        <p>{state.directStripError} Puoi riprovare.</p>
+        <button type="button" data-test="surface-direct-strip-retry" disabled={disabled}
+          onClick={() => attempt(() => controller.retryDirectStripEdges())}>Riprova</button>
+      </div>}
       <label>Protezione dei bordi
         <select data-test="surface-continuity" value={state.continuity} disabled={disabled || state.freeBoundary}
           onChange={e => attempt(() => controller.setContinuity(e.target.value as 'G0' | 'G1'))}>

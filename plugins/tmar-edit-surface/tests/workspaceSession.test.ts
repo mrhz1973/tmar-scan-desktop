@@ -15,6 +15,7 @@ class FakeWorker {
   postMessage(message: Msg) { this.sent.push(message) }
   terminate = vi.fn()
   reply(id: number, result: unknown) { this.onmessage?.({ data: { id, result } } as MessageEvent<unknown>) }
+  fail(id: number, error: string) { this.onmessage?.({ data: { id, error } } as MessageEvent<unknown>) }
 }
 function plane(): Net {
   const poles: Net['poles'] = []
@@ -463,6 +464,201 @@ describe('WorkspaceSurfaceSession',()=>{
 })
 
 describe('workspace free-edge strip',()=>{
+  it('releases a deferred layer capture on Escape before a pole gesture begins',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    const request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    const paths=t.session.getViewState().directStrip!.paths
+    const before=t.session.getSnapshot()
+    t.session.attach({} as never)
+    t.layer.cancelGesture.mockReturnValueOnce(true)
+    expect(t.session.cancelGesture()).toBe(true)
+    expect(t.layer.cancelGesture).toHaveBeenCalledTimes(1)
+    expect(t.session.getSnapshot().gesture).toBe('idle')
+    expect(t.session.getSnapshot().historyRevision).toBe(before.historyRevision)
+    expect(t.session.getSnapshot().dirty).toBe(before.dirty)
+    expect(t.session.getViewState().directStrip?.paths).toBe(paths)
+    t.layer.cancelGesture.mockReturnValueOnce(false)
+    expect(t.session.cancelGesture()).toBe(false)
+    const release=t.session.freeze(ticket(t) as never)
+    expect(()=>t.session.cancelGesture()).toThrow('congelata')
+    release();t.invalidate()
+    expect(()=>t.session.cancelGesture()).toThrow('source changed')
+    expect(t.layer.cancelGesture).toHaveBeenCalledTimes(2)
+    await t.session.dispose('cancelled')
+  })
+
+  it('preloads immutable boundaries without blocking or mutating the draft and retains their identity',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    const request=t.worker.sent.at(-1)!, before=t.session.getSnapshot()
+    expect(request.action).toBe('sheetEdges')
+    expect(before.validation.kind).toBe('valid')
+    expect(t.session.getPanelState().busy).toBe(false)
+    t.session.selectPoints([12],false)
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    const direct=t.session.getViewState().directStrip!
+    expect(direct).toMatchObject({revision:1,axis:2})
+    expect(Object.isFrozen(direct.paths)).toBe(true)
+    expect(Object.isFrozen(direct.paths[0])).toBe(true)
+    expect(Object.isFrozen(direct.paths[0][0])).toBe(true)
+    expect(t.session.getSnapshot().dirty).toBe(false)
+    expect(t.session.getSnapshot().historyRevision).toBe(before.historyRevision)
+    expect(t.session.getSnapshot().canUndo).toBe(false)
+    t.session.setDirectStripAxis(1);t.session.setAxis(0);t.session.setSnap(false)
+    expect(t.session.getViewState().directStrip?.paths).toBe(direct.paths)
+    expect(t.session.getViewState().directStrip?.axis).toBe(1)
+    expect(t.session.getPanelState().directStripAxis).toBe(1)
+    expect(t.session.getPanelState().axis).toBe(0)
+    await t.session.dispose('cancelled')
+  })
+
+  it('promotes the selected direct edge synchronously and Escape returns to poles without history',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    let request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    const direct=t.session.getViewState().directStrip!, history=t.session.getSnapshot().historyRevision
+    t.session.setDirectStripAxis(1)
+    const count=t.worker.sent.length
+    expect(t.session.beginDirectStripGesture(0,direct.revision+1)).toBe(false)
+    expect(t.session.beginDirectStripGesture(-1,direct.revision)).toBe(false)
+    expect(t.session.beginDirectStripGesture(0,direct.revision)).toBe(true)
+    expect(t.worker.sent).toHaveLength(count)
+    expect(t.session.getSnapshot().gesture).toBe('strip')
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    expect(t.session.getViewState().directStrip).toBeNull()
+    expect(t.session.getPanelState().strip).toMatchObject({selectedEdge:0,axis:1})
+    t.session.previewStripDelta([0,1,0]);await t.session.finishStripGesture(null)
+    expect(t.session.getSnapshot().gesture).toBe('idle')
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getSnapshot().dirty).toBe(false)
+    expect(t.session.getPanelState().strip).toBeNull()
+    expect(t.session.getPanelState().directStripAxis).toBe(1)
+    request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('sheetEdges')
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    expect(t.session.getViewState().directStrip?.axis).toBe(1)
+    const cachedCount=t.worker.sent.length
+    await t.session.beginStrip()
+    expect(t.worker.sent).toHaveLength(cachedCount)
+    expect(t.session.getPanelState().strip?.axis).toBe(1)
+    t.session.cancelStrip()
+    await t.session.dispose('cancelled')
+  })
+
+  it('commits direct D through the existing validated strip history',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    let request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    const direct=t.session.getViewState().directStrip!
+    expect(t.session.beginDirectStripGesture(0,direct.revision)).toBe(true)
+    t.session.previewStripDelta([0,0,1])
+    const finishing=t.session.finishStripGesture([0,0,1]);request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('duplicateSheetEdge')
+    t.worker.reply(request.id,stripReply(request));await finishing
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    expect(t.session.getPanelState().strip).toMatchObject({hasResult:true,canUndo:true})
+    expect(t.session.getSnapshot().dirty).toBe(true)
+    t.session.undo();expect(t.session.getPanelState().strip?.canRedo).toBe(true)
+    t.session.redo();expect(t.session.getPanelState().strip?.hasResult).toBe(true)
+    await t.session.dispose('cancelled')
+  })
+
+  it('discards late boundaries after a pole gesture and loads only the newly validated revision',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    const stale=t.worker.sent.at(-1)!
+    t.session.selectPoints([12],false);expect(t.session.beginPoleGesture()).toBe(true)
+    t.worker.reply(stale.id,structuredClone(stripPaths));await flush()
+    expect(t.session.getViewState().directStrip).toBeNull()
+    const poles=changedPoles(t.session);t.session.previewPoles(poles);t.session.finishPoleGesture(poles)
+    await vi.advanceTimersByTimeAsync(90)
+    let request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('evaluate')
+    t.worker.reply(request.id,preview(2));await flush()
+    request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('sheetEdges')
+    expect(t.session.beginDirectStripGesture(0,1)).toBe(false)
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    expect(t.session.getViewState().directStrip?.revision).toBe(2)
+    expect(t.session.getSnapshot().dirty).toBe(true)
+    await t.session.dispose('cancelled')
+  })
+
+  it('removes direct edges while placing or holding a note, then reloads after its deletion',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    let request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    t.session.setDirectStripAxis(0);t.session.setPlacingNote(true)
+    expect(t.session.getViewState().directStrip).toBeNull()
+    expect(t.session.beginDirectStripGesture(0,1)).toBe(false)
+    const placing=t.session.placeNote([0,0,0]);request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('notePick')
+    t.worker.reply(request.id,{anchor:{face:0,selectionRevision:1,u:.5,v:.5},at:[0,0,0],normal:[0,0,1]});await placing
+    expect(t.session.getPanelState().notes).toHaveLength(1)
+    expect(t.session.getViewState().directStrip).toBeNull()
+    t.session.removeNote(t.session.getPanelState().notes[0].id)
+    request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('sheetEdges')
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    expect(t.session.getViewState().directStrip?.axis).toBe(0)
+    await t.session.dispose('cancelled')
+  })
+
+  it('invalidates boundaries on freeze, source revocation and disposal',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    let request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    const direct=t.session.getViewState().directStrip!, release=t.session.freeze(ticket(t) as never)
+    expect(t.session.getViewState().directStrip).toBeNull()
+    expect(t.session.beginDirectStripGesture(0,direct.revision)).toBe(false)
+    release();request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('sheetEdges')
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    expect(t.session.getViewState().directStrip).not.toBeNull()
+    t.invalidate()
+    expect(t.session.getViewState().directStrip).toBeNull()
+    expect(t.session.beginDirectStripGesture(0,direct.revision)).toBe(false)
+    await t.session.dispose('source-invalid')
+    expect(t.session.getViewState().directStrip).toBeNull()
+    const other=await setup({sheet:true});await selectFace(other)
+    request=other.worker.sent.at(-1)!
+    await other.session.dispose('cancelled')
+    other.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    expect(other.session.getViewState().directStrip).toBeNull()
+  })
+
+  it('reports a failed direct edge read, avoids automatic retry loops, and retries successfully on request',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    let request=t.worker.sent.at(-1)!
+    t.worker.fail(request.id,'edge read failed');await flush()
+    expect(t.session.getPanelState().directStripError).toBe('Non è stato possibile caricare i bordi liberi.')
+    const count=t.worker.sent.filter(item=>item.action==='sheetEdges').length
+    t.session.setSnap(false);t.session.setSnap(true);t.session.setDirectStripAxis(1)
+    await flush()
+    expect(t.worker.sent.filter(item=>item.action==='sheetEdges')).toHaveLength(count)
+    expect(t.session.getPanelState().directStripError).toBe('Non è stato possibile caricare i bordi liberi.')
+    const history=t.session.getSnapshot().historyRevision, dirty=t.session.getSnapshot().dirty
+    t.session.retryDirectStripEdges()
+    expect(t.worker.sent.filter(item=>item.action==='sheetEdges')).toHaveLength(count+1)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getSnapshot().dirty).toBe(dirty)
+    request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('sheetEdges')
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    expect(t.session.getPanelState().directStripError).toBeNull()
+    expect(t.session.getViewState().directStrip?.revision).toBe(1)
+    expect(t.worker.sent.filter(item=>item.action==='sheetEdges')).toHaveLength(count+1)
+    t.session.selectPoints([12],false);t.session.moveSelected(.2)
+    await vi.advanceTimersByTimeAsync(90)
+    request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('evaluate')
+    t.worker.reply(request.id,preview(2));await flush()
+    expect(t.worker.sent.filter(item=>item.action==='sheetEdges')).toHaveLength(count+2)
+    request=t.worker.sent.at(-1)!
+    t.worker.reply(request.id,structuredClone(stripPaths));await flush()
+    expect(t.session.getViewState().directStrip?.revision).toBe(2)
+    await t.session.dispose('cancelled')
+  })
+
   it('passes a real STEP sheet through session, OCCT extension and frozen export',async()=>{
     vi.useFakeTimers()
     const editor=await SurfaceEditorKernel.load(), k=editor.kernel, box=k.makeBox(20,30,10), faces=k.getSubShapes(box,'face')

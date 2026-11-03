@@ -57,6 +57,8 @@ export interface WorkspaceSurfaceViewState {
   readonly symmetryBlocked?: boolean
   readonly transparency?: number
   readonly strip?: WorkspaceStripViewState | null
+  /** Current validated free boundaries; paths are stable and read-only until invalidated. */
+  readonly directStrip?: { readonly paths: readonly (readonly Point[])[]; readonly revision: number; readonly axis: 0 | 1 | 2 } | null
 }
 
 /** The layer never owns the session or edits project stores. */
@@ -73,6 +75,8 @@ export interface WorkspaceSurfaceLayerOwner {
   reportViewError(message: string): void
   /** Optional hooks for a future shared-view strip handle. */
   beginStripGesture?(edge: number): boolean
+  /** Promote the matching cached boundary and begin its gesture synchronously. */
+  beginDirectStripGesture?(edge: number, revision: number): boolean
   previewStripDelta?(delta: Point): void
   finishStripGesture?(delta: Point | null): Promise<void>
 }

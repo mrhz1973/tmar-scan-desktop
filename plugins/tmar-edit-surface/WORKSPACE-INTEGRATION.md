@@ -17,8 +17,8 @@ notes are not written by this first `cad-copy` contract.
 
 ## Evidence on 2026-11-03
 
-- Actual host TypeScript check: PASS. The current session and shared-layer
-  suites passed 28 tests each. These do not alone establish
+- Actual host TypeScript check: PASS. After the direct D update the session
+  and shared-layer suites passed 36 and 33 tests respectively. These do not alone establish
   app-level behavior.
 - Isolated source application, synthetic STEP box: same main canvas, camera and
   camera pose on entry; selected face, normal numeric move, local Undo/Redo,
@@ -74,8 +74,16 @@ notes are not written by this first `cad-copy` contract.
   reimport of a valid two-face sewn STEP (`strip-handle-xlmyGT`); equivalent
   Y and Z checks passed (`strip-handle-y-RAr0AU`, `strip-handle-z-0PFBpA`).
   Other sheet shapes and complete QS gesture equivalence remain unqualified.
-  The handle appears after entering strip mode and selecting an edge; it is not
-  the legacy editor's immediate D entry.
+- The same single-face sheet can now show D by clicking a free edge before
+  opening the strip panel. In the shared source application the direct X path
+  passed pointer preview, Escape, Undo/Redo and STEP reimport
+  (`strip-handle-x-gBpzfU`); a regression check passed for the panel Z path
+  (`strip-handle-z-yX62ui`). In a further direct X run a deliberately
+  simulated boundary-read failure displayed an explicit Retry control, did not
+  loop automatically, and recovered on the same revision (`strip-handle-x-tTHpez`).
+  Preloading alone did not change the CAD draft or project history. These runs
+  export a valid sewn STEP but do not apply it to a project; other sheet shapes,
+  compiled desktop behavior and QS parity remain unqualified.
 - The local STEP export was downloaded and reimported as a valid edited solid;
   the source body retained its CAD geometry and topology and no project history
   was added (`workspace-export-step-A22rAX`). With a draft note present, export

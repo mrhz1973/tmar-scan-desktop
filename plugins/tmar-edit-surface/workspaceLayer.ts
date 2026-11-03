@@ -37,7 +37,9 @@ type Capture = {
   rect: { left: number; top: number; width: number; height: number }
   offsetX?: number
   offsetY?: number
+  deferredPole?: boolean
 }
+type DirectSelection = { paths: readonly (readonly Point[])[]; revision: number; edge: number }
 
 const finitePoint = (p: readonly number[]): p is Point => p.length === 3 && p.every(Number.isFinite)
 const point = (p: THREE.Vector3): Point => [p.x, p.y, p.z]
@@ -106,6 +108,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   let cageState: WorkspaceSurfaceViewState | null = null
   let pinState: readonly Point[] | null = null
   let stripState: WorkspaceSurfaceViewState['strip'] = null
+  let directSelection: DirectSelection | null = null
+  let directDrawn: DirectSelection | null = null
   let radius = 1
   let zebra: Zebra | null = null
   let zebraKey = ''
@@ -178,7 +182,9 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
 
   // Midpoint by length, so curved or unevenly sampled borders do not put D on an end.
   const stripAnchor = (state: WorkspaceSurfaceViewState): Point | null => {
-    const strip = state.strip, path = strip?.paths[strip.selectedEdge]
+    const strip = state.strip, direct = !strip && state.directStrip && directSelection &&
+      state.directStrip.paths === directSelection.paths && state.directStrip.revision === directSelection.revision ? directSelection : null
+    const path = strip ? strip.paths[strip.selectedEdge] : direct?.paths[direct.edge]
     if (!displayed || !path || path.length < 2 || !path.every(finitePoint)) return null
     const lengths = path.slice(1).map((p, i) => new THREE.Vector3(...p).distanceTo(new THREE.Vector3(...path[i])))
     const total = lengths.reduce((a, b) => a + b, 0)
@@ -196,7 +202,12 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (disposed || layerDisposed) return
     try {
       const state = owner.getViewState(), anchor = stripAnchor(state)
-      if (!anchor || state.placingNote) { stripHandle.style.display = 'none'; return }
+      if (!anchor || state.placingNote) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
+      const direct = !state.strip && state.directStrip && directSelection &&
+        state.directStrip.paths === directSelection.paths && state.directStrip.revision === directSelection.revision ? directSelection : null
+      stripHandle.dataset.edge = String(state.strip ? state.strip.selectedEdge : direct?.edge ?? -1)
+      if (direct) stripHandle.dataset.revision = String(direct.revision)
+      else delete stripHandle.dataset.revision
       const offset = state.strip?.delta ?? [0, 0, 0]
       const end = point(new THREE.Vector3(...anchor).add(new THREE.Vector3(...offset)))
       const projected = view.projectPartPoint(end), rect = view.bounds(), overlay = view.overlayRoot.getBoundingClientRect()
@@ -306,17 +317,19 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   }
   const syncStrip = (state: WorkspaceSurfaceViewState) => {
     const strip = displayed ? state.strip ?? null : null
-    if (!strip && !stripState) return
-    if (strip?.paths === stripState?.paths && strip?.selectedEdge === stripState?.selectedEdge &&
-        strip?.delta.every((value, index) => value === stripState?.delta[index])) return
+    const direct = !strip && displayed && !state.placingNote && state.directStrip && directSelection &&
+      state.directStrip.paths === directSelection.paths && state.directStrip.revision === directSelection.revision ? directSelection : null
+    const unchanged = (!strip && !stripState) || (!!strip && !!stripState && strip.paths === stripState.paths &&
+      strip.selectedEdge === stripState.selectedEdge && strip.delta.every((value, index) => value === stripState?.delta[index]))
+    if (unchanged && direct === directDrawn) return
     clearOwned(stripGroup)
-    stripState = strip
-    if (!strip) return
-    const paths = strip.paths.map(path => path.map(p => [...p] as Point))
-    const result = drawStrip({ paths, axis: 0, edge: strip.selectedEdge, delta: [...strip.delta], change: () => {} })
-    stripGroup.add(result)
-    const selected = paths[strip.selectedEdge]
-    if (selected?.length > 1) {
+    stripState = strip; directDrawn = direct
+    if (strip) {
+      const paths = strip.paths.map(path => path.map(p => [...p] as Point))
+      stripGroup.add(drawStrip({ paths, axis: 0, edge: strip.selectedEdge, delta: [...strip.delta], change: () => {} }))
+    }
+    const selected = strip ? strip.paths[strip.selectedEdge] : direct?.paths[direct.edge]
+    if (selected && selected.length > 1) {
       const geometry = new LineGeometry()
       geometry.setPositions(selected.flat())
       const line = new Line2(geometry, new LineMaterial({ color: 0xffce30, linewidth: 3, depthTest: false, depthWrite: false }))
@@ -329,6 +342,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (disposed || layerDisposed) return
     try {
       const state = owner.getViewState()
+      if (directSelection && (state.strip || state.placingNote || !state.directStrip ||
+          state.directStrip.paths !== directSelection.paths || state.directStrip.revision !== directSelection.revision)) directSelection = null
       const nextPreview = state.preview?.valid === true ? state.preview : null
       if (nextPreview !== displayed) {
         stopZebra()
@@ -384,7 +399,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       referenceTargets = []; referencesDirty = true
       try { disposeTargets(neighbourTargets) } catch { /* Keep the original error. */ }
       neighbourTargets = []; neighboursDirty = true
-      stripState = null
+      stripState = null; directSelection = null; directDrawn = null
       stripHandle.style.display = 'none'
       for (const clean of [() => preview.clear(), () => clearOwned(cage), () => clearOwned(hover),
         () => clearOwned(pins), () => clearOwned(stripGroup)]) {
@@ -416,21 +431,24 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     const x = event.clientX - start.clientX, y = event.clientY - start.clientY, along = (x * dx + y * dy) / length
     return along >= 5 && along <= length + 4 && Math.abs(x * dy - y * dx) / length <= 6 ? index : null
   }
-  const pickStrip = (x: number, y: number): { edge: number; anchor: Point } | null => {
-    const strip = owner.getViewState().strip, rect = view.bounds()
-    const first = strip?.paths[0]?.[0]
-    if (!displayed || !strip || !first || !finitePoint(first) || rect.width <= 0 || rect.height <= 0 ||
+  const pickPaths = (pathsIn: readonly (readonly Point[])[], selectedEdge: number, x: number, y: number): { edge: number; anchor: Point } | null => {
+    const rect = view.bounds(), first = pathsIn[0]?.[0]
+    if (!displayed || !first || !finitePoint(first) || rect.width <= 0 || rect.height <= 0 ||
         x < rect.left || x > rect.left + rect.width || y < rect.top || y > rect.top + rect.height) return null
     const matrix = partMatrix(first)
-    const paths = strip.paths.map(path => path.map(p => point(new THREE.Vector3(...p).applyMatrix4(matrix))))
+    const paths = pathsIn.map(path => path.map(p => point(new THREE.Vector3(...p).applyMatrix4(matrix))))
     // A boundary chosen in the panel wins over coincident projections; do not
     // silently switch it to a neighbouring edge when the user grabs it.
-    const chosen = strip.selectedEdge >= 0
-      ? pickSheetEdge(paths, view.camera(), rect as DOMRect, x, y, strip.selectedEdge) : null
+    const chosen = selectedEdge >= 0
+      ? pickSheetEdge(paths, view.camera(), rect as DOMRect, x, y, selectedEdge) : null
     const picked = chosen ?? pickSheetEdge(paths, view.camera(), rect as DOMRect, x, y)
     if (!picked || clipping.planes?.some(plane => plane.distanceToPoint(picked.anchor) < 0)) return null
     const anchor = point(picked.anchor.clone().applyMatrix4(matrix.clone().invert()))
     return view.projectPartPoint(anchor).visible ? { edge: picked.edge, anchor } : null
+  }
+  const pickStrip = (x: number, y: number): { edge: number; anchor: Point } | null => {
+    const strip = owner.getViewState().strip
+    return strip ? pickPaths(strip.paths, strip.selectedEdge, x, y) : null
   }
   const pickFace = (x: number, y: number) => {
     if (!displayed) return null
@@ -489,7 +507,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     active.gesture.cancel()
     try {
       if (active.kind === 'strip') finishStrip(null)
-      else owner.finishPoleGesture(null)
+      else if (!active.deferredPole) owner.finishPoleGesture(null)
     } catch (error) { report(errorText(error)) }
     finally { release(active.pointerId) }
     return true
@@ -503,13 +521,16 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     } catch { return false } // A revoked source cancels rather than trapping the pointer.
   }
   const startStrip = (event: PointerEvent, picked: { edge: number; anchor: Point }, axis: 0 | 1 | 2 | null,
-    offsetX = 0, offsetY = 0): boolean => {
+    offsetX = 0, offsetY = 0, direct: DirectSelection | null = null): boolean => {
     let claimed = false, begun = false
     try {
       const state = owner.getViewState()
       if (disposed || layerDisposed || capture || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey ||
-          state.busy || state.placingNote || !displayed || !state.strip || state.strip.pending ||
-          !owner.beginStripGesture || !owner.previewStripDelta || !owner.finishStripGesture) return false
+          state.busy || state.placingNote || !displayed || !owner.previewStripDelta || !owner.finishStripGesture) return false
+      if (direct) {
+        if (state.strip || !state.directStrip || state.directStrip.paths !== direct.paths ||
+            state.directStrip.revision !== direct.revision || !owner.beginDirectStripGesture) return false
+      } else if (!state.strip || state.strip.pending || !owner.beginStripGesture) return false
       const matrix = partMatrix(picked.anchor), rect = view.bounds(), camera = view.camera()
       const direction: Point = [0, 0, 0]
       if (axis !== null) direction[axis] = 1
@@ -537,7 +558,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       if (!gesture) return true
       if (!view.capturePointer(event.pointerId)) { view.releasePointer(event.pointerId); return true }
       claimed = true
-      if (!owner.beginStripGesture(picked.edge)) { view.releasePointer(event.pointerId); claimed = false; return true }
+      const accepted = direct ? owner.beginDirectStripGesture!(picked.edge, direct.revision) : owner.beginStripGesture!(picked.edge)
+      if (!accepted) { view.releasePointer(event.pointerId); claimed = false; return true }
       begun = true
       view.claimEditDrag(true)
       capture = { kind: 'strip', pointerId: event.pointerId, gesture, camera, projection: camera.projectionMatrix.clone(),
@@ -554,13 +576,15 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     event.preventDefault(); event.stopPropagation()
     try {
       const state = owner.getViewState(), strip = state.strip, anchor = stripAnchor(state)
-      if (!strip || !anchor || stripHandle.style.display === 'none' || stripHandle.disabled) return
+      const direct = !strip && state.directStrip && directSelection && state.directStrip.paths === directSelection.paths &&
+        state.directStrip.revision === directSelection.revision ? directSelection : null
+      if ((!strip && !direct) || !anchor || stripHandle.style.display === 'none' || stripHandle.disabled) return
       const projected = view.projectPartPoint(anchor)
       if (!projected.visible) return
       // The label is offset from the edge. Correct both endpoints equally so an
       // axis drag starts at the edge even under perspective projection.
-      startStrip(event, { edge: strip.selectedEdge, anchor }, strip.axis,
-        event.clientX - projected.clientX, event.clientY - projected.clientY)
+      const edge = strip ? strip.selectedEdge : direct!.edge, axis = strip ? strip.axis : state.directStrip!.axis
+      startStrip(event, { edge, anchor }, axis, event.clientX - projected.clientX, event.clientY - projected.clientY, direct)
     } catch (error) { report(`Impossibile iniziare la modifica: ${errorText(error)}`) }
   }
   stripHandle.addEventListener('pointerdown', handleStripDown)
@@ -578,7 +602,16 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       }
       if (!net) return false
       const arrow = pickArrow(event), picked = arrow === null ? pickNet(event.clientX, event.clientY) : [arrow]
-      if (!picked) return false
+      // Preserve the entire net interaction. A coincident boundary may also
+      // reveal D, but a pole or its arrow always takes precedence.
+      const directHit = arrow === null && (!picked || picked.length > 1) && state.directStrip && owner.beginDirectStripGesture
+        ? pickPaths(state.directStrip.paths, -1, event.clientX, event.clientY) : null
+      if (directHit && state.directStrip) {
+        directSelection = { paths: state.directStrip.paths, revision: state.directStrip.revision, edge: directHit.edge }
+        syncStrip(state); positionStripHandle(); view.invalidate()
+      }
+      if (!picked) return !!directHit
+      if (!directHit && directSelection) { directSelection = null; syncStrip(state); positionStripHandle(); view.invalidate() }
       const selected = picked.every(i => state.selected.includes(i)) ? [...state.selected] : picked
       if (arrow === null) owner.selectPoints(picked, false)
       const ids = selected.filter(i => !state.locked.includes(i) && !state.hiddenPoles.includes(i))
@@ -609,13 +642,20 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
             return point(hit.point.clone().sub(anchor))
           } catch (error) { hideFeedback(); report(`Magnete non disponibile: ${errorText(error)}`); return null }
         } })
-      if (!gesture || !view.capturePointer(event.pointerId)) return true
+      if (!gesture) return true
+      if (!view.capturePointer(event.pointerId)) { view.releasePointer(event.pointerId); return true }
       claimed = true
-      if (!owner.beginPoleGesture()) { view.releasePointer(event.pointerId); claimed = false; return true }
-      begun = true
+      // A coincident control-net segment still selects/drag edits normally.
+      // Keep a plain click as selection only: starting a pole gesture here
+      // would revoke the validated direct-edge cache before D can be used.
+      const deferredPole = !!directHit
+      if (!deferredPole) {
+        if (!owner.beginPoleGesture()) { view.releasePointer(event.pointerId); claimed = false; return true }
+        begun = true
+      }
       view.claimEditDrag(true)
       capture = { kind: 'pole', pointerId: event.pointerId, gesture, camera, projection: camera.projectionMatrix.clone(), cameraWorld: camera.matrixWorld.clone(),
-        partWorld: matrix, rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } }
+        partWorld: matrix, deferredPole, rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } }
       return true
     } catch (error) {
       if (begun) try { if (state.strip) finishStrip(null); else owner.finishPoleGesture(null) } catch { /* Preserve initial error. */ }
@@ -648,7 +688,13 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (result.kind === 'preview') {
       try {
         if (capture.kind === 'strip') owner.previewStripDelta?.(result.delta)
-        else owner.previewPoles(result.poles)
+        else {
+          if (capture.deferredPole) {
+            if (!owner.beginPoleGesture()) { cancelGesture(); return }
+            capture.deferredPole = false
+          }
+          owner.previewPoles(result.poles)
+        }
       } catch (error) { cancelGesture(); report(errorText(error)) }
     }
   }
@@ -659,14 +705,30 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     try {
       const result = active.gesture.up(mousePoint(event, active.offsetX, active.offsetY))
       if (active.kind === 'strip') finishStrip(result.kind === 'commit' && Math.hypot(...result.delta) > 1e-7 ? result.delta : null)
-      else owner.finishPoleGesture(result.kind === 'commit' ? result.poles : null)
+      else if (result.kind === 'commit') {
+        if (active.deferredPole) {
+          if (!owner.beginPoleGesture()) return
+          active.deferredPole = false
+        }
+        owner.finishPoleGesture(result.poles)
+      } else if (!active.deferredPole) owner.finishPoleGesture(null)
     } catch (error) {
-      try { if (active.kind === 'strip') finishStrip(null); else owner.finishPoleGesture(null) } catch { /* Preserve the failed commit. */ }
+      try { if (active.kind === 'strip') finishStrip(null); else if (!active.deferredPole) owner.finishPoleGesture(null) } catch { /* Preserve the failed commit. */ }
       report(errorText(error))
     }
     finally { release(active.pointerId) }
   }
   const pointerCancel = (event: PointerEvent) => { if (capture?.pointerId === event.pointerId) cancelGesture() }
+  const clearDirect = () => {
+    if (!directSelection) return
+    directSelection = null
+    try { syncStrip(owner.getViewState()); positionStripHandle(); view.invalidate() }
+    catch {
+      // Revocation must not trap the overlay or propagate back into the host.
+      directDrawn = null; stripHandle.style.display = 'none'
+      try { clearOwned(stripGroup) } catch { /* Already detached by the host. */ }
+    }
+  }
   let layerDisposed = false
   const layer: SceneLayer = {
     order: 0, covers: true, pointerDown: down, click,
@@ -694,7 +756,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   try {
     cleanups.push(view.addLayer(layer))
     cleanups.push(view.onCapturedPointer({ move, up, cancel: pointerCancel, lostCapture: pointerCancel }))
-    cleanups.push(view.onInterruption(() => { cancelGesture() }))
+    cleanups.push(view.onInterruption(() => { cancelGesture(); clearDirect() }))
     cleanups.push(view.onFrame(positionStripHandle))
     cleanups.push(view.subscribeReferences(() => { referencesDirty = true; if (!capture) sync() }))
     cleanups.push(owner.subscribe(sync))

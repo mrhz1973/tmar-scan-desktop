@@ -52,6 +52,8 @@ export interface WorkspaceSurfacePanelState {
   readonly notes: readonly WorkspaceSurfaceNote[]
   readonly gesture: 'idle' | 'pole' | 'strip'
   readonly canBeginStrip: boolean
+  readonly directStripAxis: 0 | 1 | 2
+  readonly directStripError: string | null
   readonly canExportStep: boolean
   readonly strip: WorkspaceStripViewState | null
 }
@@ -76,6 +78,9 @@ interface StripMode {
   delta: Point
   error: string | null
 }
+interface DirectIdentity { readonly revision:number; readonly selectionEpoch:number; readonly face:number; readonly net:Net }
+interface DirectCache extends DirectIdentity { readonly paths:readonly (readonly Point[])[] }
+interface DirectPending extends DirectIdentity { readonly controller:AbortController; readonly generation:number; readonly key:string }
 type Frozen = { readonly ticketKey: string; readonly operationId: string; readonly stamp: PreviewStamp; readonly source: SourceBinding; readonly stripResult: StripResult | null; preparing: boolean }
 type Options = {
   /** Injected only for a controlled worker in tests; the session owns this runtime. */
@@ -134,6 +139,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private stripGeneration = 0
   private stripRequestId = 0
   private stripAbort: AbortController | null = null
+  private directStripAxis: 0 | 1 | 2 = 2
+  private directCache: DirectCache | null = null
+  private directPending: DirectPending | null = null
+  private directGeneration = 0
+  private directFailedKey: string | null = null
+  private directGestureOrigin = false
   private face = -1
   private faces: readonly FaceInfo[] = Object.freeze([])
   private sourcePreview: Preview | null = null
@@ -226,7 +237,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
 
   getSnapshot = (): EditorSnapshot => this.snapshot
   getPanelState = (): WorkspaceSurfacePanelState => this.panel
-  getViewState = (): WorkspaceSurfaceViewState => this.viewState
+  getViewState = (): WorkspaceSurfaceViewState => {
+    // Host source revocation can arrive without a draft event. Never hand the
+    // layer boundaries that no longer belong to the live source lease.
+    if ((this.directCache || this.directPending) &&
+        !this.matchesDirect(this.directCache ?? this.directPending, this.directIdentity())) {
+      this.clearDirectCache()
+    }
+    return this.viewState
+  }
   subscribe = (listener: () => void): (() => void) => {
     if (this.disposed) return () => undefined
     this.listeners.add(listener)
@@ -310,13 +329,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }, false, true)
   }
   cancelGesture(): boolean {
-    if (this.disposed || this.gesture === 'idle') return false
+    // The layer may already hold the pointer while waiting to distinguish a
+    // click on the cage from a drag. That capture precedes a pole gesture.
+    if (this.disposed || (this.gesture === 'idle' && !this.layer)) return false
     this.assertMutable()
-    const hadGesture = true
-    this.layer?.cancelGesture() // Layer releases capture synchronously and may call finishPoleGesture(null).
+    const hadGesture = this.gesture !== 'idle'
+    const layerCancelled = this.layer?.cancelGesture() ?? false // May synchronously finish the controller gesture.
     if (this.gesture === 'pole') this.finishPoleGesture(null)
     else if (this.gesture === 'strip') this.cancelStripGesture()
-    return hadGesture
+    return hadGesture || layerCancelled
   }
   undo(): void { this.change(() => { if (this.strip) { if (this.strip.at > 0) { this.strip.at--; this.strip.selectedEdge = -1; this.strip.delta = [0,0,0]; this.strip.error = null; this.message = null; this.historyRevision++ } } else this.draft.undo() }, false, false, true) }
   redo(): void { this.change(() => { if (this.strip) { if (this.strip.at + 1 < this.strip.frames.length) { this.strip.at++; this.strip.selectedEdge = -1; this.strip.delta = [0,0,0]; this.strip.error = null; this.message = null; this.historyRevision++ } } else this.draft.redo() }, false, false, true) }
@@ -330,6 +351,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (this.faces.length !== 1 || !this.faces[this.face]?.openSheet || d.preview?.faceMeshes.length !== 1 ||
         !d.net || d.validNet !== d.net || d.calculating || d.previewStale || revision === undefined || this.snapshot.validation.kind !== 'valid')
       throw new Error('Serve una superficie aperta a una sola faccia con anteprima valida.')
+    const cached = this.directCache
+    if (cached && this.matchesDirect(cached, this.directIdentity())) {
+      this.change(() => {
+        this.strip = { baseNet:cached.net, basePreviewRevision:cached.revision, initialPaths:cached.paths,
+          frames:[null], at:0, selectedEdge:-1, axis:this.directStripAxis, delta:[0,0,0], error:null }
+        this.directGestureOrigin = false; this.message = null
+      })
+      return
+    }
     const net = d.net, generation = ++this.stripGeneration, controller = new AbortController()
     this.change(() => { this.stripPending = true; this.stripAbort = controller; this.busy = true; this.message = null })
     try {
@@ -341,7 +371,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         throw new Error('Anteprima del bordo superata.')
       this.change(() => {
         this.strip = { baseNet:net, basePreviewRevision:revision, initialPaths:paths, frames:[null], at:0,
-          selectedEdge:-1, axis:2, delta:[0,0,0], error:null }
+          selectedEdge:-1, axis:this.directStripAxis, delta:[0,0,0], error:null }
+        this.directGestureOrigin = false
         this.stripPending = false; this.stripAbort = null; this.busy = false
       }, true, false, true)
     } catch (error) {
@@ -362,7 +393,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (this.gesture === 'strip') this.cancelGesture()
     this.stripGeneration++
     this.stripAbort?.abort()
-    this.change(() => { this.strip = null; this.stripPending = false; this.stripAbort = null; this.busy = false; this.message = null }, true, false, true)
+    this.change(() => { this.strip = null; this.stripPending = false; this.stripAbort = null; this.busy = false; this.directGestureOrigin = false; this.message = null }, true, false, true)
   }
 
   selectStripEdge(index: number): void {
@@ -377,8 +408,48 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.change(() => {
       const strip = this.requireStrip()
       if (axis !== 0 && axis !== 1 && axis !== 2) throw new Error('Direzione del bordo non valida.')
-      strip.axis = axis
+      strip.axis = axis; this.directStripAxis = axis
     }, false, false, true)
+  }
+
+  /** The direct-handle axis is independent of the pole manipulation axis. */
+  setDirectStripAxis(axis: 0 | 1 | 2): void {
+    this.change(() => {
+      if (axis !== 0 && axis !== 1 && axis !== 2) throw new Error('Direzione del bordo non valida.')
+      this.directStripAxis = axis
+      if (this.strip) this.strip.axis = axis
+    }, false, false, true)
+  }
+
+  /** Retry the direct boundary lookup only after an explicit user request. */
+  retryDirectStripEdges(): void {
+    const identity = this.directIdentity()
+    if (!identity || this.directPending || this.directCache) return
+    const key = `${identity.selectionEpoch}:${identity.revision}`
+    if (this.directFailedKey !== key) return
+    this.directFailedKey = null
+    this.refresh()
+  }
+
+  /** Promote one prevalidated cached edge and start a gesture without awaiting the worker. */
+  beginDirectStripGesture(edge: number, revision: number): boolean {
+    const cached = this.directCache, current = this.directIdentity()
+    // A stale hit cannot cancel the in-flight read for a newer preview.
+    if (!cached) {
+      if (this.directPending && !this.matchesDirect(this.directPending, current)) this.clearDirectCache()
+      return false
+    }
+    if (!this.matchesDirect(cached, current)) {
+      this.clearDirectCache()
+      return false
+    }
+    if (revision !== cached.revision || !Number.isInteger(edge) || edge < 0 || edge >= cached.paths.length) return false
+    this.change(() => {
+      this.strip = { baseNet:cached.net, basePreviewRevision:cached.revision, initialPaths:cached.paths,
+        frames:[null], at:0, selectedEdge:edge, axis:this.directStripAxis, delta:[0,0,0], error:null }
+      this.directGestureOrigin = true; this.gesture = 'strip'; this.message = null
+    })
+    return true
   }
 
   /** The layer may show the delta immediately; only finish requests CAD validation. */
@@ -418,7 +489,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (previous.length >= 64) throw new Error('Raggiunto il limite di 64 estensioni per bozza.')
     const copyMove = (move: StripMove): StripMove => ({ edge:move.edge, delta:pointCopy(move.delta), path:move.path.map(pointCopy) })
     const requested = pointCopy(delta), chosenPath = path.map(pointCopy), generation = ++this.stripGeneration, controller = new AbortController(), at = strip.at
-    this.change(() => { this.gesture = 'idle'; this.stripPending = true; this.stripAbort = controller; this.busy = true; strip.error = null; strip.delta = requested; this.message = null }, false, fromGesture, true)
+    this.change(() => { this.gesture = 'idle'; this.directGestureOrigin = false; this.stripPending = true; this.stripAbort = controller; this.busy = true; strip.error = null; strip.delta = requested; this.message = null }, false, fromGesture, true)
     try {
       const result = await this.runtime.worker.ask<{step:string;preview:Preview;paths:Point[][];moves:StripMove[];addedArea:number;totalArea:number}>({
         action:'duplicateSheetEdge', previewRevision:strip.basePreviewRevision, edge, delta:requested,
@@ -698,6 +769,55 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         stampKey(this.snapshot.validation.stamp) !== stampKey(frozen.stamp))
       throw new Error('La bozza congelata non corrisponde al ticket.')
   }
+  private directIdentity(): DirectIdentity | null {
+    const d = this.draft.getSnapshot(), queue = this.runtime.previews.getSnapshot()
+    const revision = d.preview?.previewRevision
+    if (this.disposed || !this.runtime.active || this.context.signal.aborted || this.mutating || this.frozen || this.busy ||
+        this.strip || this.stripPending || this.gesture !== 'idle' || this.notes.length || this.placingNote ||
+        this.faces.length !== 1 || !this.faces[this.face]?.openSheet || !d.net || d.validNet !== d.net ||
+        d.calculating || d.previewStale || !d.preview?.valid || d.preview.faceMeshes.length !== 1 ||
+        typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0 ||
+        !queue.current || queue.validRevision !== queue.current.revision) return null
+    try { this.assertLive() } catch { return null }
+    return { revision, selectionEpoch:this.selectionEpoch, face:this.face, net:d.net }
+  }
+  private matchesDirect(a: DirectIdentity | null, b: DirectIdentity | null): boolean {
+    return !!a && !!b && a.revision === b.revision && a.selectionEpoch === b.selectionEpoch && a.face === b.face && a.net === b.net
+  }
+  private clearDirectCache(): void {
+    this.directGeneration++
+    const pending = this.directPending
+    this.directPending = null; this.directCache = null
+    pending?.controller.abort()
+    if (this.viewState?.directStrip) this.viewState = Object.freeze({ ...this.viewState, directStrip:null })
+  }
+  /** Read-only and asynchronous: never advances draft or CAD history. */
+  private syncDirectCache(): void {
+    const identity = this.directIdentity()
+    if (this.directPending && !this.matchesDirect(this.directPending, identity)) this.clearDirectCache()
+    if (this.directCache && !this.matchesDirect(this.directCache, identity)) this.clearDirectCache()
+    if (!identity || this.directCache || this.directPending) return
+    const key = `${identity.selectionEpoch}:${identity.revision}`
+    if (this.directFailedKey === key) return
+    const pending: DirectPending = { ...identity, controller:new AbortController(), generation:++this.directGeneration, key }
+    this.directPending = pending
+    void this.runtime.worker.ask<Point[][]>({ action:'sheetEdges', previewRevision:identity.revision }, pending.controller.signal)
+      .then(raw => {
+        if (this.directPending !== pending || pending.generation !== this.directGeneration) return
+        const paths = freezePaths(raw)
+        if (!this.matchesDirect(pending, this.directIdentity())) { this.clearDirectCache(); return }
+        this.directPending = null
+        this.directCache = Object.freeze({ ...identity, paths })
+        this.refresh()
+      }).catch(error => {
+        if (this.directPending !== pending || pending.generation !== this.directGeneration) return
+        this.directPending = null
+        if (!this.disposed && error?.name !== 'AbortError' && this.matchesDirect(pending, this.directIdentity())) {
+          this.directFailedKey = pending.key
+          this.refresh()
+        }
+      })
+  }
   private requireNet(): Net {
     const net = this.draft.getSnapshot().net
     if (!net) throw new Error('Scegli prima una faccia CAD.')
@@ -709,7 +829,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   private cancelStripGesture(): void {
     this.change(() => {
-      if (this.gesture === 'strip') { this.gesture = 'idle'; if (this.strip) this.strip.delta = [0,0,0] }
+      if (this.gesture === 'strip') {
+        this.gesture = 'idle'
+        if (this.directGestureOrigin) this.strip = null
+        else if (this.strip) this.strip.delta = [0,0,0]
+        this.directGestureOrigin = false
+      }
     }, false, true, true)
   }
   private editable(): number[] {
@@ -812,6 +937,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const canExportStep = !this.disposed && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
       this.gesture === 'idle' && !this.stripPending && validation.kind === 'valid' &&
       (!strip || (!!stripResult && !strip.error))
+    this.syncDirectCache()
+    const directIdentity = this.directIdentity()
+    const directStripError = directIdentity && this.directFailedKey === `${directIdentity.selectionEpoch}:${directIdentity.revision}`
+      ? 'Non è stato possibile caricare i bordi liberi.' : null
+    const directStrip = this.directCache ? Object.freeze({ paths:this.directCache.paths,
+      revision:this.directCache.revision, axis:this.directStripAxis }) : null
     this.snapshot = Object.freeze({ revision: ++this.revision, current, dirty, gesture: this.gesture, validation,
       canUndo, canRedo, undoLabel: canUndo ? (strip ? 'Annulla striscia' : 'Annulla modifica superficie') : null,
       redoLabel: canRedo ? (strip ? 'Ripeti striscia' : 'Ripeti modifica superficie') : null, historyRevision: this.historyRevision,
@@ -823,13 +954,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       dragMode: this.dragMode, axis: this.axis, dragStrength: this.dragStrength, selectionMode: this.selectionMode,
       showNet: this.showNet, stripes: this.stripes, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
       mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency,
-      placingNote: this.placingNote, notes: this.notes, gesture: this.gesture, canBeginStrip, canExportStep, strip:stripView })
+      placingNote: this.placingNote, notes: this.notes, gesture: this.gesture, canBeginStrip, directStripAxis:this.directStripAxis,
+      directStripError,
+      canExportStep, strip:stripView })
     this.viewState = Object.freeze({ net: strip ? null : d.net, preview, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
       hiddenPoles: face?.hiddenPoles ?? [], selectionMode: this.selectionMode, dragMode: this.dragMode,
       axis: this.axis, dragStrength: this.dragStrength, showNet: this.showNet, snap: this.snap,
       snapDistance: this.snapDistance, busy: this.busy || !!this.frozen, placingNote: this.placingNote,
       stripes: this.stripes, notePins, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
-      mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency, strip:stripView })
+      mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency, strip:stripView, directStrip })
     for (const listener of this.listeners) listener()
   }
   private resolveNotes(): void {
@@ -862,6 +995,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private cleanup(): void {
     if (this.disposed) return
     this.disposed = true; this.exportGeneration++; this.frozen = null; this.stripGeneration++; this.stripAbort?.abort()
+    this.clearDirectCache(); this.directGestureOrigin = false
     this.strip = null; this.stripPending = false; this.stripAbort = null
     this.context.signal.removeEventListener('abort', this.onAbort)
     let failure: unknown

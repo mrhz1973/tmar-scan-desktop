@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Isolated shared-workspace QA of the D handle. Uses only a synthetic STEP
 // sheet and its own browser profile. Does not apply a change to a project.
-// Set STRIP_TEST_AXIS to X, Y or Z for the axis to verify.
+// Set STRIP_TEST_AXIS to X, Y or Z; STRIP_TEST_ENTRY=direct exercises D
+// without first opening the strip panel. STRIP_TEST_INJECT_EDGE_FAILURE=1
+// simulates a single boundary-read error to verify the visible retry action.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -17,11 +19,14 @@ assert(rel && (rel==='..'||rel.startsWith('..'+sep)||isAbsolute(rel)),'Evidence 
 const requestedAxis=process.env.STRIP_TEST_AXIS
 assert(['X','Y','Z'].includes(requestedAxis),'STRIP_TEST_AXIS must be X, Y or Z')
 const axisIndex={X:0,Y:1,Z:2}[requestedAxis]
+const direct=process.env.STRIP_TEST_ENTRY==='direct'
+const injectEdgeFailure=process.env.STRIP_TEST_INJECT_EDGE_FAILURE==='1'
+assert(!injectEdgeFailure||direct,'Simulated boundary error requires direct entry')
 mkdirSync(root,{recursive:true})
 const out=mkdtempSync(join(root,'strip-handle-'+requestedAxis.toLowerCase()+'-')),downloads=join(out,'downloads')
 mkdirSync(downloads)
 process.env.SHOT_DIR=out
-const report={scope:'isolated shared view, synthetic single-face STEP, D handle',requestedAxis,verdict:'INCOMPLETE',
+const report={scope:'isolated shared view, synthetic single-face STEP, D handle',requestedAxis,entry:direct?'direct':'strip panel',simulatedBoundaryFailure:injectEdgeFailure,verdict:'INCOMPLETE',
   checks:[],notTested:['Apply or publication to project','user data','other STEP topologies']}
 const persist=()=>writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2))
 const check=(condition,label)=>{assert(condition,label);report.checks.push(label);persist();console.log('PASS',label)}
@@ -45,6 +50,22 @@ try {
     userDataDir:join(out,'owned-browser-profile'),protocolTimeout:120000})
   browser=app.browser;page=app.page;report.consoleErrors=app.consoleErrors
   page.on('dialog',dialog=>dialog.accept())
+  if(injectEdgeFailure)await page.evaluate(()=>{
+    const original=Worker.prototype.postMessage
+    let failed=false
+    window.qaEdgeReadCount=0
+    Worker.prototype.postMessage=function(message,...rest){
+      if(message?.action==='sheetEdges'){
+        window.qaEdgeReadCount++
+        if(!failed){
+          failed=true
+          queueMicrotask(()=>this.onmessage?.(new MessageEvent('message',{data:{id:message.id,error:'Simulated boundary read error'}})))
+          return
+        }
+      }
+      return original.call(this,message,...rest)
+    }
+  })
   await page.evaluate(()=>window.addEventListener('pointerdown',event=>{window.stripHandlePointer=event.pointerId},true))
   const cdp=await page.createCDPSession()
   await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:downloads,eventsEnabled:true})
@@ -84,18 +105,42 @@ try {
     const s=window.stripHandleQa.useWorkspaceEditor.getState(),p=s.controller?.getPanelState()
     return p?.canBeginStrip&&s.snapshot?.validation?.kind==='valid'&&!p.calculating
   },{timeout:120000})
-  await page.click('[data-test=surface-strip-begin]')
-  await page.waitForFunction(()=>{
-    const strip=window.stripHandleQa.useWorkspaceEditor.getState().controller?.getPanelState().strip
-    return strip&&!strip.pending&&strip.paths.length===4
-  },{timeout:120000})
+  if(direct){
+    if(injectEdgeFailure){
+      await page.waitForSelector('[data-test=surface-direct-strip-error]',{visible:true,timeout:30000})
+      const notice=await page.$eval('[data-test=surface-direct-strip-error]',node=>node.textContent)
+      check(notice.includes('Non è stato possibile caricare i bordi liberi')&&notice.includes('Riprova'),
+        'A simulated boundary-read error is explained next to an explicit retry')
+      check(await page.evaluate(()=>window.qaEdgeReadCount===1),'No automatic retry loop follows the failed read')
+      await page.click('[data-test=surface-direct-strip-retry]')
+    }
+    await page.waitForFunction(()=>{
+      const s=window.stripHandleQa.useWorkspaceEditor.getState(),v=s.controller?.getViewState()
+      return v?.directStrip?.paths.length===4&&!v.strip&&s.snapshot?.validation?.kind==='valid'
+    },{timeout:120000})
+    if(injectEdgeFailure)check(await page.evaluate(()=>window.qaEdgeReadCount===2&&
+      !document.querySelector('[data-test=surface-direct-strip-error]')),'Retry loads the same revision and clears the message')
+    const intact=await page.evaluate(()=>{
+      const q=window.stripHandleQa,s=q.useWorkspaceEditor.getState(),reverse=q.useReverse.getState(),history=q.useHistory.getState()
+      return !s.controller.getPanelState().strip&&!s.snapshot.dirty&&reverse.features===q.before.features&&
+        reverse.stepFiles===q.before.files&&reverse.buildVersion===q.before.buildVersion&&
+        history.past===q.before.past&&history.future===q.before.future
+    })
+    check(intact,'Preloading free edges did not change the CAD draft or project history')
+  }else{
+    await page.click('[data-test=surface-strip-begin]')
+    await page.waitForFunction(()=>{
+      const strip=window.stripHandleQa.useWorkspaceEditor.getState().controller?.getPanelState().strip
+      return strip&&!strip.pending&&strip.paths.length===4
+    },{timeout:120000})
+  }
   check(true,'The synthetic STEP sheet is open in the shared editor')
 
   // Choose an axis normal to an outer boundary in the sheet's plane. Project
   // that actual 3-D displacement into the shared viewport; do not fake rays.
-  const target=await page.evaluate(requested=>{
+  const target=await page.evaluate(({requested,needEdgeHit})=>{
     const q=window.stripHandleQa,state=q.useWorkspaceEditor.getState().controller.getViewState()
-    const paths=state.strip.paths,points=paths.flat(),group=q.scene.layerHost().partGroup
+    const paths=(state.strip??state.directStrip).paths,points=paths.flat(),group=q.scene.layerHost().partGroup
     const canvas=q.scene.layerHost().canvas,rect=canvas.getBoundingClientRect(),camera=q.scene.layerHost().camera()
     group.updateWorldMatrix(true,true);camera.updateMatrixWorld(true)
     const low=[0,1,2].map(i=>Math.min(...points.map(p=>p[i]))),high=[0,1,2].map(i=>Math.max(...points.map(p=>p[i])))
@@ -122,20 +167,33 @@ try {
            hy+dy<rect.top+16||hy+dy>rect.bottom-16)continue
         const element=document.elementFromPoint(hx,hy)
         if(element!==canvas && element?.dataset?.test!=='surface-strip-handle')continue
-        choices.push({edge,axis,sign,anchor,dx,dy,edgeLength:Math.hypot(...b.map((v,i)=>v-a[i]))})
+        // Avoid the midpoint pole when testing the normal Auto selection mode.
+        const edgeClick=project(a.map((value,i)=>value+(b[i]-value)*0.37))
+        const edgeElement=document.elementFromPoint(edgeClick[0],edgeClick[1])
+        if(needEdgeHit&&edgeElement!==canvas)continue
+        choices.push({edge,axis,sign,anchor,dx,dy,edgePosition:edgeClick.slice(0,2),edgeLength:Math.hypot(...b.map((v,i)=>v-a[i]))})
       }
     })
     return choices[0]??null
-  },axisIndex)
+  },{requested:axisIndex,needEdgeHit:direct})
   assert(target,'The requested axis is geometrically degenerate or not visible for a free edge in this view')
   report.target=target
-  await page.select('[data-test=surface-strip-axis]',String(target.axis))
-  await page.select('[data-test=surface-strip-edge]',String(target.edge))
+  if(direct){
+    await page.select('[data-test=surface-direct-strip-axis]',String(target.axis))
+    await page.mouse.click(...target.edgePosition)
+  }else{
+    await page.select('[data-test=surface-strip-axis]',String(target.axis))
+    await page.select('[data-test=surface-strip-edge]',String(target.edge))
+  }
   await page.waitForSelector('[data-test=surface-strip-handle]',{visible:true,timeout:10000})
-  check(await page.evaluate(({edge,axis})=>{
-    const strip=window.stripHandleQa.useWorkspaceEditor.getState().controller.getPanelState().strip
+  check(await page.evaluate(({edge,axis,directEntry})=>{
+    const c=window.stripHandleQa.useWorkspaceEditor.getState().controller,strip=c.getPanelState().strip
+    if(directEntry){
+      const button=document.querySelector('[data-test=surface-strip-handle]')
+      return !strip&&c.getViewState().directStrip?.axis===axis&&Number(button?.dataset.edge)===edge
+    }
     return strip.selectedEdge===edge&&strip.axis===axis
-  },target),'The selected edge and axis are shared by the panel and view')
+  },{...target,directEntry:direct}),'The selected edge and axis are shared by the panel and view')
   await page.screenshot({path:join(out,'before-drag.png')})
 
   const startDrag=async()=>{
@@ -179,18 +237,25 @@ try {
   await page.screenshot({path:join(out,'drag-preview.png')})
   check(true,'D moves along the selected axis and the visible preview follows it')
   await page.keyboard.press('Escape')
-  await page.waitForFunction(()=>{
+  await page.waitForFunction(directEntry=>{
     const s=window.stripHandleQa.useWorkspaceEditor.getState(),strip=s.controller?.getPanelState().strip
-    return s.snapshot?.gesture==='idle'&&strip&&!strip.pending&&strip.delta.every(value=>value===0)
-  },{timeout:10000})
-  const cancelled=await page.evaluate(()=>{
+    return s.snapshot?.gesture==='idle'&&(directEntry?!strip:
+      strip&&!strip.pending&&strip.delta.every(value=>value===0))
+  },{timeout:10000},direct)
+  const cancelled=await page.evaluate(directEntry=>{
     const q=window.stripHandleQa,strip=q.useWorkspaceEditor.getState().controller.getPanelState().strip
     return {captured:q.scene.layerHost().canvas.hasPointerCapture(window.stripHandlePointer),
-      hasResult:strip.hasResult,canUndo:strip.canUndo,canRedo:strip.canRedo}
-  })
+      hasResult:strip?.hasResult??false,canUndo:strip?.canUndo??false,canRedo:strip?.canRedo??false,
+      exited:directEntry?!strip:true}
+  },direct)
   await page.mouse.up()
-  check(!cancelled.captured&&!cancelled.hasResult&&!cancelled.canUndo&&!cancelled.canRedo,
+  check(!cancelled.captured&&!cancelled.hasResult&&!cancelled.canUndo&&!cancelled.canRedo&&cancelled.exited,
     'Escape releases the pointer and discards the gesture without adding history')
+  if(direct){
+    await page.waitForFunction(()=>window.stripHandleQa.useWorkspaceEditor.getState().controller?.getViewState().directStrip?.paths.length===4,{timeout:30000})
+    await page.mouse.click(...target.edgePosition)
+    await page.waitForSelector('[data-test=surface-strip-handle]',{visible:true,timeout:10000})
+  }
   report.committedPreview=await startDrag()
   await page.mouse.up()
   await page.waitForFunction(()=>{

@@ -66,6 +66,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
   const set = (patch: Partial<WorkspaceSurfaceViewState>) => { state = { ...state, ...patch }; for (const listener of listeners) listener() }
   const selectPoints = vi.fn((ids: readonly number[]) => set({ selected: [...ids] }))
   const chooseFace = vi.fn(async () => {})
+  const beginPoleGesture = vi.fn(() => { if (state.directStrip) set({ directStrip: null }); return true })
   const previewPoles = vi.fn((_poles: Point[]) => {})
   const finishPoleGesture = vi.fn((_poles: Point[] | null) => {})
   const placeNote = vi.fn(async (_p: Point | null) => {})
@@ -75,15 +76,24 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     set({ strip: { ...state.strip, selectedEdge: edge, pending: true, delta: [0, 0, 0] } })
     return true
   })
+  let promoted: WorkspaceSurfaceViewState['directStrip'] = null
+  const beginDirectStripGesture = vi.fn((edge: number, revision: number) => {
+    const direct = state.directStrip
+    if (!direct || direct.revision !== revision || !direct.paths[edge]) return false
+    promoted = direct
+    set({ directStrip: null, strip: { ...stripFixture(), paths: direct.paths, axis: direct.axis, selectedEdge: edge, pending: true } })
+    return true
+  })
   const previewStripDelta = vi.fn((delta: Point) => {
     if (state.strip) set({ strip: { ...state.strip, delta: [...delta] } })
   })
   const finishStripGesture = vi.fn(async (_delta: Point | null) => {
+    if (state.strip && promoted && !_delta) { const direct = promoted; promoted = null; set({ strip: null, directStrip: direct }); return }
     if (state.strip) set({ strip: { ...state.strip, pending: false, delta: [0, 0, 0] } })
   })
   const owner: WorkspaceSurfaceLayerOwner = { getViewState: () => state, subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn) } },
-    chooseFace, selectPoints, beginPoleGesture: () => true, previewPoles, finishPoleGesture, placeNote, reportViewError,
-    beginStripGesture, previewStripDelta, finishStripGesture }
+    chooseFace, selectPoints, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError,
+    beginStripGesture, beginDirectStripGesture, previewStripDelta, finishStripGesture }
   const referenceGeometry = new THREE.PlaneGeometry(10, 10)
   const beforePosition = referenceGeometry.getAttribute('position')
   const refMatrix = new THREE.Matrix4().makeRotationY(Math.PI / 2)
@@ -114,8 +124,8 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
   const getLayer = () => layer as unknown as NonNullable<typeof layer>
   const getHandlers = () => handlers as unknown as NonNullable<typeof handlers>
   return { view, owner, set, net, group, rect, client, event, getLayer, getHandlers, counts: () => ({ maskCount, restoreCount, captured }),
-    selectPoints, chooseFace, previewPoles, finishPoleGesture, placeNote, reportViewError, referenceGeometry, beforePosition,
-    beginStripGesture, previewStripDelta, finishStripGesture,
+    selectPoints, chooseFace, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError, referenceGeometry, beforePosition,
+    beginStripGesture, beginDirectStripGesture, previewStripDelta, finishStripGesture,
     overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
@@ -478,6 +488,124 @@ it.each([false, true])('rejects an axis aligned or almost aligned to the view (%
   expect(f.finishStripGesture).toHaveBeenCalledWith(null)
   expect(f.counts().captured).toBeNull()
   layer.dispose()
+})
+
+it('shows D on a direct free-edge click, promotes only when D is dragged and returns to the poles on cancel', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  const direct = { paths: stripFixture().paths, revision: 123, axis: 0 as const }
+  f.set({ directStrip: direct })
+  expect(f.getLayer().pointerDown?.(f.event(1, [0, -1, 0]))).toBe(true)
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  expect(handle.style.display).toBe('block')
+  expect(handle.dataset.edge).toBe('0'); expect(handle.dataset.revision).toBe('123')
+  expect(f.group.getObjectByName('tmar-selected-strip-edge')).toBeDefined()
+  expect(f.owner.getViewState().strip).toBeFalsy()
+  expect(f.beginDirectStripGesture).not.toHaveBeenCalled()
+  expect(f.counts().captured).toBeNull()
+  const down = { pointerId: 7, button: 0, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false,
+    clientX: Number.parseFloat(handle.style.left), clientY: Number.parseFloat(handle.style.top),
+    preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as PointerEvent
+  handle.dispatch('pointerdown', down)
+  expect(f.beginDirectStripGesture).toHaveBeenCalledOnce()
+  expect(f.beginDirectStripGesture).toHaveBeenCalledWith(0, 123)
+  expect(f.counts().captured).toBe(7)
+  f.getHandlers().move({ ...down, clientX: down.clientX + 50, clientY: down.clientY - 80 } as PointerEvent)
+  const delta = f.previewStripDelta.mock.lastCall?.[0]
+  expect(delta?.[0]).toBeCloseTo(0.5); expect(delta?.[1]).toBeCloseTo(0); expect(delta?.[2]).toBeCloseTo(0)
+  f.interrupt()
+  expect(f.finishStripGesture).toHaveBeenCalledWith(null)
+  expect(f.counts().captured).toBeNull()
+  expect(handle.style.display).toBe('none')
+  expect(f.getLayer().pointerDown?.(f.event(2, [0, -1, 0]))).toBe(true)
+  expect(handle.style.display).toBe('block')
+  layer.dispose()
+})
+
+it('preserves net-edge selection alongside D and gives individual poles precedence', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  f.set({ directStrip: { paths: stripFixture().paths, revision: 1, axis: 0 }, selectionMode: 'auto' })
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  expect(f.getLayer().pointerDown?.(f.event(1, [0, -1, 0]))).toBe(true)
+  expect(f.selectPoints).toHaveBeenCalledWith([0, 2], false)
+  expect(handle.style.display).toBe('block')
+  const original = f.event(1, [0, -1, 0])
+  f.getHandlers().move({ ...original, clientX: original.clientX + 3 } as PointerEvent)
+  expect(f.beginPoleGesture).not.toHaveBeenCalled()
+  f.getHandlers().up({ ...original, clientX: original.clientX + 3 } as PointerEvent)
+  expect(f.beginPoleGesture).not.toHaveBeenCalled()
+  expect(f.finishPoleGesture).not.toHaveBeenCalled()
+  expect(f.counts().captured).toBeNull()
+  expect(handle.style.display).toBe('block')
+  f.set({ selectionMode: 'points' })
+  expect(f.getLayer().pointerDown?.(f.event(2, [-1, -1, 0]))).toBe(true)
+  expect(f.selectPoints).toHaveBeenLastCalledWith([0], false)
+  expect(handle.style.display).toBe('none')
+  expect(f.beginPoleGesture).toHaveBeenCalledOnce()
+  expect(layer.cancelGesture()).toBe(true)
+  layer.dispose()
+})
+
+it('starts a coincident net drag only at 4 pixels and finishes even when released outside the viewport', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  f.set({ directStrip: { paths: stripFixture().paths, revision: 1, axis: 0 }, selectionMode: 'auto' })
+  const down = f.event(1, [0, -1, 0]), handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  expect(f.getLayer().pointerDown?.(down)).toBe(true)
+  f.getHandlers().move({ ...down, clientX: down.clientX + 3 } as PointerEvent)
+  expect(f.beginPoleGesture).not.toHaveBeenCalled()
+  f.getHandlers().move({ ...down, clientX: down.clientX + 4 } as PointerEvent)
+  expect(f.beginPoleGesture).toHaveBeenCalledOnce()
+  expect(f.previewPoles).toHaveBeenCalledOnce()
+  expect(handle.style.display).toBe('none') // The preview changed; old direct edges are invalid.
+  f.getHandlers().up({ ...down, clientX: 700 } as PointerEvent)
+  expect(f.finishPoleGesture).toHaveBeenCalledOnce()
+  expect(f.finishPoleGesture.mock.lastCall?.[0]).not.toBeNull()
+  expect(f.counts().captured).toBeNull()
+  layer.dispose()
+})
+
+it('releases a deferred pointer on lost capture or Escape and preserves Ctrl/Meta selection routing', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  f.set({ directStrip: { paths: stripFixture().paths, revision: 1, axis: 0 }, selectionMode: 'auto' })
+  const down = f.event(1, [0, -1, 0])
+  expect(f.getLayer().pointerDown?.({ ...down, ctrlKey: true } as PointerEvent)).toBe(false)
+  expect(f.getLayer().pointerDown?.({ ...down, metaKey: true } as PointerEvent)).toBe(false)
+  expect(f.counts().captured).toBeNull()
+  expect(f.getLayer().pointerDown?.(down)).toBe(true)
+  f.getHandlers().lostCapture(down)
+  expect(f.counts().captured).toBeNull()
+  expect(f.beginPoleGesture).not.toHaveBeenCalled()
+  expect(f.finishPoleGesture).not.toHaveBeenCalled()
+  expect(f.getLayer().pointerDown?.(f.event(2, [0, -1, 0]))).toBe(true)
+  expect(layer.cancelGesture()).toBe(true)
+  expect(f.counts().captured).toBeNull()
+  expect(f.beginPoleGesture).not.toHaveBeenCalled()
+  expect(f.finishPoleGesture).not.toHaveBeenCalled()
+  layer.dispose()
+})
+
+it('clears the local direct selection on revision, paths, note mode and lease interruption', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  const direct = { paths: stripFixture().paths, revision: 11, axis: 0 as const }
+  f.set({ directStrip: direct })
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  const select = () => { expect(f.getLayer().pointerDown?.(f.event(1, [0, -1, 0]))).toBe(true); expect(handle.style.display).toBe('block') }
+  select()
+  f.set({ directStrip: { ...direct, axis: 1 } })
+  expect(handle.style.display).toBe('block') // An axis change does not replace the border.
+  f.set({ directStrip: { ...direct, revision: 12 } })
+  expect(handle.style.display).toBe('none')
+  f.set({ directStrip: direct })
+  expect(handle.style.display).toBe('none') // The old selection cannot revive.
+  select()
+  f.set({ directStrip: { ...direct, paths: [...direct.paths] } })
+  expect(handle.style.display).toBe('none')
+  f.set({ directStrip: direct }); select()
+  f.set({ placingNote: true }); expect(handle.style.display).toBe('none')
+  f.set({ placingNote: false }); expect(handle.style.display).toBe('none')
+  select(); f.interrupt(); expect(handle.style.display).toBe('none')
+  select()
+  layer.dispose()
+  expect(f.overlay.children).toHaveLength(0)
 })
 
 it('hides D for unselected, clipped or disposed borders and cancels the captured drag on interruption', () => {
