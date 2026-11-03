@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 // @ts-expect-error Build-only ESM helper; it is tested independently.
 import { readBuildIdentity } from './scripts/buildIdentity.mjs'
+// @ts-expect-error Build-only ESM helper, validated by node tests.
+import { readTmarVersion } from './scripts/tmarVersion.mjs'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
@@ -17,6 +19,7 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(version),
+    __TMAR_VERSION__: JSON.stringify(readTmarVersion(fileURLToPath(new URL('.', import.meta.url)))),
     __BUILD_IDENTITY__: JSON.stringify(readBuildIdentity(fileURLToPath(new URL('.', import.meta.url)))),
   },
   build: {

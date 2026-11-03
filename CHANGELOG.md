@@ -7,6 +7,13 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Versione 1 — sequential preview numbering — 2026-11-03
+
+- Replace the prominent commit code with Versione 1 and an explicit Anteprima label.
+- Keep commit, build time and dirty-source status in technical details.
+- Start an explicit chronological delivery counter in tmar-version.json; builds and reloads do not advance it.
+- Preserve upstream version, project format and all CAD functionality. Existing QA limitations remain open.
+
 ### TMAR Edit Surface feature tile - 2026-11-03
 
 - Move Edit Surface immediately after Patch network in the Create feature grid;
