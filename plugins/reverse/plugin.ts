@@ -251,16 +251,17 @@ const plugin: ScanRulerPlugin = {
     // own: undo and redo walk it while the box is open, and Save takes the
     // network into the feature list as one step.
     registerHistory({
+      blocked: () => !!networkOpen()?.motionActive,
       local: {
         workspace: 'reverse',
         label: 'network edit',
         active: () => useReverse.getState().featureDraft?.kind === 'network',
-        canUndo: () => (networkOpen()?.history.length ?? 0) > 0,
-        canRedo: () => (networkOpen()?.future.length ?? 0) > 0,
+        canUndo: () => !networkOpen()?.motionActive && (networkOpen()?.history.length ?? 0) > 0,
+        canRedo: () => !networkOpen()?.motionActive && (networkOpen()?.future.length ?? 0) > 0,
         undo: () => useReverse.getState().editNetwork(undoNetwork),
         redo: () => useReverse.getState().editNetwork(redoNetwork),
       },
-      useWatch: () => useReverse((s) => (s.featureDraft?.kind === 'network' ? s.featureDraft.history.length * 1000 + s.featureDraft.future.length : -1)),
+      useWatch: () => useReverse((s) => (s.featureDraft?.kind === 'network' ? (s.featureDraft.history.length * 1000 + s.featureDraft.future.length) * 2 + Number(!!s.featureDraft.motionActive) : -1)),
     })
     // Another version of the scan under the session: a Fit Surface's region
     // is vertices of the scan, carried onto the new numbering; and every

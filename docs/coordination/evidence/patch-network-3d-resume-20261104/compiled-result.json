@@ -1,0 +1,37 @@
+{
+  "scope": "Compiled public UI numeric node/grip movement, project Undo/Redo, Save/Load and independent STEP; source-made synthetic baseline; no browser source imports",
+  "checks": [
+    "3D control fieldset fits the narrow column without horizontal clipping",
+    "compiled normal movement produces the requested node displacement",
+    "compiled local Undo restores the node anchor",
+    "compiled local Redo restores the 3D displacement",
+    "compiled shared-curve grip accepts a negative off-scan component",
+    "compiled UI does not claim a 3D proximity magnet",
+    "compiled Save persists node and grip offsets",
+    "one project Undo restores the original network, without removing its CAD",
+    "one project Redo restores all explicit 3D targets",
+    "fresh compiled page rebuilds and resaves the exact offsets",
+    "compiled export independently reimports as a valid four-face CAD sheet",
+    "compiled browser loads no source modules or injected controller",
+    "zero compiled application errors",
+    "synthetic baseline project is unchanged"
+  ],
+  "consoleErrors": [],
+  "sourceRequests": [],
+  "verdict": "PASS",
+  "inputHash": "76b5935ddaad17fe3865b6d46db290dc7172e763e5bd283c60b59f12dd642860",
+  "files": {
+    "applied": {
+      "sha256": "2e7598f3143e6a01b04a15cf17eeac30ff7610cf7024bac95ff3d46bc90d583e"
+    },
+    "redone": {
+      "sha256": "2e7598f3143e6a01b04a15cf17eeac30ff7610cf7024bac95ff3d46bc90d583e"
+    },
+    "reopened": {
+      "sha256": "003433424bbf71be6356c3381f48f5256a02d0e0c61101db94766172f78b8eec"
+    },
+    "step": {
+      "sha256": "12d33e7e80497eb0fc6106f0efdcc3499ef27b9ee6489f0ee3dc123e4c4f18ad"
+    }
+  }
+}

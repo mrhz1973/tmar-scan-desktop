@@ -1190,7 +1190,7 @@ export function FeatureEditor() {
       {fields}
       {!planned && !leaning && <PreviewLine preview={ready ? preview : { status: 'idle' }} testPrefix={testKind} />}
       {!planned && !leaning && <AnalysisRow testPrefix={testKind} />}
-      <button className="primary block" data-test={`${testKind}-create`} disabled={!ready} title="Enter does the same" onClick={() => re.getState().commitFeature()}>
+      <button className="primary block" data-test={`${testKind}-create`} disabled={!ready || (d.kind === 'network' && (d.motionActive || preview.status !== 'ok'))} title="Enter does the same" onClick={() => re.getState().commitFeature()}>
         {d.featureId !== undefined
           ? 'Save changes'
           : planned

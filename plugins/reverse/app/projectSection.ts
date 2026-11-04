@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { readCentreOffset } from '../core/networkNormalMotion'
+import { validatePointOffsets, type PointNetwork } from '../core/networkPointMotion'
 // The Reverse engineer workspace's part of a project file, under the key
 // `reverse`: the feature list by reference — the sketches with their pieces
 // and relations, every pick as a fingerprint, every plane and axis by the id
@@ -141,17 +143,21 @@ export function validateFeatureJson(e: Record<string, unknown>): void {
     entries(e.nodes, 'network.nodes', (n) => {
       fields(n, 'id', 'number', 'network.node')
       vector(n.at, 3, 'network.node.at')
+      if (n.offset !== undefined) readCentreOffset(n.offset)
     })
     entries(e.curves, 'network.curves', (c) => {
       fields(c, 'id from to', 'number', 'network.curve')
       for (const p of array(c.via, 'network.curve.via')) vector(p, 3, 'network.curve.via')
+      if (c.viaOffsets !== undefined) for (const value of array(c.viaOffsets, 'network.curve.viaOffsets')) { if (value !== null) readCentreOffset(value) }
     })
     for (const item of array(e.cells, 'network.cells')) {
       const c = object(item, 'network.cell')
       vector(c.seed, 3, 'network.cell.seed')
       if (c.centre !== undefined) vector(c.centre, 3, 'network.cell.centre')
+      if (c.centreOffset !== undefined) readCentreOffset(c.centreOffset)
       if (c.corners !== undefined) indices(c.corners, 'network.cell.corners')
     }
+    validatePointOffsets(e as unknown as PointNetwork)
     object(e.spans, 'network.spans')
     const fit = object(e.fit, 'network.fit')
     fields(fit, 'smoothness', 'number', 'network.fit')
