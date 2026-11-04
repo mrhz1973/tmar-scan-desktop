@@ -1,13 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { it, expect } from 'vitest'
+import type { OcctKernel, ShapeHandle } from 'occt-wasm'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { boundaryLocked } from '../brep'
 
+function topologyTolerances(k: OcctKernel, shape: ShapeHandle) {
+  const text=k.toBREP(shape)
+  const read=(kind:string)=>Array.from(text.matchAll(new RegExp(`^${kind}\\s*\\n\\s*([\\deE+.-]+)`,'gm')),m=>Number(m[1]))
+  return {edges:read('Ed'),vertices:read('Ve')}
+}
+
 it('deforms the middle of a STEP disk while keeping its circular outside edge', async () => {
   const editor = await SurfaceEditorKernel.load(), k = editor.kernel
-  const cylinder = k.makeCylinder(24,10)
+  const cylinder = k.makeCylinder(24,10), input=k.exportStep(cylinder), source=k.importStep(input)
   try {
-    const opened = editor.open(k.exportStep(cylinder))
+    const before=topologyTolerances(k,source)
+    expect(before.edges.length).toBeGreaterThan(0);expect(before.vertices.length).toBeGreaterThan(0)
+    const opened = editor.open(input)
+    // Keep the unqualified analytic side closed to editing; rejecting it must
+    // still leave the supported planar cap available for a safe CAD edit.
+    const side=opened.faces.find(f=>f.kind==='cylinder')
+    expect(side?.reason).toBeTruthy()
+    expect(()=>editor.select(side!.index)).toThrow()
     const face = opened.faces.find(f=>!f.reason && editor.select(f.index).poles.every(p=>Math.abs(p[2]-10)<1e-7))
     expect(face).toBeDefined()
     const net = editor.select(face!.index)
@@ -20,6 +34,10 @@ it('deforms the middle of a STEP disk while keeping its circular outside edge', 
     try {
       expect(k.isValid(solid)).toBe(true)
       expect(k.getVolume(solid)).toBeGreaterThan(k.getVolume(cylinder)+1)
+      const after=topologyTolerances(k,solid)
+      expect(after.edges.length).toBe(before.edges.length);expect(after.vertices.length).toBe(before.vertices.length)
+      expect(Math.max(...after.edges)).toBeLessThanOrEqual(Math.max(...before.edges)+1e-9)
+      expect(Math.max(...after.vertices)).toBeLessThanOrEqual(Math.max(...before.vertices)+1e-9)
       const top=faces.find(f=>k.surfaceType(f).toLowerCase().includes('spline'))!
       const wire=k.outerWire(top)
       try {
@@ -32,5 +50,5 @@ it('deforms the middle of a STEP disk while keeping its circular outside edge', 
         }
       } finally {k.release(wire)}
     } finally {faces.forEach(f=>k.release(f));k.release(solid)}
-  } finally {k.release(cylinder);editor.dispose()}
+  } finally {k.release(source);k.release(cylinder);editor.dispose()}
 },60000)

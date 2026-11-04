@@ -626,7 +626,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       const origin = picked.reduce((v, i) => v.add(new THREE.Vector3(...net.poles[i])), new THREE.Vector3()).multiplyScalar(1 / picked.length)
       const matrix = partMatrix(point(origin)), rect = view.bounds(), camera = view.camera()
       const frame = createDragFrame({ camera, partWorld: matrix, rect, anchor: point(origin), clientX: event.clientX, clientY: event.clientY,
-        ...(state.dragMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction: direction! }) })
+        ...(state.dragMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction: direction!, allowViewAlignedDepth: true }) })
       if (!frame) { report('Direzione allineata alla vista: ruota il modello o scegli un altro asse.'); return true }
       const inverse = new THREE.Matrix3().setFromMatrix4(matrix.clone().invert())
       const snapDirection = state.dragMode === 'screen' ? new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld).applyMatrix3(inverse).normalize() : new THREE.Vector3(...direction!)

@@ -7,9 +7,11 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 assert.equal(process.env.SCANRULER_ISOLATED, '1', 'Explicit isolated-host guard is required')
 const dragMode = process.env.EDIT_SURFACE_DRAG_MODE ?? 'axis'
+const alignedDepth = process.env.TEST_ALIGNED_DEPTH === '1'
 assert(['axis','local','screen'].includes(dragMode), 'Choose axis, local or screen')
+assert(!alignedDepth || dragMode !== 'screen', 'View-aligned depth requires an axis or local direction')
 const url = new URL(process.env.APP_URL ?? '')
-assert.equal(url.href, 'http://127.0.0.1:17527/', 'Only the designated local QA host is allowed')
+assert(['http://127.0.0.1:17527/','http://127.0.0.1:17723/'].includes(url.href), 'Only a designated local QA host is allowed')
 const outputRoot = process.env.EDIT_SURFACE_QA_OUT
 assert(outputRoot && isAbsolute(outputRoot), 'EDIT_SURFACE_QA_OUT must be an absolute folder')
 const outputFromApp = relative(resolve(process.cwd()), resolve(outputRoot))
@@ -115,6 +117,7 @@ async function runCase(kind) {
     await page.select('[data-test=surface-selection-mode]', 'points')
     await page.select('[data-test=surface-drag-mode]', dragMode)
     if (dragMode !== 'screen') await page.click('[data-test=surface-axis-2]')
+    if (alignedDepth) await page.evaluate(() => window.workspaceSnapQa.scene.viewFrom('top'))
     if (!await page.$eval('[data-test=surface-snap]', el => el.checked)) await page.click('[data-test=surface-snap]')
     await page.$eval('[data-test=surface-snap-distance]', (el,mode) => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, mode === 'screen' ? '4' : '1')
@@ -139,15 +142,23 @@ async function runCase(kind) {
     assert(target && target.distance > 8, `No separately clickable editable pole: ${JSON.stringify(target)}`)
     item.poleIndex = target.id; item.start = target.pole
     check(Math.abs(target.pole[2] - 10) < 1e-4, item, 'known top-face pole selected')
-    const project = delta => page.evaluate(({ index, dz }) => {
+    const project = delta => page.evaluate(({ index, dz, aligned }) => {
       const q = window.workspaceSnapQa, c = q.useWorkspaceEditor.getState().controller, v = c.getViewState()
       const camera = q.scene.layerHost().camera(), group = q.scene.layerHost().partGroup, rect = q.scene.layerHost().canvas.getBoundingClientRect()
       group.updateWorldMatrix(true, true); camera.updateMatrixWorld(true)
       const pole = v.net.poles[index], projection = z => group.position.clone().set(pole[0], pole[1], z).applyMatrix4(group.matrixWorld).project(camera)
       const a = projection(pole[2]), b = projection(pole[2] + dz)
       const client = p => [rect.left + (p.x + 1) * rect.width / 2, rect.top + (1 - p.y) * rect.height / 2]
+      if (aligned) {
+        const world = group.position.clone().set(...pole).applyMatrix4(group.matrixWorld)
+        const up = group.position.clone().set(0,1,0).transformDirection(camera.matrixWorld)
+        const oneMm = world.clone().add(up).project(camera)
+        const from=client(a), raised=client(oneMm), pixelsPerMm=Math.hypot(raised[0]-from[0],raised[1]-from[1])
+        if (!(pixelsPerMm>0)) throw Error('Cannot measure camera depth drag scale')
+        return {from,to:[from[0],from[1]-dz*pixelsPerMm]}
+      }
       return { from: client(a), to: client(b) }
-    }, { index: target.id, dz: delta })
+    }, { index: target.id, dz: delta, aligned: alignedDepth })
     const drag = async (label, alt, expectedFeedback) => {
       const positions = await project(1.5)
       assert(Math.hypot(positions.to[0] - positions.from[0], positions.to[1] - positions.from[1]) >= 4,
