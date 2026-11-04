@@ -136,6 +136,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private mutating = false
   private busy = false
   private exportGeneration = 0
+  private cylinderValidationSerial = 0
+  private cylinderValidated: {net:Net;session:number;draftEpoch:number;selectionEpoch:number;requestId:number;step:string}|null = null
   private gesture: 'idle' | 'pole' | 'strip' = 'idle'
   private gestureNet: Net | null = null
   private strip: StripMode | null = null
@@ -320,7 +322,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         if (this.notes.length) { this.advanceNotesRevision(); this.notes = Object.freeze([]) }
         this.selectionEpoch++; this.face = index; this.busy = false
         this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
-        if(picked.session !== null) this.message = 'Cilindro sperimentale: trascina il punto centrale. Conferma e note non ancora disponibili.'
+        if(picked.session !== null) this.message = 'Cilindro sperimentale: trascina il punto centrale, poi verifica la geometria CAD. Le note non sono ancora disponibili.'
       }, true)
     } catch (error) {
       if (!this.disposed && epoch === this.selectionEpoch) {
@@ -661,7 +663,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.stripes = value ? Object.freeze({ ...value }) : null
     }, false, false, true)
   }
-  setPlacingNote(value: boolean): void { this.change(() => { this.placingNote = value }) }
+  setPlacingNote(value: boolean): void { this.change(() => {
+    if(value && this.draft.getSnapshot().cylinderSession!==null) throw new Error('Le note sul cilindro sperimentale non sono ancora disponibili.')
+    this.placingNote = value
+  }) }
   setNoteText(id: string, text: string): void {
     this.change(() => {
       if (text.length > 2000 || !this.notes.some(note => note.id === id)) throw new Error('Nota non valida.')
@@ -718,6 +723,29 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.change(() => { this.message = message }, false, true, true)
   }
 
+  /** Explicit, slower CAD check. A provisional rendering alone cannot Apply. */
+  async validateCylinder(): Promise<void> {
+    this.assertMutable()
+    const draft=this.draft.getSnapshot(),net=draft.net,session=draft.cylinderSession
+    if(!net || session===null || draft.calculating || this.gesture!=='idle' || this.notes.length || this.placingNote)
+      throw new Error('Termina il trascinamento e attendi l’anteprima prima di verificare.')
+    const draftEpoch=this.draftEpoch,selectionEpoch=this.selectionEpoch,requestId=++this.cylinderValidationSerial
+    this.cylinderValidated=null;this.busy=true;this.message='Verifica CAD del cilindro in corso…';this.refresh()
+    try {
+      const result=await this.draft.evaluateCylinderForExport()
+      this.assertLive()
+      const current=this.draft.getSnapshot()
+      if(current.net!==net || current.cylinderSession!==session || this.draftEpoch!==draftEpoch ||
+         this.selectionEpoch!==selectionEpoch || requestId!==this.cylinderValidationSerial || !result.step.trim())
+        throw new Error('La bozza è cambiata durante la verifica CAD.')
+      this.cylinderValidated={net,session,draftEpoch,selectionEpoch,requestId,step:result.step}
+      this.message='Cilindro verificato con controlli sperimentali: puoi creare una copia CAD.'
+    } catch(error) {
+      if(!this.disposed) this.message=String((error as Error)?.message ?? error)
+      throw error
+    } finally {if(!this.disposed){this.busy=false;this.refresh()}}
+  }
+
   freeze(ticket: ApplyTicket): () => void {
     this.assertLive()
     if (this.frozen || this.mutating || this.busy || this.placingNote || this.gesture !== 'idle' || this.notes.length)
@@ -767,7 +795,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.assertFrozen(ticket, frozen, signal)
     frozen.preparing = true
     try {
-      const result = frozen.stripResult ?? await this.draft.evaluateForExport()
+      const cylinder = this.currentValidatedCylinder()
+      const result = cylinder ? {step:cylinder.step} : frozen.stripResult ?? await this.draft.evaluateForExport()
       this.assertFrozen(ticket, frozen, signal)
       if (!result.step.trim()) throw new Error('Esportazione STEP vuota.')
       const step = new TextEncoder().encode(result.step)
@@ -833,6 +862,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         ? 'Le note restano nella bozza e non vengono incluse nello STEP. Rimuovile prima di esportare.'
         : 'Attendi una preview CAD valida e termina ogni gesto prima di esportare.')
 
+    const cylinder=this.currentValidatedCylinder()
+    if(cylinder) {
+      this.assertLive()
+      if(this.currentValidatedCylinder()!==cylinder || !cylinder.step.trim()) throw new Error('La bozza cilindrica è cambiata.')
+      return {name:'superficie-modificata.step',step:cylinder.step}
+    }
     const stamp = initial.stamp
     const net = this.requireNet()
     const draft = this.draft.getSnapshot()
@@ -879,6 +914,11 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     abortIf(this.context.signal)
     if (sourceKey(this.context.source) !== this.sourceId) throw new Error('La sorgente CAD è cambiata.')
     this.context.assertSourceCurrent()
+  }
+  private currentValidatedCylinder() {
+    const value=this.cylinderValidated,draft=this.draft.getSnapshot()
+    return value && draft.net===value.net && draft.cylinderSession===value.session &&
+      this.draftEpoch===value.draftEpoch && this.selectionEpoch===value.selectionEpoch ? value : null
   }
   private assertMutable(allowBusy = false): void {
     this.assertLive()
@@ -1032,11 +1072,13 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       selectionEpoch: this.selectionEpoch, draftEpoch: this.draftEpoch })
     const queue = this.runtime.previews.getSnapshot()
     const strip = this.strip, stripResult = strip?.frames[strip.at] ?? null
-    const stamp: PreviewStamp = Object.freeze({ ...current, requestId: strip ? (stripResult?.requestId ?? 0) : (queue.current?.revision ?? 0) })
+    const cylinder=this.currentValidatedCylinder()
+    const stamp: PreviewStamp = Object.freeze({ ...current, requestId: strip ? (stripResult?.requestId ?? 0) : (d.cylinderSession!==null ? (cylinder?.requestId ?? 0) : (queue.current?.revision ?? 0)) })
     const geometryValidation = !d.net ? { kind: 'none' as const } :
       (d.calculating || this.busy || this.placingNote || this.gesture === 'strip') ? { kind: 'pending' as const, wanted: stamp } :
       strip?.error ? { kind: 'invalid' as const, stamp, message: strip.error } :
       strip ? (stripResult ? { kind: 'valid' as const, stamp } : { kind: 'pending' as const, wanted: stamp }) :
+      d.cylinderSession!==null ? (cylinder ? {kind:'valid' as const,stamp} : {kind:'pending' as const,wanted:stamp}) :
       d.validNet === d.net && !d.previewStale && d.preview?.valid && queue.validRevision === queue.current?.revision
         ? { kind: 'valid' as const, stamp } :
         d.error ? { kind: 'invalid' as const, stamp, message: d.error } : { kind: 'pending' as const, wanted: stamp }

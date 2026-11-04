@@ -24,8 +24,9 @@ try {
     await reverseSession().settled()
     if(!useReverse.getState().bodies.length)throw Error('Cylinder missing')
     const scene=sceneOf();if(!scene)throw Error('Scene missing');scene.fitToView()
-    window.cylinderQa={useWorkspaceEditor,useReverse,scene}
+    window.cylinderQa={useWorkspaceEditor,useReverse,scene,runCommand}
   },step)
+  const original=await page.evaluate(async()=>{const q=window.cylinderQa,id=q.useReverse.getState().bodies[0].id;return Array.from((await q.runCommand('reverse.export.step',{bodies:[id]})).file.bytes)})
   await page.waitForSelector('[data-test=feature-edit-surface]:enabled',{timeout:60000})
   await page.click('[data-test=feature-edit-surface]')
   await page.waitForSelector('[data-test=workspace-surface-parameters]',{timeout:120000})
@@ -57,6 +58,30 @@ try {
     return {validation:state.snapshot.validation.kind,canExport:p.canExportStep,canUndo:p.canUndo,faces:c.getViewState().provisionalPreview.faceMeshes.length}
   })
   assert.notEqual(result.validation,'valid');assert.equal(result.canExport,false);assert.equal(result.canUndo,true);assert.equal(result.faces,3)
+  await page.waitForSelector('[data-test=surface-validate-cylinder]:enabled',{timeout:60000})
+  await page.click('[data-test=surface-validate-cylinder]')
+  await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind==='valid',{timeout:120000})
+  await page.click('[data-test=surface-undo]')
+  await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind!=='valid',{timeout:60000})
+  assert.equal(await page.$eval('[data-test=workspace-editor-apply]',e=>e.disabled),true)
+  await page.click('[data-test=surface-redo]')
+  await page.waitForSelector('[data-test=surface-validate-cylinder]:enabled',{timeout:60000})
+  await page.click('[data-test=surface-validate-cylinder]')
+  await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind==='valid',{timeout:120000})
+  assert.equal(await page.$eval('[data-test=surface-note-add]',e=>e.disabled),true)
+  await page.waitForSelector('[data-test=workspace-editor-apply]:enabled',{timeout:60000})
+  await page.click('[data-test=workspace-editor-apply]')
+  await page.waitForFunction(()=>{const s=window.cylinderQa.useWorkspaceEditor.getState();return s.phase==='closed'||!!s.error},{timeout:120000})
+  const applied=await page.evaluate(()=>{const q=window.cylinderQa,s=q.useWorkspaceEditor.getState();return {phase:s.phase,error:s.error,bodies:q.useReverse.getState().bodies.length,receipt:s.receipt}})
+  assert.equal(applied.error,null);assert.equal(applied.phase,'closed');assert.equal(applied.bodies,2)
+  const exported=await page.evaluate(async()=>{
+    const q=window.cylinderQa,ids=q.useReverse.getState().bodies.map(b=>b.id)
+    return Promise.all(ids.map(async id=>Array.from((await q.runCommand('reverse.export.step',{bodies:[id]})).file.bytes)))
+  })
+  const data=bytes=>{const text=new TextDecoder().decode(new Uint8Array(bytes)),at=text.indexOf('DATA;');assert(at>=0);return text.slice(at)}
+  assert.equal(data(exported[0]),data(original),'original CAD STEP data remains unchanged (header timestamp excluded)')
+  const verify=await OcctKernel.init(),copy=verify.importStep(new TextDecoder().decode(new Uint8Array(exported[1])))
+  try {assert.equal(verify.isValid(copy),true)} finally {verify.release(copy);verify[Symbol.dispose]()}
   assert.deepEqual(consoleErrors,[])
-  console.log(JSON.stringify({status:'PASS',scope:'isolated source host; synthetic cylinder; shared-view pointer gesture',...result}))
+  console.log(JSON.stringify({status:'PASS',scope:'isolated source host; synthetic cylinder; shared-view pointer gesture and CAD copy',...result,applied:applied.phase,bodies:applied.bodies}))
 } finally {await browser.close()}

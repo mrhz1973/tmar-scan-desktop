@@ -366,15 +366,18 @@ An isolated browser source-worker test on a synthetic cylinder verifies its prov
 rejection of a protected-pole edit, and STEP from `evaluateCylinder` reopens as
 valid; reopening the STEP rejects the prior session. `CylinderPreviewSession` keeps delayed validation results and errors
 from applying to newer candidates or a disposed session. It is not connected
-to the standard Apply path. The shared workspace exposes an explicitly
+to the normal nonperiodic Apply path. The shared workspace exposes an explicitly
 experimental preview for the narrowly qualified full cylinder: only its
 central pole is selectable and its coupled movement preserves the supported
 net's seam/boundary rules. In isolated source-host QA, selecting a generated
 STEP cylinder and dragging that pole with actual pointer events updated the
-preview; Undo was available and Export/Apply remained unavailable. The pole
-was initially outside the fitted view and required zooming out. This does not
-qualify real user STEP files, all cylinders, persistence, notes or Apply.
+preview; after an explicit sampled CAD check, Apply created a separate CAD
+copy. Undo invalidated that check and required another verification. The copy
+export reopened as valid; the source STEP data remained identical, excluding
+its timestamp-bearing header. The pole was initially outside the fitted view
+and required zooming out. This does not qualify real user STEP files, all
+cylinders, persistence, notes, or freedom from self-intersections.
 On one synthetic imported cylinder, a local Vitest run
 measured 44.6 ms for this preview and 1956.8 ms for full evaluation; this is
-not a frame-rate or real-project benchmark. Apply integration, complete lifecycle
-qualification, control-net framing and real-project qualification remain open.
+not a frame-rate or real-project benchmark. Complete lifecycle qualification,
+control-net framing and real-project qualification remain open.
