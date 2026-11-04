@@ -146,13 +146,22 @@ host state. A host without this capability keeps the original behavior.
   than the source `6283.1853 mm³`; independently sampled signed triangle
   volumes converged to `6283.1664` and `6283.1644 mm³` respectively at the
   finest tested deflection, without proving the source of the discrepancy.
+  `periodic-conversion.test.ts` also compares the source, converted body and
+  reopened STEP on this fixture: matching subshape counts and face
+  orientations, and sampled edge locations, surface positions and normals.
+  Edge comparison uses nearest locations; it does not inspect either seam
+  pcurve or prove same-parameter correspondence.
   The periodic record can now be read and round-tripped without enabling
   editing. Exact V elevation/refinement exposed an interior row; on this
   one synthetic solid an interior pole move preserved sampled caps/seam,
   edge tolerances and a valid STEP round trip. A different pole changed the
   seam tangent despite preserving its sampled position. This is not a UI
-  capability: seam/trim pcurves, controls, recipes and other STEP topologies
-  remain unqualified, and periodic editing is still explicitly rejected.
+  capability. On that cylinder in two positions/orientations,
+  `periodic-seam.test.ts` compares both serialized seam pcurves to their 3D
+  edge and tests the two seam normals at 65 samples before editing, after
+  one interior pole move, and after STEP reopening. This does not qualify
+  arbitrary seam/trim pcurves, controls,
+  recipes or other STEP topologies. Periodic editing is explicitly rejected.
 - A synthetic STEP box in the isolated shared view passed pointer selection of
   a second CAD face, preservation of a modified draft when the change was
   cancelled, and a confirmed change (`run-jx0E4G`). Failed face loading also
