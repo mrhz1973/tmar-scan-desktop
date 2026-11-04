@@ -199,7 +199,7 @@ export function SurfaceViewport(props: Props) {
         : new THREE.Vector3(...direction)
       const frame = createDragFrame({ camera, partWorld: netFrame, rect: div.getBoundingClientRect(),
         anchor: origin.toArray() as Point, clientX: e.clientX, clientY: e.clientY,
-        ...(p.dragMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction }) })
+        ...(p.dragMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction, allowViewAlignedDepth: true }) })
       if (!frame) return
       const startAnchor = new THREE.Vector3(...p.net.poles[index])
       const gesture = createSurfaceGesture({ frame, poles:p.net.poles, selected:ids,

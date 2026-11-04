@@ -148,6 +148,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <div className="row" aria-label="Asse di movimento">{axisNames.map((name, index) =>
         <button type="button" key={name} data-test={`surface-axis-${index}`} disabled={disabled}
           aria-pressed={state.axis === index} onClick={() => attempt(() => controller.setAxis(index as 0 | 1 | 2))}>{name}</button>)}</div>
+      {state.dragMode !== 'screen' && <p>Se la direzione punta verso la vista, trascina in verticale per muovere il punto in profondità.</p>}
       <label>Intensità trascinamento · {Math.round(state.dragStrength * 100)}%
         <input data-test="surface-drag-strength" type="range" min="0.05" max="1" step="0.05" value={state.dragStrength}
           disabled={disabled} onChange={e => attempt(() => controller.setDragStrength(Number(e.target.value)))} />

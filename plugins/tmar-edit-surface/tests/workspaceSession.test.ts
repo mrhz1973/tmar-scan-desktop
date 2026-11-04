@@ -56,10 +56,10 @@ async function setup(options: {sheet?:boolean;annotated?:boolean} = {}) {
   const session = await creating
   return { worker, runtime, abort, binding, context, session, layer, owned, invalidate:()=>{sourceCurrent=false} }
 }
-async function selectFace(test: Awaited<ReturnType<typeof setup>>) {
+async function selectFace(test: Awaited<ReturnType<typeof setup>>, net = plane()) {
   const choosing = test.session.chooseFace(0)
   expect(test.worker.sent.at(-1)?.action).toBe('select')
-  test.worker.reply(test.worker.sent.at(-1)!.id,plane())
+  test.worker.reply(test.worker.sent.at(-1)!.id,net)
   await choosing
   await vi.advanceTimersByTimeAsync(90)
   const request = test.worker.sent.at(-1)!
@@ -111,6 +111,19 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 afterEach(()=>vi.useRealTimers())
 
 describe('WorkspaceSurfaceSession',()=>{
+  it('starts by moving a point along the normal of a rotated surface', async()=>{
+    const t=await setup(), net=plane()
+    net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
+    await selectFace(t,net)
+    expect(t.session.getPanelState().dragMode).toBe('local')
+    expect(t.session.getPanelState().axis).toBe(2)
+    t.session.selectPoints([12],false);t.session.moveSelected(.25)
+    expect(t.session.getPanelState().net!.poles[12]).toEqual([.25,2,2])
+    t.session.undo()
+    expect(t.session.getPanelState().net!.poles[12]).toEqual([0,2,2])
+    await t.session.dispose('cancelled')
+  })
+
   it('preserves a changed draft if switching faces is cancelled, and switches only after confirmation', async()=>{
     const t=await setup();await selectFace(t)
     t.session.selectPoints([12],false);t.session.moveSelected(.2)

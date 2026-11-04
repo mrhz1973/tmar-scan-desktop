@@ -12,10 +12,12 @@ if (url.protocol !== 'http:' || !['localhost','127.0.0.1','[::1]'].includes(url.
     url.username || url.password || url.pathname !== '/' || url.search || url.hash)
   throw Error('APP_URL must be an isolated local HTTP origin with an explicit port.')
 const sourceFile = process.env.STEP_FILE
+const testAlignedDepth = process.env.TEST_ALIGNED_DEPTH === '1'
 if (sourceFile && (!isAbsolute(sourceFile) || !['.step','.stp'].includes(extname(sourceFile).toLowerCase())))
   throw Error('STEP_FILE must be an absolute STEP path.')
 if (sourceFile && process.env.TEST_FACE_SWITCH === '1')
   throw Error('TEST_FACE_SWITCH uses only its synthetic box fixture.')
+if (sourceFile && testAlignedDepth) throw Error('TEST_ALIGNED_DEPTH uses only its synthetic box fixture.')
 const requestedFace = process.env.FACE_INDEX
 if (requestedFace !== undefined && (!/^\d+$/.test(requestedFace) || !Number.isSafeInteger(Number(requestedFace))))
   throw Error('FACE_INDEX must be a non-negative integer.')
@@ -93,7 +95,7 @@ try {
     'actual editor uses the same canvas and camera; source geometry is borrowed unchanged')
   // STEP serialization may reorder faces: choose the largest supported planar
   // face in this imported body, unless the operator supplies its current index.
-  const faceIndex = requestedFace !== undefined ? Number(requestedFace) : await page.evaluate(() => {
+  const faceIndex = requestedFace !== undefined ? Number(requestedFace) : await page.evaluate(alignedDepth => {
     const controller = window.surfaceQa.useWorkspaceEditor.getState().controller
     const faces = controller.getPanelState().faces, meshes = controller.getViewState().preview.faceMeshes
     const area = mesh => {
@@ -107,10 +109,19 @@ try {
       return total
     }
     const candidates = faces.filter(face => face.kind === 'plane' && !face.reason).map(face => ({ index: face.index, locks: face.trimLocks.length, area: area(meshes[face.index]) }))
+    if (alignedDepth) {
+      const upper = candidates.filter(face => {
+        const p=meshes[face.index].positions, z=[]
+        for(let i=2;i<p.length;i+=3) z.push(p[i])
+        return z.length>0 && z.every(value=>Math.abs(value-10)<1e-5)
+      })
+      if (upper.length !== 1) throw Error('Synthetic top face unavailable')
+      return upper[0].index
+    }
     candidates.sort((a,b) => a.locks-b.locks || b.area-a.area)
     if (!candidates.length) throw Error('No supported planar face in the imported body')
     return candidates[0].index
-  })
+  }, testAlignedDepth)
   report.faceIndex = faceIndex
   const face = await page.$eval('[data-test=surface-face]', (select, index) => {
     const option = [...select.options].find(item => item.value === String(index))
@@ -214,6 +225,67 @@ try {
     return { poles: s.net.poles.map(p => [...p]), locked: s.locked, volume: c.getViewState().preview.volume }
   })
   check(first.poles.length > first.locked.length, 'selected imported CAD face has an editable control point')
+  if (testAlignedDepth) {
+    // The QA helper places the real camera on the normal; the edit itself is
+    // made with real pointer events in the shared viewport.
+    await page.evaluate(() => window.surfaceQa.scene.viewFrom('top'))
+    await page.select('[data-test=surface-selection-mode]', 'points')
+    check(await page.$eval('[data-test=surface-drag-mode]', e => e.value === 'local') &&
+      await page.$eval('[data-test=surface-axis-2]', e => e.getAttribute('aria-pressed') === 'true'),
+      'the initial drag direction is the surface normal')
+    const snapWasOn = await page.$eval('[data-test=surface-snap]', e => e.checked)
+    if (snapWasOn) await page.click('[data-test=surface-snap]')
+    const target = await page.evaluate(() => {
+      const q=window.surfaceQa, state=q.useWorkspaceEditor.getState().controller.getViewState()
+      const layer=q.scene.layerHost(), rect=layer.canvas.getBoundingClientRect(), camera=layer.camera(), group=layer.partGroup
+      group.updateWorldMatrix(true,true);camera.updateMatrixWorld(true)
+      const p=state.net.poles.map((pole,id)=>{
+        const v=group.position.clone().set(...pole).applyMatrix4(group.matrixWorld).project(camera)
+        return {id,x:rect.left+(v.x+1)*rect.width/2,y:rect.top+(1-v.y)*rect.height/2,visible:Math.abs(v.z)<1}
+      })
+      const free=p.filter(v=>v.visible && !state.locked.includes(v.id) && !state.hiddenPoles.includes(v.id) &&
+        v.x>rect.left+12 && v.x<rect.right-12 && v.y>rect.top+12 && v.y<rect.bottom-12 &&
+        document.elementFromPoint(v.x,v.y)===layer.canvas)
+      free.forEach(v=>v.separation=Math.min(...p.filter(other=>other.id!==v.id).map(other=>Math.hypot(v.x-other.x,v.y-other.y))))
+      return free.sort((a,b)=>b.separation-a.separation)[0] ?? null
+    })
+    assert(target && target.separation > 8, 'No independently selectable control point in top view')
+    const previewBefore = await page.evaluate(() => {
+      const q=window.surfaceQa, view=q.useWorkspaceEditor.getState().controller.getViewState()
+      const group=q.scene.layerHost().partGroup.getObjectByName('tmar-edit-surface-preview')
+      q.depthPreviewGeometry=group?.children[0]?.geometry
+      return {revision:view.preview.previewRevision, volume:view.preview.volume}
+    })
+    await page.mouse.move(target.x,target.y)
+    await page.mouse.down()
+    await page.waitForFunction(() => window.surfaceQa.useWorkspaceEditor.getState().snapshot?.gesture === 'pole', {timeout:10000})
+    await page.mouse.move(target.x,target.y-16,{steps:4})
+    await page.waitForFunction(before => {
+      const q=window.surfaceQa, s=q.useWorkspaceEditor.getState(), view=s.controller?.getViewState()
+      const group=q.scene.layerHost().partGroup.getObjectByName('tmar-edit-surface-preview')
+      return s.snapshot?.gesture==='pole' && view?.preview?.valid && view.preview.previewRevision!==before.revision &&
+        Math.abs(view.preview.volume-before.volume)>1e-6 && !!group?.children[0]?.geometry &&
+        group.children[0].geometry!==q.depthPreviewGeometry
+    },{timeout:120000},previewBefore)
+    check(true,'the displayed CAD preview updates while the pointer is still held')
+    await page.screenshot({path:join(out,'during-aligned-drag.png')})
+    await page.mouse.up()
+    await page.waitForFunction(({id,before}) => {
+      const s=window.surfaceQa.useWorkspaceEditor.getState(), p=s.controller?.getPanelState().net?.poles[id]
+      return s.snapshot?.validation.kind==='valid' && s.snapshot.gesture==='idle' && p && Math.abs(p[2]-before[2])>1e-5
+    },{timeout:120000},{id:target.id,before:first.poles[target.id]})
+    const moved=await page.evaluate(id => window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().net.poles[id],target.id)
+    check(Math.abs(moved[0]-first.poles[target.id][0])<1e-8 && Math.abs(moved[1]-first.poles[target.id][1])<1e-8,
+      'a real vertical drag moves the point along the view-aligned normal')
+    await page.click('[data-test=surface-undo]')
+    await page.waitForFunction(previous => {
+      const s=window.surfaceQa.useWorkspaceEditor.getState()
+      return s.snapshot?.validation.kind==='valid' && JSON.stringify(s.controller.getPanelState().net.poles)===JSON.stringify(previous)
+    },{timeout:120000},first.poles)
+    check(true,'Undo restores the point after the view-aligned drag')
+    if (snapWasOn) await page.click('[data-test=surface-snap]')
+    await page.evaluate(() => window.surfaceQa.scene.viewFrom('iso'))
+  }
   if (process.env.TEST_SYMMETRY === '1') {
     await page.select('[data-test=surface-continuity]', 'G0')
     await page.waitForFunction(() => {

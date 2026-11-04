@@ -1,5 +1,17 @@
 # Edit Surface — CAD prototype checkpoint
 
+### Shared workspace: normal drag and integration, 2026-11-04
+
+Pole movement starts on the surface's local normal N. U/V and world axes remain
+selectable. When the chosen axis points almost directly at the camera, dragging
+vertically moves the pole in depth; the view-scale mapping is approximate near
+the threshold. This does not change the separate edge-duplication guard.
+Synthetic shared-view tests cover the real pointer, Undo, valid STEP Apply and
+snapping to scan and CAD with Alt/off. See `WORKSPACE-INTEGRATION.md` for the
+exact revisions, results and the independent compiled integration of the
+preceding plugin revision. A packaged desktop build and full QS parity are not
+claimed.
+
 ### Scan/CAD snapping and direct-handle correction, 2026-11-03
 
 When a body is loaded from the project, the editor can show the visible scan and other visible CAD bodies as translucent references. The magnet is on by default with a 1 mm adjustable reach; Alt temporarily disables it. During a pole drag it searches along the chosen world/local axis, or along the view direction for screen-plane movement, and labels a successful hit. Other faces of the edited body are also candidates; the edited face is excluded. Hidden project references are excluded. A STEP opened directly outside the project has no verified project coordinate relationship, so only its own other faces are offered as references; import it and load the project body to use the scan and other bodies. Reference hits use displayed tessellation; **a NURBS pole is generally not a point on the resulting surface**. Locked poles and existing geometry validation remain in force. No assertion of exact surface-to-scan contact or global G1 is made.

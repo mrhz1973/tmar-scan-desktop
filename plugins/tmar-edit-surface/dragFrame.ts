@@ -16,7 +16,7 @@ export type DragFrameInput = {
   readonly anchor: Point3
   readonly clientX: number
   readonly clientY: number
-} & ({ readonly mode: 'axis'; readonly direction: Point3 } | { readonly mode: 'screen' })
+} & ({ readonly mode: 'axis'; readonly direction: Point3; readonly allowViewAlignedDepth?: boolean } | { readonly mode: 'screen' })
 
 export interface DragFrame {
   /** Delta in part-frame millimetres. Null means this pointer ray is degenerate. */
@@ -101,6 +101,29 @@ export function createDragFrame(input: DragFrameInput): DragFrame | null {
   if (!finite(input.direction) || new THREE.Vector3(...input.direction).lengthSq() < 1e-20) return null
   const localAxis = new THREE.Vector3(...input.direction).normalize()
   const worldAxis = localAxis.clone().transformDirection(part)
+  const cosine = startRay.direction.dot(worldAxis)
+  if (input.allowViewAlignedDepth && 1 - cosine * cosine < 0.0025) {
+    // An axis pointing at the camera has no useful screen-space projection.
+    // Move it with vertical pixels at the anchor's view-plane scale instead.
+    // This is explicitly opted into by pole editing, not by edge duplication.
+    const viewNormal = new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld)
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(viewNormal, worldAnchor)
+    const a = startRay.intersectPlane(plane, new THREE.Vector3())
+    const nextRay = rayAt(clientX, clientY - 1)
+    const b = nextRay?.intersectPlane(plane, new THREE.Vector3())
+    const millimetresPerPixel = a && b ? a.distanceTo(b) : NaN
+    if (!Number.isFinite(millimetresPerPixel) || millimetresPerPixel <= 1e-12) return null
+    return { deltaAt(x, y) {
+      if (!finite([x, y])) return null
+      const amount = (clientY - y) * millimetresPerPixel
+      const moved = worldAnchor.clone().addScaledVector(worldAxis, amount)
+      const movedClip = new THREE.Vector4(moved.x, moved.y, moved.z, 1)
+        .applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix)
+      if (!finite(movedClip.toArray()) || movedClip.w <= 1e-12 || movedClip.z < -movedClip.w || movedClip.z > movedClip.w) return null
+      const delta = localAxis.clone().multiplyScalar(amount)
+      return finite(delta.toArray()) ? delta.toArray() as Point : null
+    } }
+  }
   // Closest points between the pointer ray and the allowed axis. This works
   // for both projection types, unlike a fixed pixels-per-mm approximation.
   const parameter = (ray: THREE.Ray): number | null => {
