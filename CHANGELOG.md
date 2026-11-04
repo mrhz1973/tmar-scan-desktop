@@ -7,6 +7,13 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Patch Network 3D point checkpoint ? 2026-11-04
+
+- Preserve recovered work and connect explicit node, shared-curve grip and derived-centre offsets to coupled fitting, preview and native project persistence.
+- Add part-frame XYZ and scan-normal controls, captured point drag and selective local/project Undo/Redo; protect active gestures from Ctrl+Z.
+- Keep on-scan projection and CAD constraints; do not claim an unimplemented 3D proximity magnet or near-parallel depth fallback.
+- Isolated Windows/web QA only; no release or preview counter change. See `docs/coordination/patch-network-3d-resume-20261104.md`.
+
 ### TMAR Versione 1 — sequential preview numbering — 2026-11-03
 
 - Replace the prominent commit code with Versione 1 and an explicit Anteprima label.

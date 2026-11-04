@@ -1394,3 +1394,31 @@
 .note-focus-ring::before { width: 18px; height: 3px; left: 15px; top: 22px; }
 .note-focus-ring::after { width: 3px; height: 18px; left: 22px; top: 15px; }
 .note-label.focused { border: 2px solid #e8b400; background: #fff7cf; color: #191919; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px #181818; margin-left: 38px; }
+
+/* Explicit 3D controls must fit the resizable narrow model column. */
+[data-test='network-point-motion'],
+[data-test='network-point-motion'] fieldset {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-left: 0;
+  margin-right: 0;
+}
+[data-test='network-point-motion'] .field > span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  flex: 1 1 45%;
+  min-width: 0;
+}
+[data-test='network-point-motion'] .field > select,
+[data-test='network-point-motion'] .field > .unitfield {
+  flex: 1 1 50%;
+  min-width: 0;
+  max-width: 55%;
+}
+[data-test='network-point-motion'] .unitfield input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+[data-test='network-point-motion'] p { overflow-wrap: anywhere; }

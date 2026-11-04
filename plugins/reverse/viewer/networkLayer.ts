@@ -39,6 +39,10 @@
 // paths (scanPath.ts).
 
 import * as THREE from 'three'
+import { useStore } from '../../../src/state/store'
+import { beginCentreNormalDrag, sampleCentreNormalDrag, createCentreOffset, reanchorCentreOffset, type NormalPointer, type CentreOffset } from '../core/networkNormalMotion'
+import { setCentreOffset, setPointOffset } from '../state/reNetworkDraft'
+import { displayedPoint, offsetDelta, offsetFromDelta, offsetTrace, pointAnchor, pointOffset, pointProtected, type NetworkPointRef } from '../core/networkPointMotion'
 import { Line2 } from 'three/addons/lines/Line2.js'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
@@ -220,6 +224,7 @@ export class NetworkLayer {
   private offered: { line: Line2; geo: LineGeometry; mat: LineMaterial; letGo: () => void }[] = []
   private hovered: NetworkHit | null = null
   private lastClick: { t: number; x: number; y: number } | null = null
+  private normalCancel: (() => void) | null = null
   private dragging: { hit: NetworkHit; before: NetworkData } | null = null
   /** An edge being dragged out: the curve, where it was pressed, and where
    *  the cursor is on the scan now. */
@@ -270,11 +275,13 @@ export class NetworkLayer {
         if (this.fat.setLineWidth(px)) this.host.invalidate()
       },
       partMoved: () => {
+        this.normalCancel?.()
         this.paths = null
         this.sides.clear()
         this.clearCurves()
       },
       scanReplaced: () => {
+        this.normalCancel?.()
         this.paths = null
         this.sides.clear()
         this.clearCurves()
@@ -292,6 +299,7 @@ export class NetworkLayer {
     this.report = report
     this.color = color
     if (!d) {
+      this.normalCancel?.()
       this.clearAll()
       this.host.setCursor('')
       this.host.invalidate()
@@ -301,7 +309,7 @@ export class NetworkLayer {
     this.settleWaiting(d, report)
     // The curves again only where the network changed; a corner placed
     // changes the patch being placed alone.
-    if (!was || was.nodes !== d.nodes || was.curves !== d.curves || was.cells !== d.cells || was.picked !== d.picked || reported !== report) this.redraw()
+    if (!was || was.nodes !== d.nodes || was.curves !== d.curves || was.cells !== d.cells || was.picked !== d.picked || was.pointPicked !== d.pointPicked || was.pointMotion !== d.pointMotion || reported !== report) this.redraw()
     if (!was || was.suggested !== d.suggested) this.drawSuggested()
     this.drawPreview(this.hovered)
     this.host.invalidate()
@@ -364,13 +372,15 @@ export class NetworkLayer {
       const b = this.nodeAt(c.to)
       if (!a || !b) continue
       keep.add(c.id)
-      const key = JSON.stringify([a, c.via, b, c.crease === true])
+      const offsets = [d.nodes.find(n => n.id === c.from)?.offset, ...c.via.map((_,i) => c.viaOffsets?.[i]), d.nodes.find(n => n.id === c.to)?.offset]
+      const key = JSON.stringify([a, c.via, b, c.crease === true, offsets])
       const had = this.curves.get(c.id)
       if (had && had.key === key) continue
       if (had) this.dropCurve(c.id)
       const trace = traceCurve(paths, [a, ...c.via, b])
       if (trace.points.length < 6) continue
-      const fit = fitProvisional(trace, paths.edge)
+      const fitPoints = offsetTrace(trace, offsets)
+      const fit = fitProvisional(fitPoints ?? trace, paths.edge)
       const points = Float32Array.from(sampleCurve(fit, fit.spans * DRAW_PER_SPAN + 1))
       const geo = new LineGeometry()
       geo.setPositions(points)
@@ -386,9 +396,9 @@ export class NetworkLayer {
     this.dressCurves()
     // The nodes, the corners of the patches, and the grips.
     const corners = new Set([...(this.report?.patches ?? []).flatMap((p) => p.corners), ...d.cells.flatMap((c) => c.corners ?? [])])
-    this.setPoints('dots', d.nodes.filter((n) => !corners.has(n.id)).map((n) => n.at), this.dotTexture, 10)
-    this.setPoints('squares', d.nodes.filter((n) => corners.has(n.id)).map((n) => n.at), this.squareTexture, 11)
-    this.setPoints('grips', d.curves.flatMap((c) => c.via), this.dotTexture, 7)
+    this.setPoints('dots', d.nodes.filter((n) => !corners.has(n.id)).map((n) => displayedPoint(n.at,n.offset)), this.dotTexture, 10)
+    this.setPoints('squares', d.nodes.filter((n) => corners.has(n.id)).map((n) => displayedPoint(n.at,n.offset)), this.squareTexture, 11)
+    this.setPoints('grips', d.curves.flatMap((c) => c.via.map((v,i) => displayedPoint(v,c.viaOffsets?.[i]))), this.dotTexture, 7)
     // The refusals by their seeds, the picked patch's outline.
     for (const e of this.extras) {
       this.group.remove(e.object)
@@ -409,7 +419,7 @@ export class NetworkLayer {
     }
     if (report && report.centres.length > 0) {
       const geo = new THREE.BufferGeometry()
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(report.centres.flatMap((c) => [...c.at]), 3))
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(report.centres.flatMap((c) => [...(d.cells[c.cell]?.centreOffset ? this.pointFrame({kind:'centre',cell:c.cell}).position : c.at)]), 3))
       const mat = new THREE.PointsMaterial({ size: 11, sizeAttenuation: false, map: this.squareTexture, transparent: true, depthTest: false, depthWrite: false, alphaTest: 0.2 })
       const points = new THREE.Points(geo, mat)
       points.renderOrder = 14
@@ -435,6 +445,15 @@ export class NetworkLayer {
       line.renderOrder = 13
       this.group.add(line)
       this.extras.push({ object: line, dispose: () => (letGo(), geo.dispose(), mat.dispose()) })
+    }
+    if (d.pointPicked && d.pointMotion && d.pointMotion !== 'scan') {
+      try {
+        const f = this.pointFrame(d.pointPicked), direction = new THREE.Vector3(...f.direction).normalize()
+        const arrow = new THREE.ArrowHelper(direction,new THREE.Vector3(...f.position),Math.max(this.host.modelRadius()*.15,.1),0x4fb3ff)
+        arrow.renderOrder=16; for (const m of [arrow.line.material,arrow.cone.material].flat()) m.depthTest=false
+        this.group.add(arrow)
+        this.extras.push({object:arrow,dispose:()=>arrow.dispose()})
+      } catch { /* Missing or CAD-bound targets have no free manipulator. */ }
     }
     this.drawLitPatch(true)
   }
@@ -808,7 +827,7 @@ export class NetworkLayer {
     let best: NetworkHit | null = null
     let bestD = NODE_PX
     for (const n of d.nodes) {
-      const s = screen(n.at)
+      const s = screen(displayedPoint(n.at,n.offset))
       const dist = Math.hypot(s.x - x, s.y - y)
       if (dist <= bestD) [bestD, best] = [dist, { kind: 'node', id: n.id }]
     }
@@ -822,14 +841,15 @@ export class NetworkLayer {
     bestD = GRIP_PX
     for (const c of d.curves) {
       c.via.forEach((p, index) => {
-        const s = screen(p)
+        const s = screen(displayedPoint(p,c.viaOffsets?.[index]))
         const dist = Math.hypot(s.x - x, s.y - y)
         if (dist <= bestD) [bestD, best] = [dist, { kind: 'grip', curve: c.id, index }]
       })
     }
     if (best) return best
     for (const c of this.report?.centres ?? []) {
-      const sc = screen(c.at)
+      const o=d.cells[c.cell]?.centreOffset
+      const sc = screen(o ? displayedPoint([...o.anchor] as Vec3,o) : c.at)
       const dist = Math.hypot(sc.x - x, sc.y - y)
       if (dist <= bestD) [bestD, best] = [dist, { kind: 'centre', cell: c.cell }]
     }
@@ -885,7 +905,7 @@ export class NetworkLayer {
   }
 
   private hover(at: { x: number; y: number } | null, covered: boolean): boolean {
-    if (!this.draft || this.dragging) return this.dragging !== null
+    if (!this.draft || this.dragging || this.normalCancel) return this.dragging !== null || !!this.normalCancel
     const hit = at && !covered ? this.hitAt(at.x, at.y) : null
     const changed = JSON.stringify(hit) !== JSON.stringify(this.hovered)
     this.hovered = hit
@@ -906,7 +926,8 @@ export class NetworkLayer {
   }
 
   private edit(change: (d: Draft) => Draft): void {
-    this.onEdit?.(change)
+    try { this.onEdit?.(change) }
+    catch (error) { useStore.getState().setError(error instanceof Error ? error.message : String(error)) }
   }
 
   /** The plain left-drag taken from the camera, or given back. */
@@ -929,7 +950,10 @@ export class NetworkLayer {
       this.hovered = null
       return true
     }
-    if (hit.kind === 'centre') return true
+    if (hit.kind === 'centre' || ((d.pointMotion ?? 'scan') !== 'scan' && (hit.kind === 'node' || hit.kind === 'grip'))) {
+      this.edit(x => ({...x,pointPicked:hit})); return true
+    }
+    if ((d.pointMotion ?? 'scan') !== 'scan' && !d.placing) return true
     if (hit.kind === 'bodyEdge') {
       // The face beside the edge the curve's patch meets: the first of its
       // two, until the box says otherwise.
@@ -993,9 +1017,19 @@ export class NetworkLayer {
     // The click that follows a press is told Ctrl, not Shift: kept here.
     this.shiftDown = e.shiftKey
     const d = this.draft
+    if (this.normalCancel) return true
     if (!d || d.tool !== 'draw' || d.placing || e.button !== 0) return false
     const pressed = this.hitAt(e.clientX, e.clientY)
     if (!pressed) return false
+    if ((d.pointMotion ?? 'scan') !== 'scan') {
+      if (e.shiftKey) { this.claim(false); return false }
+      if (pressed.kind === 'node' || pressed.kind === 'grip' || pressed.kind === 'centre') {
+        this.edit(x => ({...x,pointPicked:pressed}))
+        return this.startPointDrag(e,pressed)
+      }
+      return true
+    }
+    if (pressed.kind === 'centre') this.edit(x => ({...x,pointPicked:pressed}))
     if (pressed.kind !== 'node' && pressed.kind !== 'grip' && pressed.kind !== 'centre' && pressed.kind !== 'curve') return false
     // Shift on an edge is the click's — a grip put in — or the camera's.
     if (pressed.kind === 'curve' && e.shiftKey) return false
@@ -1028,7 +1062,12 @@ export class NetworkLayer {
         hit = { kind: 'grip', curve: h.curve, index }
         this.dragging = { hit, before }
       } else if (h.kind === 'node') this.edit((x) => moveNode(x, h.id, at, false))
-      else if (h.kind === 'centre') this.edit((x) => moveCell(x, h.cell, 'centre', at, false))
+      else if (h.kind === 'centre') this.edit((x) => {
+        const old=x.cells[h.cell]?.centreOffset
+        if(!old) return moveCell(x,h.cell,'centre',at,false)
+        const near=this.paths?.closestInside(at)
+        return near ? setCentreOffset(x,h.cell,reanchorCentreOffset(old,near.point,old.direction),false) : x
+      })
       else if (h.kind === 'grip') this.edit((x) => moveGrip(x, h.curve, h.index, at, false))
       else if (h.kind === 'curve') {
         this.extending = { curve: h.curve, from: h.at, to: at }
@@ -1038,6 +1077,7 @@ export class NetworkLayer {
       }
     }
     const move = (ev: PointerEvent) => {
+      if(ev.pointerId!==e.pointerId) return
       // A drag once past the viewport's own click slack.
       if (!moved && Math.abs(ev.clientX - from.x) + Math.abs(ev.clientY - from.y) <= DRAG_SLACK_PX) return
       moved = true
@@ -1045,6 +1085,7 @@ export class NetworkLayer {
       if (!frame) frame = requestAnimationFrame(step)
     }
     const up = (ev: PointerEvent) => {
+      if(ev.pointerId!==e.pointerId) return
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       // The last move, if no frame took it yet.
@@ -1086,10 +1127,125 @@ export class NetworkLayer {
     return true
   }
 
+  private pointFrame(p: NetworkPointRef): { anchor: Vec3; position: Vec3; delta: Vec3; direction: Vec3 } {
+    const d = this.draft, paths = this.ensurePaths()
+    if (!d || !paths) throw Error('Rete o scansione non disponibile.')
+    if (pointProtected(d, p)) throw Error('Punto vincolato al CAD: movimento protetto.')
+    const old = pointOffset(d, p)
+    const raw = old?.anchor ?? pointAnchor(d, p) ?? (p.kind === 'centre' ? this.report?.centres.find(c => c.cell === p.cell)?.at : undefined)
+    if (!raw) throw Error('Punto della rete non disponibile.')
+    const near = paths.closestInside([...raw] as Vec3)
+    if (!near) throw Error('Ancora sulla scansione non disponibile.')
+    const anchor = [...(old?.anchor ?? near.point)] as Vec3, delta = offsetDelta(old)
+    const mode = d.pointMotion ?? 'scan'
+    const direction: Vec3 = mode === 'x' ? [1,0,0] : mode === 'y' ? [0,1,0] : mode === 'z' ? [0,0,1] : paths.normalAt(near.point, near.triangle)
+    return { anchor, delta, position: anchor.map((v, i) => v + delta[i]) as Vec3, direction }
+  }
+
+  private checkedPointOffset(p: NetworkPointRef, delta: Vec3): CentreOffset {
+    const frame = this.pointFrame(p), limit = Math.max(1, this.host.modelRadius()*2)
+    if (Math.hypot(...delta) > limit) throw Error('Spostamento oltre la dimensione ammessa del modello.')
+    return offsetFromDelta(frame.anchor, delta)
+  }
+
+  setPointComponent(p: NetworkPointRef, axis: number, value: number): void {
+    if (!this.draft || this.draft.motionActive) return
+    try {
+      if (![0,1,2].includes(axis) || !Number.isFinite(value)) throw Error('Coordinata non valida.')
+      const delta = [...this.pointFrame(p).delta] as Vec3; delta[axis] = value
+      const o = this.checkedPointOffset(p, delta)
+      this.edit(x => setPointOffset(x, p, o))
+    } catch (error) { useStore.getState().setError(String(error)) }
+  }
+
+  movePointAlong(p: NetworkPointRef, distance: number): void {
+    if (!this.draft || this.draft.motionActive || (this.draft.pointMotion ?? 'scan') === 'scan') return
+    try {
+      if (!Number.isFinite(distance)) throw Error('Quota non valida.')
+      const f = this.pointFrame(p), length = Math.hypot(...f.direction)
+      if (length < 1e-12) throw Error('Normale della scansione degenere.')
+      const delta = f.delta.map((v, i) => v + f.direction[i]/length*distance) as Vec3
+      const o = this.checkedPointOffset(p, delta)
+      this.edit(x => setPointOffset(x, p, o))
+    } catch (error) { useStore.getState().setError(String(error)) }
+  }
+
+  private normalPointer(event: PointerEvent): NormalPointer {
+    const camera = this.host.camera(), group = this.host.partGroup, rect = this.host.canvas.getBoundingClientRect()
+    group.updateWorldMatrix(true,false); camera.updateMatrixWorld(true)
+    this.host.setPickRay(event.clientX,event.clientY)
+    const ray = this.host.raycaster.ray.clone().applyMatrix4(group.matrixWorld.clone().invert())
+    return { pointerId:event.pointerId, screen:[event.clientX,event.clientY], ray:{ origin:ray.origin.toArray() as Vec3, direction:ray.direction.toArray() as Vec3 },
+      viewKey:JSON.stringify([camera.matrixWorld.elements,camera.projectionMatrix.elements,group.matrixWorld.elements,rect.x,rect.y,rect.width,rect.height]) }
+  }
+
+  private startPointDrag(event: PointerEvent, p: NetworkPointRef): boolean {
+    if (!this.draft) return false
+    const before: NetworkData = { nodes:this.draft.nodes, curves:this.draft.curves, cells:this.draft.cells, spans:this.draft.spans, fit:this.draft.fit }
+    let drag: ReturnType<typeof beginCentreNormalDrag>, value: ReturnType<NetworkLayer['pointFrame']>
+    try {
+      value = this.pointFrame(p)
+      drag = beginCentreNormalDrag(createCentreOffset(value.position,value.direction,0),this.normalPointer(event),
+        {thresholdPx:4,maxAbsDistance:Math.max(1,this.host.modelRadius()*2)})
+    } catch (error) { useStore.getState().setError(String(error)); return true }
+    const canvas = this.host.canvas
+    let ended = false, changed = false, pending: PointerEvent | null = null, frame = 0
+    const finish = (cancelled: boolean) => {
+      if (ended) return
+      ended = true; this.normalCancel = null
+      if (frame) cancelAnimationFrame(frame)
+      window.removeEventListener('pointermove',move,true); window.removeEventListener('pointerup',up,true)
+      window.removeEventListener('pointercancel',cancel,true); window.removeEventListener('blur',blur)
+      canvas.removeEventListener('lostpointercapture',cancel)
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+      if (this.draft) this.edit(x => {
+        const restored = { ...x, ...(cancelled ? before : {}), motionActive:false }
+        const differs = JSON.stringify([x.nodes,x.curves,x.cells]) !== JSON.stringify([before.nodes,before.curves,before.cells])
+        return !cancelled && changed && differs ? recordDrag(restored,before) : restored
+      })
+      this.claim(false); this.host.requestHover(); this.host.invalidate()
+    }
+    const step = () => {
+      frame = 0; const e = pending; pending = null
+      if (!e || ended) return
+      const next = sampleCentreNormalDrag(drag,this.normalPointer(e))
+      if (next.kind === 'rejected') { useStore.getState().setError(next.reason); finish(true); return }
+      if (next.kind !== 'moved') return
+      try {
+        const delta = value.delta.map((v,i) => v + next.offset.direction[i]*next.offset.distance) as Vec3
+        const o = this.checkedPointOffset(p,delta)
+        drag = next.drag; changed = true
+        this.edit(x => setPointOffset(x,p,o,false))
+      } catch (error) { useStore.getState().setError(String(error)); finish(true) }
+    }
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== event.pointerId || ended) return
+      e.preventDefault(); e.stopImmediatePropagation(); pending = e
+      if (!frame) frame = requestAnimationFrame(step)
+    }
+    const up = (e: PointerEvent) => {
+      if (e.pointerId !== event.pointerId || ended) return
+      e.preventDefault(); e.stopImmediatePropagation(); pending = e
+      if (frame) cancelAnimationFrame(frame)
+      step(); finish(false)
+    }
+    const cancel = (e: PointerEvent) => { if (e.pointerId === event.pointerId) finish(true) }
+    const blur = () => finish(true)
+    try { canvas.setPointerCapture(event.pointerId) } catch { return true }
+    this.normalCancel = () => finish(true)
+    this.claim(true); this.edit(x => ({...x,motionActive:true,pointPicked:p}))
+    event.preventDefault(); event.stopPropagation()
+    window.addEventListener('pointermove',move,true); window.addEventListener('pointerup',up,true)
+    window.addEventListener('pointercancel',cancel,true); window.addEventListener('blur',blur)
+    canvas.addEventListener('lostpointercapture',cancel)
+    return true
+  }
+
   /** The wheel over a curve: its strip's span count, one up or down. */
   private wheel(e: WheelEvent): void {
     const d = this.draft
     const h = this.hovered
+    if (this.normalCancel) { e.preventDefault(); e.stopImmediatePropagation(); return }
     if (!d || !h || (h.kind !== 'curve' && h.kind !== 'grip')) return
     const strip = this.report?.strips.find((s) => s.curves.includes(h.curve))
     if (!strip) return
@@ -1104,6 +1260,7 @@ export class NetworkLayer {
     const d = this.draft
     if (!d) return false
     const h = this.hovered
+    if(this.normalCancel) { if(e.key==='Escape') this.normalCancel(); return true }
     if (d.placing) {
       if (e.key === 'Escape') this.edit(dropPlacing)
       else if (e.key === 'Enter') this.finishPlacing()
@@ -1175,6 +1332,7 @@ export class NetworkLayer {
   }
 
   private teardown(): void {
+    this.normalCancel?.()
     this.clearAll()
     this.stopWheel()
     this.host.partGroup.remove(this.group)

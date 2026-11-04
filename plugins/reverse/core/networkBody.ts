@@ -186,7 +186,7 @@ export function networkBody(k: ReKernel, reading: NetworkReading): { shape: Shap
     for (const patch of fit.patches) {
       let made: Shape | null = null
       let off = 0
-      for (const perSpan of [GRID_PER_SPAN, ...GRID_RETRIES]) {
+      for (const perSpan of [...new Set([reading.displacedCentres ? 6 : GRID_PER_SPAN, ...GRID_RETRIES])]) {
         const grid = patchGrid(patch, perSpan, sideSamplesOf(patch))
         const face = k.surfaceThrough(grid.points, grid.rows, grid.cols)
         off = k.surfaceArea(face) / gridArea(grid)

@@ -7,6 +7,8 @@ documentation.
 
 ## TMAR fork additions
 
+Patch Network now has an isolated-review **Movimento 3D dei punti** panel for nodes, intermediate curve grips and derived split centres. Keep scan topology anchors separate from part-frame XYZ/scan-normal fitting offsets; saved projects preserve the offsets and their history. CAD-bound points stay protected. This is not Edit Surface pole editing and does not add its proximity magnet or depth-drag fallback. See [scope, interaction and validation](../../docs/coordination/patch-network-3d-resume-20261104.md).
+
 The TMAR feature list has independent categories. Hiding sketches cannot hide
 completed bodies; surface and solid output scopes are separate. The original
 chronological controls remain in Build history / rollback. Category visibility

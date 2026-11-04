@@ -23,6 +23,7 @@ import { reverseSession } from '../app/reSession'
 import { useNetworkReport } from '../app/useNetworkLayer'
 import { type FeatureDraft, useReverse } from '../state/reStore'
 import { Num } from './featureFields'
+import { NetworkPointFields } from './NetworkPointFields'
 
 type NetworkDraftOpen = Extract<FeatureDraft, { kind: 'network' }>
 
@@ -156,10 +157,10 @@ export function NetworkFields({ d }: { d: NetworkDraftOpen }) {
         <button data-test="network-suggest" disabled={finding} title="Find the scan's sharp edges and folds, to take as crease curves" onClick={suggest}>
           {finding ? 'Finding creases…' : 'Suggest creases'}
         </button>
-        <button data-test="network-undo" disabled={d.history.length === 0} title="Undo the last edit of the network (Ctrl+Z)" onClick={() => edit(undoNetwork)}>
+        <button data-test="network-undo" disabled={!!d.motionActive || d.history.length === 0} title="Undo the last edit of the network (Ctrl+Z)" onClick={() => edit(undoNetwork)}>
           Undo
         </button>
-        <button data-test="network-redo" disabled={d.future.length === 0} title="Redo (Ctrl+Y)" onClick={() => edit(redoNetwork)}>
+        <button data-test="network-redo" disabled={!!d.motionActive || d.future.length === 0} title="Redo (Ctrl+Y)" onClick={() => edit(redoNetwork)}>
           Redo
         </button>
       </div>
@@ -229,6 +230,7 @@ export function NetworkFields({ d }: { d: NetworkDraftOpen }) {
           ))}
         </div>
       )}
+      <NetworkPointFields d={d} report={report} />
       <BodySides d={d} />
       <Num label="Smoothness" unit="" testId="network-smooth" value={d.fit.smoothness} onCommit={(v) => edit((x) => setNetworkFit(x, { smoothness: Math.max(0, Math.abs(v)) }))} hint="How hard the patches and their edges are held fair against the scan: 0 follows it exactly, 0.001 fairs its noise, 0.1 smooths well over it, from 1 detail goes" />
       <Num label="Tolerance" testId="network-tolerance" value={d.fit.tolerance ?? DEFAULT_TOLERANCE} onCommit={(v) => edit((x) => setNetworkFit(x, { tolerance: Math.max(0, Math.abs(v)) }))} hint="How far a patch may stray from the scan beyond its noise before Auto gives its strips more spans: they start at 4 and get more only where a patch misses by more than this, and only while that helps. Fewer spans are smoother" />
