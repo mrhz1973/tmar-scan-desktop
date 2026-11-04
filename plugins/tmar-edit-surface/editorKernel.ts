@@ -317,6 +317,7 @@ export class SurfaceEditorKernel {
     assertNet(base, next, continuity, freeBoundary)
     const recipe: SurfaceEditRecipe = {
       schema: 'tmar.surface-edit', ...(freeBoundary ? { version: 3, boundaryMode: 'free-natural' } : { version: 2 }), engine: 'occt-wasm-5.7.1/brep-v3',
+      // units-ok: this is a serialized CAD coordinate-frame identifier, always in millimetres.
       units: 'mm', coordinateFrame: 'imported-step',
       source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids },
       faceIndex: this.chosen, preparation: this.preparation(), baseNetSha256: '', continuity,

@@ -5,9 +5,14 @@ import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
 import { hasSurfaceZebra } from './SurfaceViewport'
 import './workspaceSurface.css'
+import { useFieldUnits } from '../../src/ui/NumberField'
+import { useUnits } from '../../src/app/useUnits'
+import { fmtArea } from '../../src/core/units'
 
 /** The host owns Apply and Cancel; this panel edits only the session draft. */
 export function WorkspaceSurfaceParameters({ controller }: { controller: WorkspaceSurfaceSession }) {
+  const fieldUnits = useFieldUnits('length', undefined)
+  const units = useUnits()
   const state = useSyncExternalStore(controller.subscribe, controller.getPanelState, controller.getPanelState)
   const [error, setError] = useState('')
   const [distance, setDistance] = useState(0.1)
@@ -73,7 +78,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         title={state.notes.length || state.placingNote ? 'Le note non vengono incluse nello STEP: rimuovile prima di esportare.' : 'Scarica la geometria CAD convalidata come STEP.'}
         onClick={() => { void exportStep() }}>Esporta STEP</button>
       {strip ? <fieldset data-test="surface-strip-panel"><legend>Duplica bordo libero</legend>
-        <p>Scegli un bordo e trascina D lungo l’asse scelto, oppure indica lo spostamento in millimetri.</p>
+        <p>Scegli un bordo e trascina D lungo l’asse scelto, oppure indica lo spostamento nelle unità selezionate.</p>
         <label>Bordo libero<select data-test="surface-strip-edge" value={strip.selectedEdge < 0 ? '' : String(strip.selectedEdge)}
           disabled={disabled || strip.pending} onChange={e => {
             if (e.target.value !== '') attempt(() => controller.selectStripEdge(Number(e.target.value)))
@@ -85,9 +90,9 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           onChange={e => attempt(() => controller.setStripAxis(Number(e.target.value) as 0 | 1 | 2))}>
           <option value={0}>X</option><option value={1}>Y</option><option value={2}>Z</option>
         </select></label>
-        <label>Spostamento · mm<input data-test="surface-strip-distance" type="number" step="any"
-          value={Number.isFinite(stripDistance) ? stripDistance : ''} disabled={disabled || strip.pending}
-          onChange={e => setStripDistance(e.target.valueAsNumber)} /></label>
+        <label>Spostamento · {fieldUnits.word}<input data-test="surface-strip-distance" type="number" step="any"
+          value={Number.isFinite(stripDistance) ? fieldUnits.text(stripDistance) : ''} disabled={disabled || strip.pending}
+          onChange={e => setStripDistance(fieldUnits.read(e.target.valueAsNumber))} /></label>
         <button type="button" data-test="surface-strip-extend"
           disabled={disabled || strip.pending || strip.selectedEdge < 0 || !Number.isFinite(stripDistance) || Math.abs(stripDistance) <= 1e-7}
           onClick={extendStrip}>Duplica e sposta il bordo</button>
@@ -96,7 +101,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           ? 'Superficie estesa pronta: puoi continuare oppure usare Applica per creare la copia CAD.'
           : 'Scegli un bordo libero per iniziare.'}</p>
         {strip.hasResult && strip.addedArea !== null && strip.totalArea !== null && <p data-test="surface-strip-area">
-          Area aggiunta: {strip.addedArea.toLocaleString('it-IT', { maximumFractionDigits: 3 })} mm² · Area totale: {strip.totalArea.toLocaleString('it-IT', { maximumFractionDigits: 3 })} mm²
+          Area aggiunta: {fmtArea(strip.addedArea,units,3)} · Area totale: {fmtArea(strip.totalArea,units,3)}
         </p>}
         <div className="row"><button type="button" data-test="surface-strip-undo" disabled={disabled || strip.pending || !strip.canUndo}
           onClick={() => attempt(() => controller.undo())}>Annulla bordo</button>
@@ -156,8 +161,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <fieldset><legend>Magnete</legend>
         <label className="inline"><input data-test="surface-snap" type="checkbox" checked={state.snap} disabled={disabled}
           onChange={e => attempt(() => controller.setSnap(e.target.checked))} /> Aggancia a scansione e CAD vicini</label>
-        {state.snap && <><label>Portata · mm<input data-test="surface-snap-distance" type="number" min="0.001" max="1000" step="0.1"
-          value={state.snapDistance} disabled={disabled} onChange={e => { if (Number.isFinite(e.target.valueAsNumber)) attempt(() => controller.setSnapDistance(e.target.valueAsNumber)) }} /></label>
+        {state.snap && <><label>Portata · {fieldUnits.word}<input data-test="surface-snap-distance" type="number" min={fieldUnits.min(0.001)} max={fieldUnits.min(1000)} step={fieldUnits.step(0.1)}
+          value={fieldUnits.text(state.snapDistance)} disabled={disabled} onChange={e => { if (Number.isFinite(e.target.valueAsNumber)) attempt(() => controller.setSnapDistance(fieldUnits.read(e.target.valueAsNumber))) }} /></label>
           <p>Alt sospende il magnete durante il trascinamento. L’aggancio usa la geometria visualizzata.</p></>}
       </fieldset>
       <label className="inline"><input data-test="surface-control-net" type="checkbox" checked={state.showNet} disabled={disabled}
@@ -170,10 +175,10 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
             onChange={e => attempt(() => controller.setMirrorAxis(Number(e.target.value)))}>
             <option value={0}>YZ</option><option value={1}>XZ</option><option value={2}>XY</option>
           </select></label>
-          <label>Posizione del piano · mm<input key={`${state.mirrorAxis}:${state.mirrorOffset}`} data-test="surface-mirror-offset"
-            type="number" step="any" defaultValue={state.mirrorOffset} disabled={disabled} onBlur={e => {
-              if (Number.isFinite(e.target.valueAsNumber)) attempt(() => controller.setMirrorOffset(e.target.valueAsNumber))
-              else e.target.value = String(state.mirrorOffset)
+          <label>Posizione del piano · {fieldUnits.word}<input key={`${state.mirrorAxis}:${state.mirrorOffset}`} data-test="surface-mirror-offset"
+            type="number" step="any" defaultValue={fieldUnits.text(state.mirrorOffset)} disabled={disabled} onBlur={e => {
+              if (Number.isFinite(e.target.valueAsNumber)) attempt(() => controller.setMirrorOffset(fieldUnits.read(e.target.valueAsNumber)))
+              else e.target.value = fieldUnits.text(state.mirrorOffset)
             }} /></label>
           <p role="status">{state.symmetryBlocked ? 'La selezione contiene un polo speculare mancante, ambiguo o bloccato.' :
             'I poli speculari sono mostrati in viola; quelli sul piano restano sul piano.'}</p>
@@ -205,8 +210,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <button type="button" disabled={disabled} onClick={() => attempt(() => controller.clearSelection())}>Nessuno</button></div>
       <div className="row"><button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(true))}>Blocca punti</button>
         <button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(false))}>Sblocca punti</button></div>
-      <label>Spostamento · mm<input data-test="surface-distance" type="number" step="0.1" value={Number.isFinite(distance) ? distance : ''}
-        onChange={e => setDistance(e.target.valueAsNumber)} disabled={disabled} /></label>
+      <label>Spostamento · {fieldUnits.word}<input data-test="surface-distance" type="number" step={fieldUnits.step(0.1)} value={Number.isFinite(distance) ? fieldUnits.text(distance) : ''}
+        onChange={e => setDistance(fieldUnits.read(e.target.valueAsNumber))} disabled={disabled} /></label>
       <button type="button" data-test="surface-move" disabled={disabled || state.symmetryBlocked || !editable.length || !Number.isFinite(distance)}
         onClick={() => attempt(() => controller.moveSelected(distance))}>Sposta lungo {axisNames[state.axis]}</button>
       <button type="button" disabled={disabled || state.symmetryBlocked || !editable.length} onClick={() => attempt(() => controller.flattenSelected())}>Spiana i punti selezionati</button>

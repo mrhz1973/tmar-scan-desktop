@@ -764,6 +764,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const step = new TextEncoder().encode(result.step)
       this.assertFrozen(ticket, frozen, signal)
       return { kind: 'cad-copy', operationId: frozen.operationId, source: frozen.source, stamp: frozen.stamp,
+        // units-ok: this is a serialized CAD coordinate-frame identifier, always in millimetres.
         units: 'mm', coordinateFrame: 'part', name: 'superficie-modificata.step', step, draftNoteCount: 0 }
     } finally { frozen.preparing = false }
   }
@@ -808,6 +809,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.assertFrozenAnnotated(ticket, frozen, signal)
       if (!/^[a-f0-9]{64}$/i.test(stepHash) || !/^[a-f0-9]{64}$/i.test(brepHash)) throw new Error('Hash della copia annotata non valido.')
       return { annotationVersion:1, kind:'annotated-cad-copy', operationId:frozen.operationId,
+        // units-ok: this is a serialized CAD coordinate-frame identifier, always in millimetres.
         source:frozen.source, stamp:frozen.stamp, notesRevision:frozen.notesRevision!, units:'mm', coordinateFrame:'part',
         name:'superficie-modificata.step', step, witnesses:[{ key, kind:'occt-face-brep', brep:witness.faceBrep,
           brepSha256:brepHash.toLowerCase(), finalStepSha256:stepHash.toLowerCase(), stamp:frozen.stamp, diagnosticFaceIndex:witness.face }],

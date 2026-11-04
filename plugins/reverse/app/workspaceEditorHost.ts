@@ -58,6 +58,7 @@ export function createReverseEditorHost(): WorkspaceEditorHost {
       assertCurrent()
       const binding = Object.freeze({ documentEpoch: before.documentEpoch, sourceEpoch: ++sourceEpoch, bodyId, bodyKey: source.bodyKey,
         buildVersion: before.buildVersion, kernelGeneration: kernelGeneration(client), frameRevision: before.buildVersion,
+        // units-ok: this is a serialized CAD coordinate-frame identifier, always in millimetres.
         stepSha256: digest, units: 'mm' as const, coordinateFrame: 'part' as const })
       return { binding, step, assertCurrent, subscribe: listener => {
         const stops = [useReverse.subscribe(listener), useStore.subscribe(listener), useShell.subscribe(listener)]

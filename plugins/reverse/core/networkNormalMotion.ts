@@ -50,6 +50,7 @@ const dot = (a: NormalVec3, b: NormalVec3) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
 const subtract = (a: NormalVec3, b: NormalVec3): NormalVec3 => vector(a.map((x, i) => x-b[i]), 'Difference')
 
 export function createCentreOffset(anchor: NormalVec3, direction: NormalVec3, distance = 0): CentreOffset {
+  // units-ok: this is a serialized CAD coordinate-frame identifier, always in millimetres.
   const value: CentreOffset = Object.freeze({ version: 1, units: 'mm', coordinateFrame: 'part',
     anchor: vector(anchor, 'Anchor'), direction: unit(direction), distance: finite(distance, 'Distance') })
   centreOffsetPoint(value) // Reject finite inputs whose result overflows.
@@ -78,6 +79,7 @@ export function readCentreOffset(raw: unknown): CentreOffset {
     throw new Error('Unsupported or incomplete centre-offset schema.')
   const anchor = vector(r.anchor, 'Anchor'), direction = vector(r.direction, 'Direction')
   if (Math.abs(Math.hypot(...direction)-1) > 1e-12) throw new Error('Stored direction must be unit length.')
+  // units-ok: this is a serialized CAD coordinate-frame identifier, always in millimetres.
   const offset: CentreOffset = Object.freeze({ version: 1, units: 'mm', coordinateFrame: 'part', anchor, direction, distance: finite(r.distance, 'Distance') })
   centreOffsetPoint(offset)
   return offset

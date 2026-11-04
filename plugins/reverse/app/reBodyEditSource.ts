@@ -59,6 +59,7 @@ export const bodyEditSource: Command<{ body: number; expectedKey?: string; expec
       source: {
         bodyId: source.bodyId, bodyKey: source.bodyKey, buildVersion: before.buildVersion,
         kind: source.surface ? 'surface' : 'solid', faces: source.faces, closed: source.closed,
+        // units-ok: this is a serialized CAD coordinate-frame identifier, always in millimetres.
         units: 'mm', coordinateFrame: 'part',
       },
       status: 'Current CAD editor source; general STEP export policy unchanged.',
