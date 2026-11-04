@@ -2,7 +2,7 @@
 import { expect, it } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { replaceSurface, surfaceTable } from '../brep'
-import { moveSmoothCylinderPole, refineLinearPeriodicV } from '../periodic'
+import { assertSmoothCylinderMove, canonicalizeCylinderGesture, moveSmoothCylinderPole, refineLinearPeriodicV } from '../periodic'
 import { localFrame } from '../localFrame'
 
 it('refines a periodic STEP cylinder in V without changing its support or protected boundaries', async () => {
@@ -50,8 +50,34 @@ it('refines a periodic STEP cylinder in V without changing its support or protec
       const left=k.surfaceNormal(changed[0],u-1e-7,v),right=k.surfaceNormal(changed[0],u+1e-7,v)
       expect(left.x*right.x+left.y*right.y+left.z*right.z).toBeLessThan(1-1e-9)
       expect(localFrame(candidate,2*next.nv+2)).toBeNull()
+      expect(()=>assertSmoothCylinderMove(next,candidate)).toThrow()
+      expect(canonicalizeCylinderGesture(next,candidate)).toEqual(moveSmoothCylinderPole(next,[.5,0,0]))
+      for(const distance of [.1,.2,.3]) {
+        const gesture=structuredClone(next);gesture.poles[3*next.nv+2][0]+=distance
+        const actualDelta=gesture.poles[3*next.nv+2][0]-next.poles[3*next.nv+2][0]
+        expect(canonicalizeCylinderGesture(next,gesture)).toEqual(moveSmoothCylinderPole(next,[actualDelta,0,0]))
+      }
+      let accumulated=structuredClone(next)
+      for(let i=0;i<100;i++) {
+        accumulated=moveSmoothCylinderPole(accumulated,[.001,-.002,.0015])
+        expect(()=>assertSmoothCylinderMove(next,accumulated)).not.toThrow()
+      }
       for(const delta of [[.5,0,0],[0,.5,0],[0,0,.5]] as [number,number,number][]) {
-        const smooth=k.fromBREP(replaceSurface(text,rec,moveSmoothCylinderPole(next,delta)))
+        const proposal=moveSmoothCylinderPole(next,delta)
+        expect(()=>assertSmoothCylinderMove(next,proposal)).not.toThrow()
+        expect(canonicalizeCylinderGesture(next,proposal)).toEqual(proposal)
+        const invalid=structuredClone(proposal);invalid.poles[0][0]+=.001
+        expect(()=>assertSmoothCylinderMove(next,invalid)).toThrow()
+        expect(()=>canonicalizeCylinderGesture(next,invalid)).toThrow()
+        const uncoupled=structuredClone(proposal);uncoupled.poles[2*next.nv+2][0]+=.001
+        expect(()=>assertSmoothCylinderMove(next,uncoupled)).toThrow()
+        expect(()=>canonicalizeCylinderGesture(next,uncoupled)).toThrow()
+        expect(()=>assertSmoothCylinderMove(next,{...proposal,periodic:[0,0]})).toThrow()
+        const changedWeights=structuredClone(proposal);changedWeights.weights[0]+=.01
+        expect(()=>assertSmoothCylinderMove(next,changedWeights)).toThrow()
+        const changedKnots=structuredClone(proposal);changedKnots.ku[1]+=.01
+        expect(()=>assertSmoothCylinderMove(next,changedKnots)).toThrow()
+        const smooth=k.fromBREP(replaceSurface(text,rec,proposal))
         const smoothFaces=k.getSubShapes(smooth,'face')
         try {
           expect(k.isValid(smooth)).toBe(true)

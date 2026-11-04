@@ -174,6 +174,10 @@ host state. A host without this capability keeps the original behavior.
   derivative jump by about `0.0115`; the restricted helper now refuses nets
   whose weights vary along V within a U row. This is a guard for the tested
   full-cylinder convention, not support for general rational periodic nets.
+  A separate gesture canonicalizer computes the coupled proposal from the
+  captured starting frame and a validator rejects unexpected pole, weight or
+  knot edits. These helpers are not yet connected to the worker or UI; the
+  source-face/topology qualification and history/recipe integration remain.
   Net edge/cell picking and cage drawing now include cyclic connections for
   periodic dimensions with more than two rows. Ambiguous two-row periodic
   picking and unqualified periodic frame conventions fail closed; periodic

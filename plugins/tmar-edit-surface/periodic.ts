@@ -67,3 +67,37 @@ export function moveSmoothCylinderPole(n: Net, delta: Point): Net {
   }
   return result
 }
+
+/** Validate a coupled move independently of the UI. This does not qualify a
+ * source face and is not a replacement for the kernel/topology checks. */
+export function assertSmoothCylinderMove(base: Net, candidate: Net): void {
+  if (JSON.stringify({ ...base, poles: [] }) !== JSON.stringify({ ...candidate, poles: [] }) ||
+      candidate.poles.length !== base.poles.length ||
+      candidate.poles.some(p=>p.length!==3 || p.some(x=>!Number.isFinite(x))))
+    throw new Error('Il reticolo periodico o i suoi parametri sono cambiati.')
+  const center=3*base.nv+2, delta=base.poles[center].map((x,d)=>candidate.poles[center][d]-x) as Point
+  const expected=moveSmoothCylinderPole(base,delta), coupled=new Set([2*base.nv+2,4*base.nv+2])
+  for(let i=0;i<base.poles.length;i++) for(let d=0;d<3;d++) {
+    const distance=Math.abs(candidate.poles[i][d]-expected.poles[i][d])
+    if(coupled.has(i) ? distance>1e-9 : distance!==0)
+      throw new Error('Il movimento periodico non conserva i punti accoppiati e i bordi protetti.')
+  }
+}
+
+/** Build the coupled proposal from a captured gesture frame. A viewport may
+ * report only the dragged centre pole; other unexpected changes are refused. */
+export function canonicalizeCylinderGesture(base: Net, candidate: Net): Net {
+  if (JSON.stringify({ ...base, poles: [] }) !== JSON.stringify({ ...candidate, poles: [] }) ||
+      candidate.poles.length !== base.poles.length ||
+      candidate.poles.some(p=>p.length!==3 || p.some(x=>!Number.isFinite(x))))
+    throw new Error('Il reticolo periodico o i suoi parametri sono cambiati.')
+  const center=3*base.nv+2,delta=base.poles[center].map((x,d)=>candidate.poles[center][d]-x) as Point
+  const expected=moveSmoothCylinderPole(base,delta),coupled=new Set([2*base.nv+2,4*base.nv+2])
+  for(let i=0;i<base.poles.length;i++) for(let d=0;d<3;d++) {
+    if(i===center) continue
+    const value=candidate.poles[i][d]
+    if(coupled.has(i) ? Math.abs(value-base.poles[i][d])>1e-9 && Math.abs(value-expected.poles[i][d])>1e-9 : value!==base.poles[i][d])
+      throw new Error('Il gesto modifica altri punti del reticolo periodico.')
+  }
+  return expected
+}
