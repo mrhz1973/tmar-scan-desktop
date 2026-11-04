@@ -39,8 +39,29 @@ const {browser,page,consoleErrors}=await launchApp({url:process.env.APP_URL??'ht
 try {
   await page.click('[data-test=workspace-reverse]')
   await page.waitForSelector('[data-test=edit-surface-entry] button')
+  await page.evaluate(()=>{
+    window.noteResolveReplies=[]
+    const post=Worker.prototype.postMessage
+    Worker.prototype.postMessage=function(message,...rest){
+      if(message?.action==='noteResolve'){
+        const worker=this,id=message.id,revision=message.previewRevision
+        const receive=event=>{
+          if(event.data?.id!==id)return
+          worker.removeEventListener('message',receive)
+          window.noteResolveReplies.push({revision,ok:typeof event.data.error!=='string',result:event.data.result})
+        }
+        worker.addEventListener('message',receive)
+      }
+      return post.call(this,message,...rest)
+    }
+  })
   await page.click('[data-test=edit-surface-entry] button')
   await (await page.$('[data-test=surface-step-file]')).uploadFile(input)
+  await page.evaluate(()=>document.addEventListener('click',e=>{
+    if(e.target instanceof HTMLAnchorElement && e.target.download.endsWith('.step')){
+      e.preventDefault();window.stepExport=fetch(e.target.href).then(r=>r.text())
+    }
+  },true))
   await page.waitForFunction(n=>document.querySelectorAll('[data-test=surface-face] option').length===n,{},fs.length+1)
   await page.select('[data-test=surface-face]',String(top))
   const ready=()=>page.waitForFunction(()=>document.querySelector('[data-test=surface-apply]')?.disabled===false)
@@ -94,16 +115,40 @@ try {
     noteEnd=await page.$eval('[data-test=surface-note-position]',e=>e.textContent)
     assert.equal(await page.$eval('[data-test=surface-note-text]',e=>e.value),noteText)
     await page.screenshot({path:join(out,'zebra-note.png')})
+    assert.equal(await page.$eval('[data-test=surface-zebra]',e=>e.getAttribute('aria-pressed')), 'true')
+    const beforeRevision=await page.$eval('[data-test=surface-status]',e=>e.dataset.previewRevision)
+    await page.evaluate(()=>{window.stepExport=null;window.noteResolveReplies=[]})
+    const buttons=await page.$$('.es-dialog button')
+    for(const button of buttons) if(await button.evaluate(e=>e.textContent.startsWith('Esporta STEP'))) { await button.click();break }
+    await page.waitForFunction(old=>{
+      const status=document.querySelector('[data-test=surface-status]')
+      const position=document.querySelector('[data-test=surface-note-position]')?.textContent??''
+      return !!window.stepExport && status?.dataset.previewRevision!==old &&
+        status?.textContent?.includes('CAD valido') && position.endsWith(' mm') &&
+        window.noteResolveReplies.some(reply=>reply.revision===Number(status.dataset.previewRevision)&&reply.ok)
+    },{},beforeRevision)
+    noteEnd=await page.$eval('[data-test=surface-note-position]',e=>e.textContent)
+    assert.equal(await page.$eval('[data-test=surface-note-text]',e=>e.value),noteText)
+    assert(noteEnd.endsWith(' mm'))
+    assert.equal(await page.$eval('[data-test=surface-zebra]',e=>e.getAttribute('aria-pressed')), 'true')
+    const resolved=await page.evaluate(()=>window.noteResolveReplies.find(reply=>
+      reply.revision===Number(document.querySelector('[data-test=surface-status]').dataset.previewRevision)&&reply.ok))
+    assert.equal(resolved.revision,Number(await page.$eval('[data-test=surface-status]',e=>e.dataset.previewRevision)))
+    assert.equal(resolved.result.at.length,3)
+    assert.equal(resolved.result.normal.length,3)
+    assert.equal(await page.$$('.es-dialog button').then(async bs=>{
+      for(const b of bs) if(await b.evaluate(e=>e.textContent==='Rimuovi nota 1')) return true
+      return false
+    }),true)
+    const noteDraftExport=await page.evaluate(()=>window.stepExport)
+    assert(noteDraftExport.startsWith('ISO-10303-21'))
+    assert.equal(await page.$eval('[data-test=surface-apply]',e=>e.disabled),true)
     for(const b of await page.$$('.es-dialog button')) if(await b.evaluate(e=>e.textContent==='Rimuovi nota 1')){await b.click();break}
   }
   await ready()
   assert.equal(await page.$eval('[data-test=surface-selection]',e=>e.textContent),'1 selezionati · 1 modificabili')
   await page.screenshot({path:join(out,'edit-drilled-face.png')})
-  await page.evaluate(()=>document.addEventListener('click',e=>{
-    if(e.target instanceof HTMLAnchorElement && e.target.download.endsWith('.step')){
-      e.preventDefault();window.stepExport=fetch(e.target.href).then(r=>r.text())
-    }
-  },true))
+  await page.evaluate(()=>{window.stepExport=null})
   const exportButton=await page.$$('.es-dialog button')
   for(const button of exportButton) if(await button.evaluate(e=>e.textContent.startsWith('Esporta STEP'))) { await button.click();break }
   await page.waitForFunction(()=>!!window.stepExport)

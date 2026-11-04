@@ -1,10 +1,24 @@
 # Edit Surface — CAD prototype checkpoint
 
+### Scan/CAD snapping and direct-handle correction, 2026-11-03
+
+When a body is loaded from the project, the editor can show the visible scan and other visible CAD bodies as translucent references. The magnet is on by default with a 1 mm adjustable reach; Alt temporarily disables it. During a pole drag it searches along the chosen world/local axis, or along the view direction for screen-plane movement, and labels a successful hit. Other faces of the edited body are also candidates; the edited face is excluded. Hidden project references are excluded. A STEP opened directly outside the project has no verified project coordinate relationship, so only its own other faces are offered as references; import it and load the project body to use the scan and other bodies. Reference hits use displayed tessellation; **a NURBS pole is generally not a point on the resulting surface**. Locked poles and existing geometry validation remain in force. No assertion of exact surface-to-scan contact or global G1 is made.
+
+The visible scan geometry/BVH is borrowed without disposal; CAD references use wrappers around the existing immutable buffers. No host project geometry is modified during the drag. If a reference changes or disappears it ceases to be a candidate. This is independent of the Patch Network editor and does not qualify its snap or vertical movement.
+
+The direct edge-duplication handle is offset and joined to its anchor by a leader; it is hidden while free-boundary editing is active, where the explicit duplication button remains available. Its drag is calibrated at the original edge anchor. Pole dragging now starts after four pixels; Escape during an active pole or D-handle drag restores the original draft instead of closing the editor. The latter was caught by independent review and verified with `--direct --cancel --escape --pending --chain` in source and compiled hosts; both result files are in `evidence/snap/escape-handle-*.json`.
+
+Actual Chrome pointer/STEP readback tests passed in an isolated source host and in its compiled build for a 20×30×10 mm box and separate scan or CAD references at +2 mm. The sampled edited surface centre was **10.500 mm** with snap, and **10.375 mm** with Alt or snap off; the latter are not measurements of scanner accuracy. Escape restored the original draft in the scan fixture. Seven snap unit tests and two edge-picker unit tests passed, as did TypeScript and the compiled build. The unmodified free-boundary regression and the D/cancel/pending/chained-extension test passed both in the source host and the compiled build. Evidence and compact synthetic projects are in `evidence/snap/`; scripts are `tests/e2e-snap.mjs` and `tests/e2e-snap-cad.mjs`.
+
+An additional independent OCCT reimport of the six snapped, Alt and disabled STEP exports from the compiled run found each shape valid, with one solid and six faces. The snapped volumes were 6075.001949994354 mm³ and the free-drag volumes 6056.251465043694 mm³ (`evidence/snap/independent-step-check.json`). This is a bounded check on the synthetic box, not a guarantee for arbitrary models.
+
+Not yet qualified: a broad range of user projects, screen-plane/local-direction snapping, exact B-rep edges/vertices as targets, large-scan latency, changing reference visibility while the dialog remains open, or QuickSurface parity. The QS window was not capturable in this run. The compiled test initially timed out because it used a dev-only hook; the successful compiled runs above use the public project/UI path. The test host temporarily ran out of disk space; only known inactive browser-test profiles were removed, and Windows-blocked files were left untouched.
+
 2026-11-03 · branch `codex/edit-surface` · base `e90b4c68f16792faffcfa0423fca6b606dba703a`.
 
 ## What works
 
-Open **Reverse Engineer → Create feature → Edit Surface** (immediately after **Patch network**, with a square control-net and point icon), choose an existing CAD body or load a STEP file, then select an eligible face. Select poles (Ctrl for several), drag along X/Y/Z or enter a displacement. Local smoothing, flattening and stretching operate on selected unlocked poles. Undo/Redo are local while the editor is open. Apply imports an edited CAD copy through the host command/history system; the original remains intact.
+Open **Reverse Engineer → Edit Surface**, choose an existing CAD body or load a STEP file, then select an eligible face. Select poles (Ctrl for several), drag along X/Y/Z or enter a displacement. Local smoothing, flattening and stretching operate on selected unlocked poles. Undo/Redo are local while the editor is open. Apply imports an edited CAD copy through the host command/history system; the original remains intact.
 
 The kernel edits actual B-spline/NURBS poles. The display is tessellated only for rendering. A planar face is converted exactly to a bicubic NURBS before editing; an eligible imported NURBS is edited directly. A clamped bicubic 4×4 patch is first refined exactly to 5×5 by homogeneous midpoint knot insertion: this exposes one free interior pole under G1 protection, retaining the original shape, parameter domain and degree. Knots and weights are retained after that initialization. This is not a mesh conversion or a new approximate surface fit.
 
@@ -462,3 +476,25 @@ qualified.
 
 Evidence: `evidence/duplicate-edge/direct-host-20261103/`,
 `direct-compiled-20261103/`, and `direct-reject-20261103/`.
+
+
+## Main-view preparation · 2026-11-03
+
+The existing prototype now uses the same reusable control-cage drawing and screen-space segment/cell picker intended for the shared viewport. The picker supports orthographic and perspective cameras and a separate part-to-world transform; its isolated tests do not prove host interaction or occlusion by other objects. The current editor is still a separate dialog.
+
+With an imported synthetic 20 × 30 × 10 mm STEP solid, the source UI passed the point/segment and cell gesture checks; the compiled UI passed the cell check. Both paths exported and reimported valid six-face CAD, including the changed cell and Undo/Redo states; no console errors were recorded. TypeScript and 18 focused tests passed. Reports and a compiled-UI screenshot are in `evidence/main-view-preparation/`. These tests do not establish main-view integration, large-scan performance, QuickSurface equivalence or real-project acceptance.
+
+
+### Session and drag preparation
+
+The prototype groups its worker, local geometry history and coalesced preview queue in a session-owned `SurfaceRuntime`. `SurfaceDraft` owns the editable net, selected points, locks, boundary settings and preview validity; the session also retains draft notes and Zebra options. Temporary strip state and other display options remain in the dialog, so this is **not yet** the host workspace controller. The shared drag calculation accepts orthographic or perspective projection and rigid part transforms; the current prototype still runs in its own perspective viewport. A pointer other than the one that started a drag is ignored, and Escape releases its capture immediately.
+
+On synthetic CAD, the source and compiled prototype passed scan-snap/Alt/off, Escape and the second-pointer checks; the final compiled prototype showed a changed valid preview during 20 of 24 observations while dragging. Source checks also covered screen-plane and local-normal motion, open-boundary editing, and Zebra draft notes. A source-only isolated test delivered a real worker reply after closing the editor and observed no project body, feature or STEP-file insertion. Reports are in `evidence/main-view-preparation/`; results are bounded to these fixtures and are not a release or main-viewport qualification.
+
+The current Apply path can still enqueue a host import after its last source check. A command already queued or started is **not** cancelled by closing this prototype. The coordinator must complete the host-side execution-time guard and atomic transaction before integrated Apply is qualified. Notes in the current prototype remain draft-only unless a compatible host callback is installed.
+
+### Draft controller and preview preparation
+
+The existing dialog now uses `SurfaceDraft` as the sole authority for geometry, local history and CAD-preview scheduling. A session retains that controller outside the panel; it is not yet the host workspace session. `SurfaceGesture` handles the prototype's point drag, including pointer identity, the drag threshold, Alt and cancellation. `WorkspacePreview` prepares owned face meshes for the eventual shared viewport; it does not create a camera or renderer and is not yet connected to the host. Its source-mask callback must be atomic and restore only the host's temporary mask.
+
+On isolated synthetic STEP fixtures, the integrated source dialog passed history, locks, protected boundaries, failure recovery, point/edge/cell selection, drag and scan snap; the compiled prototype passed CAD-reference snap, Alt and disabled snap. A source test with Zebra and a note observed a successful `noteResolve` for the new surface revision after STEP export; the note remained a draft and annotated Apply remained disabled. TypeScript and 33 focused controller/gesture/preview tests passed. Results are in `evidence/main-view-preparation/`; a perspective error found and corrected in the CAD-snap test is documented in `evidence/snap/cad-perspective-qa-20261103.md`. These results do not demonstrate shared-viewport integration, persistence of notes, arbitrary STEP support or QuickSurface parity.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { IconFrame } from '../../src/ui/icons'
 
-/** Four square patches and their nine poles, using the app's 24-unit icon grammar. */
+/** Four square patches and their nine poles, using ScanRuler's icon grammar. */
 export function EditSurfaceIcon() {
   return <IconFrame>
     <path className="i-f" d="M4 4h16v16H4Z" />

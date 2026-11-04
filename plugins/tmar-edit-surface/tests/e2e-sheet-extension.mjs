@@ -11,9 +11,11 @@ const hostSource=process.argv.includes('--host-source')
 const chain=project || process.argv.includes('--chain')
 const direct=process.argv.includes('--direct')
 const cancelFirst=process.argv.includes('--cancel')
+const escapeFirst=process.argv.includes('--escape')
 const pending=process.argv.includes('--pending')
 const reject=process.argv.includes('--reject')
 assert(!cancelFirst || direct, '--cancel requires --direct')
+assert(!escapeFirst || direct, '--escape requires --direct')
 assert(!reject || (direct && !pending), '--reject requires --direct without --pending')
 assert(!moved || (project && hostSource), '--moved requires --project --host-source')
 const k=await OcctKernel.init(),box=k.makeBox(20,30,10),fs=k.getSubShapes(box,'face')
@@ -100,6 +102,14 @@ try {
       await page.waitForFunction(()=>document.querySelector('[data-test=strip-result]')?.textContent==='Anteprima striscia')
       await page.$eval('[data-test=edit-surface-viewport]',div=>div.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:1,pointerType:'mouse'})))
       await page.mouse.up();await restored()
+    }
+    if(escapeFirst) {
+      start=await selectHandle()
+      await page.mouse.move(...start);await page.mouse.down()
+      await page.mouse.move(start[0]+b[0]-a[0],start[1]+b[1]-a[1],{steps:8})
+      await page.waitForFunction(()=>document.querySelector('[data-test=strip-result]')?.textContent==='Anteprima striscia')
+      await page.keyboard.press('Escape');await page.mouse.up();await restored()
+      assert(await page.$('[data-test=edit-surface-dialog]'),'Escape must cancel D without closing the editor')
     }
     start=await selectHandle()
     await page.screenshot({path:join(out,'direct-handle.png')})
@@ -217,6 +227,6 @@ try {
     }
     assert.deepEqual(consoleErrors,[])
     console.log(out,areas)
-    writeFileSync(join(out,'result.json'),JSON.stringify({valid:true,areas,sharedEdges,chain,direct,cancelFirst,pending,reject,consoleErrors,projectResult}))
+    writeFileSync(join(out,'result.json'),JSON.stringify({valid:true,areas,sharedEdges,chain,direct,cancelFirst,escapeFirst,pending,reject,consoleErrors,projectResult}))
   }finally{faces.forEach(f=>k.release(f));k.release(shape)}
 }catch(error){console.error('Edit Surface QA:',error,await page.evaluate(()=>({kernel:window.__re?.store.getState().kernelStatus,bodies:window.__re?.store.getState().bodies.length,status:document.querySelector('[data-test=surface-status]')?.textContent,dialog:document.querySelector('.es-dialog')?.innerText?.slice(-900)})));throw error}finally{await browser.close();k[Symbol.dispose]()}
