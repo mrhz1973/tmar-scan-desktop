@@ -94,3 +94,21 @@ revision and preview revision. Stale revisions are rejected. applyWithNotes
 now passes this witness with the editor session UUID and each draft note's ID
 and UV anchor. The host gateway still owns document context, operation
 idempotency, artifact hashing and binding to the newly imported face.
+
+
+## Shared main viewport: integration prerequisites
+
+The owner requires editing in the existing viewport, with the scan, other bodies and camera retained. `populateSurfaceCage` and `pickNetAt` are reusable plugin primitives, not an integrated host tool. They do not by themselves arbitrate input, preserve host visibility or implement scene occlusion.
+
+The host currently dispatches existing gizmo/marking/grip handlers before plugin layers; `claimDrag` only takes navigation drag. A surface-edit session therefore needs an exclusive, scoped interaction lease that refuses or suspends conflicting gestures and always restores input, capture, cursor and hover on completion, cancellation or failure.
+
+The host body-preview slot is shared and its setter resets materials across bodies. Surface editing needs an exclusive preview lease, preserving and restoring the actual prior visibility of each affected body and tracking changes while the preview is active. Do not silently replace another tool's preview. The host should reject stale asynchronous updates after project body, build or alignment changes. No host code or live session is changed by this plugin checkpoint.
+
+
+### Partial resource ownership checkpoint
+
+`SurfaceRuntime` owns `SurfaceWorkerClient`, `PreviewQueue` and `SurfaceHistory` and is created on explicit editor entry. `SurfaceDraft` now exclusively controls that history and preview queue for the selected face, and the prototype session owns the draft plus notes and Zebra options. The dialog still owns temporary strip and some display state. This is a preparation step, not `createEditSurfaceSession`, a complete persistent workspace controller, `freeze`, `prepareApply`, a main-scene layer or a host capability.
+
+A source-only synthetic-project test holds an actual export-evaluation response until the editor has unmounted, then delivers it to the old callback. No host body, feature or STEP file appears. This does not cover an import already placed on the command queue: source/session must be checked by the host immediately before mutation, under its transaction gate. See `tests/e2e-close-during-apply.mjs` and `evidence/main-view-preparation/session-close-source.json`.
+
+`WorkspacePreview` is an unconnected helper for face meshes in a host-supplied part-frame group. It owns and disposes its own geometries and materials, uses an injected temporary source mask, and never creates a renderer or camera. The host must supply an atomic mask/restore and clipping and input leases; the helper itself cannot guarantee scene occlusion, visibility changes, persistence, or exclusive pointer handling. `SurfaceGesture` is used in the current dialog but does not capture pointers or publish project changes on its own.

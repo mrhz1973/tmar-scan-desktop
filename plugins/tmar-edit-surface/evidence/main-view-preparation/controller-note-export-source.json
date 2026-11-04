@@ -1,0 +1,16 @@
+{
+  "reopen": false,
+  "noteStart": "X 36.014 · Y 36.011 · Z 10.000 mm",
+  "noteEnd": "X 36.014 · Y 36.011 · Z 10.889 mm",
+  "zebraPixelDifferences": {
+    "enable": 26.293739615661934,
+    "orientation": 15.161729207812158,
+    "restore": 0
+  },
+  "inputVolume": 22757.256661176947,
+  "editedVolume": 22829.216023190307,
+  "faces": 7,
+  "wires": 2,
+  "rimSamples": 72,
+  "maxRimError": 0
+}

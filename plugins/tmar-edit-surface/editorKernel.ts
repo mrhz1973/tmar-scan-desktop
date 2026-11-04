@@ -11,6 +11,22 @@ export interface DraftAnchor { face: number; selectionRevision: number; u: numbe
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
+/** Return a finite unit normal with the topological face orientation applied. */
+export function orientedSurfaceNormal(kernel: OcctKernel, face: ShapeHandle, u: number, v: number): Point {
+  const raw = tuple(kernel.surfaceNormal(face, u, v))
+  if (!raw.every(Number.isFinite)) throw new Error('Normale della faccia non valida.')
+  const orientation = kernel.shapeOrientation(face)
+  if (orientation !== 'forward' && orientation !== 'reversed')
+    throw new Error('Orientamento della faccia non supportato.')
+  const length = Math.hypot(...raw)
+  if (!Number.isFinite(length) || length <= 1e-12)
+    throw new Error('Normale della faccia non determinata.')
+  // OCCT surfaceNormal(handle, ...) evaluates the face's oriented normal;
+  // multiplying by shapeOrientation here would reverse it a second time.
+  const normal: Point = [raw[0] / length, raw[1] / length, raw[2] / length]
+  if (!normal.every(Number.isFinite)) throw new Error('Normale della faccia non valida.')
+  return normal
+}
 // On each nonempty knot span a positive-weight NURBS lies inside the
 // convex hull of the active poles. A disjoint world-space box rules out
 // contact with a trim even where the surface folds in parameter space.
@@ -415,8 +431,8 @@ export class SurfaceEditorKernel {
       throw new Error('Riferimento della nota estraneo alla faccia attiva.')
     const location = k.classifyPointOnFace(face,anchor.u,anchor.v)
     if (location !== 'in' && location !== 'on') throw new Error('Il punto cade fuori dalla faccia o dentro un foro.')
-    const at = tuple(k.pointOnSurface(face,anchor.u,anchor.v)), normal = tuple(k.surfaceNormal(face,anchor.u,anchor.v))
-    if (!at.every(Number.isFinite) || !normal.every(Number.isFinite)) throw new Error('Posizione della nota non determinata.')
+    const at = tuple(k.pointOnSurface(face,anchor.u,anchor.v)), normal = orientedSurfaceNormal(k, face, anchor.u, anchor.v)
+    if (!at.every(Number.isFinite)) throw new Error('Posizione della nota non determinata.')
     return { at, normal }
   }
   anchorFromPick(point: Point, previewRevision: number) {
