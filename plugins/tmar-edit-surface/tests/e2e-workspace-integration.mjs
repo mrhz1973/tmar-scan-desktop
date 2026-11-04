@@ -250,10 +250,25 @@ try {
       return free.sort((a,b)=>b.separation-a.separation)[0] ?? null
     })
     assert(target && target.separation > 8, 'No independently selectable control point in top view')
+    const previewBefore = await page.evaluate(() => {
+      const q=window.surfaceQa, view=q.useWorkspaceEditor.getState().controller.getViewState()
+      const group=q.scene.layerHost().partGroup.getObjectByName('tmar-edit-surface-preview')
+      q.depthPreviewGeometry=group?.children[0]?.geometry
+      return {revision:view.preview.previewRevision, volume:view.preview.volume}
+    })
     await page.mouse.move(target.x,target.y)
     await page.mouse.down()
     await page.waitForFunction(() => window.surfaceQa.useWorkspaceEditor.getState().snapshot?.gesture === 'pole', {timeout:10000})
     await page.mouse.move(target.x,target.y-16,{steps:4})
+    await page.waitForFunction(before => {
+      const q=window.surfaceQa, s=q.useWorkspaceEditor.getState(), view=s.controller?.getViewState()
+      const group=q.scene.layerHost().partGroup.getObjectByName('tmar-edit-surface-preview')
+      return s.snapshot?.gesture==='pole' && view?.preview?.valid && view.preview.previewRevision!==before.revision &&
+        Math.abs(view.preview.volume-before.volume)>1e-6 && !!group?.children[0]?.geometry &&
+        group.children[0].geometry!==q.depthPreviewGeometry
+    },{timeout:120000},previewBefore)
+    check(true,'the displayed CAD preview updates while the pointer is still held')
+    await page.screenshot({path:join(out,'during-aligned-drag.png')})
     await page.mouse.up()
     await page.waitForFunction(({id,before}) => {
       const s=window.surfaceQa.useWorkspaceEditor.getState(), p=s.controller?.getPanelState().net?.poles[id]

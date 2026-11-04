@@ -99,7 +99,9 @@ host state. A host without this capability keeps the original behavior.
   captured view scale. The fallback applies to poles only; free-edge D keeps
   its existing guard. An isolated shared-view synthetic STEP run exercised the
   actual pointer, Undo and Apply and reimported both valid solids (`run-Diu6zn`,
-  15 checks). Separate scan and CAD snap cases (`snap-cFcjZt`) each reached a
+  15 checks). A further run (`run-FxHIzy`, 16 checks) also verified that the
+  displayed CAD preview changes while the pointer is still held. Separate scan
+  and CAD snap cases (`snap-cFcjZt`) each reached a
   +2 mm synthetic reference, while Alt and snap-off produced the same free
   +1.5 mm movement; each reported nine checks and no app console errors.
   Unit tests cover orthographic and perspective cameras, a rotated part and a
