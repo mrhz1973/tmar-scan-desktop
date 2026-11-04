@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, it } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
-import { assertToleranceDistribution, isOnCylinderEquivalent, prepareCylinder, projectionWitnessMatches } from '../cylinderPreparation'
+import { assertToleranceDistribution, boundaryPointOnFace, isOnCylinderEquivalent, prepareCylinder, projectionWitnessMatches } from '../cylinderPreparation'
 import { moveSmoothCylinderPole, assertSmoothCylinderMove, canonicalizeCylinderGesture } from '../periodic'
 import { localFrame } from '../localFrame'
 import { evaluatePreparedCylinder } from '../cylinderEvaluation'
@@ -29,6 +29,9 @@ it('recognizes a cylinder seam on the equivalent angular branch without acceptin
     expect(isOnCylinderEquivalent(k,face,(b.uMin+b.uMax)/2+2*Math.PI,v)).toBe(true)
     expect(isOnCylinderEquivalent(k,face,(b.uMin+b.uMax)/2+2*Math.PI,b.vMax+1)).toBe(false)
     expect(isOnCylinderEquivalent(k,face,Number.NaN,v)).toBe(false)
+    const on=k.pointOnSurface(face,(b.uMin+b.uMax)/2,v),outside=k.pointOnSurface(face,(b.uMin+b.uMax)/2,b.vMax+1)
+    expect(boundaryPointOnFace(k,face,on)).toBe(true)
+    expect(boundaryPointOnFace(k,face,outside)).toBe(false)
   } finally {faces.forEach(f=>k.release(f));k.release(body);e.dispose()}
 },60000)
 

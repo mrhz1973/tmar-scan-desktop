@@ -44,6 +44,17 @@ export function projectionWitnessMatches(p: {x:number;y:number;z:number}, q: {x:
   })
 }
 
+/** At the source parameter boundary, projection can choose a different UV
+ * branch. In that case verify distance to the actual trimmed target face,
+ * not just to its unbounded support surface. Interior points still require
+ * the parameter classifier. The independent 3D witness checks remain. */
+export function boundaryPointOnFace(k: OcctKernel, face: ShapeHandle, p: {x:number;y:number;z:number}): boolean {
+  if (![p.x,p.y,p.z].every(Number.isFinite)) return false
+  const vertex=k.makeVertex(p.x,p.y,p.z)
+  try {const distance=k.distanceBetween(vertex,face);return Number.isFinite(distance)&&distance<=1e-6}
+  finally {k.release(vertex)}
+}
+
 /** Experimental native conversion for a full cylindrical face in one solid. Never
  * mutates the borrowed source or enables editing. Comparisons are sampled;
  * arbitrary BREP encodings and seam identities still require qualification.
@@ -75,8 +86,10 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
             const p=k.pointOnSurface(from,u,v),q=k.projectPointOnFace(to,p),uv=k.uvFromPoint(to,p)
             const n=k.surfaceNormal(from,u,v),m=k.surfaceNormal(to,uv.u,uv.v),uvPoint=k.pointOnSurface(to,uv.u,uv.v)
             const dot=n.x*m.x+n.y*m.y+n.z*m.z
+            const onFace=isOnCylinderEquivalent(k,to,uv.u,uv.v) ||
+              ((i===0||i===8||j===0||j===8) && boundaryPointOnFace(k,to,p))
             if(!projectionWitnessMatches(p,q,uvPoint)||!Number.isFinite(dot)||dot<1-1e-7 ||
-                !Number.isFinite(uv.u)||!Number.isFinite(uv.v)||!isOnCylinderEquivalent(k,to,uv.u,uv.v))
+                !Number.isFinite(uv.u)||!Number.isFinite(uv.v)||!onFace)
               throw new Error('Geometria della conversione cilindrica alterata.')
           }
           const originalEdges=k.getSubShapes(from,'edge');let targetEdges:ShapeHandle[]=[]
