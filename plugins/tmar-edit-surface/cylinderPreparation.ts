@@ -5,6 +5,18 @@ import { assertSimpleCylinderSource } from './cylinderSource'
 import { auditCylinderSeam } from './cylinderSeam'
 import { moveSmoothCylinderPole, refineLinearPeriodicV } from './periodic'
 
+/** Refuse an increase in the sorted edge/vertex tolerance distribution. This
+ * does not identify corresponding TShapes or prove per-edge equivalence. */
+export function assertToleranceDistribution(source: string, candidate: string): void {
+  for(const kind of ['Ed','Ve']) {
+    const read=(text:string)=>Array.from(text.matchAll(new RegExp(`^${kind}\\s*\\n\\s*([\\deE+.-]+)`,'gm')),m=>Number(m[1])).sort((a,b)=>a-b)
+    const before=read(source),after=read(candidate)
+    if(!before.length || before.length!==after.length || [...before,...after].some(v=>!Number.isFinite(v)||v<0) ||
+       before.some((value,index)=>after[index]>value+1e-12))
+      throw new Error('Tolleranze dei bordi cilindrici alterate.')
+  }
+}
+
 /** Experimental native conversion for a single, simple STEP cylinder. Never
  * mutates the borrowed source or enables editing. Comparisons are sampled;
  * arbitrary BREP encodings and seam identities still require qualification.
@@ -15,6 +27,7 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
   try {
     if (!Number.isInteger(index) || !originalFaces[index]) throw new Error('Faccia cilindrica non valida.')
     assertSimpleCylinderSource(k, source, originalFaces[index])
+    const sourceBrep=k.toBREP(source)
     converted = k.generalTransform(source,[1,0,0,0,0,1,0,0,0,0,1,0])
     const convertedFaces=k.getSubShapes(converted,'face')
     try {
@@ -57,6 +70,7 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
       }
       auditCylinderSeam(k,convertedFaces[index])
       const text=k.toBREP(converted),faceText=k.toBREP(convertedFaces[index]),headers=[...faceText.matchAll(/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/gm)]
+      assertToleranceDistribution(sourceBrep,text)
       if(headers.length!==1) throw new Error('Superficie cilindrica non identificabile.')
       const own=surfaceTable(faceText)[Number(headers[0][1])-1],matches=own?surfaceTable(text).filter(r=>signature(r)===signature(own)):[]
       if(matches.length!==1 || !matches[0].periodicNet) throw new Error('Reticolo cilindrico ambiguo.')
@@ -65,6 +79,7 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
       const brep=replaceSurface(text,matches[0],net)
       refined=k.fromBREP(brep)
       if(!k.isValid(refined)) throw new Error('Raffinamento cilindrico non valido.')
+      assertToleranceDistribution(sourceBrep,k.toBREP(refined))
       const refinedFaces=k.getSubShapes(refined,'face')
       try {
         if(refinedFaces.length!==convertedFaces.length) throw new Error('Topologia del raffinamento alterata.')

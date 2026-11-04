@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, it } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
-import { prepareCylinder } from '../cylinderPreparation'
+import { assertToleranceDistribution, prepareCylinder } from '../cylinderPreparation'
 import { moveSmoothCylinderPole, assertSmoothCylinderMove } from '../periodic'
 import { replaceSurface, surfaceTable } from '../brep'
 import { auditCylinderSeam } from '../cylinderSeam'
+
+it('rejects increased or missing topological tolerances',()=>{
+  const source='Ed\n 1e-7 1 1 0\nVe\n1e-7\n'
+  expect(()=>assertToleranceDistribution(source,source)).not.toThrow()
+  expect(()=>assertToleranceDistribution(source,'Ed\n 0.1 1 1 0\nVe\n1e-7\n')).toThrow(/Tolleranze/)
+  expect(()=>assertToleranceDistribution(source,'Ed\n 1e-7 1 1 0\n')).toThrow(/Tolleranze/)
+})
 
 it.each([false,true])('prepares the converted cylindrical STEP support without modifying its source (rotated: %s)',async rotated=>{
   const e=await SurfaceEditorKernel.load(),k=e.kernel,p=k.makeCylinder(10,20)

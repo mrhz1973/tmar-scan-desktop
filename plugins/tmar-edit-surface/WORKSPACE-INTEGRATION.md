@@ -204,6 +204,10 @@ host state. A host without this capability keeps the original behavior.
   kernel volume readings without declaring either transformed reading accurate;
   the known volume discrepancy, exact seam identity, recipe/history and real
   STEP qualification remain unresolved. It is not wired to the editor or UI.
+  Preparation also rejects any increase in the sorted edge/vertex tolerance
+  distributions between source, conversion and refinement. This is a coarse
+  guard, not per-edge TShape matching. The synthetic tests include increased
+  and missing tolerances; they do not qualify tolerances after arbitrary edits.
   Net edge/cell picking and cage drawing now include cyclic connections for
   periodic dimensions with more than two rows. Ambiguous two-row periodic
   picking and unqualified periodic frame conventions fail closed; periodic
