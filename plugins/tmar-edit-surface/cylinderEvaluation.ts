@@ -5,6 +5,15 @@ import { auditCylinderSeam } from './cylinderSeam'
 import { assertSmoothCylinderMove } from './periodic'
 import { assertMatchedCylinderTolerances } from './cylinderTolerance'
 
+/** Isolated contacts must lie on the original boundary, including on faces
+ * which were already adjacent to the original cylinder. */
+export function assertCylinderSectionVertices(k: OcctKernel, vertices: ShapeHandle[], boundaries: ShapeHandle[]): void {
+  for (const vertex of vertices) {
+    if (!boundaries.some(w => k.distanceBetween(vertex,w) <= 1e-6))
+      throw new Error('Intersezione puntuale fuori dal bordo originale.')
+  }
+}
+
 /** Experimental cylinder preview only. No trusted volume is returned. Checks
  * are sampled and this does not enable editor Apply or certify arbitrary STEP. */
 export function evaluatePreparedCylinder(k: OcctKernel, prepared: {brep:string;net:Net}, faceIndex:number, candidate:Net): {mesh:Mesh;step:string;faceBrep:string} {
@@ -46,6 +55,7 @@ export function evaluatePreparedCylinder(k: OcctKernel, prepared: {brep:string;n
         try {
           edges=k.getSubShapes(section,'edge');vertices=k.getSubShapes(section,'vertex')
           if(vertices.length&&k.distanceBetween(original,before[i])>1e-6) throw new Error('Intersezione con una faccia non adiacente.')
+          assertCylinderSectionVertices(k,vertices,boundaries)
           for(const edge of edges) {
             const range=k.curveParameters(edge)
             for(let j=0;j<=16;j++) {

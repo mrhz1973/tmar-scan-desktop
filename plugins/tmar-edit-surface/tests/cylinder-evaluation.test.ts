@@ -2,8 +2,19 @@
 import { expect, it } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { prepareCylinder } from '../cylinderPreparation'
-import { evaluatePreparedCylinder } from '../cylinderEvaluation'
+import { assertCylinderSectionVertices, evaluatePreparedCylinder } from '../cylinderEvaluation'
 import { moveSmoothCylinderPole } from '../periodic'
+
+it('accepts a section vertex on the original rim and rejects an isolated interior contact',async()=>{
+  const e=await SurfaceEditorKernel.load(),k=e.kernel,body=k.makeCylinder(10,20),faces=k.getSubShapes(body,'face')
+  const face=faces.find(f=>k.surfaceType(f)==='cylinder')!,wires=k.getSubShapes(face,'wire')
+  const onRim=k.makeVertex(10,0,0),interior=k.makeVertex(0,10,10)
+  try {
+    expect(()=>assertCylinderSectionVertices(k,[onRim],wires)).not.toThrow()
+    expect(()=>assertCylinderSectionVertices(k,[interior],wires)).toThrow(/fuori dal bordo/)
+    expect(()=>assertCylinderSectionVertices(k,[onRim,interior],wires)).toThrow(/fuori dal bordo/)
+  } finally {[onRim,interior,...wires,...faces,body].forEach(h=>k.release(h));e.dispose()}
+},60000)
 
 it.each([false,true])('evaluates and reopens a coupled cylindrical deformation (rotated: %s)',async rotated=>{
   const editor=await SurfaceEditorKernel.load(),k=editor.kernel,primitive=k.makeCylinder(10,20)
