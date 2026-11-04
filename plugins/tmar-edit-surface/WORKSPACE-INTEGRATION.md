@@ -204,6 +204,15 @@ host state. A host without this capability keeps the original behavior.
   kernel volume readings without declaring either transformed reading accurate;
   the known volume discrepancy, exact seam identity, recipe/history and real
   STEP qualification remain unresolved. It is not wired to the editor or UI.
+  `cylinderEvaluation.ts` evaluates a coupled-pole proposal in isolation,
+  verifies its face/support association, sampled protected boundaries,
+  section intersections and matched boundary tolerances, and returns an
+  exported STEP and display mesh without reporting the disputed volume.
+  Straight and rotated synthetic cylinders reimported as valid and showed a
+  measurable interior change; wrong faces, changed protected points and a
+  large deformation were refused. This remains unconnected to the worker/UI;
+  sampled checks do not prove global self-intersection freedom or establish
+  arbitrary STEP support. The underlying volume discrepancy remains unresolved.
   Preparation also rejects any increase in the sorted edge/vertex tolerance
   distributions between source, conversion and refinement. This is a coarse
   guard, not per-edge TShape matching. The synthetic tests include increased
