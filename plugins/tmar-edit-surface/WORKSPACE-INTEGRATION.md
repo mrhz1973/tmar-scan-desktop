@@ -132,6 +132,13 @@ host state. A host without this capability keeps the original behavior.
   The spike remains outside production and cylinder editing is not enabled.
   A separate supported planar-cap edit on a synthetic cylinder preserved the
   original edge and vertex tolerances at `1e-7 mm` in its STEP round trip.
+  A further isolated experiment rebuilt the converted cylinder face with
+  `fixWireOnFace` (requested tolerance `1e-7 mm`), then sewed it to the two
+  planar caps. Although the resulting single solid and face reported valid,
+  edge and vertex tolerances still reached `0.156576 mm` and its reported
+  volume remained `6296.4133 mm³` versus `6283.1853 mm³` on the source. This
+  wire-repair approach therefore does not qualify cylindrical editing; the
+  diagnostic used one synthetic cylinder and did not assert a global bound.
 - A synthetic STEP box in the isolated shared view passed pointer selection of
   a second CAD face, preservation of a modified draft when the change was
   cancelled, and a confirmed change (`run-jx0E4G`). Failed face loading also
