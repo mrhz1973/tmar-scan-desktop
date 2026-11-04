@@ -208,6 +208,11 @@ host state. A host without this capability keeps the original behavior.
   distributions between source, conversion and refinement. This is a coarse
   guard, not per-edge TShape matching. The synthetic tests include increased
   and missing tolerances; they do not qualify tolerances after arbitrary edits.
+  A second guard pairs individual edges by bidirectional geometric samples and
+  vertices by position, rejecting ambiguous matches and increased tolerances.
+  A synthetic test detects a per-edge increase even when sorted distributions
+  are unchanged. This sampled pairing is not exact topological naming and has
+  not been qualified for arbitrary STEP bodies or after arbitrary edits.
   Net edge/cell picking and cage drawing now include cyclic connections for
   periodic dimensions with more than two rows. Ambiguous two-row periodic
   picking and unqualified periodic frame conventions fail closed; periodic

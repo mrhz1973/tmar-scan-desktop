@@ -4,6 +4,7 @@ import { replaceSurface, signature, surfaceTable, type Net } from './brep'
 import { assertSimpleCylinderSource } from './cylinderSource'
 import { auditCylinderSeam } from './cylinderSeam'
 import { moveSmoothCylinderPole, refineLinearPeriodicV } from './periodic'
+import { assertMatchedCylinderTolerances } from './cylinderTolerance'
 
 /** Refuse an increase in the sorted edge/vertex tolerance distribution. This
  * does not identify corresponding TShapes or prove per-edge equivalence. */
@@ -71,6 +72,7 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
       auditCylinderSeam(k,convertedFaces[index])
       const text=k.toBREP(converted),faceText=k.toBREP(convertedFaces[index]),headers=[...faceText.matchAll(/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/gm)]
       assertToleranceDistribution(sourceBrep,text)
+      assertMatchedCylinderTolerances(k,source,converted)
       if(headers.length!==1) throw new Error('Superficie cilindrica non identificabile.')
       const own=surfaceTable(faceText)[Number(headers[0][1])-1],matches=own?surfaceTable(text).filter(r=>signature(r)===signature(own)):[]
       if(matches.length!==1 || !matches[0].periodicNet) throw new Error('Reticolo cilindrico ambiguo.')
@@ -80,6 +82,7 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
       refined=k.fromBREP(brep)
       if(!k.isValid(refined)) throw new Error('Raffinamento cilindrico non valido.')
       assertToleranceDistribution(sourceBrep,k.toBREP(refined))
+      assertMatchedCylinderTolerances(k,source,refined)
       const refinedFaces=k.getSubShapes(refined,'face')
       try {
         if(refinedFaces.length!==convertedFaces.length) throw new Error('Topologia del raffinamento alterata.')
