@@ -41,8 +41,16 @@ jobs:
           paths=[n for n in git('ls-files').splitlines() if n.startswith(('src/','plugins/'))]
           hashes={n:hashlib.sha256((a/n).read_bytes()).hexdigest() for n in paths}
           t=r/'tooling/review/compiled-annotated-324a2e0/full-compiled-annotated.mjs'
-          shutil.copyfile(t,a/'plugins/reverse/scripts/e2e-compiled-full-annotated.mjs')
-          report={'integration':git('rev-parse','HEAD'),'host':'5684f5f27eaaa6ee460eef2300b010eb622b4507','plugin':'324a2e00bfd35c40d86e199015ea7718c2e946b7','pluginTree':git('rev-parse','HEAD:plugins/tmar-edit-surface'),'runtimeSha256':hashes,'qaScriptSha256':hashlib.sha256(t.read_bytes()).hexdigest()}
+          # QA-only representation fix: native serialization omits an empty hiddenBodies.
+          # Retain the initial failed run and every visibility/geometry assertion.
+          original=t.read_text();old='assert(!undone.manifest.reverse.hiddenBodies.includes(sourceFeature.id))'
+          new='assert(!(undone.manifest.reverse.hiddenBodies??[]).includes(sourceFeature.id))'
+          assert original.count(old)==1
+          corrected=original.replace(old,new)
+          script=a/'plugins/reverse/scripts/e2e-compiled-full-annotated.mjs'
+          script.write_text(corrected)
+          (o/'executed-compiled-test.mjs').write_text(corrected)
+          report={'integration':git('rev-parse','HEAD'),'host':'5684f5f27eaaa6ee460eef2300b010eb622b4507','plugin':'324a2e00bfd35c40d86e199015ea7718c2e946b7','pluginTree':git('rev-parse','HEAD:plugins/tmar-edit-surface'),'runtimeSha256':hashes,'qaOriginalScriptSha256':hashlib.sha256(t.read_bytes()).hexdigest(),'qaScriptSha256':hashlib.sha256(script.read_bytes()).hexdigest(),'qaOnlyCorrection':{'old':old,'new':new}}
           (o/'snapshot.json').write_text(json.dumps(report,indent=2))
           PY
       - name: Locked dependencies, no lifecycle scripts
@@ -112,6 +120,7 @@ jobs:
             full-cycle-results/snapshot.json
             full-cycle-results/final-integrity.json
             full-cycle-results/targeted-tests.json
+            full-cycle-results/executed-compiled-test.mjs
             full-cycle-results/server-*.log
             full-cycle-results/source-face-switch/**/result.json
             full-cycle-results/source-face-switch/**/*.png
