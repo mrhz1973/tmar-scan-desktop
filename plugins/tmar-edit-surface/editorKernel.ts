@@ -5,6 +5,7 @@ import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
+import { prepareCylinder } from './cylinderPreparation'
 
 export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[] }
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
@@ -95,6 +96,11 @@ export class SurfaceEditorKernel {
   constructor(readonly kernel: OcctKernel, private readonly ownsKernel = false) {}
   static async load(wasm?: string) { return new SurfaceEditorKernel(await OcctKernel.init(wasm ? { wasm } : undefined), true) }
   private count(s: ShapeHandle, type: 'solid' | 'shell' | 'face') { const a = this.kernel.getSubShapes(s, type); const n = a.length; a.forEach(h => this.kernel.release(h)); return n }
+  /** Experimental cylinder path. Only the worker retains the returned BREP. */
+  prepareCylinderForPreview(face:number) {
+    if(!this.source) throw new Error('Apri prima un corpo CAD.')
+    return prepareCylinder(this.kernel,this.source,face)
+  }
   open(step: string) {
     this.clear()
     const k = this.kernel

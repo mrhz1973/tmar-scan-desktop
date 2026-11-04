@@ -16,7 +16,7 @@ it('never accepts a delayed validation for a different candidate or closed sessi
       if(request.action==='evaluateCylinder')return new Promise((resolve,reject)=>pending.push({resolve:resolve as (value:unknown)=>void,reject}))
       return Promise.resolve({kind:'provisional',mesh:{}} as T)
     }
-    const session=new CylinderPreviewSession(call,prepared,index)
+    const session=new CylinderPreviewSession(call,prepared.net,1)
     const first=moveSmoothCylinderPole(prepared.net,[.2,0,0]),second=moveSmoothCylinderPole(prepared.net,[.3,0,0])
     session.setCandidate(first)
     const old=session.validate()

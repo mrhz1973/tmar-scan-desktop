@@ -12,7 +12,7 @@ type Validated = {mesh:Mesh;step:string}
 /** Experimental session adapter: a preview is never an Apply authorization.
  * Validation output is delivered only if its candidate remains current. */
 export class CylinderPreviewSession {
-  private readonly prepared:{brep:string;net:Net}
+  private readonly base:Net
   private readonly queue:PreviewQueue<Net,Provisional>
   private revision=0
   private current:Net|null=null
@@ -22,9 +22,9 @@ export class CylinderPreviewSession {
   private readonly listeners=new Set<()=>void>()
   private readonly unsubscribe:()=>void
 
-  constructor(private readonly call:WorkerCall, prepared:{brep:string;net:Net}, private readonly face:number) {
-    this.prepared=structuredClone(prepared)
-    this.queue=new PreviewQueue({evaluate:net=>call<Provisional>({action:'previewCylinder',prepared:this.prepared,net})})
+  constructor(private readonly call:WorkerCall, base:Net, private readonly session:number) {
+    this.base=structuredClone(base)
+    this.queue=new PreviewQueue({evaluate:net=>call<Provisional>({action:'previewCylinder',session:this.session,net})})
     this.unsubscribe=this.queue.subscribe(()=>this.emit())
   }
   subscribe(listener:()=>void):()=>void {if(this.disposed)return ()=>{};this.listeners.add(listener);return ()=>{this.listeners.delete(listener)}}
@@ -33,7 +33,7 @@ export class CylinderPreviewSession {
   getValidated():Validated|null {return this.validated?.revision===this.revision ? structuredClone(this.validated.value) : null}
   setCandidate(net:Net):void {
     if(this.disposed) throw new Error('Editor chiuso.')
-    assertSmoothCylinderMove(this.prepared.net,net)
+    assertSmoothCylinderMove(this.base,net)
     this.current=structuredClone(net);this.revision++;this.validationAttempt++;this.validated=null
     this.queue.schedule(this.current)
   }
@@ -42,7 +42,7 @@ export class CylinderPreviewSession {
     const revision=this.revision,net=this.current,attempt=++this.validationAttempt
     this.validated=null;this.emit()
     let value:Validated
-    try {value=await this.call<Validated>({action:'evaluateCylinder',prepared:this.prepared,net,face:this.face})}
+    try {value=await this.call<Validated>({action:'evaluateCylinder',session:this.session,net})}
     catch(error) {
       if(this.disposed || revision!==this.revision || net!==this.current || attempt!==this.validationAttempt) return null
       throw error

@@ -8,31 +8,35 @@ const {browser,page,consoleErrors}=await launchApp({url:process.env.APP_URL ?? '
 try {
   const result=await page.evaluate(async()=>{
     const {OcctKernel}=await import('/node_modules/occt-wasm/dist/index.js')
-    const {prepareCylinder}=await import('/plugins/tmar-edit-surface/cylinderPreparation.ts')
     const {moveSmoothCylinderPole}=await import('/plugins/tmar-edit-surface/periodic.ts')
     const k=await OcctKernel.init({wasm:'/node_modules/occt-wasm/dist/occt-wasm.wasm'})
     const primitive=k.makeCylinder(10,20),source=k.importStep(k.exportStep(primitive)),faces=k.getSubShapes(source,'face')
     const worker=new (await import('/plugins/tmar-edit-surface/editor.worker.ts?worker')).default()
     try {
-      const index=faces.findIndex(f=>k.surfaceType(f)==='cylinder'),prepared=prepareCylinder(k,source,index)
-      const net=moveSmoothCylinderPole(prepared.net,[.2,-.1,.15])
-      const call=(id,net,action='previewCylinder')=>new Promise((resolve,reject)=>{
+      const index=faces.findIndex(f=>k.surfaceType(f)==='cylinder')
+      const call=(id,request)=>new Promise((resolve,reject)=>{
         const timer=setTimeout(()=>reject(Error('worker timeout')),30000)
         const handler=({data})=>{if(data.id!==id)return;clearTimeout(timer);worker.removeEventListener('message',handler);data.error?reject(Error(data.error)):resolve(data.result)}
-        worker.addEventListener('message',handler);worker.postMessage({id,action,prepared,net,face:index})
+        worker.addEventListener('message',handler);worker.postMessage({id,...request})
       })
-      const preview=await call(1,net)
-      const validated=await call(3,net,'evaluateCylinder')
+      await call(1,{action:'open',step:k.exportStep(source)})
+      const prepared=await call(2,{action:'prepareCylinder',face:index})
+      const net=moveSmoothCylinderPole(prepared.net,[.2,-.1,.15])
+      const preview=await call(3,{action:'previewCylinder',session:prepared.session,net})
+      const validated=await call(4,{action:'evaluateCylinder',session:prepared.session,net})
       const bad=structuredClone(net);bad.poles[0][0]+=1
-      let rejected=false;try {await call(2,bad)} catch {rejected=true}
+      let rejected=false;try {await call(5,{action:'previewCylinder',session:prepared.session,net:bad})} catch {rejected=true}
+      await call(6,{action:'open',step:k.exportStep(source)})
+      let staleRejected=false;try {await call(7,{action:'evaluateCylinder',session:prepared.session,net})}catch {staleRejected=true}
       const round=k.importStep(validated.step);let valid
       try {valid=k.isValid(round)} finally {k.release(round)}
-      return {kind:preview.kind,triangles:preview.mesh.triangleCount,hasStep:'step' in preview,hasValid:'valid' in preview,rejected,validated:valid}
+      return {kind:preview.kind,triangles:preview.mesh.triangleCount,hasStep:'step' in preview,hasValid:'valid' in preview,rejected,validated:valid,staleRejected}
     } finally {worker.terminate();faces.forEach(f=>k.release(f));k.release(source);k.release(primitive);k[Symbol.dispose]()}
   })
   assert.equal(result.kind,'provisional');assert.ok(result.triangles>0)
   assert.equal(result.hasStep,false);assert.equal(result.hasValid,false);assert.equal(result.rejected,true)
   assert.equal(result.validated,true)
+  assert.equal(result.staleRejected,true)
   assert.deepEqual(consoleErrors,[])
   console.log(JSON.stringify({status:'PASS',scope:'isolated source worker; synthetic cylinder',...result}))
 } finally {await browser.close()}
