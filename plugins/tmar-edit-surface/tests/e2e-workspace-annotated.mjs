@@ -33,7 +33,8 @@ const waitFile=async suffix=>{
 try {
   const app=await launchApp({url:url.href,width:1440,height:1000,agentDataOk:false,userDataDir:join(out,'owned-browser-profile'),protocolTimeout:120000})
   browser=app.browser;page=app.page;report.consoleErrors=app.consoleErrors
-  page.on('dialog',d=>d.accept())
+  const dialogChoices=[], dialogMessages=[]
+  page.on('dialog',d=>{dialogMessages.push(d.message());void (dialogChoices.shift()===false?d.dismiss():d.accept())})
   const cdp=await page.createCDPSession()
   await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:downloads,eventsEnabled:true})
   await page.evaluate(async step=>{
@@ -81,6 +82,25 @@ try {
   await page.waitForSelector('[data-test=surface-note-text]')
   const noteText='Nota persistente sulla faccia inversa'
   await page.type('[data-test=surface-note-text]',noteText)
+  if (process.env.TEST_NOTED_FACE_SWITCH === '1') {
+    const other=await page.evaluate(index=>window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState().faces.find(f=>f.index!==index&&!f.reason)?.index,selected.index)
+    assert.notEqual(other,undefined,'Second editable face exists')
+    dialogChoices.push(false)
+    await page.select('[data-test=surface-face]',String(other))
+    await page.waitForFunction(()=>window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState().notes[0]?.text==='Nota persistente sulla faccia inversa')
+    check(await page.evaluate(index=>{const p=window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState();return p.face===index&&p.notes.length===1},selected.index),'declining face change preserves the note and face')
+    assert.match(dialogMessages.at(-1),/note/i)
+    dialogChoices.push(true)
+    await page.select('[data-test=surface-face]',String(other))
+    await page.waitForFunction(index=>{const s=window.annotatedQa.useWorkspaceEditor.getState();return s.controller?.getPanelState().face===index&&s.snapshot?.validation.kind==='valid'},{timeout:120000},other)
+    check(await page.evaluate(()=>window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState().notes.length===0),'confirming face change clears the draft note after loading')
+    await page.select('[data-test=surface-face]',String(selected.index))
+    await page.waitForFunction(index=>{const s=window.annotatedQa.useWorkspaceEditor.getState();return s.controller?.getPanelState().face===index&&s.snapshot?.validation.kind==='valid'},{timeout:120000},selected.index)
+    await page.click('[data-test=surface-note-add]')
+    await page.evaluate(point=>window.annotatedQa.useWorkspaceEditor.getState().controller.placeNote(point),selected.point)
+    await page.waitForSelector('[data-test=surface-note-text]')
+    await page.type('[data-test=surface-note-text]',noteText)
+  }
   await page.select('[data-test=surface-drag-mode]','local')
   await page.click('[data-test=surface-axis-2]')
   const selectFree=await page.evaluateHandle(()=>[...document.querySelectorAll('[data-test=workspace-surface-parameters] button')].find(e=>e.textContent==='Seleziona liberi'))

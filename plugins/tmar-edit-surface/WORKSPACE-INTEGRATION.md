@@ -280,8 +280,13 @@ Changing the active face now offers to discard draft notes and edits together.
 The notes remain if the confirmation is declined, the worker fails, or the CAD
 source changes while the other face loads; they are cleared after successful
 selection. `workspaceSession.test.ts` covers these paths through the session
-controller, including a simulated worker failure and source change. A real UI
-run and packaged desktop qualification have not been performed for this change.
+controller, including a simulated worker failure and source change. An isolated
+source-app browser run on a synthetic STEP box (`annotated-edit-kjCwsi`)
+confirmed the decline and accept paths through the face selector, and then
+created, saved and reopened an annotated CAD copy with Zebra active. The note
+placement in this test used the controller; it did not verify a viewport click.
+The opt-in scenario uses `TEST_NOTED_FACE_SWITCH=1` with the annotated QA script.
+A packaged desktop release and arbitrary real-world projects remain untested.
 
 ## Not yet qualified
 
