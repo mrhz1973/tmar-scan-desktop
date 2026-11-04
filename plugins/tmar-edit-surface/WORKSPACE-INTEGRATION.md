@@ -213,6 +213,12 @@ host state. A host without this capability keeps the original behavior.
   large deformation were refused. This remains unconnected to the worker/UI;
   sampled checks do not prove global self-intersection freedom or establish
   arbitrary STEP support. The underlying volume discrepancy remains unresolved.
+  `cylinderDraft.ts` reuses the local surface history in an isolated experiment:
+  it validates a move before recording it, preserves locked points and supports
+  Undo/Redo. The synthetic STEP test also checks rejected edits, source and
+  snapshot isolation, and skips tessellation for a lock-only Undo. It is not
+  connected to the UI/worker, and per-move evaluation remains too slow for a
+  demonstrated real-time drag; no interactive performance claim is made.
   Preparation also rejects any increase in the sorted edge/vertex tolerance
   distributions between source, conversion and refinement. This is a coarse
   guard, not per-edge TShape matching. The synthetic tests include increased
