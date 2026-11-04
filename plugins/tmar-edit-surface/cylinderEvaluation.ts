@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Mesh, OcctKernel, ShapeHandle } from 'occt-wasm'
-import { replaceSurface, signature, surfaceTable, type Net } from './brep'
+import { replaceSurface, type Net } from './brep'
+import { exclusiveFaceSurface } from './exclusiveSurface'
 import { auditCylinderSeam } from './cylinderSeam'
 import { assertSmoothCylinderMove } from './periodic'
 import { assertMatchedCylinderTolerances } from './cylinderTolerance'
@@ -18,18 +19,17 @@ export function assertCylinderSectionVertices(k: OcctKernel, vertices: ShapeHand
  * are sampled and this does not enable editor Apply or certify arbitrary STEP. */
 export function evaluatePreparedCylinder(k: OcctKernel, prepared: {brep:string;net:Net}, faceIndex:number, candidate:Net): {mesh:Mesh;step:string;faceBrep:string} {
   assertSmoothCylinderMove(prepared.net,candidate)
-  const records=surfaceTable(prepared.brep), entries=records.filter(r=>r.periodicNet)
-  if(entries.length!==1 || JSON.stringify(entries[0].periodicNet)!==JSON.stringify(prepared.net)) throw new Error('Base cilindrica non corrispondente.')
   const base=k.fromBREP(prepared.brep);let edited:ShapeHandle|null=null
   let before:ShapeHandle[]=[],after:ShapeHandle[]=[]
   try {
-    edited=k.fromBREP(replaceSurface(prepared.brep,entries[0],candidate))
-    before=k.getSubShapes(base,'face');after=k.getSubShapes(edited,'face')
-    if(!k.isValid(base)||!k.isValid(edited)||!Number.isInteger(faceIndex)||!before[faceIndex]||after.length!==before.length)
+    before=k.getSubShapes(base,'face')
+    if(!k.isValid(base)||!Number.isInteger(faceIndex)||!before[faceIndex]) throw new Error('Deformazione cilindrica non valida.')
+    const support=exclusiveFaceSurface(prepared.brep,k.toBREP(before[faceIndex]),before.length)
+    if(JSON.stringify(support.periodicNet)!==JSON.stringify(prepared.net)) throw new Error('Base cilindrica non corrispondente.')
+    edited=k.fromBREP(replaceSurface(prepared.brep,support,candidate))
+    after=k.getSubShapes(edited,'face')
+    if(!k.isValid(edited)||after.length!==before.length)
       throw new Error('Deformazione cilindrica non valida.')
-    const faceText=k.toBREP(before[faceIndex]),headers=[...faceText.matchAll(/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/gm)]
-    const own=headers.length===1?surfaceTable(faceText)[Number(headers[0][1])-1]:undefined
-    if(!own || signature(own)!==signature(entries[0])) throw new Error('La faccia non corrisponde al reticolo cilindrico.')
     for(const kind of ['solid','edge','vertex'] as const) {
       const a=k.getSubShapes(base,kind);let b:ShapeHandle[]=[]
       try {b=k.getSubShapes(edited,kind);if(a.length!==b.length) throw new Error('Topologia cilindrica alterata.')}

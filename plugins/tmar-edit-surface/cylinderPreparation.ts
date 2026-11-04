@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { OcctKernel, ShapeHandle } from 'occt-wasm'
-import { replaceSurface, signature, surfaceTable, type Net } from './brep'
+import { replaceSurface, type Net } from './brep'
+import { exclusiveFaceSurface } from './exclusiveSurface'
 import { assertSimpleCylinderSource } from './cylinderSource'
 import { auditCylinderSeam } from './cylinderSeam'
 import { moveSmoothCylinderPole, refineLinearPeriodicV } from './periodic'
@@ -18,7 +19,7 @@ export function assertToleranceDistribution(source: string, candidate: string): 
   }
 }
 
-/** Experimental native conversion for a single, simple STEP cylinder. Never
+/** Experimental native conversion for a full cylindrical face in one solid. Never
  * mutates the borrowed source or enables editing. Comparisons are sampled;
  * arbitrary BREP encodings and seam identities still require qualification.
  * Face pairing uses OCCT's returned order and rejects changed pair geometry. */
@@ -70,15 +71,14 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
         }
       }
       auditCylinderSeam(k,convertedFaces[index])
-      const text=k.toBREP(converted),faceText=k.toBREP(convertedFaces[index]),headers=[...faceText.matchAll(/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/gm)]
+      const text=k.toBREP(converted),faceText=k.toBREP(convertedFaces[index])
       assertToleranceDistribution(sourceBrep,text)
       assertMatchedCylinderTolerances(k,source,converted)
-      if(headers.length!==1) throw new Error('Superficie cilindrica non identificabile.')
-      const own=surfaceTable(faceText)[Number(headers[0][1])-1],matches=own?surfaceTable(text).filter(r=>signature(r)===signature(own)):[]
-      if(matches.length!==1 || !matches[0].periodicNet) throw new Error('Reticolo cilindrico ambiguo.')
-      const net=refineLinearPeriodicV(matches[0].periodicNet,6)
+      const support=exclusiveFaceSurface(text,faceText,convertedFaces.length)
+      if(!support.periodicNet) throw new Error('Reticolo cilindrico ambiguo.')
+      const net=refineLinearPeriodicV(support.periodicNet,6)
       moveSmoothCylinderPole(net,[0,0,0]) // Reject unsupported weights/knot conventions before exposing the net.
-      const brep=replaceSurface(text,matches[0],net)
+      const brep=replaceSurface(text,support,net)
       refined=k.fromBREP(brep)
       if(!k.isValid(refined)) throw new Error('Raffinamento cilindrico non valido.')
       assertToleranceDistribution(sourceBrep,k.toBREP(refined))

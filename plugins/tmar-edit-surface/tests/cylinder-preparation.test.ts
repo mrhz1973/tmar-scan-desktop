@@ -66,3 +66,50 @@ it('refuses preparation of a trimmed cylinder',async()=>{
     expect(()=>prepareCylinder(k,source,index)).toThrow()
   } finally {faces.forEach(h=>k.release(h));[source,cut,moved,tool,p].forEach(h=>k.release(h));e.dispose()}
 },60000)
+
+it('edits a full cylindrical boss on a box without modifying the original STEP',async()=>{
+  const e=await SurfaceEditorKernel.load(),k=e.kernel,box=k.makeBox(30,30,5),base=k.translate(box,-15,-15,-5)
+  const pin=k.makeCylinder(5,11),offset=k.translate(pin,0,0,-1),fused=k.fuse(base,offset)
+  const source=k.importStep(k.exportStep(fused)),faces=k.getSubShapes(source,'face')
+  try {
+    const before=k.toBREP(source),index=faces.findIndex(f=>k.surfaceType(f)==='cylinder')
+    expect(index).toBeGreaterThanOrEqual(0);expect(faces.length).toBeGreaterThan(3)
+    const prepared=prepareCylinder(k,source,index)
+    const net=moveSmoothCylinderPole(prepared.net,[.1,0,.05],2)
+    const result=evaluatePreparedCylinder(k,prepared,index,net),round=k.importStep(result.step),after=k.getSubShapes(round,'face')
+    try {
+      expect(k.isValid(round)).toBe(true);expect(k.toBREP(source)).toBe(before);expect(after.length).toBe(faces.length)
+      for(let f=0;f<faces.length;f++) if(f!==index) {
+        const b=k.uvBounds(faces[f]);let tested=0
+        for(let i=1;i<4;i++) for(let j=1;j<4;j++) {
+          const u=b.uMin+(b.uMax-b.uMin)*i/4,v=b.vMin+(b.vMax-b.vMin)*j/4
+          if(k.classifyPointOnFace(faces[f],u,v)!=='in')continue
+          const p=k.pointOnSurface(faces[f],u,v),q=k.projectPointOnFace(after[f],p)
+          expect(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)).toBeLessThan(1e-6);tested++
+        }
+        expect(tested).toBeGreaterThan(0)
+      }
+    } finally {after.forEach(h=>k.release(h));k.release(round)}
+  } finally {[...faces,source,fused,offset,pin,base,box].forEach(h=>k.release(h));e.dispose()}
+},60000)
+
+it('edits one of two distinct cylindrical bosses while preserving the other',async()=>{
+  const e=await SurfaceEditorKernel.load(),k=e.kernel,box=k.makeBox(50,30,5),base=k.translate(box,-25,-15,-5)
+  const cylinder=k.makeCylinder(4,9),left=k.translate(cylinder,-10,0,-1),right=k.translate(cylinder,10,0,-1)
+  const one=k.fuse(base,left),both=k.fuse(one,right),source=k.importStep(k.exportStep(both)),faces=k.getSubShapes(source,'face')
+  try {
+    const indices=faces.map((f,i)=>k.surfaceType(f)==='cylinder'?i:-1).filter(i=>i>=0)
+    expect(indices).toHaveLength(2)
+    const prepared=prepareCylinder(k,source,indices[0]),edited=evaluatePreparedCylinder(k,prepared,indices[0],moveSmoothCylinderPole(prepared.net,[.08,0,.05]))
+    const round=k.importStep(edited.step),after=k.getSubShapes(round,'face')
+    try {
+      expect(k.isValid(round)).toBe(true);expect(after).toHaveLength(faces.length)
+      const b=k.uvBounds(faces[indices[1]])
+      for(let i=1;i<5;i++)for(let j=1;j<5;j++) {
+        const p=k.pointOnSurface(faces[indices[1]],b.uMin+(b.uMax-b.uMin)*i/5,b.vMin+(b.vMax-b.vMin)*j/5)
+        const q=k.projectPointOnFace(after[indices[1]],p)
+        expect(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)).toBeLessThan(1e-6)
+      }
+    } finally {after.forEach(h=>k.release(h));k.release(round)}
+  } finally {[...faces,source,both,one,right,left,cylinder,base,box].forEach(h=>k.release(h));e.dispose()}
+},60000)

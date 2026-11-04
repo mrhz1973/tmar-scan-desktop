@@ -406,3 +406,7 @@ packaged desktop qualification, or general QuickSurface parity. Evidence:
 ### Two axial handles on a simple cylinder
 
 The experimental full-cylinder path uses exact cubic V refinement with two independently draggable axial controls. Coupled U poles protect the existing seam and the end rows. Isolated source-host QA exercised two pointer drags, sampled CAD validation, undo/redo, notes, Zebra, STEP and project reopen on a generated cylinder; this does not qualify other cylindrical faces or a packaged desktop build. Checks are finite and do not prove global absence of self-intersection. The previously observed periodic-cylinder volume discrepancy remains unresolved.
+
+### Full cylindrical boss on a solid
+
+The experimental gate also accepts a complete cylindrical face bounded by two full circles adjacent to distinct planar faces in a single solid. It rejects ambiguous or shared BREP support records before replacement. OCCT tests on generated STEP bosses cover one and two cylinders, STEP reimport and sampled preservation of other faces; the isolated source-host test covers pointer editing, verification, notes and project reopen on an eight-face boss. These results do not qualify arbitrary trims, shared or repeated TShapes, real customer STEP models, global self-intersections, or packaged desktop integration. The periodic volume discrepancy remains unresolved.

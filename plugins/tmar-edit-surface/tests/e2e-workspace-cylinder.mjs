@@ -8,8 +8,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 assert.equal(process.env.SCANRULER_ISOLATED,'1')
 assert.equal(process.env.APP_URL,'http://127.0.0.1:17723/')
-const k=await OcctKernel.init(),body=k.makeCylinder(10,20)
-let step;try {step=k.exportStep(body)} finally {k.release(body);k[Symbol.dispose]()}
+const k=await OcctKernel.init(),body=k.makeCylinder(10,20),boss=process.env.CYLINDER_BOSS==='1'
+let step,box,base,pin,fused
+try {
+  if(boss) {box=k.makeBox(50,50,5);base=k.translate(box,-25,-25,-5);pin=k.translate(body,0,0,-1);fused=k.fuse(base,pin)}
+  step=k.exportStep(fused??body)
+} finally {[fused,pin,base,box,body].filter(Boolean).forEach(h=>k.release(h));k[Symbol.dispose]()}
 const {browser,page,consoleErrors}=await launchApp({url:process.env.APP_URL,width:1440,height:1000,agentDataOk:false})
 try {
   const downloads=mkdtempSync(join(tmpdir(),'scanruler-cylinder-qa-'))
@@ -39,7 +43,7 @@ try {
   const index=await page.evaluate(()=>window.cylinderQa.useWorkspaceEditor.getState().controller.getPanelState().faces.find(f=>f.experimentalCylinder)?.index)
   assert.notEqual(index,undefined,'eligible cylinder')
   await page.select('[data-test=surface-face]',String(index))
-  await page.waitForFunction(index=>{const c=window.cylinderQa.useWorkspaceEditor.getState().controller,p=c.getPanelState(),v=c.getViewState();return p.face===index && v.provisionalPreview?.faceMeshes.length===3},{timeout:120000},index)
+  await page.waitForFunction(index=>{const c=window.cylinderQa.useWorkspaceEditor.getState().controller,p=c.getPanelState(),v=c.getViewState();return p.face===index && v.provisionalPreview?.faceMeshes.length===p.faces.length},{timeout:120000},index)
   await page.select('[data-test=surface-selection-mode]','points')
   await page.select('[data-test=surface-drag-mode]','screen')
   await page.evaluate(()=>window.cylinderQa.scene.viewFrom('front'))
@@ -75,7 +79,7 @@ try {
     const state=window.cylinderQa.useWorkspaceEditor.getState(),c=state.controller,p=c.getPanelState()
     return {validation:state.snapshot.validation.kind,canExport:p.canExportStep,canUndo:p.canUndo,faces:c.getViewState().provisionalPreview.faceMeshes.length}
   })
-  assert.notEqual(result.validation,'valid');assert.equal(result.canExport,false);assert.equal(result.canUndo,true);assert.equal(result.faces,3)
+  assert.notEqual(result.validation,'valid');assert.equal(result.canExport,false);assert.equal(result.canUndo,true);assert(boss?result.faces>3:result.faces===3)
   await page.waitForSelector('[data-test=surface-validate-cylinder]:enabled',{timeout:60000})
   await page.click('[data-test=surface-validate-cylinder]')
   await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind==='valid',{timeout:120000})
@@ -147,5 +151,5 @@ try {
   await reopened.waitForFunction(()=>window.reopenedCylinderQa.useReverse.getState().bodies.length===2 && window.reopenedCylinderQa.useNotes.getState().notes.some(n=>n.text==='Nota sul cilindro'&&n.attachment?.status==='verified'),{timeout:90000})
   await reopened.close()
   assert.deepEqual(consoleErrors,[])
-  console.log(JSON.stringify({status:'PASS',scope:'isolated source host; synthetic cylinder; shared-view pointer gesture, annotated CAD copy and project reopen',...result,applied:applied.phase,bodies:applied.bodies}))
+  console.log(JSON.stringify({status:'PASS',scope:`isolated source host; synthetic ${boss?'boss on box':'cylinder'}; shared-view pointer gesture, annotated CAD copy and project reopen`,...result,applied:applied.phase,bodies:applied.bodies}))
 } finally {await browser.close()}

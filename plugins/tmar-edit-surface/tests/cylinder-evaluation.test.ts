@@ -4,6 +4,22 @@ import { SurfaceEditorKernel } from '../editorKernel'
 import { prepareCylinder } from '../cylinderPreparation'
 import { assertCylinderSectionVertices, evaluatePreparedCylinder } from '../cylinderEvaluation'
 import { moveSmoothCylinderPole } from '../periodic'
+import { exclusiveFaceSurface } from '../exclusiveSurface'
+import { signature, surfaceTable } from '../brep'
+
+it('refuses an ambiguous or shared serialized support before changing a face',async()=>{
+  const e=await SurfaceEditorKernel.load(),k=e.kernel,body=k.makeCylinder(10,20),faces=k.getSubShapes(body,'face')
+  try {
+    const text=k.toBREP(body),face=faces.find(f=>k.surfaceType(f)==='cylinder')!,faceText=k.toBREP(face)
+    const record=exclusiveFaceSurface(text,faceText,faces.length),index=surfaceTable(text).findIndex(r=>signature(r)===signature(record))+1
+    expect(index).toBeGreaterThan(0)
+    const other=[...text.matchAll(/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/gm)].find(m=>Number(m[1])!==index)!
+    const duplicate=other[0].replace(/(\s+)\d+(\s+0\s*)$/,`$1${index}$2`)
+    const shared=text.slice(0,other.index!)+duplicate+text.slice(other.index!+other[0].length)
+    expect(()=>exclusiveFaceSurface(shared,faceText,faces.length)).toThrow(/condivisa|ambigua/)
+    expect(()=>exclusiveFaceSurface(text,faceText,faces.length+1)).toThrow(/riferimenti/i)
+  } finally {[...faces,body].forEach(h=>k.release(h));e.dispose()}
+},60000)
 
 it('accepts a section vertex on the original rim and rejects an isolated interior contact',async()=>{
   const e=await SurfaceEditorKernel.load(),k=e.kernel,body=k.makeCylinder(10,20),faces=k.getSubShapes(body,'face')
