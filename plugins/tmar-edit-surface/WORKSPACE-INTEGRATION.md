@@ -162,6 +162,11 @@ host state. A host without this capability keeps the original behavior.
   one interior pole move, and after STEP reopening. This does not qualify
   arbitrary seam/trim pcurves, controls,
   recipes or other STEP topologies. Periodic editing is explicitly rejected.
+  Net edge/cell picking and cage drawing now include cyclic connections for
+  periodic dimensions with more than two rows. Ambiguous two-row periodic
+  picking and the clamped-only local-frame calculation fail closed; periodic
+  local drag is not yet available. `periodic-picking.test.ts` and existing
+  picking/cage/local-frame checks pass on synthetic fixtures.
 - A synthetic STEP box in the isolated shared view passed pointer selection of
   a second CAD face, preservation of a modified draft when the change was
   cancelled, and a confirmed change (`run-jx0E4G`). Failed face loading also

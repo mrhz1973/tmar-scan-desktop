@@ -11,6 +11,9 @@ const greville = (knots: number[], degree: number, i: number) => knots.slice(i +
 // parameters, then differentiate the rational surface (not its control polygon).
 // N = U x V is parametric, not necessarily the solid's outward normal.
 export function localFrame(net: Net, index: number): [Point, Point, Point] | null {
+  // The clamped Greville/basis calculation below does not represent periodic
+  // knot vectors. Fail closed until cyclic local derivatives are supported.
+  if (net.periodic?.some(Boolean)) return null
   if (!Number.isInteger(index) || index < 0 || index >= net.poles.length) return null
   const ku = expand(net.ku, net.mu), kv = expand(net.kv, net.mv)
   const u = greville(ku, net.du, Math.floor(index / net.nv)), v = greville(kv, net.dv, index % net.nv)
