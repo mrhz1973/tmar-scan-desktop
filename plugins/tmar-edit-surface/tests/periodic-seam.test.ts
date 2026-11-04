@@ -2,7 +2,7 @@
 import { expect, it } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { replaceSurface, surfaceTable } from '../brep'
-import { refineLinearPeriodicV } from '../periodic'
+import { moveSmoothCylinderPole, refineLinearPeriodicV } from '../periodic'
 
 // Restricted fixture reader: this test accepts only the clamped quadratic 2D
 // B-spline seam records produced by OCCT for this particular STEP cylinder.
@@ -30,8 +30,7 @@ it.each([false,true])('preserves both seam pcurves and their 3D edge on a synthe
   const rotatedPrimitive=rotated?k.rotate(primitive,{point:{x:0,y:0,z:0},direction:{x:1,y:1,z:0}},0.73):null
   const positioned=rotatedPrimitive?k.translate(rotatedPrimitive,7,-11,4):null
   const source=k.importStep(k.exportStep(positioned??primitive)),base=k.generalTransform(source,[1,0,0,0,0,1,0,0,0,0,1,0])
-  const text=k.toBREP(base),record=surfaceTable(text).find(r=>r.periodicNet)!,net=refineLinearPeriodicV(record.periodicNet!)
-  net.poles[3*net.nv+2][0]+=0.5
+  const text=k.toBREP(base),record=surfaceTable(text).find(r=>r.periodicNet)!,net=moveSmoothCylinderPole(refineLinearPeriodicV(record.periodicNet!),[.5,0,0])
   const edited=k.fromBREP(replaceSurface(text,record,net)),reopened=k.importStep(k.exportStep(edited))
   try {
     for(const shape of [base,edited,reopened]) {

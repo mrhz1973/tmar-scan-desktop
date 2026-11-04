@@ -2,7 +2,8 @@
 import { expect, it } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { replaceSurface, surfaceTable } from '../brep'
-import { refineLinearPeriodicV } from '../periodic'
+import { moveSmoothCylinderPole, refineLinearPeriodicV } from '../periodic'
+import { localFrame } from '../localFrame'
 
 it('refines a periodic STEP cylinder in V without changing its support or protected boundaries', async () => {
   const e = await SurfaceEditorKernel.load(), k = e.kernel, cylinder = k.makeCylinder(10,20)
@@ -17,6 +18,10 @@ it('refines a periodic STEP cylinder in V without changing its support or protec
     expect(() => refineLinearPeriodicV({ ...net, weights: net.weights.map(() => 0) })).toThrow()
     expect(() => refineLinearPeriodicV({ ...net, mu: [] })).toThrow()
     expect(() => refineLinearPeriodicV({ ...net, ku: [1,0] })).toThrow()
+    expect(() => moveSmoothCylinderPole({ ...next, ku: [0,Number.NaN,4,6] },[1,0,0])).toThrow()
+    expect(() => moveSmoothCylinderPole({ ...next, weights: next.weights.map(()=>1e308) },[1,0,0])).toThrow()
+    const nonseparable=structuredClone(next);nonseparable.weights[nonseparable.nv+1]*=1.5
+    expect(() => moveSmoothCylinderPole(nonseparable,[.5,0,0])).toThrow(/variabili lungo V/)
     refined = k.fromBREP(replaceSurface(text,rec,next))
     const candidate = structuredClone(next); candidate.poles[3*next.nv+2][0] += 0.5
     edited = k.fromBREP(replaceSurface(text,rec,candidate)); round = k.importStep(k.exportStep(edited))
@@ -39,6 +44,33 @@ it('refines a periodic STEP cylinder in V without changing its support or protec
         }
       }
       expect(interiorGap).toBeGreaterThan(0.01)
+      // An isolated pole displacement can kink a quadratic double knot,
+      // even though the seam, caps and BREP validity checks all pass.
+      const u=next.ku[1],v=(next.kv[0]+next.kv.at(-1)!)/2
+      const left=k.surfaceNormal(changed[0],u-1e-7,v),right=k.surfaceNormal(changed[0],u+1e-7,v)
+      expect(left.x*right.x+left.y*right.y+left.z*right.z).toBeLessThan(1-1e-9)
+      expect(localFrame(candidate,2*next.nv+2)).toBeNull()
+      for(const delta of [[.5,0,0],[0,.5,0],[0,0,.5]] as [number,number,number][]) {
+        const smooth=k.fromBREP(replaceSurface(text,rec,moveSmoothCylinderPole(next,delta)))
+        const smoothFaces=k.getSubShapes(smooth,'face')
+        try {
+          expect(k.isValid(smooth)).toBe(true)
+          for(const knot of next.ku.slice(1,-1)) for(let i=0;i<=8;i++) {
+            const vv=next.kv[0]+(next.kv.at(-1)!-next.kv[0])*i/8
+            const a=k.surfaceNormal(smoothFaces[0],knot-1e-7,vv),b=k.surfaceNormal(smoothFaces[0],knot+1e-7,vv)
+            expect(a.x*b.x+a.y*b.y+a.z*b.z).toBeGreaterThan(1-1e-9)
+            for(const h of [1e-5,5e-6]) {
+              const sides=(face:typeof smoothFaces[number])=>{
+                const l=k.pointOnSurface(face,knot-h,vv),m=k.pointOnSurface(face,knot,vv),r=k.pointOnSurface(face,knot+h,vv)
+                return {left:[(m.x-l.x)/h,(m.y-l.y)/h,(m.z-l.z)/h],right:[(r.x-m.x)/h,(r.y-m.y)/h,(r.z-m.z)/h]}
+              }
+              const before=sides(after[0]),afterMove=sides(smoothFaces[0])
+              const leftChange=before.left.map((x,d)=>afterMove.left[d]-x),rightChange=before.right.map((x,d)=>afterMove.right[d]-x)
+              expect(Math.hypot(...leftChange.map((x,d)=>x-rightChange[d]))).toBeLessThan(1e-4)
+            }
+          }
+        } finally {smoothFaces.forEach(f=>k.release(f));k.release(smooth)}
+      }
       const tolerances=(shape:typeof converted,kind:string)=>Array.from(k.toBREP(shape).matchAll(new RegExp(`^${kind}\\s*\\n\\s*([\\deE+.-]+)`,'gm')),m=>Number(m[1]))
       for(const kind of ['Ed','Ve']) {
         expect(tolerances(refined,kind)).toEqual(tolerances(converted,kind))

@@ -162,10 +162,22 @@ host state. A host without this capability keeps the original behavior.
   one interior pole move, and after STEP reopening. This does not qualify
   arbitrary seam/trim pcurves, controls,
   recipes or other STEP topologies. Periodic editing is explicitly rejected.
+  Subsequent checks found that moving one interior pole alone can introduce a
+  tangent break at a different double knot even when the seam and caps pass.
+  A restricted experimental move couples neighbouring poles using their
+  weights; X/Y/Z tests on the synthetic cylinder check the existing knot
+  tangents and sampled one-sided derivative jumps. A cyclic local frame for
+  the same six-pole periodic convention is checked against OCCT on straight
+  and rotated fixtures, and refuses an ambiguous tangent at a crease. This
+  is not yet wired to the editor or a general G1 solver.
+  A synthetic nonseparable-weight counterexample changed the sampled
+  derivative jump by about `0.0115`; the restricted helper now refuses nets
+  whose weights vary along V within a U row. This is a guard for the tested
+  full-cylinder convention, not support for general rational periodic nets.
   Net edge/cell picking and cage drawing now include cyclic connections for
   periodic dimensions with more than two rows. Ambiguous two-row periodic
-  picking and the clamped-only local-frame calculation fail closed; periodic
-  local drag is not yet available. `periodic-picking.test.ts` and existing
+  picking and unqualified periodic frame conventions fail closed; periodic
+  local drag is not yet available in the editor. `periodic-picking.test.ts` and existing
   picking/cage/local-frame checks pass on synthetic fixtures.
 - A synthetic STEP box in the isolated shared view passed pointer selection of
   a second CAD face, preservation of a modified draft when the change was
