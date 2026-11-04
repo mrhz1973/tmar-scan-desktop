@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { createServer } from 'vite'
 import { importStep, writeBinarySTL } from 'meshstep'
-import { noisySheet } from '../plugins/tmar-mesh-review/scripts/fixture.mjs'
+import { noisySheet } from './fixtures/noisy-sheet.mjs'
 const root=fileURLToPath(new URL('../',import.meta.url)),out=join(root,'e2e-out','readme-gallery')
 mkdirSync(out,{recursive:true});process.env.OUT_DIR=out
 const server=await createServer({root,server:{host:'127.0.0.1',port:0,open:false,watch:{ignored:['**/e2e-out/**']}}})
