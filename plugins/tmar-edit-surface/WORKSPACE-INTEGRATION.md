@@ -102,11 +102,29 @@ host state. A host without this capability keeps the original behavior.
   case also passed the isolated shared-view numeric move, pointer drag,
   Undo/Redo and Apply workflow (`run-OASliT`), with both STEP bodies valid and
   the input hash unchanged. This is not direct editing of those curved faces.
+- A separate, synthetic cylinder conversion spike is research only: the
+  sampled support and 3D boundaries coincided, but the kernel's volume changed
+  and the original BREP was invalid until healing. Signed mesh volumes at three
+  finer resolutions moved toward the analytic reference; pcurve and seam
+  correspondence still need independent verification. The reported OCCT
+  integration issue https://github.com/Open-Cascade-SAS/OCCT/issues/1675 is a
+  possible explanation for numerical discrepancies, not a diagnosis here.
+  The spike remains outside production and cylinder editing is not enabled.
 - A synthetic STEP box in the isolated shared view passed pointer selection of
   a second CAD face, preservation of a modified draft when the change was
   cancelled, and a confirmed change (`run-jx0E4G`). Failed face loading also
   preserves the draft and its Undo history in session tests. An in-progress CAD
   evaluation must finish before changing faces; draft notes still block a change.
+- After the face-switch change, the annotated source-app scenario passed its 14
+  checks again (`annotated-edit-LYQ8lX`): Zebra, note, deformation, Apply,
+  Undo/Redo, native Save and reopen. The 34 plugin runtime files in that QA copy
+  matched the author checkout after newline normalization. The host was the
+  corrected experimental snapshot, not a checkout of the published host SHA.
+- The host owner subsequently reported an independent pairing of published
+  host `5684f5f` with plugin `3bed36f`: source-app annotation and mixed-support
+  workflows passed, and a compiled web build reopened and resaved the resulting
+  synthetic annotated project. The full annotated Apply in the compiled browser
+  and the newer plugin revision are separate, still-unqualified scenarios.
 - An isolated box test in the shared view selected a control pole, enabled
   symmetry, moved the reflected pair, checked preview-only transparency and
   Undo, then applied a valid modified solid copy (`run-n8jr0q`). The test must
@@ -174,9 +192,12 @@ oriented-normal handling, `SCANRULER_ISOLATED=1`, `APP_URL` fixed to
 
 The new adapter has not yet been qualified in a packaged desktop release or
 against every existing standalone-editor function. Transactional note saving
-still needs the separate host V1 with its reversed-normal correction and real
-integrated Apply/Undo/Redo/Save/Load validation. It must remain blocked until
-that validation succeeds. Parametric replay and
+requires the corrected host V1 capability: source-app tests have passed with
+the experimental snapshot, and the host owner reports an independent run with
+published host `5684f5f` and plugin `3bed36f`. That is not a released
+integration or a compiled-browser test of the exact current pair.
+An older host without that capability must continue to block annotated Apply.
+Parametric replay and
 editing an already existing NURBS face through this host
 on further real-world topologies remain separate checks. Snap to the host's other CAD bodies uses their displayed
 tessellation, not exact B-rep targets. Large-scan performance, real-world
