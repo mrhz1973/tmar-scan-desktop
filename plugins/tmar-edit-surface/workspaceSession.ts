@@ -159,7 +159,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private message: string | null = null
   private snap = true
   private snapDistance = 1
-  private dragMode: DragMode = 'axis'
+  private dragMode: DragMode = 'local'
   private axis = 2
   private dragStrength = 1
   private selectionMode: NetSelectionMode = 'auto'

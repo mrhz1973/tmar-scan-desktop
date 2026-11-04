@@ -99,7 +99,7 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
   const [axis, setAxis] = useState(2)
   const [distance, setDistance] = useState(1), [factor, setFactor] = useState(1.1)
   const [dragStrength, setDragStrength] = useState(1), [smoothStrength, setSmoothStrength] = useState(0.5)
-  const [dragMode, setDragMode] = useState<DragMode>('axis')
+  const [dragMode, setDragMode] = useState<DragMode>('local')
   const [selectionMode, setSelectionMode] = useState<NetSelectionMode>('auto')
   const [placingNote, setPlacingNote] = useState(false)
   const [notes, setNotesState] = useState<SurfaceNote[]>(session.notes)
@@ -463,7 +463,7 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
         </fieldset>
         <details><summary>Filtri di selezione del reticolo</summary><label>Selezione<select data-test="surface-selection-mode" value={selectionMode} onChange={e => setSelectionMode(e.target.value as NetSelectionMode)}><option value="auto">Diretta · punti, segmenti e celle</option><option value="points">Solo punti</option><option value="edges">Solo segmenti</option><option value="cells">Solo celle</option><option value="mixed">Punti e segmenti</option></select></label></details>
         <p className="es-hint">Passa sul reticolo: l'elemento evidenziato si seleziona con un clic. Punti, segmenti e celle selezionano rispettivamente uno, due o quattro poli. Ctrl+clic aggiunge o toglie dalla selezione. I poli bloccati restano fermi. Se il reticolo è nascosto, solo i punti sono selezionabili.</p>
-        <p>{dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.' : dragMode === 'local' ? 'U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. Trascina la freccia gialla o imposta una quota.' : 'Trascina la freccia gialla lungo l’asse scelto.'} Pulsante centrale: ruota; destro: sposta la vista; rotella: zoom. Lo stiramento usa sempre X/Y/Z.</p>
+        <p>{dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.' : dragMode === 'local' ? 'U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. Trascina il punto o la freccia gialla, oppure imposta una quota.' : 'Trascina il punto o la freccia gialla lungo l’asse scelto.'} {dragMode !== 'screen' && 'Se la direzione punta verso la vista, trascina in verticale per muovere il punto in profondità.'} Pulsante centrale: ruota; destro: sposta la vista; rotella: zoom. Lo stiramento usa sempre X/Y/Z.</p>
         {dragMode === 'local' && editable.length > 0 && !moveDirection && <p role="alert">Riferimento locale non definito in questo punto. Scegli un altro punto o il riferimento mondo.</p>}
         <label>Intensità trascinamento · {Math.round(dragStrength * 100)}%<input data-test="surface-drag-strength" type="range" min="0.05" max="1" step="0.05" value={dragStrength} onChange={e => setDragStrength(Number(e.target.value))} /></label>
         <p className="es-hint">Riduce lo spostamento durante il trascinamento per modifiche fini. Le quote numeriche restano esatte.</p>

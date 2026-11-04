@@ -65,6 +65,40 @@ describe.each(['orthographic', 'perspective'] as const)('%s camera', kind => {
     expect(createDragFrame({ camera: cam, partWorld: part, rect, anchor, ...client(anchor, part, cam),
       mode: 'axis', direction: [0, 0, 1] })).toBeNull()
   })
+
+  it('lets a pole move in depth with a vertical drag when explicitly enabled', () => {
+    const cam = camera(kind), part = new THREE.Matrix4(), anchor: Point3 = [0, 0, 0]
+    const at = client(anchor, part, cam), start = {clientX: at.clientX + 4, clientY: at.clientY - 3}
+    const drag = createDragFrame({camera: cam, partWorld: part, rect, anchor, ...start,
+      mode: 'axis', direction: [0, 0, 1], allowViewAlignedDepth: true})
+    const scale = kind === 'orthographic' ? 6 / rect.height : 20 * Math.tan(25 * Math.PI / 180) / rect.height
+    expectPoint(drag?.deltaAt(start.clientX, start.clientY) ?? null, [0, 0, 0])
+    expectPoint(drag?.deltaAt(start.clientX + 70, start.clientY - 40) ?? null, [0, 0, 40 * scale])
+    expectPoint(drag?.deltaAt(start.clientX, start.clientY + 40) ?? null, [0, 0, -40 * scale])
+    expect(drag?.deltaAt(Number.NaN, start.clientY)).toBeNull()
+    expect(drag?.deltaAt(start.clientX, start.clientY - 100000)).toBeNull()
+  })
+
+  it('keeps depth displacement in part coordinates when the part is rotated', () => {
+    const cam = camera(kind), part = new THREE.Matrix4().makeRotationY(Math.PI / 2), anchor: Point3 = [0, 0, 0]
+    const start = client(anchor, part, cam)
+    const drag = createDragFrame({camera: cam, partWorld: part, rect, anchor, ...start,
+      mode: 'axis', direction: [1, 0, 0], allowViewAlignedDepth: true})
+    const scale = kind === 'orthographic' ? 6 / rect.height : 20 * Math.tan(25 * Math.PI / 180) / rect.height
+    expectPoint(drag?.deltaAt(start.clientX, start.clientY - 40) ?? null, [40 * scale, 0, 0])
+  })
+
+  it('keeps near-aligned depth movement on the chosen axis with a frozen camera', () => {
+    const cam = camera(kind), part = new THREE.Matrix4(), anchor: Point3 = [0, 0, 0]
+    const start = client(anchor, part, cam), angle = 2 * Math.PI / 180
+    const direction: Point3 = [Math.sin(angle), 0, Math.cos(angle)]
+    const drag = createDragFrame({camera: cam, partWorld: part, rect, anchor, ...start,
+      mode: 'axis', direction, allowViewAlignedDepth: true})
+    const scale = kind === 'orthographic' ? 6 / rect.height : 20 * Math.tan(25 * Math.PI / 180) / rect.height
+    cam.position.set(0,0,50);cam.updateMatrixWorld(true)
+    expectPoint(drag?.deltaAt(start.clientX, start.clientY - 40) ?? null,
+      direction.map(value => value * 40 * scale) as Point3)
+  })
 })
 
 it('does not jump when a handle is grabbed off-centre', () => {

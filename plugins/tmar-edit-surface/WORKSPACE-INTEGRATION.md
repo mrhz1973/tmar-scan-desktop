@@ -94,6 +94,17 @@ host state. A host without this capability keeps the original behavior.
   reached the target, while Alt and snap-off preserved free movement; the
   Screen drag stayed in the camera plane. These checks cover one planar top
   face and do not establish the intended behavior for occluded targets.
+- The default pole drag is now Local N. If the chosen direction points almost
+  at the camera, vertical pointer motion moves the pole in depth using the
+  captured view scale. The fallback applies to poles only; free-edge D keeps
+  its existing guard. An isolated shared-view synthetic STEP run exercised the
+  actual pointer, Undo and Apply and reimported both valid solids (`run-Diu6zn`,
+  15 checks). Separate scan and CAD snap cases (`snap-cFcjZt`) each reached a
+  +2 mm synthetic reference, while Alt and snap-off produced the same free
+  +1.5 mm movement; each reported nine checks and no app console errors.
+  Unit tests cover orthographic and perspective cameras, a rotated part and a
+  near-aligned axis; the mapping near the alignment threshold is an interaction
+  approximation. Neither run qualifies a packaged desktop app or other topology.
 - Imported STEP bodies may contain extrusion or revolution supports alongside
   an editable face. The BREP table reader now recognizes their embedded curve
   record boundaries without modifying or enabling those supports. Independent
@@ -106,9 +117,11 @@ host state. A host without this capability keeps the original behavior.
   sampled support and 3D boundaries coincided, but the kernel's volume changed
   and the original BREP was invalid until healing. Signed mesh volumes at three
   finer resolutions moved toward the analytic reference; pcurve and seam
-  correspondence still need independent verification. The reported OCCT
-  integration issue https://github.com/Open-Cascade-SAS/OCCT/issues/1675 is a
-  possible explanation for numerical discrepancies, not a diagnosis here.
+  correspondence still need independent verification. The public source of
+  `occt-wasm` v5.7.1 shows that `getVolume` uses the default OCCT overload:
+  https://github.com/andymai/occt-wasm/blob/v5.7.1/facade/generated/kernel.cpp
+  The OCCT report https://github.com/Open-Cascade-SAS/OCCT/issues/1675 concerns
+  primarily the Eps overload, so its defect cannot be attributed to this call.
   The spike remains outside production and cylinder editing is not enabled.
 - A synthetic STEP box in the isolated shared view passed pointer selection of
   a second CAD face, preservation of a modified draft when the change was
@@ -120,11 +133,15 @@ host state. A host without this capability keeps the original behavior.
   Undo/Redo, native Save and reopen. The 34 plugin runtime files in that QA copy
   matched the author checkout after newline normalization. The host was the
   corrected experimental snapshot, not a checkout of the published host SHA.
-- The host owner subsequently reported an independent pairing of published
-  host `5684f5f` with plugin `3bed36f`: source-app annotation and mixed-support
-  workflows passed, and a compiled web build reopened and resaved the resulting
-  synthetic annotated project. The full annotated Apply in the compiled browser
-  and the newer plugin revision are separate, still-unqualified scenarios.
+- The host owner integrated host `5684f5f` and the exact plugin `324a2e0` in
+  draft PR https://github.com/mrhz1973/tmar-scan-desktop/pull/23, runtime
+  commit `5f39ff5`. The reported independent checks include 155 focused tests,
+  TypeScript and production build, 15 source-app face-switch checks, and 16
+  compiled-browser checks from fresh synthetic STEP through Zebra, note,
+  deformation, Apply, Undo/Redo, Save/Load and STEP export. Both exported
+  solids reimported as valid. The compiled test used a forward face; reversed
+  normals have separate kernel tests, not the same compiled UI scenario.
+  This remains draft integration, not a packaged desktop release.
 - An isolated box test in the shared view selected a control pole, enabled
   symmetry, moved the reflected pair, checked preview-only transparency and
   Undo, then applied a valid modified solid copy (`run-n8jr0q`). The test must
@@ -175,6 +192,8 @@ adds the note/Zebra checks. Evidence, including user-derived screenshots, stays
 in the selected local QA output, not in this repository.
 `TEST_FACE_SWITCH=1` adds the viewport face-switch scenario and requires the
 script's synthetic box rather than an operator-supplied STEP.
+`TEST_ALIGNED_DEPTH=1` adds the normal-aligned pointer test on a synthetic box;
+it can also be used with `tests/e2e-workspace-snap.mjs` in axis or local mode.
 The separate `tests/e2e-workspace-snap.mjs` exercises the synthetic snap cases;
 `EDIT_SURFACE_DRAG_MODE=axis|local|screen` selects the movement mode.
 `tests/e2e-workspace-strip.mjs` and `tests/e2e-workspace-strip-drag.mjs` cover
@@ -192,10 +211,9 @@ oriented-normal handling, `SCANRULER_ISOLATED=1`, `APP_URL` fixed to
 
 The new adapter has not yet been qualified in a packaged desktop release or
 against every existing standalone-editor function. Transactional note saving
-requires the corrected host V1 capability: source-app tests have passed with
-the experimental snapshot, and the host owner reports an independent run with
-published host `5684f5f` and plugin `3bed36f`. That is not a released
-integration or a compiled-browser test of the exact current pair.
+requires the corrected host V1 capability. The host owner reports a passing
+compiled-browser run for the specific integration and fixture above; other
+faces, real projects and a packaged desktop build remain unqualified.
 An older host without that capability must continue to block annotated Apply.
 Parametric replay and
 editing an already existing NURBS face through this host
