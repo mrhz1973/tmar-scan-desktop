@@ -1,0 +1,6 @@
+{
+  "error": "AssertionError [ERR_ASSERTION]: Lock must create an undoable action",
+  "result": {},
+  "consoleErrors": [],
+  "note": "Local stack path omitted; original test output retained locally."
+}

@@ -7,6 +7,8 @@
 // the one before kept for the editor's own undo. The viewport's layer, the
 // box and the agent's commands all edit through these.
 
+import { curveHasOffsets, pointProtected, validatePointOffsets, type NetworkPointRef } from '../core/networkPointMotion'
+import { readCentreOffset, reanchorCentreOffset, type CentreOffset } from '../core/networkNormalMotion'
 import type { Vec3 } from '../../../src/core/types'
 import type { EdgeRef, FaceRef, NetworkCell, NetworkCurve, NetworkFeature, NetworkFitParams, NetworkNode } from '../core/features'
 import type { NetworkReport } from '../core/networkBody'
@@ -45,9 +47,9 @@ export function networkDraftOf(f: NetworkFeature): NetworkDraft {
 /** The network's data alone, copied. */
 export function cloneData(d: NetworkData): NetworkData {
   return {
-    nodes: d.nodes.map((n) => ({ ...n, at: [...n.at] as Vec3, ...(n.on ? { on: { ...n.on } } : {}) })),
-    curves: d.curves.map((c) => ({ ...c, via: c.via.map((p) => [...p] as Vec3) })),
-    cells: d.cells.map((c) => ({ ...c, seed: [...c.seed] as Vec3, ...(c.centre ? { centre: [...c.centre] as Vec3 } : {}), ...(c.corners ? { corners: [...c.corners] } : {}) })),
+    nodes: d.nodes.map((n) => ({ ...n, at: [...n.at] as Vec3, ...(n.offset ? { offset: readCentreOffset(n.offset) } : {}), ...(n.on ? { on: { ...n.on } } : {}) })),
+    curves: d.curves.map((c) => ({ ...c, via: c.via.map((p) => [...p] as Vec3), ...(c.viaOffsets ? { viaOffsets: c.viaOffsets.map(o => o ? readCentreOffset(o) : null) } : {}) })),
+    cells: d.cells.map((c) => ({ ...c, seed: [...c.seed] as Vec3, ...(c.centre ? { centre: [...c.centre] as Vec3 } : {}), ...(c.centreOffset ? { centreOffset: readCentreOffset(JSON.parse(JSON.stringify(c.centreOffset))) } : {}), ...(c.corners ? { corners: [...c.corners] } : {}) })),
     spans: { ...d.spans },
     fit: { ...d.fit },
   }
@@ -67,12 +69,16 @@ function oneStep<D extends NetworkDraft>(before: D, after: D): D {
 }
 
 export function undoNetwork<D extends NetworkDraft>(d: D): D {
+  // Only release or cancellation may finish a captured 3D gesture.
+  if (d.motionActive) return d
   const last = d.history[d.history.length - 1]
   if (!last) return d
   return { ...d, ...last, placing: null, history: d.history.slice(0, -1), future: [...d.future, dataOf(d)] }
 }
 
 export function redoNetwork<D extends NetworkDraft>(d: D): D {
+  // Only release or cancellation may finish a captured 3D gesture.
+  if (d.motionActive) return d
   const next = d.future[d.future.length - 1]
   if (!next) return d
   return { ...d, ...next, placing: null, history: [...d.history, dataOf(d)], future: d.future.slice(0, -1) }
@@ -267,6 +273,7 @@ function chainBetween(curves: readonly NetworkCurve[], at: ReadonlyMap<number, V
 export function splitCurve<D extends NetworkDraft>(d: D, curveId: number, run: number, at: Vec3): { draft: D; node: number; second: number } | null {
   const c = d.curves.find((x) => x.id === curveId)
   if (!c) return null
+  if (curveHasOffsets(d, c)) throw Error('Prima di suddividere un tratto spostato, azzera i suoi spostamenti 3D. La bozza è conservata.')
   const r = Math.max(0, Math.min(c.via.length, run))
   return splitWith(d, c, [...at] as Vec3, c.via.slice(0, r), c.via.slice(r))
 }
@@ -275,15 +282,15 @@ export function splitCurve<D extends NetworkDraft>(d: D, curveId: number, run: n
 export function splitAtGrip<D extends NetworkDraft>(d: D, curveId: number, index: number): { draft: D; node: number; second: number } | null {
   const c = d.curves.find((x) => x.id === curveId)
   if (!c || index < 0 || index >= c.via.length) return null
-  return splitWith(d, c, [...c.via[index]] as Vec3, c.via.slice(0, index), c.via.slice(index + 1))
+  return splitWith(d, c, [...c.via[index]] as Vec3, c.via.slice(0, index), c.via.slice(index + 1), c.viaOffsets?.[index] ?? undefined)
 }
 
-function splitWith<D extends NetworkDraft>(d: D, c: NetworkCurve, at: Vec3, first: Vec3[], rest: Vec3[]): { draft: D; node: number; second: number } {
+function splitWith<D extends NetworkDraft>(d: D, c: NetworkCurve, at: Vec3, first: Vec3[], rest: Vec3[], offset?: CentreOffset): { draft: D; node: number; second: number } {
   const node = d.nextId
   const second = d.nextId + 1
-  const a: NetworkCurve = { ...c, to: node, via: first }
-  const b: NetworkCurve = { ...c, id: second, from: node, via: rest }
-  const nodes: NetworkNode[] = [...d.nodes, { id: node, at }]
+  const a: NetworkCurve = { ...c, to: node, via: first, ...(c.viaOffsets ? { viaOffsets: c.viaOffsets.slice(0, first.length) } : {}) }
+  const b: NetworkCurve = { ...c, id: second, from: node, via: rest, ...(c.viaOffsets ? { viaOffsets: c.viaOffsets.slice(c.via.length - rest.length) } : {}) }
+  const nodes: NetworkNode[] = [...d.nodes, { id: node, at, ...(offset ? { offset: readCentreOffset(offset) } : {}) }]
   const curves = d.curves.flatMap((x) => (x.id === c.id ? [a, b] : [x]))
   // The second half runs in the same strip as the first did.
   const spans = { ...d.spans }
@@ -314,13 +321,16 @@ function cellsWithNodes(cells: readonly NetworkCell[], nodes: readonly NetworkNo
 
 /** A node moved — onto the scan where it was dragged to. */
 export function moveNode<D extends NetworkDraft>(d: D, id: number, at: Vec3, record = true): D {
-  const nodes = d.nodes.map((n) => (n.id === id ? { ...n, at: [...at] as Vec3 } : n))
+  const nodes = d.nodes.map((n) => (n.id === id ? { ...n, at: [...at] as Vec3, ...(n.offset ? { offset: reanchorCentreOffset(n.offset, at, n.offset.direction) } : {}) } : n))
   return record ? edited(d, { nodes }) : { ...d, nodes }
 }
 
 /** A curve's grip moved. */
 export function moveGrip<D extends NetworkDraft>(d: D, curveId: number, index: number, at: Vec3, record = true): D {
-  const curves = d.curves.map((c) => (c.id === curveId ? { ...c, via: c.via.map((p, i) => (i === index ? ([...at] as Vec3) : p)) } : c))
+  const curves = d.curves.map((c) => (c.id === curveId ? { ...c,
+    via: c.via.map((p, i) => (i === index ? ([...at] as Vec3) : p)),
+    ...(c.viaOffsets ? { viaOffsets: c.viaOffsets.map((o, i) => i === index && o ? reanchorCentreOffset(o, at, o.direction) : o) } : {}),
+  } : c))
   return record ? edited(d, { curves }) : { ...d, curves }
 }
 
@@ -332,7 +342,7 @@ export function moveCell<D extends NetworkDraft>(d: D, index: number, what: 'see
 
 /** A split cell's centre back at its polygon's middle. */
 export function resetCentre<D extends NetworkDraft>(d: D, index: number): D {
-  const cells = d.cells.map((c, i) => (i === index && c.centre ? (({ centre: _c, ...rest }) => (void _c, rest))(c) : c))
+  const cells = d.cells.map((c, i) => (i === index ? (({ centre: _c, centreOffset: _o, ...rest }) => (void _c, void _o, rest))(c) : c))
   return edited(d, { cells })
 }
 
@@ -351,6 +361,7 @@ export function addEdgeCurve<D extends NetworkDraft>(d: D, body: number, edge: E
   const nodes = [...d.nodes]
   const nodeAt = (at: Vec3, end: 0 | 1): number => {
     const near = nodes.find((n) => Math.hypot(n.at[0] - at[0], n.at[1] - at[1], n.at[2] - at[2]) <= EDGE_NODE_MM)
+    if (near?.offset?.distance) throw Error('Il nodo vicino è spostato fuori scansione: azzera lo spostamento prima del vincolo CAD.')
     if (near) return near.id
     const id = nextId++
     nodes.push({ id, at: [...at] as Vec3, on: { body, vertex: edge, end } })
@@ -369,6 +380,8 @@ const EDGE_NODE_MM = 0.5
 /** The patch beside a curve on a body: meeting the face on its edge
  *  (contact) or tangent to it, or — null — beside no face. */
 export function setSide<D extends NetworkDraft>(d: D, curveId: number, side: NetworkCurve['side'] | null): D {
+  const target = d.curves.find(c => c.id === curveId)
+  if (side && target && curveHasOffsets(d, target)) throw Error('Azzera gli spostamenti prima di aggiungere il vincolo CAD.')
   const curves = d.curves.map((c) => (c.id === curveId ? (side ? { ...c, side } : (({ side: _s, ...rest }) => (void _s, rest))(c)) : c))
   return edited(d, { curves })
 }
@@ -377,16 +390,19 @@ export function setSide<D extends NetworkDraft>(d: D, curveId: number, side: Net
 export function insertGrip<D extends NetworkDraft>(d: D, curveId: number, run: number, at: Vec3, record = true): D {
   const curves = d.curves.map((c) => {
     if (c.id !== curveId) return c
+    if (curveHasOffsets(d, c)) throw Error('Azzera gli spostamenti del tratto prima di inserire un punto. La bozza è conservata.')
     const via = [...c.via]
     via.splice(Math.max(0, Math.min(via.length, run)), 0, [...at] as Vec3)
-    return { ...c, via }
+    const viaOffsets = c.viaOffsets ? [...c.viaOffsets] : undefined
+    viaOffsets?.splice(Math.max(0, Math.min(c.via.length, run)), 0, null)
+    return { ...c, via, ...(viaOffsets ? { viaOffsets } : {}) }
   })
   return record ? edited(d, { curves }) : { ...d, curves }
 }
 
 /** A grip taken out of a curve. */
 export function removeGrip<D extends NetworkDraft>(d: D, curveId: number, index: number): D {
-  const curves = d.curves.map((c) => (c.id === curveId ? { ...c, via: c.via.filter((_, i) => i !== index) } : c))
+  const curves = d.curves.map((c) => (c.id === curveId ? { ...c, via: c.via.filter((_, i) => i !== index), ...(c.viaOffsets ? { viaOffsets: c.viaOffsets.filter((_, i) => i !== index) } : {}) } : c))
   return edited(d, { curves })
 }
 
@@ -515,4 +531,43 @@ export function setNetworkFit<D extends NetworkDraft>(d: D, fit: Partial<Network
 /** Whether a network draft has anything to build. */
 export function networkReady(d: NetworkData): boolean {
   return d.curves.length > 0 && d.cells.length > 0
+}
+
+/** One numeric operation or the transient updates of one captured gesture. */
+export function setCentreOffset<D extends NetworkDraft>(d: D, index: number, raw: CentreOffset | null, record = true): D {
+  if (!d.cells[index]) return d
+  const value = raw ? readCentreOffset(raw) : null
+  const cells=d.cells.map((c,i) => {
+    if(i!==index) return c
+    const {centreOffset:_old,...rest}=c; void _old
+    return value ? {...rest,centre:[...value.anchor] as Vec3,centreOffset:value} : rest
+  })
+  if(JSON.stringify(cells)===JSON.stringify(d.cells)) return d
+  return record ? edited(d,{cells}) : {...d,cells}
+}
+
+/** One point operation, or a transient sample of one captured 3D gesture. */
+export function setPointOffset<D extends NetworkDraft>(d: D, p: NetworkPointRef, raw: CentreOffset | null, record = true): D {
+  if (raw && pointProtected(d, p)) throw Error('Punto vincolato al CAD: spostamento 3D protetto.')
+  if (p.kind === 'centre') return setCentreOffset(d, p.cell, raw, record)
+  const offset = raw ? readCentreOffset(raw) : undefined
+  let next: Partial<NetworkData>
+  if (p.kind === 'node') {
+    if (!d.nodes.some(n => n.id === p.id)) throw Error('Nodo non trovato.')
+    next = { nodes: d.nodes.map(n => {
+      if (n.id !== p.id) return n
+      const { offset: _old, ...rest } = n; void _old
+      return offset ? { ...rest, at: [...offset.anchor] as Vec3, offset } : rest
+    }) }
+  } else {
+    const c = d.curves.find(c => c.id === p.curve)
+    if (!c || !Number.isInteger(p.index) || p.index < 0 || p.index >= c.via.length) throw Error('Punto della curva non trovato.')
+    const viaOffsets = c.via.map((_, i) => i === p.index ? offset ?? null : c.viaOffsets?.[i] ?? null)
+    next = { curves: d.curves.map(c => c.id === p.curve ? { ...c,
+      via: c.via.map((v, i) => i === p.index && offset ? [...offset.anchor] as Vec3 : v), viaOffsets } : c) }
+  }
+  const value = { ...d, ...next }
+  validatePointOffsets(value)
+  if (JSON.stringify(dataOf(value)) === JSON.stringify(dataOf(d))) return d
+  return record ? edited(d, next) : value
 }

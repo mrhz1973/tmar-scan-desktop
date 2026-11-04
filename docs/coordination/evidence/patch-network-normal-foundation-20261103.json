@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-03",
+  "base": "a28c747591e740d62f3b1f90330f145141c77de1",
+  "scope": "Pure normal-motion foundation; no production entry point imports this module",
+  "environment": { "os": "Linux sandbox", "node": "22.16.0", "typescript": "5.8.3" },
+  "tests": { "command": "node --experimental-strip-types --test plugins/reverse/tests/networkNormalMotion.test.mjs", "passed": 24, "failed": 0, "skipped": 0 },
+  "typecheck": { "command": "tsc --strict --noEmit --skipLibCheck --target ES2022 --module ESNext plugins/reverse/core/networkNormalMotion.ts", "result": "PASS", "scope": "new standalone module only" },
+  "sourceBlob": "9688d19989658ce17053cc2c77fd53a3c92483c6",
+  "testsBlob": "342ba364d32d76d2cef7b381fc98cf4da776d7ed",
+  "notRun": ["whole-app TypeScript", "app build", "browser source or compiled", "OCCT", "coupled fit and continuity", "project Undo/Redo", "scanruler save/reopen", "user Lego"],
+  "windowsAccess": "Tunnel initialization failed; Desktop Commander had no online device; no operational command executed",
+  "frozenHostChanged": false,
+  "editSurfaceChanged": false,
+  "numberedRelease": false
+}

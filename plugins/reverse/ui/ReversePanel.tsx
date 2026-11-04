@@ -370,6 +370,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
               <Icon name="surface" />
               <span>Patch network</span>
             </button>
+            <PluginPanelExtensions slot="reverse.create.after-network" />
             <button data-test="feature-trim" disabled={!fileName || !ready || (!bodies.some((b) => b.surface) && !hasSolidElement)} title="Close a set of fitted surfaces, sheets and measured planes, cylinders, cones and spheres into a solid: the faces they cut space into are kept where they lie on the scan and sewn" onClick={() => re.getState().startFeature('trim')}>
               <Icon name="trim" />
               <span>Trim</span>

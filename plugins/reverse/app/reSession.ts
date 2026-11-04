@@ -11,6 +11,13 @@
 // (src/app/session.ts) stands under the app's panels. Under a test it
 // stands without a viewport, its kernel in the test's own thread.
 
+import { annotationNoteDelta } from './annotatedNoteDelta'
+import type { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
+import { historyAtomic } from '../../../src/state/historyStore'
+import { abortIfNeeded } from '../../../src/plugins/editorLifetime'
+import type { CommitReceipt } from '../../../src/plugins/workspaceEditorTypes'
+import { stepFileKey, type ImportFeature } from '../core/features'
+import { nameBodies } from '../state/reFeatureHelpers'
 import { fmtLen, fmtVol, type DisplayUnits } from '../../../src/core/units'
 import type { Vec3 } from '../../../src/core/types'
 import type { RefObject } from 'react'
@@ -146,6 +153,7 @@ export function createReverseSession({
   let stopping: Promise<Stopped | null> | null = null
   /** The store's build version the last build that landed was made for. */
   let landed: number | null = null
+  let adoptingEditor = false
   /** Builds held back while changes are made one after another, to build
    *  once after the last of them (see hold); the timer lets them go should
    *  nothing else — a caller gone before its last change. */
@@ -380,6 +388,7 @@ export function createReverseSession({
    *  once the kernel is up. The returned function stops it. */
   const watch = (): (() => void) => {
     const stop = useReverse.subscribe((s, prev) => {
+      if (adoptingEditor) return
       if (s.buildVersion === prev.buildVersion && s.kernelStatus === prev.kernelStatus) return
       if (holding) {
         heldBack = true
@@ -738,8 +747,120 @@ export function createReverseSession({
     return deleteFaceGroup(topology, faceHash, (e) => joins.get(e), tangent).flatMap((h) => byHash.get(h) ?? [])
   }
 
+  /** Build an immutable copy candidate in a DIFFERENT kernel. Nothing enters the
+   * project before all CAD validation finishes. The tested kernel is adopted,
+   * avoiding a second fallible rebuild after publication. */
+  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal, display?: Readonly<{ hideSourceBodyId: number }>, annotation?: Awaited<ReturnType<typeof validateAnnotatedCopy>>) => {
+    assertCurrent(); abortIfNeeded(signal)
+    const before = useReverse.getState(), originalClient = requireClient()
+    // Host-derived identity, not an arbitrary ID from the plugin payload.
+    const hideSourceBodyId = display?.hideSourceBodyId
+    if (hideSourceBodyId !== undefined && (!Number.isSafeInteger(hideSourceBodyId) || !before.bodies.some(b => b.id === hideSourceBodyId)))
+      throw new Error('Corpo sorgente da nascondere non disponibile.')
+    if (running || scheduled || holding || before.building || before.playback ||
+        before.sketchDraft || before.featureDraft || before.extrudeDraft || before.revolveDraft)
+      throw new Error('Concludi la costruzione o la bozza CAD corrente.')
+    if (!/^\s*ISO-10303-21\s*;/.test(text.slice(0, 256))) throw new Error('Il risultato non è un file STEP.')
+    const feature: ImportFeature = { ...(annotation?{annotationSource:{version:1 as const,featureUuid:crypto.randomUUID(),stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256,faceBrep:annotation.prepared.witnesses[0].brep}}:{}), id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
+      file: { key: stepFileKey(text), name, size: text.length } }
+    if (before.stepFiles[feature.file.key] !== undefined && before.stepFiles[feature.file.key] !== text)
+      throw new Error('Collisione della chiave STEP: importazione rifiutata.')
+    const files = { ...before.stepFiles, [feature.file.key]: text }
+    const features = [...before.features, feature]
+    const built = featuresToBuild({ ...before, features })
+    const candidate = kernel()
+    let adopted = false, disposed = false, receipt: CommitReceipt | null = null
+    const dispose = () => { if (!adopted && !disposed) { disposed = true; candidate.dispose() } }
+    const deadline = setTimeout(dispose, 120_000)
+    const alive = () => { assertCurrent(); abortIfNeeded(signal); if (disposed) throw new Error('Staged CAD was disposed.') }
+    signal.addEventListener('abort', dispose, { once: true })
+    try {
+      await candidate.init(); alive()
+      const scene = sceneRef.current, fromWorker = scene ? null : await scanFromWorker()
+      alive()
+      const positions = scene ? scene.scanPositions() : (fromWorker?.positions ?? null)
+      const indices = scene?.scanIndices() ?? null
+      if (positions) await candidate.setScan(positions.slice(), null, indices?.slice() ?? null, fromWorker?.normals?.slice() ?? null)
+      alive()
+      const steps = resolveFeatures(built, resolveContext(), regionsOf)
+      const answer = await candidate.build(steps, new Map(built.filter((f): f is SketchFeature => f.kind === 'sketch').map(f => [f.id, f.sketch])), new Map(Object.entries(files)))
+      alive()
+      if (!answer || answer.results.some(r => r.status !== 'ok')) throw new Error('Il CAD preparato non ricostruisce tutta la storia corrente.')
+      const oldIds = new Set(before.bodies.map(b => b.id)), made = answer.bodies.filter(b => !oldIds.has(b.id))
+      if (made.length !== 1 || answer.bodies.length !== before.bodies.length + 1)
+        throw new Error('Applica copia richiede esattamente un nuovo corpo CAD.')
+      for (const old of before.bodies) {
+        const next = answer.bodies.find(b => b.id === old.id)
+        if (!next || next.faces !== old.faces || next.closed !== old.closed || Math.abs(next.volume - old.volume) > 1e-8 * Math.max(1, Math.abs(old.volume)))
+          throw new Error('La preparazione ha cambiato un corpo precedente.')
+      }
+      const check = await candidate.check(made[0].id, 0)
+      alive()
+      if (!check?.valid || check.faces < 1) throw new Error('La copia CAD preparata non è valida.')
+      const verified=annotation?await candidate.verifyAnnotatedNotes(made[0].id,annotation.prepared.witnesses[0].brep,annotation.prepared.notes):null
+      alive()
+      const notes=annotation&&verified?annotationNoteDelta({prepared:annotation.prepared,verified,face:verified.face,bodyId:made[0].id,featureUuid:feature.annotationSource!.featureUuid,documentEpoch:before.documentEpoch,stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256}):null
+      return {
+        publish: (operationId: string, artifactSha256: string): CommitReceipt => {
+          if (receipt) {
+            if (receipt.operationId !== operationId || receipt.artifactSha256 !== artifactSha256) throw new Error('Operazione già pubblicata con un altro contenuto.')
+            return receipt
+          }
+          if(annotation&&(operationId!==annotation.prepared.operationId||artifactSha256!==annotation.artifactSha256))throw new Error('Ticket annotato o hash CAD cambiato.')
+          alive()
+          if (client !== originalClient) throw new Error('Il kernel sorgente è cambiato.')
+          const live = useReverse.getState(), oldMeshes = new Map(meshes), oldTopologies = new Map(topologies), oldLanded = landed
+          const nextVersion = live.buildVersion + 1
+          const hiddenBodies = hideSourceBodyId === undefined || live.hiddenBodies.includes(hideSourceBodyId)
+            ? live.hiddenBodies : [...live.hiddenBodies, hideSourceBodyId]
+          const restoreEffect = hideSourceBodyId === undefined ? undefined : {
+            undo: () => useReverse.getState().setBodiesVisible([hideSourceBodyId], !live.hiddenBodies.includes(hideSourceBodyId)),
+            redo: () => useReverse.getState().setBodiesVisible([hideSourceBodyId], false),
+          }
+          const restore = () => {
+            client = originalClient; landed = oldLanded
+            meshes.clear(); oldMeshes.forEach((m, id) => meshes.set(id, m))
+            topologies.clear(); oldTopologies.forEach((m, id) => topologies.set(id, m))
+            useReverse.setState(live, true)
+            notes?.rollback()
+          }
+          notes?.capturePublication()
+          adoptingEditor = true
+          try {
+            historyAtomic('Edit Surface: copia CAD', () => {
+              assertCurrent()
+              client = candidate; landed = nextVersion
+              meshes.clear(); topologies.clear()
+              for (const body of answer.bodies) { meshes.set(body.id, body.mesh); topologies.set(body.id, body.topology) }
+              const bodies = nameBodies(answer.bodies.map(b => ({ id: b.id, name: b.name, visible: !hiddenBodies.includes(b.id), volume: b.volume,
+                faces: b.faces, closed: b.closed, triangles: b.triangles, surface: b.surface, ...(b.box ? { box: b.box } : {}), ...(b.label ? { label: b.label } : {}) })), features, live.bodyStyles)
+              useReverse.setState({ features, stepFiles: files, hiddenBodies, nextFeatureId: feature.id + 1,
+                nextOfKind: { ...live.nextOfKind, import: (live.nextOfKind.import ?? 0) + 1 },
+                buildVersion: nextVersion, bodiesVersion: live.bodiesVersion + 1, building: false, buildError: null,
+                bodies, results: Object.fromEntries(withStepsSaid(answer.results, built).map(result => [result.id, result])) })
+              notes?.publish()
+            }, restore, operationId, restoreEffect, notes ?? undefined)
+            adopted = true
+          } finally { adoptingEditor = false }
+          candidate.onFailure = why => { if (client === candidate) { useReverse.getState().failBuild(why); useReverse.getState().setKernel('unavailable', why) } }
+          // Scan data was copied to the staged worker; clear this cache for a safe resync.
+          scanSent = null; scanSending = null; extractedFrom = extractSources()
+          signal.removeEventListener('abort', dispose)
+          clearTimeout(deadline)
+          originalClient.onFailure = null
+          try { originalClient.dispose() } catch { /* Published CAD remains owned by candidate. */ }
+          receipt = Object.freeze({ operationId, artifactSha256, documentEpoch: live.documentEpoch,
+            createdBodyIds: Object.freeze(made.map(b => b.id)), historyActionId: operationId, mode: annotation?'annotated-cad-copy' as const:'cad-copy' as const, ...(annotation?{annotationVersion:1 as const,envelopeSha256:annotation.envelopeSha256,createdFeatureUuid:feature.annotationSource!.featureUuid,notes:notes!.receipt()}: {}) })
+          return receipt
+        },
+        dispose: () => { clearTimeout(deadline); signal.removeEventListener('abort', dispose); dispose() },
+      }
+    } catch (error) { clearTimeout(deadline); signal.removeEventListener('abort', dispose); dispose(); throw error }
+  }
+
   return {
     sceneRef,
+    stageEditorCopy,
     /** The kernel's client once it has been started, else null. */
     client: () => client,
     startKernel,

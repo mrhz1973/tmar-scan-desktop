@@ -14,6 +14,8 @@
 // go. The same input gives the same answer, kept or not; the map was half
 // of a 30-patch read, and nearly all of it was a cell read before.
 
+import { offsetTrace, validatePointOffsets, networkHasOffsets } from './networkPointMotion'
+import { liftedCentreGraph } from './networkCentreFit'
 import type { ScanPaths } from '../../../src/core/geometry/scanPath'
 import type { Vec3 } from '../../../src/core/types'
 import type { EdgeRef, FaceRef, NetworkCurve, NetworkFeature, NetworkNode } from './features'
@@ -31,6 +33,8 @@ export type CellOutcome = { seed: Vec3; sides: number; patch: number; patches: n
  *  the side's middles of a split cell — its cells, and the patches fitted
  *  to them, or null where no cell could be filled. */
 export interface NetworkReading {
+  /** Deliberate off-scan centres need denser CAD interpolation, not looser sewing. */
+  displacedCentres?: true
   traced: TracedNetwork
   cells: NetworkCells
   outcomes: CellOutcome[]
@@ -122,6 +126,7 @@ function cacheOf(scan: ScanPaths): ReadCache {
 
 /** The network read off the scan, every stage (see above). */
 export function readNetwork(scan: ScanPaths, f: Pick<NetworkFeature, 'nodes' | 'curves' | 'cells' | 'spans' | 'fit'>, bodies?: NetworkBodies): NetworkReading {
+  validatePointOffsets(f)
   const t0 = performance.now()
   const cache = cacheOf(scan)
   cache.begin()
@@ -182,12 +187,13 @@ export function readNetwork(scan: ScanPaths, f: Pick<NetworkFeature, 'nodes' | '
   // curve is; a spoke is not.
   const crease = new Map(f.curves.map((c) => [c.id, c.crease === true]))
   const creaseOf = (id: number) => crease.get(id) ?? (split ? (split.originOf.has(id) ? (crease.get(split.originOf.get(id)!) ?? false) : false) : false)
+  const lifted = liftedCentreGraph(graph, split, f, scan.edge)
   const fit =
     patches.length > 0
       ? fitNetwork({
           patches,
-          curves: graph.curves.map((c) => ({ ...c, crease: creaseOf(c.id) })),
-          nodes: graph.nodes,
+          curves: lifted.graph.curves.map((c) => ({ ...c, crease: creaseOf(c.id) })),
+          nodes: lifted.graph.nodes,
           spans: f.spans,
           smoothness: f.fit.smoothness,
           robust: f.fit.robust,
@@ -201,7 +207,7 @@ export function readNetwork(scan: ScanPaths, f: Pick<NetworkFeature, 'nodes' | '
         })
       : null
   const t4 = performance.now()
-  return { traced: graph, cells, outcomes, fit, split: split ? { spokes: split.spokes, centres: split.centres } : null, ms: { trace: t1 - t0, cells: t2 - t1, map: t3 - t2, fit: t4 - t3 } }
+  return { ...(networkHasOffsets(f)?{displacedCentres:true as const}:{}), traced: graph, cells, outcomes, fit, split: split ? { spokes: lifted.spokes, centres: lifted.centres } : null, ms: { trace: t1 - t0, cells: t2 - t1, map: t3 - t2, fit: t4 - t3 } }
 }
 
 /** What a network reads off the bodies it rests on (PN11): the build's
@@ -374,7 +380,12 @@ export function traceNetwork(scan: ScanPaths, nodes: readonly NetworkNode[], cur
       lost.push(c.id)
       continue
     }
-    traced.push({ id: c.id, from: c.from, to: c.to, trace: got.trace, fit: exact ? fitProvisional(exact, scan.edge) : got.fit, ...(exact ? { exact } : {}) })
+    const fitPoints = exact ? undefined : offsetTrace(got.trace, [
+      nodes.find(n => n.id === c.from)?.offset, ...c.via.map((_, i) => c.viaOffsets?.[i]),
+      nodes.find(n => n.id === c.to)?.offset,
+    ])
+    traced.push({ id: c.id, from: c.from, to: c.to, trace: got.trace, fit: exact ? fitProvisional(exact, scan.edge) : got.fit,
+      ...(exact ? { exact } : {}), ...(fitPoints ? { fitPoints } : {}) })
   }
   return { nodes: [...placed.values()], curves: traced, lost, ...(lostWhy.size > 0 ? { lostWhy } : {}) }
 }

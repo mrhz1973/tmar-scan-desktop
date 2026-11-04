@@ -1,0 +1,370 @@
+{
+  "label": "baseline-a28c747-source",
+  "url": "http://127.0.0.1:17661/",
+  "checks": [
+    "real author controller in existing workspace",
+    "validated numeric normal movement before Apply"
+  ],
+  "exceptions": [
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.assertCurrent (http://127.0.0.1:17661/plugins/reverse/app/workspaceEditorHost.ts:48:17)\n    at current (http://127.0.0.1:17661/src/viewer/editorViewportLease.ts:146:13)\n    at Object.references (http://127.0.0.1:17661/src/viewer/editorViewportLease.ts:204:7)\n    at refreshReferences (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:158:30)\n    at sync (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:347:9)\n    at http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:795:21\n    at http://127.0.0.1:17661/e2e-out/host-editor/vite-cache-local/deps/zustand.js?v=84e1161a:17:39\n    at Set.forEach (<anonymous>)\n    at useBoundStore.setState (http://127.0.0.1:17661/e2e-out/host-editor/vite-cache-local/deps/zustand.js?v=84e1161a:17:17)\n    at http://127.0.0.1:17661/plugins/reverse/app/reSession.ts:575:26",
+      "frames": [
+        {
+          "name": "assertCurrent",
+          "url": "",
+          "line": 48,
+          "column": 10
+        },
+        {
+          "name": "current",
+          "url": "",
+          "line": 146,
+          "column": 12
+        },
+        {
+          "name": "references",
+          "url": "",
+          "line": 204,
+          "column": 6
+        },
+        {
+          "name": "refreshReferences",
+          "url": "",
+          "line": 158,
+          "column": 29
+        },
+        {
+          "name": "sync",
+          "url": "",
+          "line": 347,
+          "column": 8
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 795,
+          "column": 20
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 17,
+          "column": 38
+        },
+        {
+          "name": "setState",
+          "url": "",
+          "line": 17,
+          "column": 16
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 575,
+          "column": 25
+        },
+        {
+          "name": "historyAtomic",
+          "url": "",
+          "line": 104,
+          "column": 19
+        },
+        {
+          "name": "publish",
+          "url": "",
+          "line": 553,
+          "column": 12
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 195,
+          "column": 29
+        }
+      ],
+      "guard": {
+        "kernelChanged": true,
+        "documentChanged": false,
+        "buildChanged": true,
+        "building": false,
+        "featuresChanged": true,
+        "stepsChanged": true,
+        "parametersChanged": false,
+        "elementsChanged": false,
+        "sectionsChanged": false
+      }
+    },
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.assertCurrent (http://127.0.0.1:17661/plugins/reverse/app/workspaceEditorHost.ts:48:17)\n    at assertLive (http://127.0.0.1:17661/src/plugins/workspaceEditors.ts:35:19)\n    at Object.assertSourceCurrent (http://127.0.0.1:17661/src/plugins/workspaceEditors.ts:70:34)\n    at WorkspaceSurfaceSession.assertLive (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:747:18)\n    at WorkspaceSurfaceSession.assertMutable (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:750:10)\n    at WorkspaceSurfaceSession.change (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:808:10)\n    at WorkspaceSurfaceSession.reportViewError (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:687:10)\n    at report (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:120:11)\n    at refreshReferences (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:172:7)\n    at sync (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:347:9)",
+      "frames": [
+        {
+          "name": "assertCurrent",
+          "url": "",
+          "line": 48,
+          "column": 10
+        },
+        {
+          "name": "assertLive",
+          "url": "",
+          "line": 35,
+          "column": 18
+        },
+        {
+          "name": "assertSourceCurrent",
+          "url": "",
+          "line": 70,
+          "column": 33
+        },
+        {
+          "name": "assertLive",
+          "url": "",
+          "line": 747,
+          "column": 17
+        },
+        {
+          "name": "assertMutable",
+          "url": "",
+          "line": 750,
+          "column": 9
+        },
+        {
+          "name": "change",
+          "url": "",
+          "line": 808,
+          "column": 9
+        },
+        {
+          "name": "reportViewError",
+          "url": "",
+          "line": 687,
+          "column": 9
+        },
+        {
+          "name": "report",
+          "url": "",
+          "line": 120,
+          "column": 10
+        },
+        {
+          "name": "refreshReferences",
+          "url": "",
+          "line": 172,
+          "column": 6
+        },
+        {
+          "name": "sync",
+          "url": "",
+          "line": 347,
+          "column": 8
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 795,
+          "column": 20
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 17,
+          "column": 38
+        },
+        {
+          "name": "setState",
+          "url": "",
+          "line": 17,
+          "column": 16
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 575,
+          "column": 25
+        },
+        {
+          "name": "historyAtomic",
+          "url": "",
+          "line": 104,
+          "column": 19
+        },
+        {
+          "name": "publish",
+          "url": "",
+          "line": 553,
+          "column": 12
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 195,
+          "column": 29
+        }
+      ],
+      "guard": {
+        "kernelChanged": true,
+        "documentChanged": false,
+        "buildChanged": true,
+        "building": false,
+        "featuresChanged": true,
+        "stepsChanged": true,
+        "parametersChanged": false,
+        "elementsChanged": false,
+        "sectionsChanged": false
+      }
+    },
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.assertCurrent (http://127.0.0.1:17661/plugins/reverse/app/workspaceEditorHost.ts:48:17)\n    at assertLive (http://127.0.0.1:17661/src/plugins/workspaceEditors.ts:35:19)\n    at Object.assertSourceCurrent (http://127.0.0.1:17661/src/plugins/workspaceEditors.ts:70:34)\n    at WorkspaceSurfaceSession.assertLive (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:747:18)\n    at WorkspaceSurfaceSession.assertMutable (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:750:10)\n    at WorkspaceSurfaceSession.change (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:808:10)\n    at WorkspaceSurfaceSession.reportViewError (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:687:10)\n    at report (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:120:11)\n    at sync (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:377:7)\n    at http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:795:21",
+      "frames": [
+        {
+          "name": "assertCurrent",
+          "url": "",
+          "line": 48,
+          "column": 10
+        },
+        {
+          "name": "assertLive",
+          "url": "",
+          "line": 35,
+          "column": 18
+        },
+        {
+          "name": "assertSourceCurrent",
+          "url": "",
+          "line": 70,
+          "column": 33
+        },
+        {
+          "name": "assertLive",
+          "url": "",
+          "line": 747,
+          "column": 17
+        },
+        {
+          "name": "assertMutable",
+          "url": "",
+          "line": 750,
+          "column": 9
+        },
+        {
+          "name": "change",
+          "url": "",
+          "line": 808,
+          "column": 9
+        },
+        {
+          "name": "reportViewError",
+          "url": "",
+          "line": 687,
+          "column": 9
+        },
+        {
+          "name": "report",
+          "url": "",
+          "line": 120,
+          "column": 10
+        },
+        {
+          "name": "sync",
+          "url": "",
+          "line": 377,
+          "column": 6
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 795,
+          "column": 20
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 17,
+          "column": 38
+        },
+        {
+          "name": "setState",
+          "url": "",
+          "line": 17,
+          "column": 16
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 575,
+          "column": 25
+        },
+        {
+          "name": "historyAtomic",
+          "url": "",
+          "line": 104,
+          "column": 19
+        },
+        {
+          "name": "publish",
+          "url": "",
+          "line": 553,
+          "column": 12
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 195,
+          "column": 29
+        }
+      ],
+      "guard": {
+        "kernelChanged": true,
+        "documentChanged": false,
+        "buildChanged": true,
+        "building": false,
+        "featuresChanged": true,
+        "stepsChanged": true,
+        "parametersChanged": false,
+        "elementsChanged": false,
+        "sectionsChanged": false
+      }
+    },
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.assertCurrent (http://127.0.0.1:17661/plugins/reverse/app/workspaceEditorHost.ts:48:17)\n    at assertLive (http://127.0.0.1:17661/src/plugins/workspaceEditors.ts:35:19)\n    at Object.assertSourceCurrent (http://127.0.0.1:17661/src/plugins/workspaceEditors.ts:70:34)\n    at WorkspaceSurfaceSession.assertLive (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:747:18)\n    at WorkspaceSurfaceSession.assertMutable (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:750:10)\n    at WorkspaceSurfaceSession.change (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:808:10)\n    at WorkspaceSurfaceSession.reportViewError (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:687:10)\n    at report (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:120:11)\n    at sync (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:377:7)\n    at http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:795:21",
+      "frames": [
+        {
+          "name": "historyAtomic",
+          "url": "",
+          "line": 115,
+          "column": 4
+        },
+        {
+          "name": "publish",
+          "url": "",
+          "line": 553,
+          "column": 12
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 195,
+          "column": 29
+        }
+      ]
+    },
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.assertCurrent (http://127.0.0.1:17661/plugins/reverse/app/workspaceEditorHost.ts:48:17)\n    at assertLive (http://127.0.0.1:17661/src/plugins/workspaceEditors.ts:35:19)\n    at Object.assertSourceCurrent (http://127.0.0.1:17661/src/plugins/workspaceEditors.ts:70:34)\n    at WorkspaceSurfaceSession.assertLive (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:747:18)\n    at WorkspaceSurfaceSession.assertMutable (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:750:10)\n    at WorkspaceSurfaceSession.change (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:808:10)\n    at WorkspaceSurfaceSession.reportViewError (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceSession.ts:687:10)\n    at report (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:120:11)\n    at sync (http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:377:7)\n    at http://127.0.0.1:17661/plugins/tmar-edit-surface/workspaceLayer.ts:795:21",
+      "frames": [
+        {
+          "name": "",
+          "url": "",
+          "line": 212,
+          "column": 6
+        }
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "verdict": "FAIL",
+  "after": {
+    "open": true,
+    "status": "La sorgente CAD o il documento è cambiato: riapri la modifica.",
+    "bodies": 1
+  },
+  "error": "AssertionError [ERR_ASSERTION]: Apply creates one copy and closes editor without stale-source error\n    at check (file:///D:/TMAR-QA/workspace-apply-guard-qa-20261103/plugins/reverse/scripts/e2e-workspace-apply-guard.mjs:18:25)\n    at file:///D:/TMAR-QA/workspace-apply-guard-qa-20261103/plugins/reverse/scripts/e2e-workspace-apply-guard.mjs:65:3"
+}

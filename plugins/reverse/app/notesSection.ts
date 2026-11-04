@@ -10,6 +10,7 @@
 // part. They are carried with the part when an alignment moves it. Those a
 // file brings are marked as its own (Note.fromFile), which no file holds.
 
+import { revalidateAnnotations } from './annotationPersistence'
 import type { ProjectSection } from '../../../src/app/projectSections'
 import { rigidCompose, rigidInvert, type Rigid } from '../../../src/core/deviation/rigid'
 import { useStore } from '../../../src/state/store'
@@ -33,8 +34,9 @@ export const notesSection: ProjectSection<NotesPart> = {
     const notes = value === undefined ? [] : notesFromFile(validateNotes((value as NotesPart).notes))
     // The project's, whatever was in hand — for its part or for another
     // (followPart) — as its model replaces the model in hand.
-    return () => useNotes.getState().load(notes)
+    return () => useNotes.getState().load(notes.map(n=>n.attachment?{...n,attachment:{...n.attachment,status:'unresolved'}}:n))
   },
+  remeasure: async () => { await revalidateAnnotations() },
   hasContent: (value) => value.notes.length > 0,
   holdsWork: () => useNotes.getState().notes.length > 0,
   holds: () => ({ notes: useNotes.getState().notes.length }),

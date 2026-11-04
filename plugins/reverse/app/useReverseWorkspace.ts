@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { createCentreOffset, type CentreOffset } from '../core/networkNormalMotion'
 // The Reverse engineer workspace's plumbing: the kernel brought up when the
 // workspace is first entered, the slice chains a sketch is drawn over, the
 // bodies the rebuild after every change to the feature list makes pushed
@@ -221,11 +222,18 @@ export function useReverseWorkspace({
       return [out[0], out[1], out[2]]
     }
     // A network's points are on the scan, in its frame: they go with it.
+    const moveOffset = (offset: CentreOffset): CentreOffset => {
+      const origin = moveAt([0, 0, 0]), end = moveAt([...offset.direction] as Vec3)
+      const direction = end.map((v, i) => v - origin[i]) as Vec3
+      const scale = Math.hypot(...direction)
+      return createCentreOffset(moveAt([...offset.anchor] as Vec3), direction, offset.distance * scale)
+    }
     const movedNetwork = <T extends NetworkData>(n: T): T => ({
       ...n,
-      nodes: n.nodes.map((x) => ({ ...x, at: moveAt(x.at) })),
-      curves: n.curves.map((c) => ({ ...c, via: c.via.map(moveAt) })),
-      cells: n.cells.map((c) => ({ ...c, seed: moveAt(c.seed), ...(c.centre ? { centre: moveAt(c.centre) } : {}) })),
+      nodes: n.nodes.map(x => ({ ...x, at: moveAt(x.at), ...(x.offset ? { offset: moveOffset(x.offset) } : {}) })),
+      curves: n.curves.map(c => ({ ...c, via: c.via.map(moveAt), ...(c.viaOffsets ? { viaOffsets: c.viaOffsets.map(o => o ? moveOffset(o) : null) } : {}) })),
+      cells: n.cells.map(c => ({ ...c, seed: moveAt(c.seed), ...(c.centre ? { centre: moveAt(c.centre) } : {}),
+        ...(c.centreOffset ? { centreOffset: moveOffset(c.centreOffset) } : {}) })),
     })
     const moved = (f: Feature): Feature =>
       f.kind === 'network'

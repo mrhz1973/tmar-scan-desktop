@@ -83,10 +83,12 @@ the edited copy is explicitly taken into use.
 
 **STEP opened as Scan now keeps its CAD face boundaries with Zebra.** The
 reported import route is supported without reimporting the file as a CAD body.
-The separate **TMAR web + source revision** badge is visible beside ScanRuler;
-click it for full build details in Settings. It identifies the loaded bundle,
-not the latest repository version. Original ScanRuler version and attribution
-are preserved. [Follow-up validation](docs/tmar-step-scan-validation.md).
+The separate **TMAR Versione 1** badge starts a chronological delivery sequence:
+**1, 2, 3…**. A clearly marked **Anteprima** is still a preview, not a stable release.
+Click the badge for Settings; the source commit remains under **Dettagli tecnici**,
+not in the main label. Numbers identify delivered versions, never page loads or
+Git commit counts. Original ScanRuler version and attribution are preserved.
+[Numbering policy and versions](docs/tmar-versions.md). [Follow-up validation](docs/tmar-step-scan-validation.md).
 
 ## CAD face edges with Zebra
 

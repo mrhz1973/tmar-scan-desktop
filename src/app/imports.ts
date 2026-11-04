@@ -6,6 +6,7 @@
 // was; and busy and errors are reported for the import as a whole
 // (runImport), not member by member.
 
+import { workspaceEditors } from '../plugins/workspaceEditors'
 import type { MeshWorkerClient, LoadedScan, LoadedNominal } from '../core/workerClient'
 import type { CreaseSetting } from '../core/geometry/crease'
 import type { Rigid } from '../core/deviation/rigid'
@@ -47,6 +48,7 @@ export function runImport(
   shouldStart: () => boolean = () => true,
 ): Promise<void> {
   return queue.run(async () => {
+    if (workspaceEditors.active()) { useStore.getState().setError('Concludi Edit Surface prima di aprire un altro file.'); return }
     if (!shouldStart()) return
     const previousStatus = useStore.getState().statusText
     useStore.setState({ busy: true, errorText: null, statusText })

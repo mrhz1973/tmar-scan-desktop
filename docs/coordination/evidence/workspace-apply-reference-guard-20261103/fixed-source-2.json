@@ -1,0 +1,30 @@
+{
+  "label": "fixed-source-2",
+  "url": "http://127.0.0.1:17661/",
+  "checks": [
+    "real author controller in existing workspace",
+    "validated numeric normal movement before Apply",
+    "Apply creates one copy and closes editor without stale-source error",
+    "project toolbar Undo/Redo removes/restores only copy",
+    "saved project reopens with original and copy in a fresh page",
+    "independent OCCT validates original and deformed copy",
+    "no source guard exceptions during publication",
+    "zero application console errors"
+  ],
+  "exceptions": [],
+  "consoleErrors": [],
+  "verdict": "PASS",
+  "after": {
+    "open": false,
+    "status": "",
+    "bodies": 2
+  },
+  "geometry": {
+    "valid": true,
+    "solids": 2,
+    "volumes": [
+      6000,
+      5999.062475625071
+    ]
+  }
+}

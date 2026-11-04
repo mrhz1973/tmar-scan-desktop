@@ -113,9 +113,21 @@ try {
   check(thread.json?.result?.status === 'ok' && thread.json.feature.pitch === 0.5, `reverse_feature_add thread: M3×${thread.json?.feature?.pitch}, ${thread.json?.result?.status}`)
 
   // What the person sees.
-  await page.waitForFunction(() => document.querySelectorAll('[data-test="feature-row"]').length === 3, { timeout: 30_000 }).catch(() => {})
-  const rows = await page.$$eval('[data-test="feature-row"]', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()))
-  check(rows.length === 3 && rows[0].includes('Pin profile') && rows[1].includes('Revolve 1') && rows[2].includes('Thread 1'), `the feature tree in the panel: ${JSON.stringify(rows)}`)
+  // TMAR deliberately renders the same feature in the category view AND in
+  // the native chronological history. Assert both presentations separately;
+  // counting all [data-test=feature-row] globally would count each twice.
+  const groupedRowsSelector = '[data-test="feature-category"] [data-test="feature-row"]'
+  const historyRowsSelector = '[data-test="feature-build-history"] [data-test="feature-row"]'
+  await page.waitForFunction((grouped, history) =>
+    document.querySelectorAll(grouped).length === 3 && document.querySelectorAll(history).length === 3,
+  { timeout: 30_000 }, groupedRowsSelector, historyRowsSelector)
+  const readRows = (selector) => page.$$eval(selector, (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()))
+  const groupedRows = await readRows(groupedRowsSelector)
+  const historyRows = await readRows(historyRowsSelector)
+  const expectedNames = ['Pin profile', 'Revolve 1', 'Thread 1']
+  check(groupedRows.length === 3 && historyRows.length === 3 &&
+    expectedNames.every((name, i) => groupedRows[i].includes(name) && historyRows[i].includes(name)),
+  `category view and chronological history each contain the three features: ${JSON.stringify({groupedRows, historyRows})}`)
   // The Parameters section opens folded; unfolded as a person would.
   if ((await page.$eval('[data-test="parameters-fold"]', (e) => e.getAttribute('aria-expanded'))) !== 'true') await page.click('[data-test="parameters-fold"]')
   await page.waitForSelector('[data-test="parameter-row"]', { timeout: 10_000 }).catch(() => {})

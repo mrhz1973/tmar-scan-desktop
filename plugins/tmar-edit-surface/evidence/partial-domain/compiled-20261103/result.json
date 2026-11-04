@@ -1,0 +1,12 @@
+{
+  "pass": true,
+  "faceIndex": 5,
+  "poles": 729,
+  "hiddenProtectedPoles": 344,
+  "hiddenPickingExcluded": true,
+  "beforeVolume": 23045.15110012278,
+  "afterVolume": 23057.564546293597,
+  "maxBoundaryDistance": 0,
+  "validStep": true,
+  "consoleErrors": []
+}

@@ -19,6 +19,7 @@ import { allFeatures, type Json, withHeldBuild } from './reCommandCore'
 import { add, build, clear, importStep, list, move, refit, remove, rollback, schema, sketchEdit, suppress, update } from './reFeatureCommands'
 import { buildStop } from './reBuildStop'
 import { bodySet, check, clearance, compare, compareInDeviationCommand, describe, step, stl } from './reBodyCommands'
+import { bodyEditSource } from './reBodyEditSource'
 import { volumeCompare } from './reVolumeCompare'
 import { review } from './reReview'
 import { planeDescribe, sectionFit, sectionOutline, sectionStack, sketchCandidates, tubeTrace } from './reSectionCommands'
@@ -89,7 +90,7 @@ function withNotes(command: Command<never>): Command<never> {
  *  described and checked, notes, and the files. */
 const HEADLESS = new Set([
   'feature.list', 'feature.add', 'feature.schema', 'feature.update', 'feature.remove', 'feature.move', 'feature.suppress', 'feature.clear', 'feature.rollback', 'sketch.edit', 'build',
-  'body.describe', 'body.check', 'body.fillet_try', 'export.step', 'export.stl', 'import.step', 'plane.describe',
+  'body.describe', 'body.edit_source', 'body.check', 'body.fillet_try', 'export.step', 'export.stl', 'import.step', 'plane.describe',
   'parameter.list', 'parameter.add', 'parameter.set', 'parameter.rename', 'parameter.remove',
   'note.list', 'note.add', 'note.resolve', 'plan.set', 'plan.update', 'plan.tick', 'plan.replace',
 ])
@@ -116,6 +117,7 @@ export const reverseCommands: Command<never>[] = ([
   build,
   buildStop,
   { ...describe, name: 'body.describe' },
+  { ...bodyEditSource, name: 'body.edit_source' },
   { ...bodySet, name: 'body.set' },
   { ...clearance, name: 'body.clearance' },
   { ...compare, name: 'body.compare' },

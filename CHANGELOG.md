@@ -7,6 +7,40 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Patch Network 3D point checkpoint ? 2026-11-04
+
+- Preserve recovered work and connect explicit node, shared-curve grip and derived-centre offsets to coupled fitting, preview and native project persistence.
+- Add part-frame XYZ and scan-normal controls, captured point drag and selective local/project Undo/Redo; protect active gestures from Ctrl+Z.
+- Keep on-scan projection and CAD constraints; do not claim an unimplemented 3D proximity magnet or near-parallel depth fallback.
+- Isolated Windows/web QA only; no release or preview counter change. See `docs/coordination/patch-network-3d-resume-20261104.md`.
+
+### TMAR Versione 1 — sequential preview numbering — 2026-11-03
+
+- Replace the prominent commit code with Versione 1 and an explicit Anteprima label.
+- Keep commit, build time and dirty-source status in technical details.
+- Start an explicit chronological delivery counter in tmar-version.json; builds and reloads do not advance it.
+- Preserve upstream version, project format and all CAD functionality. Existing QA limitations remain open.
+
+### TMAR Edit Surface feature tile - 2026-11-03
+
+- Move Edit Surface immediately after Patch network in the Create feature grid;
+  remove the old bottom-panel entry. Keep the original command name.
+- Draw a theme-aware quadrilateral control-net icon with nine pole markers,
+  using the existing icon frame, accent colours and feature-tile styling.
+- Keep the editor modal outside the grid through a portal so feature-button
+  styles and sidebar scrolling do not affect the editor. CAD logic is unchanged.
+
+### TMAR current CAD editor source - 2026-11-03
+
+- Add read-only `reverse.body.edit_source` for one explicitly named current
+  CAD body, including ordinary open and sewn sheets. Keep general STEP export
+  filtering unchanged; use built CAD rather than the original import file.
+- Reject mismatched body keys and results overtaken by document/build changes.
+  Do not create geometry, notes, or history entries during this read.
+- Document the editor integration contract in `plugins/reverse/EDITOR-SOURCE.md`.
+  The Edit Surface author owns its Load body wiring; annotated Apply and
+  parametric host persistence remain separate work, with no release implied.
+
 ### TMAR Dark default and screenshot gallery - 2026-11-03
 
 - Start with Dark independently of the operating system, including first paint

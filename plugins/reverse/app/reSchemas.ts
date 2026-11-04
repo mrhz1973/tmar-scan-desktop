@@ -21,6 +21,10 @@ import { NET_MAX, NET_MIN } from '../core/surfaceFit'
 import { SURFACE_REGION_LIMIT, SURFACE_REGION_MAX } from './reSurfaceRegion'
 import { INSERT_SIZES } from '../core/inserts'
 
+const networkOffsetIn = obj({ version: { type: 'number', enum: [1] }, units: { type: 'string', enum: ['mm'] }, coordinateFrame: { type: 'string', enum: ['part'] },
+  anchor: vec3('On-scan topology anchor.'), direction: vec3('Unit displacement direction.'), distance: num('Signed millimetres.') },
+  ['version', 'units', 'coordinateFrame', 'anchor', 'direction', 'distance'], 'Explicit 3D offset; does not replace the scan topology anchor.')
+
 const vec2 = (description: string): JsonSchema => arr(num(), description, { minItems: 2, maxItems: 2 })
 const kind = (k: string): JsonSchema => enumOf([k])
 
@@ -943,7 +947,7 @@ export const FEATURE_IN: Record<string, JsonSchema> = {
       kind: kind('network'),
       name: nameIn,
       nodes: arr(
-        obj({ id: int('Its id, which the curves name.'), at: vec3('On the scan, mm — taken onto it again at every build.'), on: anyObject('On a body: { body, edge, t } or { body, vertex, end }.'), corner: bool('A corner of the cells it bounds, or not, over the rule (the boundary turning more than 30° there).') }, ['id', 'at']),
+        obj({ id: int('Its id, which the curves name.'), at: vec3('On the scan, mm — taken onto it again at every build.'), offset: networkOffsetIn, on: anyObject('On a body: { body, edge, t } or { body, vertex, end }.'), corner: bool('A corner of the cells it bounds, or not, over the rule (the boundary turning more than 30° there).') }, ['id', 'at']),
         'The network’s points: the curves’ ends, by id.',
       ),
       curves: arr(
@@ -953,6 +957,7 @@ export const FEATURE_IN: Record<string, JsonSchema> = {
             from: int('The node it starts at.'),
             to: int('The node it ends at.'),
             via: arr(vec3(''), 'The grips between its ends, in order; between two points the curve follows the scan.'),
+            viaOffsets: arr(oneOf([networkOffsetIn, { type: 'null' }]), 'One offset or null for each via grip.'),
             crease: bool('The patches either side meet at an angle; absent, tangent.'),
             along: anyObject('{ body, edge }: it runs along that body’s edge (an edge fingerprint).'),
             side: anyObject('{ body, face, mode: "contact" | "tangent" }: the patch beside it meets that body’s face (a face fingerprint).'),
@@ -961,7 +966,7 @@ export const FEATURE_IN: Record<string, JsonSchema> = {
         ),
         'The curves, each between two nodes through its grips.',
       ),
-      cells: arr(obj({ seed: vec3('A point inside the region filled.'), centre: vec3('A cell of three, five or six sides split from here.'), corners: arr(int(''), 'The patch’s corners, node ids in order round it: its corners however little the boundary turns there.') }, ['seed']), 'The regions filled, each by a point inside it.'),
+      cells: arr(obj({ seed: vec3('A point inside the region filled.'), centre: vec3('A cell of three, five or six sides split from here.'), centreOffset: obj({ version: {type:'number',enum:[1]}, units: {type:'string',enum:['mm']}, coordinateFrame: {type:'string',enum:['part']}, anchor: vec3('On-scan split centre.'), direction: vec3('Unit direction in part frame.'), distance: num('Signed displacement in mm.') }, ['version','units','coordinateFrame','anchor','direction','distance']), corners: arr(int(''), 'The patch’s corners, node ids in order round it: its corners however little the boundary turns there.') }, ['seed']), 'The regions filled, each by a point inside it.'),
       spans: anyObject('A strip’s span count by the id of a curve in it, as text: { "4": 6 }; a strip with none is Auto.'),
       fit: obj({ smoothness: num('0.001 by default.', { minimum: 0 }), robust: bool('Fit again without the points past three sigmas.'), tolerance: num('mm, 0.01 by default: Auto gives a strip more spans only where a patch on it strays from the scan by more than this beyond its noise, and only while that helps.', { minimum: 0 }) }, [], 'How the patches are fitted.'),
     },
