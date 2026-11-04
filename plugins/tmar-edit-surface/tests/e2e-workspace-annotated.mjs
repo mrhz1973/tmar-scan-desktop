@@ -76,6 +76,16 @@ try {
   await page.waitForFunction(()=>{const s=window.annotatedQa.useWorkspaceEditor.getState();return s.snapshot?.validation.kind==='valid'&&!s.controller?.getPanelState().calculating},{timeout:120000})
   const supported=await page.evaluate(index=>!window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState().faces[index].reason,selected.index)
   check(supported,'a reversed STEP solid face is editable')
+  if (process.env.TEST_SNAP_ENTRY === '1') {
+    const selector='[data-test=surface-snap-distance]'
+    const selectAll=async()=>{await page.click(selector);await page.keyboard.down('Control');await page.keyboard.press('A');await page.keyboard.up('Control')}
+    await selectAll();await page.type(selector,'0.05');await page.keyboard.press('Enter')
+    check(await page.evaluate(()=>window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState().snapDistance===0.05),'small fractional magnet distance can be typed and confirmed')
+    await selectAll();await page.type(selector,'0');await page.keyboard.press('Enter')
+    check(await page.$eval(selector,e=>e.value==='0.05') && await page.evaluate(()=>window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState().snapDistance===0.05),'invalid magnet distance restores the last valid value')
+    await selectAll();await page.type(selector,'0.2');await page.keyboard.press('Escape')
+    check(await page.$eval(selector,e=>e.value==='0.05') && await page.evaluate(()=>window.annotatedQa.useWorkspaceEditor.getState().phase!=='closed'),'Escape cancels numeric input without closing the editor')
+  }
   await page.click('[data-test=surface-zebra]')
   await page.click('[data-test=surface-note-add]')
   await page.evaluate(point=>window.annotatedQa.useWorkspaceEditor.getState().controller.placeNote(point),selected.point)

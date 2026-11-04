@@ -156,8 +156,15 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <fieldset><legend>Magnete</legend>
         <label className="inline"><input data-test="surface-snap" type="checkbox" checked={state.snap} disabled={disabled}
           onChange={e => attempt(() => controller.setSnap(e.target.checked))} /> Aggancia a scansione e CAD vicini</label>
-        {state.snap && <><label>Portata · mm<input data-test="surface-snap-distance" type="number" min="0.001" max="1000" step="0.1"
-          value={state.snapDistance} disabled={disabled} onChange={e => { if (Number.isFinite(e.target.valueAsNumber)) attempt(() => controller.setSnapDistance(e.target.valueAsNumber)) }} /></label>
+        {state.snap && <><label>Portata · mm<input key={state.snapDistance} data-test="surface-snap-distance" type="number" min="0.001" max="1000" step="any"
+          defaultValue={state.snapDistance} disabled={disabled} onBlur={e => {
+            const value = e.currentTarget.valueAsNumber
+            if (Number.isFinite(value) && value >= .001 && value <= 1000) attempt(() => controller.setSnapDistance(value))
+            else { e.currentTarget.value = String(state.snapDistance); setError('Portata magnete: inserisci un valore tra 0,001 e 1000 mm.') }
+          }} onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); e.currentTarget.value = String(state.snapDistance); e.currentTarget.blur() }
+          }} /></label>
           <p>Alt sospende il magnete durante il trascinamento. L’aggancio usa la geometria visualizzata.</p></>}
       </fieldset>
       <label className="inline"><input data-test="surface-control-net" type="checkbox" checked={state.showNet} disabled={disabled}

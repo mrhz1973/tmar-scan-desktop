@@ -288,6 +288,14 @@ placement in this test used the controller; it did not verify a viewport click.
 The opt-in scenario uses `TEST_NOTED_FACE_SWITCH=1` with the annotated QA script.
 A packaged desktop release and arbitrary real-world projects remain untested.
 
+The magnet reach field now accepts an intermediate value while typing and
+commits on Enter or blur; Escape restores the prior value. Invalid ranges are
+rejected and displayed. `TEST_SNAP_ENTRY=1` verified actual keyboard entry of
+0.05 mm, rejection of zero, and Escape without closing the editor in the
+isolated source app on a synthetic STEP (`annotated-edit-NBrigV`). The first
+attempt failed in the test harness on its keyboard shortcut, before testing the
+field; the corrected run passed. Packaged desktop behavior is not qualified.
+
 ## Not yet qualified
 
 The new adapter has not yet been qualified in a packaged desktop release or
