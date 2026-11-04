@@ -5,6 +5,7 @@ import { assertToleranceDistribution, boundaryPointOnFace, isOnCylinderEquivalen
 import { moveSmoothCylinderPole, assertSmoothCylinderMove, canonicalizeCylinderGesture } from '../periodic'
 import { localFrame } from '../localFrame'
 import { evaluatePreparedCylinder } from '../cylinderEvaluation'
+import { previewPreparedCylinder } from '../cylinderPreview'
 import { replaceSurface, surfaceTable } from '../brep'
 import { auditCylinderSeam } from '../cylinderSeam'
 
@@ -121,6 +122,8 @@ it('edits one of two distinct cylindrical bosses while preserving the other',asy
     const indices=faces.map((f,i)=>k.surfaceType(f)==='cylinder'?i:-1).filter(i=>i>=0)
     expect(indices).toHaveLength(2)
     const prepared=prepareCylinder(k,source,indices[0]),edited=evaluatePreparedCylinder(k,prepared,indices[0],moveSmoothCylinderPole(prepared.net,[.08,0,.05]))
+    const preview=previewPreparedCylinder(k,prepared,moveSmoothCylinderPole(prepared.net,[.08,0,.05]))
+    expect(preview.faceMeshes).toHaveLength(faces.length)
     const round=k.importStep(edited.step),after=k.getSubShapes(round,'face')
     try {
       expect(k.isValid(round)).toBe(true);expect(after).toHaveLength(faces.length)

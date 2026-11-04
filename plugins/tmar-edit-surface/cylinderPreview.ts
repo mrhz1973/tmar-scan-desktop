@@ -8,8 +8,8 @@ import { assertSmoothCylinderMove } from './periodic'
  * UI thread; the current revision must still pass evaluatePreparedCylinder. */
 export function previewPreparedCylinder(k: OcctKernel, prepared: {brep:string; net:Net}, candidate: Net): {kind:'provisional'; mesh:Mesh; faceMeshes:Mesh[]} {
   assertSmoothCylinderMove(prepared.net, candidate)
-  const entries=surfaceTable(prepared.brep).filter(r=>r.periodicNet)
-  if(entries.length!==1 || JSON.stringify(entries[0].periodicNet)!==JSON.stringify(prepared.net))
+  const entries=surfaceTable(prepared.brep).filter(r=>r.periodicNet && JSON.stringify(r.periodicNet)===JSON.stringify(prepared.net))
+  if(entries.length!==1)
     throw new Error('Base cilindrica non corrispondente.')
   const shape=k.fromBREP(replaceSurface(prepared.brep,entries[0],candidate))
   try {

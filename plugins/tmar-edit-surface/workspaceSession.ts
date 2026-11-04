@@ -323,7 +323,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         if (this.notes.length) { this.advanceNotesRevision(); this.notes = Object.freeze([]) }
         this.selectionEpoch++; this.face = index; this.busy = false
         this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
-        if(picked.session !== null) this.message = 'Cilindro sperimentale: trascina il punto centrale, poi verifica la geometria CAD. Le note non sono ancora disponibili.'
+        if(picked.session !== null) this.message = 'Cilindro sperimentale: trascina i punti disponibili, poi verifica la geometria CAD prima di aggiungere note o applicare.'
       }, true)
     } catch (error) {
       if (!this.disposed && epoch === this.selectionEpoch) {
@@ -1123,7 +1123,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const lockedSet = new Set(locked)
     const symmetryBlocked = !!symmetryPartners && d.selected.some(i =>
       !lockedSet.has(i) && (symmetryPartners[i] < 0 || lockedSet.has(symmetryPartners[i])))
-    const message = this.message ?? (strip?.error || d.error || noteMessage || (notesPending ? 'Verifica della posizione delle note in corso…' : null))
+    const message = strip?.error || d.error || this.message || noteMessage || (notesPending ? 'Verifica della posizione delle note in corso…' : null)
     const canUndo = strip ? strip.at > 0 : d.canUndo, canRedo = strip ? strip.at + 1 < strip.frames.length : d.canRedo
     const stripView: WorkspaceStripViewState | null = strip ? Object.freeze({
       paths: stripResult?.paths ?? strip.initialPaths, selectedEdge:strip.selectedEdge, axis:strip.axis, delta:freezePoint(strip.delta),

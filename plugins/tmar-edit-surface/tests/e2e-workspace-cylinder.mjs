@@ -3,16 +3,16 @@
 import assert from 'node:assert/strict'
 import { OcctKernel } from 'occt-wasm'
 import { launchApp } from '../../../scripts/e2e-lib.mjs'
-import { mkdtempSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 assert.equal(process.env.SCANRULER_ISOLATED,'1')
 assert.equal(process.env.APP_URL,'http://127.0.0.1:17723/')
-const k=await OcctKernel.init(),body=k.makeCylinder(10,20),boss=process.env.CYLINDER_BOSS==='1'
+const k=await OcctKernel.init(),body=k.makeCylinder(10,20),boss=process.env.CYLINDER_BOSS==='1',realFile=process.env.CYLINDER_REAL_STEP
 let step,box,base,pin,fused
 try {
   if(boss) {box=k.makeBox(50,50,5);base=k.translate(box,-25,-25,-5);pin=k.translate(body,0,0,-1);fused=k.fuse(base,pin)}
-  step=k.exportStep(fused??body)
+  step=realFile?readFileSync(realFile,'utf8'):k.exportStep(fused??body)
 } finally {[fused,pin,base,box,body].filter(Boolean).forEach(h=>k.release(h));k[Symbol.dispose]()}
 const {browser,page,consoleErrors}=await launchApp({url:process.env.APP_URL,width:1440,height:1000,agentDataOk:false})
 try {
@@ -43,12 +43,17 @@ try {
   const index=await page.evaluate(()=>window.cylinderQa.useWorkspaceEditor.getState().controller.getPanelState().faces.find(f=>f.experimentalCylinder)?.index)
   assert.notEqual(index,undefined,'eligible cylinder')
   await page.select('[data-test=surface-face]',String(index))
-  await page.waitForFunction(index=>{const c=window.cylinderQa.useWorkspaceEditor.getState().controller,p=c.getPanelState(),v=c.getViewState();return p.face===index && v.provisionalPreview?.faceMeshes.length===p.faces.length},{timeout:120000},index)
+  try {
+    await page.waitForFunction(index=>{const c=window.cylinderQa.useWorkspaceEditor.getState().controller,p=c.getPanelState(),v=c.getViewState();return p.face===index && v.provisionalPreview?.faceMeshes.length===p.faces.length},{timeout:120000},index)
+  } catch(error) {
+    const detail=await page.evaluate(()=>{const s=window.cylinderQa.useWorkspaceEditor.getState(),c=s.controller,p=c.getPanelState(),v=c.getViewState();return {phase:s.phase,error:s.error,face:p.face,faces:p.faces.length,message:p.message,calculating:p.calculating,previewFaces:v.provisionalPreview?.faceMeshes.length}})
+    console.error('QA_PREPARATION_STATE',JSON.stringify(detail));throw error
+  }
   await page.select('[data-test=surface-selection-mode]','points')
   await page.select('[data-test=surface-drag-mode]','screen')
   await page.evaluate(()=>window.cylinderQa.scene.viewFrom('front'))
   await page.mouse.move(750,500)
-  for(let i=0;i<7;i++){await page.mouse.wheel({deltaY:200,deltaX:0});await new Promise(r=>setTimeout(r,40))}
+  for(let i=0;i<(realFile?2:7);i++){await page.mouse.wheel({deltaY:200,deltaX:0});await new Promise(r=>setTimeout(r,40))}
   await new Promise(r=>setTimeout(r,300))
   const before=await page.evaluate(()=>{
     const q=window.cylinderQa,c=q.useWorkspaceEditor.getState().controller,p=c.getPanelState(),index=3*p.net.nv+2
@@ -61,7 +66,7 @@ try {
   })
   assert(before.canvas,'control point must be visible on canvas: '+JSON.stringify(before))
   await page.mouse.move(before.x,before.y);await page.mouse.down()
-  await page.mouse.move(before.x+30,before.y-20,{steps:5});await page.mouse.up()
+  await page.mouse.move(before.x+(realFile?6:30),before.y-(realFile?6:20),{steps:5});await page.mouse.up()
   await page.waitForFunction(({point,index})=>{const c=window.cylinderQa.useWorkspaceEditor.getState().controller,p=c.getPanelState();return p.net.poles[index].some((x,i)=>Math.abs(x-point[i])>1e-5)&&!!c.getViewState().provisionalPreview},{timeout:120000},before)
   const second=await page.evaluate(()=>{
     const q=window.cylinderQa,c=q.useWorkspaceEditor.getState().controller,p=c.getPanelState(),index=3*p.net.nv+3
@@ -73,16 +78,17 @@ try {
   })
   assert(second.canvas && !second.locked,'second control point must be available: '+JSON.stringify(second))
   await page.mouse.move(second.x,second.y);await page.mouse.down()
-  await page.mouse.move(second.x-20,second.y-15,{steps:5});await page.mouse.up()
+  await page.mouse.move(second.x-(realFile?6:20),second.y-(realFile?6:15),{steps:5});await page.mouse.up()
   await page.waitForFunction(({point,index})=>{const c=window.cylinderQa.useWorkspaceEditor.getState().controller,p=c.getPanelState();return p.net.poles[index].some((x,i)=>Math.abs(x-point[i])>1e-5)&&!!c.getViewState().provisionalPreview},{timeout:120000},second)
   const result=await page.evaluate(()=>{
     const state=window.cylinderQa.useWorkspaceEditor.getState(),c=state.controller,p=c.getPanelState()
     return {validation:state.snapshot.validation.kind,canExport:p.canExportStep,canUndo:p.canUndo,faces:c.getViewState().provisionalPreview.faceMeshes.length}
   })
-  assert.notEqual(result.validation,'valid');assert.equal(result.canExport,false);assert.equal(result.canUndo,true);assert(boss?result.faces>3:result.faces===3)
+  assert.notEqual(result.validation,'valid');assert.equal(result.canExport,false);assert.equal(result.canUndo,true);assert((boss||realFile)?result.faces>3:result.faces===3)
   await page.waitForSelector('[data-test=surface-validate-cylinder]:enabled',{timeout:60000})
   await page.click('[data-test=surface-validate-cylinder]')
-  await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind==='valid',{timeout:120000})
+  try {await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind==='valid',{timeout:120000})}
+  catch(error) {const detail=await page.evaluate(()=>{const s=window.cylinderQa.useWorkspaceEditor.getState(),p=s.controller.getPanelState();return {message:p.message,validation:s.snapshot?.validation,calculating:p.calculating}});console.error('QA_VALIDATION_STATE',JSON.stringify(detail));throw error}
   await page.click('[data-test=surface-undo]')
   await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind!=='valid',{timeout:60000})
   assert.equal(await page.$eval('[data-test=workspace-editor-apply]',e=>e.disabled),true)
@@ -151,5 +157,6 @@ try {
   await reopened.waitForFunction(()=>window.reopenedCylinderQa.useReverse.getState().bodies.length===2 && window.reopenedCylinderQa.useNotes.getState().notes.some(n=>n.text==='Nota sul cilindro'&&n.attachment?.status==='verified'),{timeout:90000})
   await reopened.close()
   assert.deepEqual(consoleErrors,[])
-  console.log(JSON.stringify({status:'PASS',scope:`isolated source host; synthetic ${boss?'boss on box':'cylinder'}; shared-view pointer gesture, annotated CAD copy and project reopen`,...result,applied:applied.phase,bodies:applied.bodies}))
-} finally {await browser.close()}
+  console.log(JSON.stringify({status:'PASS',scope:`isolated source host; ${realFile?'real-derived STEP':boss?'synthetic boss on box':'synthetic cylinder'}; shared-view pointer gesture, annotated CAD copy and project reopen`,...result,applied:applied.phase,bodies:applied.bodies}))
+} catch(error) { console.error('QA_FAILURE',error);process.exitCode=1 }
+finally { try { await browser.close() } catch(error) { console.error('QA_CLEANUP_FAILURE',error);process.exitCode=1 } }
