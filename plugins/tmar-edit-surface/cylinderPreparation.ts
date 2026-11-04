@@ -6,6 +6,7 @@ import { assertSimpleCylinderSource } from './cylinderSource'
 import { auditCylinderSeam } from './cylinderSeam'
 import { moveSmoothCylinderPole, refineLinearPeriodicV } from './periodic'
 import { assertMatchedCylinderTolerances } from './cylinderTolerance'
+import { auditSpherePoles } from './spherePole'
 
 /** Refuse an increase in the sorted edge/vertex tolerance distribution. This
  * does not identify corresponding TShapes or prove per-edge equivalence. */
@@ -78,6 +79,13 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
       for(let f=0;f<originalFaces.length;f++) {
         const a=originalFaces[f],b=convertedFaces[f]
         if(k.shapeOrientation(a)!==k.shapeOrientation(b)) throw new Error('Orientamento delle facce alterato.')
+        // Singular sphere poles have no defined parametric normal. The
+        // specialized audit checks the bounded trim, pole, nearby normals
+        // and sampled edges in both directions; unsupported trims fail closed.
+        if(k.surfaceType(a)==='sphere' && k.surfaceType(b)==='bspline') {
+          auditSpherePoles(k,a,b)
+          continue
+        }
         for(const [from,to] of [[a,b],[b,a]] as const) {
           const bounds=k.uvBounds(from)
           for(let i=0;i<=8;i++) for(let j=0;j<=8;j++) {
