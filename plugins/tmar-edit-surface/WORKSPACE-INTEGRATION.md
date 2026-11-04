@@ -185,6 +185,13 @@ host state. A host without this capability keeps the original behavior.
   pcurves, conversion, volume, recipes or arbitrary imported STEP geometry.
   This preliminary helper is not connected to the editor and enables no
   additional surface editing.
+  `cylinderSeam.ts` separately compares both serialized quadratic seam
+  pcurves with a 3D edge at 65 samples. Synthetic straight and rotated STEP
+  fixtures pass after conversion, deformation and STEP reopening; deliberately
+  duplicated or shifted 2D representations are rejected. Its edge matching
+  uses the parameter interval rather than proving topological identity, so
+  coincident edges may remain ambiguous. Sampling is not a global proof; other
+  BREP encodings fail closed. It is a diagnostic only, not a production gate.
   Net edge/cell picking and cage drawing now include cyclic connections for
   periodic dimensions with more than two rows. Ambiguous two-row periodic
   picking and unqualified periodic frame conventions fail closed; periodic
