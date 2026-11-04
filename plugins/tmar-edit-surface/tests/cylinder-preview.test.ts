@@ -16,6 +16,7 @@ it('keeps a provisional drag preview separate from validated CAD output',async()
     const start=performance.now(),preview=previewPreparedCylinder(k,prepared,candidate),previewMs=performance.now()-start
     expect(preview.kind).toBe('provisional')
     expect(preview.mesh.triangleCount).toBeGreaterThan(0)
+    expect(preview.faceMeshes).toHaveLength(3)
     expect(exported).not.toHaveBeenCalled()
     expect('step' in preview).toBe(false)
     const finalStart=performance.now(),final=evaluatePreparedCylinder(k,prepared,index,candidate),finalMs=performance.now()-finalStart

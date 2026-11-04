@@ -6,7 +6,7 @@ import { PreviewQueue } from './previewQueue'
 import type { SurfaceWorkerPayload } from './workerClient'
 
 type WorkerCall = <T>(payload:SurfaceWorkerPayload)=>Promise<T>
-type Provisional = {kind:'provisional';mesh:Mesh}
+type Provisional = {kind:'provisional';mesh:Mesh;faceMeshes:Mesh[]}
 type Validated = {mesh:Mesh;step:string}
 
 /** Experimental session adapter: a preview is never an Apply authorization.

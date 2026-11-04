@@ -5,6 +5,7 @@
 import type { EditorViewportLease } from '../../src/plugins/workspaceEditorTypes'
 import type { Net, Point } from './brep'
 import type { Preview } from './editorKernel'
+import type { Mesh } from 'occt-wasm'
 import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
 
@@ -33,6 +34,8 @@ export interface WorkspaceStripViewState {
 export interface WorkspaceSurfaceViewState {
   readonly net: Net | null
   readonly preview: Preview | null
+  /** Display only: never authorizes Apply or note anchoring. */
+  readonly provisionalPreview?: {readonly kind:'provisional';readonly faceMeshes:Mesh[]} | null
   readonly face: number
   readonly selected: readonly number[]
   readonly locked: readonly number[]

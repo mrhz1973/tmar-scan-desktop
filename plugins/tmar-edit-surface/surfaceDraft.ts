@@ -3,8 +3,16 @@ import { assertNet, type Net } from './brep'
 import type { Preview } from './editorKernel'
 import type { EditFrame } from './surfaceHistory'
 import type { PreviewDraft, SurfaceRuntime } from './surfaceRuntime'
+import { PreviewQueue } from './previewQueue'
+import { assertSmoothCylinderMove, canonicalizeCylinderGesture } from './periodic'
+import type { Mesh } from 'occt-wasm'
+
+export interface CylinderProvisionalPreview { kind: 'provisional'; mesh: Mesh; faceMeshes?: Mesh[] }
 
 export interface SurfaceDraftSnapshot {
+  /** Worker-owned experimental cylinder; never qualifies the normal Apply path. */
+  readonly cylinderSession: number | null
+  readonly cylinderPreview: CylinderProvisionalPreview | null
   /** Source part frame, in millimetres. Treat the returned net and preview as read-only. */
   readonly net: Net | null
   readonly committedNet: Net | null
@@ -56,7 +64,7 @@ export class SurfaceDraft {
   private readonly listeners = new Set<() => void>()
   private readonly unsubscribe: () => void
   private snapshot: SurfaceDraftSnapshot = Object.freeze({
-    net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY, continuity: 'G1',
+    cylinderSession: null, cylinderPreview: null, net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY, continuity: 'G1',
     freeBoundary: false, preview: null, previewStale: false, validNet: null,
     calculating: false, error: '', canUndo: false, canRedo: false,
   })
@@ -66,6 +74,16 @@ export class SurfaceDraft {
   private epoch = 0
   private exported: { epoch: number; queueRevision: number; value: Preview } | null = null
   private disposed = false
+  private readonly cylinderPreviews = new PreviewQueue<PreviewDraft & { session: number }, CylinderProvisionalPreview>({
+    evaluate: async draft => {
+      const value = await this.runtime.worker.ask<CylinderProvisionalPreview>({
+        action: 'previewCylinder', session: draft.session, net: draft.net,
+      })
+      if (value.kind !== 'provisional' || !value.mesh) throw new Error('Anteprima cilindrica non disponibile.')
+      return value
+    },
+  })
+  private readonly unsubscribeCylinder: () => void
 
   constructor(private readonly runtime: SurfaceRuntime) {
     if (!runtime.active || runtime.previews.getSnapshot().disposed)
@@ -75,6 +93,7 @@ export class SurfaceDraft {
       throw new Error('La sessione contiene già una bozza non acquisita.')
     owners.set(runtime, this)
     this.unsubscribe = runtime.previews.subscribe(this.syncPreview)
+    this.unsubscribeCylinder = this.cylinderPreviews.subscribe(this.syncPreview)
   }
 
   getSnapshot = (): SurfaceDraftSnapshot => this.snapshot
@@ -86,11 +105,16 @@ export class SurfaceDraft {
   }
 
   /** Install a worker-selected CAD net. No project or worker selection is performed. */
-  install(net: Net, options: { continuity?: 'G0' | 'G1'; trimLocks?: readonly number[] } = {}): void {
+  install(net: Net, options: { continuity?: 'G0' | 'G1'; trimLocks?: readonly number[]; cylinderSession?: number } = {}): void {
     this.ensureActive()
     const continuity = options.continuity ?? this.snapshot.continuity
     if (continuity !== 'G0' && continuity !== 'G1') throw new Error('Continuità non valida.')
-    assertNet(net, net, continuity, true)
+    const cylinderSession = options.cylinderSession ?? null
+    if (cylinderSession !== null) {
+      if (!Number.isInteger(cylinderSession) || cylinderSession < 0 || continuity !== 'G1')
+        throw new Error('Sessione cilindrica non valida.')
+      assertSmoothCylinderMove(net, net)
+    } else assertNet(net, net, continuity, true)
     const trimLocks = frozenIds(options.trimLocks ?? [], net.poles.length)
     const base = freezeNet(structuredClone(net))
     this.invalidate()
@@ -99,10 +123,15 @@ export class SurfaceDraft {
     this.queueNet = null
     const frame = this.runtime.history.commit({ net, locks: [], continuity, freeBoundary: false })
     freezeNet(frame.net)
-    this.update({ net: frame.net, committedNet: frame.net, originalNet: base, selected: EMPTY, locks: EMPTY, trimLocks,
+    this.update({ cylinderSession, cylinderPreview: null, net: frame.net, committedNet: frame.net, originalNet: base, selected: EMPTY, locks: EMPTY, trimLocks,
       continuity, freeBoundary: false, preview: null, previewStale: false,
       validNet: null, calculating: false, error: '', canUndo: false, canRedo: false })
     this.schedule(frame.net)
+  }
+
+  /** Install only the net returned by prepareCylinder in this runtime's worker. */
+  installCylinder(net: Net, session: number): void {
+    this.install(net, { continuity: 'G1', cylinderSession: session })
   }
 
   /** Drop the selected face and invalidate in-flight worker replies. */
@@ -113,7 +142,7 @@ export class SurfaceDraft {
     this.runtime.history.reset()
     this.base = null
     this.queueNet = null
-    this.update({ net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY,
+    this.update({ cylinderSession: null, cylinderPreview: null, net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY,
       continuity, freeBoundary: false, preview: null, previewStale: false,
       validNet: null, calculating: false, error: '', canUndo: false, canRedo: false })
   }
@@ -128,7 +157,7 @@ export class SurfaceDraft {
   /** Update during drag without adding a history frame or changing the host. */
   preview(net: Net): void {
     this.ensureActive()
-    this.checkEdit(net)
+    net = this.checkEdit(net)
     const draft = freezeNet(structuredClone(net))
     this.update({ net: draft, validNet: null, calculating: true, error: '' })
     this.schedule(draft)
@@ -137,8 +166,9 @@ export class SurfaceDraft {
   /** Commit an edit once, preserving current locks and border settings. */
   commit(net: Net = this.requireNet()): void {
     this.ensureActive()
-    this.checkEdit(net)
-    const equivalentToShown = net === this.snapshot.net
+    const supplied = net
+    net = this.checkEdit(net)
+    const equivalentToShown = supplied === this.snapshot.net
     const frame = this.runtime.history.commit({ net, locks: [...this.snapshot.locks],
       continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary })
     this.applyFrame(frame, equivalentToShown)
@@ -159,6 +189,7 @@ export class SurfaceDraft {
    */
   async evaluateForExport(): Promise<Preview & { step: string; previewRevision: number }> {
     this.ensureActive()
+    if (this.snapshot.cylinderSession !== null) throw new Error('Usa la verifica cilindrica dedicata.')
     const snapshot = this.snapshot, net = this.requireNet()
     const current = this.runtime.previews.getSnapshot().current
     if (snapshot.validNet !== net || snapshot.calculating || !current)
@@ -177,6 +208,22 @@ export class SurfaceDraft {
     this.exported = { epoch, queueRevision: current.revision, value: result }
     this.update({ preview: result, previewStale: false })
     return result
+  }
+
+  /** Full experimental cylinder evaluation, kept separate from normal Apply. */
+  async evaluateCylinderForExport(): Promise<{ mesh: Mesh; step: string }> {
+    this.ensureActive()
+    const snapshot = this.snapshot, net = this.requireNet(), session = snapshot.cylinderSession
+    if (session === null) throw new Error('Scegli prima una faccia cilindrica.')
+    this.checkEdit(net)
+    const epoch = this.epoch
+    const value = await this.runtime.worker.ask<{ mesh: Mesh; step: string }>({ action: 'evaluateCylinder', session, net })
+    this.ensureActive()
+    if (epoch !== this.epoch || this.snapshot.net !== net || this.snapshot.cylinderSession !== session ||
+        this.snapshot.continuity !== snapshot.continuity || this.snapshot.freeBoundary !== snapshot.freeBoundary)
+      throw new Error('La bozza è cambiata durante la valutazione STEP.')
+    if (!value.mesh || typeof value.step !== 'string' || !value.step.length) throw new Error('Valutazione cilindrica non valida.')
+    return value
   }
 
   /** Cancel an uncommitted drag and return to the last committed frame. */
@@ -199,6 +246,10 @@ export class SurfaceDraft {
     this.ensureActive()
     const net = this.requireNet()
     if (continuity !== 'G0' && continuity !== 'G1') throw new Error('Continuità non valida.')
+    if (this.snapshot.cylinderSession !== null) {
+      if (continuity !== 'G1') throw new Error('Il cilindro richiede continuità G1.')
+      return
+    }
     if (this.snapshot.freeBoundary) throw new Error('Proteggi prima i bordi liberi.')
     assertNet(this.base!, net, continuity)
     const frame = this.runtime.history.commit({ net, locks: [...this.snapshot.locks],
@@ -210,6 +261,10 @@ export class SurfaceDraft {
   setFreeBoundary(freeBoundary: boolean): void {
     this.ensureActive()
     const net = this.requireNet()
+    if (this.snapshot.cylinderSession !== null) {
+      if (freeBoundary) throw new Error('I bordi cilindrici devono restare protetti.')
+      return
+    }
     if (!freeBoundary) assertNet(this.base!, net, this.snapshot.continuity)
     const frame = this.runtime.history.commit({ net, locks: [...this.snapshot.locks],
       continuity: this.snapshot.continuity, freeBoundary })
@@ -224,6 +279,8 @@ export class SurfaceDraft {
     if (this.disposed) return
     this.disposed = true
     this.unsubscribe()
+    this.unsubscribeCylinder()
+    this.cylinderPreviews.dispose()
     this.epoch++
     this.runtime.previews.invalidate({ clearPreview: true })
     this.runtime.history.reset()
@@ -231,7 +288,7 @@ export class SurfaceDraft {
     this.queueNet = null
     this.exported = null
     owners.delete(this.runtime)
-    this.update({ net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY,
+    this.update({ cylinderSession: null, cylinderPreview: null, net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY,
       preview: null, previewStale: false, validNet: null, calculating: false,
       error: '', canUndo: false, canRedo: false })
     this.listeners.clear()
@@ -248,15 +305,20 @@ export class SurfaceDraft {
     this.exported = null
     this.epoch++
     this.runtime.previews.invalidate({ clearPreview: true })
+    this.cylinderPreviews.invalidate({ clearPreview: true })
   }
-  private checkEdit(candidate: Net): void {
+  private checkEdit(candidate: Net): Net {
     const base = this.base, frame = this.runtime.history.current
     if (!base || !frame) throw new Error('Scegli prima una faccia CAD.')
-    assertNet(base, candidate, this.snapshot.continuity, this.snapshot.freeBoundary)
+    if (this.snapshot.cylinderSession !== null) {
+      candidate = canonicalizeCylinderGesture(frame.net, candidate)
+      assertSmoothCylinderMove(base, candidate)
+    } else assertNet(base, candidate, this.snapshot.continuity, this.snapshot.freeBoundary)
     for (const i of [...this.snapshot.locks, ...this.snapshot.trimLocks]) {
       if (candidate.poles[i].some((value, axis) => value !== frame.net.poles[i][axis]))
         throw new Error('Un punto bloccato è stato modificato.')
     }
+    return candidate
   }
   private step(delta: -1 | 1): boolean {
     this.ensureActive()
@@ -283,13 +345,29 @@ export class SurfaceDraft {
   private schedule(net: Net): void {
     this.exported = null
     this.queueNet = net
-    const revision = this.runtime.previews.schedule({
+    const cylinderSession = this.snapshot.cylinderSession
+    const payload = { net, continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, epoch: this.epoch }
+    const revision = cylinderSession !== null
+      ? this.cylinderPreviews.schedule({ ...payload, session: cylinderSession })
+      : this.runtime.previews.schedule({
       net, continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, epoch: this.epoch,
     })
     if (revision === null) this.update({ validNet: null, calculating: false, error: 'Anteprima CAD non disponibile.' })
   }
   private syncPreview = (): void => {
     if (this.disposed) return
+    if (this.snapshot.cylinderSession !== null) {
+      const queue = this.cylinderPreviews.getSnapshot(), current = queue.current
+      const matches = !!current && current.draft.epoch === this.epoch && current.draft.net === this.queueNet &&
+        current.draft.session === this.snapshot.cylinderSession
+      const visible = queue.preview?.identity.epoch === this.epoch ? queue.preview : null
+      this.update({ preview: null, cylinderPreview: visible?.value ?? null, validNet: null,
+        previewStale: !!visible && (visible.stale || !matches || visible.revision !== current?.revision),
+        calculating: this.runtime.active && queue.calculating,
+        error: !this.runtime.active ? 'Editor chiuso.' : matches && queue.error?.revision === current?.revision
+          ? String((queue.error.error as Error)?.message ?? queue.error.error) : '' })
+      return
+    }
     const queue = this.runtime.previews.getSnapshot(), current = queue.current
     const matches = (job: PreviewDraft) => job.epoch === this.epoch &&
       job.continuity === this.snapshot.continuity && job.freeBoundary === this.snapshot.freeBoundary
@@ -302,6 +380,7 @@ export class SurfaceDraft {
     const exported = valid && this.exported?.epoch === this.epoch &&
       this.exported.queueRevision === current?.revision ? this.exported.value : null
     this.update({ preview: exported ?? visible?.value ?? null,
+      cylinderPreview: null,
       previewStale: !!visible && (!valid || visible.stale),
       validNet: valid ? this.snapshot.net : null, calculating: this.runtime.active && queue.calculating,
       error: this.runtime.active ? error : 'Editor chiuso.' })

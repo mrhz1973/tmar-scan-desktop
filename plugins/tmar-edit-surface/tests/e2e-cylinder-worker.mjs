@@ -30,10 +30,11 @@ try {
       let staleRejected=false;try {await call(7,{action:'evaluateCylinder',session:prepared.session,net})}catch {staleRejected=true}
       const round=k.importStep(validated.step);let valid
       try {valid=k.isValid(round)} finally {k.release(round)}
-      return {kind:preview.kind,triangles:preview.mesh.triangleCount,hasStep:'step' in preview,hasValid:'valid' in preview,rejected,validated:valid,staleRejected}
+      return {kind:preview.kind,triangles:preview.mesh.triangleCount,faces:preview.faceMeshes.length,hasStep:'step' in preview,hasValid:'valid' in preview,rejected,validated:valid,staleRejected}
     } finally {worker.terminate();faces.forEach(f=>k.release(f));k.release(source);k.release(primitive);k[Symbol.dispose]()}
   })
   assert.equal(result.kind,'provisional');assert.ok(result.triangles>0)
+  assert.equal(result.faces,3)
   assert.equal(result.hasStep,false);assert.equal(result.hasValid,false);assert.equal(result.rejected,true)
   assert.equal(result.validated,true)
   assert.equal(result.staleRejected,true)

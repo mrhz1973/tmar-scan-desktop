@@ -276,7 +276,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.assertMutable()
     const face = this.faces[index]
     if (!face || !Number.isInteger(index)) throw new Error('Faccia non disponibile.')
-    if (face.reason) throw new Error(face.reason)
+    if (face.reason && !face.experimentalCylinder) throw new Error(face.reason)
     if (index === this.face && this.draft.getSnapshot().net) return
     if (this.draft.getSnapshot().calculating) throw new Error('Attendi la verifica CAD prima di cambiare faccia.')
     const dirty = this.snapshot.dirty
@@ -292,7 +292,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (this.strip || this.stripPending) throw new Error('Chiudi prima la modifica del bordo.')
     const face = this.faces[index]
     if (!face || !Number.isInteger(index)) throw new Error('Faccia non disponibile.')
-    if (face.reason) throw new Error(face.reason)
+    if (face.reason && !face.experimentalCylinder) throw new Error(face.reason)
     if (this.gesture !== 'idle') throw new Error('Termina prima il trascinamento.')
     if (index === this.face && this.draft.getSnapshot().net) return
     if (this.notes.length && !discardChanges) throw new Error('La bozza contiene note: conferma prima di cambiare faccia.')
@@ -309,14 +309,18 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     })
     const epoch = this.selectionEpoch
     try {
-      const net = await this.runtime.worker.ask<Net>({ action: 'select', face: index }, this.context.signal)
+      const picked = face.experimentalCylinder
+        ? await this.runtime.worker.ask<{net:Net;session:number}>({ action:'prepareCylinder', face:index }, this.context.signal)
+        : {net:await this.runtime.worker.ask<Net>({ action:'select', face:index }, this.context.signal),session:null}
       this.assertLive()
       if (epoch !== this.selectionEpoch) throw new Error('Selezione faccia superata.')
       this.change(() => {
-        this.draft.install(net, { continuity: previousContinuity, trimLocks: face.trimLocks })
+        if (picked.session !== null) this.draft.installCylinder(picked.net,picked.session)
+        else this.draft.install(picked.net, { continuity: previousContinuity, trimLocks: face.trimLocks })
         if (this.notes.length) { this.advanceNotesRevision(); this.notes = Object.freeze([]) }
         this.selectionEpoch++; this.face = index; this.busy = false
         this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
+        if(picked.session !== null) this.message = 'Cilindro sperimentale: trascina il punto centrale. Conferma e note non ancora disponibili.'
       }, true)
     } catch (error) {
       if (!this.disposed && epoch === this.selectionEpoch) {
@@ -1054,7 +1058,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const locks = new Set([...d.locks, ...d.trimLocks])
       cached = { net: d.net, locks: d.locks, trim: d.trimLocks, continuity: d.continuity, free: d.freeBoundary,
         value: Object.freeze(d.net ? d.net.poles.flatMap((_,i) =>
-          locks.has(i) || (!d.freeBoundary && boundaryLocked(d.net!,i,d.continuity)) ? [i] : []) : []) }
+          locks.has(i) || (d.cylinderSession !== null ? i !== 3*d.net!.nv+2 : (!d.freeBoundary && boundaryLocked(d.net!,i,d.continuity))) ? [i] : []) : []) }
       this.lockCache = cached
     }
     const locked = cached.value, face = this.faces[this.face]
@@ -1104,7 +1108,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       placingNote: this.placingNote, notes: this.notes, annotatedCopyAvailable, noteResolutionError, gesture: this.gesture, canBeginStrip, directStripAxis:this.directStripAxis,
       directStripError,
       canExportStep, strip:stripView })
-    this.viewState = Object.freeze({ net: strip ? null : d.net, preview, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
+    this.viewState = Object.freeze({ net: strip ? null : d.net, preview, provisionalPreview:d.cylinderPreview?.faceMeshes ? {kind:'provisional' as const,faceMeshes:d.cylinderPreview.faceMeshes} : null, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
       hiddenPoles: face?.hiddenPoles ?? [], selectionMode: this.selectionMode, dragMode: this.dragMode,
       axis: this.axis, dragStrength: this.dragStrength, showNet: this.showNet, snap: this.snap,
       snapDistance: this.snapDistance, busy: this.busy || !!this.frozen, placingNote: this.placingNote,

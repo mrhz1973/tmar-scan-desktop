@@ -6,8 +6,9 @@ import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
 import { prepareCylinder } from './cylinderPreparation'
+import { assertSimpleCylinderSource } from './cylinderSource'
 
-export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[] }
+export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[]; experimentalCylinder?: boolean }
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
@@ -130,8 +131,12 @@ export class SurfaceEditorKernel {
       let natural = false
       try { const info = this.netFor(index); trimLocks = info.trimLocks; hiddenPoles = info.hiddenPoles; natural = info.natural } catch (e) { reason = e instanceof Error ? e.message : String(e) }
       const record = this.records[this.recordsByFace[index]]
+      let experimentalCylinder=false
+      if(reason && k.surfaceType(face)==='cylinder') {
+        try {assertSimpleCylinderSource(k,this.source!,face);experimentalCylinder=true} catch { /* Full preparation remains the final gate. */ }
+      }
       return { index, trimLocks, hiddenPoles, openSheet, freeBoundary: openSheet && this.faces.length === 1 && natural, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
-        enriched: !!record?.net && enrichBicubic(record.net) !== record.net }
+        enriched: !!record?.net && enrichBicubic(record.net) !== record.net, experimentalCylinder }
     })
     return { faces: this.infos, preview: this.render(this.source) }
   }

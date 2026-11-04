@@ -103,7 +103,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   let disposed = false
   let clipping: WorkspacePreviewClipping = { planes: null, intersection: false }
   let capture: Capture | null = null
-  let displayed: WorkspaceSurfaceViewState['preview'] = null
+  let displayed: WorkspaceSurfaceViewState['preview'] | NonNullable<WorkspaceSurfaceViewState['provisionalPreview']> = null
   let selectedFace = -1
   let cageState: WorkspaceSurfaceViewState | null = null
   let pinState: readonly Point[] | null = null
@@ -344,7 +344,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       const state = owner.getViewState()
       if (directSelection && (state.strip || state.placingNote || !state.directStrip ||
           state.directStrip.paths !== directSelection.paths || state.directStrip.revision !== directSelection.revision)) directSelection = null
-      const nextPreview = state.preview?.valid === true ? state.preview : null
+      const nextPreview = state.provisionalPreview?.kind === 'provisional' ? state.provisionalPreview : state.preview?.valid === true ? state.preview : null
       if (nextPreview !== displayed) {
         stopZebra()
         disposeTargets(neighbourTargets); neighbourTargets = []; neighboursDirty = true
