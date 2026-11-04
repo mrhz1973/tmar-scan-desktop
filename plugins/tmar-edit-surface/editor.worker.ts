@@ -4,6 +4,7 @@ import wasmUrl from 'occt-wasm/dist/occt-wasm.wasm?url'
 import type { Net, Point } from './brep'
 import type { StripMove } from './sheetExtension'
 import { previewPreparedCylinder } from './cylinderPreview'
+import { evaluatePreparedCylinder } from './cylinderEvaluation'
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'sheetEdges'; previewRevision: number }
@@ -14,6 +15,7 @@ export type Request = { id: number } & (
   | { action: 'evaluate'; net: Net; continuity: 'G0' | 'G1'; exportStep?: boolean; freeBoundary?: boolean }
   // Experimental display only; this is not an evaluate/Apply result.
   | { action: 'previewCylinder'; prepared: {brep:string;net:Net}; net:Net }
+  | { action: 'evaluateCylinder'; prepared: {brep:string;net:Net}; net:Net; face:number }
   | { action: 'createRecipe'; net: Net; continuity: 'G0' | 'G1'; lockedPoles: number[]; bodyId: string; freeBoundary?: boolean }
   | { action: 'restoreRecipe' | 'replayRecipe'; step: string; recipe: unknown; bodyId: string }
 )
@@ -35,6 +37,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
         case 'noteResolve': result = editor.resolveAnchor(req.anchor,req.previewRevision); break
         case 'evaluate': result = editor.evaluate(req.net, req.continuity, req.exportStep, req.freeBoundary); break
         case 'previewCylinder': result = previewPreparedCylinder(editor.kernel, req.prepared, req.net); break
+        case 'evaluateCylinder': result = evaluatePreparedCylinder(editor.kernel, req.prepared, req.face, req.net); break
         case 'createRecipe': result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.freeBoundary); break
         case 'restoreRecipe': result = await editor.restoreRecipe(req.step, req.recipe, req.bodyId); break
         case 'replayRecipe': result = await editor.replayRecipe(req.step, req.recipe, req.bodyId); break
