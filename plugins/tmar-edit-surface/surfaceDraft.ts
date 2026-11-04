@@ -33,6 +33,7 @@ function freezeNet(net: Net): Net {
   for (const pole of net.poles) Object.freeze(pole)
   Object.freeze(net.poles)
   Object.freeze(net.weights); Object.freeze(net.rational)
+  if (net.periodic) Object.freeze(net.periodic)
   Object.freeze(net.ku); Object.freeze(net.kv); Object.freeze(net.mu); Object.freeze(net.mv)
   return Object.freeze(net)
 }
