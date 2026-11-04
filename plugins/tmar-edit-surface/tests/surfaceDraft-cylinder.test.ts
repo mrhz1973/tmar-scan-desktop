@@ -36,6 +36,12 @@ function cylinder(): Net {
 
 }
 
+function cylinderSix(): Net {
+  const poles: Net['poles'] = Array.from({length:36},(_,i)=>[Math.floor(i/6),i%6,0])
+  return {nu:6,nv:6,du:2,dv:3,poles,weights:poles.map(()=>1),rational:[0,0],
+    periodic:[1,0],ku:[0,2,4,6],mu:[2,2,2,2],kv:[0,7,14,21],mv:[4,1,1,4]}
+}
+
 function setup() {
 
   vi.useFakeTimers()
@@ -110,6 +116,23 @@ it('couples the centre gesture, protects companion locks, and retains undo/redo'
 
   draft.dispose();runtime.dispose()
 
+})
+
+it('keeps two axial gestures independent and respects locks and history',()=>{
+  const {draft,runtime}=setup()
+  draft.installCylinder(cylinderSix(),8)
+  const base=draft.getSnapshot().net!
+  draft.setLocks([14])
+  const first=structuredClone(base);first.poles[20][2]+=.3
+  expect(()=>draft.preview(first)).toThrow('bloccato')
+  const second=structuredClone(base);second.poles[21][2]+=.2
+  draft.preview(second);draft.commit()
+  const changed=draft.getSnapshot().net!
+  expect(changed.poles[21][2]).toBeCloseTo(.2)
+  expect(changed.poles[20]).toEqual(base.poles[20])
+  expect(draft.undo()).toBe(true);expect(draft.getSnapshot().net).toEqual(base)
+  expect(draft.redo()).toBe(true);expect(draft.getSnapshot().net).toEqual(changed)
+  draft.dispose();runtime.dispose()
 })
 
 
