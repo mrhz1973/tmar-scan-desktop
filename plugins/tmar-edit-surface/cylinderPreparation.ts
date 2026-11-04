@@ -19,6 +19,23 @@ export function assertToleranceDistribution(source: string, candidate: string): 
   }
 }
 
+/** OCCT may project onto the equivalent angular branch of an analytic
+ * cylinder. Accept another turn only when it classifies on the same trimmed
+ * face and evaluates to the same three-dimensional point. */
+export function isOnCylinderEquivalent(k: OcctKernel, face: ShapeHandle, u: number, v: number): boolean {
+  if (!Number.isFinite(u) || !Number.isFinite(v)) return false
+  if (k.classifyPointOnFace(face,u,v)!=='out') return true
+  if (k.surfaceType(face)!=='cylinder') return false
+  const point=k.pointOnSurface(face,u,v)
+  return [-2*Math.PI,2*Math.PI].some(offset=>{
+    const alternate=u+offset
+    if(k.classifyPointOnFace(face,alternate,v)==='out') return false
+    const p=k.pointOnSurface(face,alternate,v)
+    const gap=Math.hypot(p.x-point.x,p.y-point.y,p.z-point.z)
+    return Number.isFinite(gap)&&gap<=1e-6
+  })
+}
+
 /** Experimental native conversion for a full cylindrical face in one solid. Never
  * mutates the borrowed source or enables editing. Comparisons are sampled;
  * arbitrary BREP encodings and seam identities still require qualification.
@@ -51,7 +68,7 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
             const n=k.surfaceNormal(from,u,v),m=k.surfaceNormal(to,uv.u,uv.v)
             const gap=Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z),dot=n.x*m.x+n.y*m.y+n.z*m.z
             if(!Number.isFinite(gap)||gap>1e-6||!Number.isFinite(dot)||dot<1-1e-7 ||
-                !Number.isFinite(uv.u)||!Number.isFinite(uv.v)||k.classifyPointOnFace(to,uv.u,uv.v)==='out')
+                !Number.isFinite(uv.u)||!Number.isFinite(uv.v)||!isOnCylinderEquivalent(k,to,uv.u,uv.v))
               throw new Error('Geometria della conversione cilindrica alterata.')
           }
           const originalEdges=k.getSubShapes(from,'edge');let targetEdges:ShapeHandle[]=[]

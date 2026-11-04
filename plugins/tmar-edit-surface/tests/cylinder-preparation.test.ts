@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, it } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
-import { assertToleranceDistribution, prepareCylinder } from '../cylinderPreparation'
+import { assertToleranceDistribution, isOnCylinderEquivalent, prepareCylinder } from '../cylinderPreparation'
 import { moveSmoothCylinderPole, assertSmoothCylinderMove, canonicalizeCylinderGesture } from '../periodic'
 import { localFrame } from '../localFrame'
 import { evaluatePreparedCylinder } from '../cylinderEvaluation'
@@ -14,6 +14,16 @@ it('rejects increased or missing topological tolerances',()=>{
   expect(()=>assertToleranceDistribution(source,'Ed\n 0.1 1 1 0\nVe\n1e-7\n')).toThrow(/Tolleranze/)
   expect(()=>assertToleranceDistribution(source,'Ed\n 1e-7 1 1 0\n')).toThrow(/Tolleranze/)
 })
+
+it('recognizes a cylinder seam on the equivalent angular branch without accepting a point beyond its caps',async()=>{
+  const e=await SurfaceEditorKernel.load(),k=e.kernel,body=k.makeCylinder(10,20),faces=k.getSubShapes(body,'face')
+  try {
+    const face=faces.find(f=>k.surfaceType(f)==='cylinder')!,b=k.uvBounds(face),v=(b.vMin+b.vMax)/2
+    expect(isOnCylinderEquivalent(k,face,(b.uMin+b.uMax)/2+2*Math.PI,v)).toBe(true)
+    expect(isOnCylinderEquivalent(k,face,(b.uMin+b.uMax)/2+2*Math.PI,b.vMax+1)).toBe(false)
+    expect(isOnCylinderEquivalent(k,face,Number.NaN,v)).toBe(false)
+  } finally {faces.forEach(f=>k.release(f));k.release(body);e.dispose()}
+},60000)
 
 it.each([false,true])('prepares the converted cylindrical STEP support without modifying its source (rotated: %s)',async rotated=>{
   const e=await SurfaceEditorKernel.load(),k=e.kernel,p=k.makeCylinder(10,20)
