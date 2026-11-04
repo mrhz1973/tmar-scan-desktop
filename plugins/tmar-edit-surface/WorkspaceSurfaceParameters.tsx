@@ -233,7 +233,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <button type="button" data-test="surface-redo" disabled={disabled || !state.canRedo} onClick={() => attempt(() => controller.redo())}>Ripeti</button>
         <button type="button" disabled={disabled} onClick={() => attempt(() => controller.restoreOriginal())}>Ripristina</button></div>
       <fieldset><legend>Note sulla superficie</legend>
-        <button type="button" data-test="surface-note-add" disabled={disabled || state.calculating} aria-pressed={state.placingNote}
+        <button type="button" data-test="surface-note-add" disabled={disabled || state.calculating || (!state.placingNote && !state.canPlaceNote)} aria-pressed={state.placingNote}
           onClick={() => attempt(() => controller.setPlacingNote(!state.placingNote))}>{state.placingNote ? 'Annulla scelta punto' : 'Aggiungi nota'}</button>
         {state.placingNote && <p>Clicca sulla faccia modificata per posizionare la nota.</p>}
         {state.notes.map((note, index) => <div key={note.id}><label>Nota {index + 1}<input data-test="surface-note-text" value={note.text} maxLength={2000} disabled={disabled}

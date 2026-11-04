@@ -76,11 +76,27 @@ try {
   await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind==='valid',{timeout:120000})
   await page.click('[data-test=surface-zebra]')
   await page.click('[data-test=surface-note-add]')
-  await page.evaluate(async()=>{
-    const c=window.cylinderQa.useWorkspaceEditor.getState().controller,v=c.getViewState(),m=v.provisionalPreview.faceMeshes[v.face],i=m.indices
-    const point=[0,1,2].map(d=>(m.positions[3*i[0]+d]+m.positions[3*i[1]+d]+m.positions[3*i[2]+d])/3)
-    await c.placeNote(point)
+  const noteTarget=await page.evaluate(async()=>{
+    const q=window.cylinderQa,c=q.useWorkspaceEditor.getState().controller,state=c.getViewState(),layer=q.scene.layerHost()
+    const rect=layer.canvas.getBoundingClientRect(),camera=layer.camera(),group=layer.partGroup,preview=group.getObjectByName('tmar-edit-surface-preview')
+    const THREE=await import('/node_modules/.vite/deps/three.js'),caster=new THREE.Raycaster()
+    group.updateWorldMatrix(true,true);camera.updateMatrixWorld(true)
+    const mesh=preview?.children.find(m=>m.userData.face===state.face)
+    if(!mesh)return null
+    const position=mesh.geometry.getAttribute('position'),indices=mesh.geometry.getIndex(),count=indices?indices.count:position.count
+    for(let i=0;i+2<count;i+=3){
+      const p=new THREE.Vector3()
+      for(let j=0;j<3;j++)p.add(new THREE.Vector3().fromBufferAttribute(position,indices?indices.getX(i+j):i+j))
+      p.multiplyScalar(1/3).applyMatrix4(mesh.matrixWorld)
+      const projected=p.clone().project(camera),x=rect.left+(projected.x+1)*rect.width/2,y=rect.top+(1-projected.y)*rect.height/2
+      if(Math.abs(projected.z)>=1 || document.elementFromPoint(x,y)!==layer.canvas)continue
+      caster.setFromCamera(new THREE.Vector2(projected.x,projected.y),camera)
+      if(caster.intersectObjects(preview.children,false)[0]?.object.userData.face===state.face)return {x,y}
+    }
+    return null
   })
+  assert(noteTarget,'no visible point on the cylinder face')
+  await page.mouse.click(noteTarget.x,noteTarget.y)
   await page.waitForSelector('[data-test=surface-note-text]')
   await page.type('[data-test=surface-note-text]','Nota sul cilindro')
   await page.click('[data-test=surface-undo]')

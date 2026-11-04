@@ -383,8 +383,9 @@ a new preview. Isolated source-worker QA on a synthetic cylinder measured a
 round-trip point gap of approximately 1.8e-15 mm. This is only an anchoring
 check, not scan accuracy. Isolated source-host QA on a synthetic cylinder also
 exercised Zebra, a note, Undo/Redo and revalidation, annotated-copy Apply, and
-save/reopen with the note marked verified. Note positioning used the session
-controller rather than pointer events. Seam changes, real STEP, packaged desktop
+save/reopen with the note marked verified. The note was placed with an actual
+pointer click on the selected face; the Note button is enabled only after a
+current CAD validation. Seam changes, real STEP, packaged desktop
 and general persistence need further qualification.
 On one synthetic imported cylinder, a local Vitest run
 measured 44.6 ms for this preview and 1956.8 ms for full evaluation; this is

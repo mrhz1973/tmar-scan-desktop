@@ -51,6 +51,7 @@ export interface WorkspaceSurfacePanelState {
   readonly symmetryBlocked: boolean
   readonly transparency: number
   readonly placingNote: boolean
+  readonly canPlaceNote: boolean
   readonly notes: readonly WorkspaceSurfaceNote[]
   readonly annotatedCopyAvailable: boolean
   readonly noteResolutionError: boolean
@@ -1152,7 +1153,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       dragMode: this.dragMode, axis: this.axis, dragStrength: this.dragStrength, selectionMode: this.selectionMode,
       showNet: this.showNet, stripes: this.stripes, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
       mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency,
-      placingNote: this.placingNote, notes: this.notes, annotatedCopyAvailable, noteResolutionError, gesture: this.gesture, canBeginStrip, directStripAxis:this.directStripAxis,
+      placingNote: this.placingNote, canPlaceNote:validation.kind==='valid' && this.gesture==='idle' && !this.busy && !this.frozen, notes: this.notes, annotatedCopyAvailable, noteResolutionError, gesture: this.gesture, canBeginStrip, directStripAxis:this.directStripAxis,
       directStripError,
       canExportStep, strip:stripView })
     this.viewState = Object.freeze({ net: strip ? null : d.net, preview, provisionalPreview:d.cylinderPreview?.faceMeshes ? {kind:'provisional' as const,faceMeshes:d.cylinderPreview.faceMeshes} : null, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
