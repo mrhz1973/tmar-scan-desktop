@@ -122,7 +122,7 @@ it('exports only through full cylinder evaluation and refuses changed or replace
 
   expect(worker.sent[0]).toMatchObject({action:'evaluateCylinder',session:7})
 
-  worker.reply(0,{mesh:{},step:'STEP'})
+  worker.reply(0,{mesh:{},step:'STEP',previewRevision:1})
 
   await expect(pending).resolves.toMatchObject({step:'STEP'})
 

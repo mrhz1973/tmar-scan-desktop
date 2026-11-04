@@ -376,14 +376,16 @@ copy. Undo invalidated that check and required another verification. The copy
 export reopened as valid; the source STEP data remained identical, excluding
 its timestamp-bearing header. The pole was initially outside the fitted view
 and required zooming out. This does not qualify real user STEP files, all
-cylinders, persistence, notes, or freedom from self-intersections.
+cylinders, or freedom from self-intersections.
 The worker can now create and resolve UV note anchors against the exact
 evaluated cylinder face BREP and rejects an obsolete session/revision after
 a new preview. Isolated source-worker QA on a synthetic cylinder measured a
 round-trip point gap of approximately 1.8e-15 mm. This is only an anchoring
-check, not scan accuracy or an end-to-end note test. The workspace note UI and
-annotated-copy transaction are still disabled for this path; seam changes,
-real STEP and persistence need further qualification.
+check, not scan accuracy. Isolated source-host QA on a synthetic cylinder also
+exercised Zebra, a note, Undo/Redo and revalidation, annotated-copy Apply, and
+save/reopen with the note marked verified. Note positioning used the session
+controller rather than pointer events. Seam changes, real STEP, packaged desktop
+and general persistence need further qualification.
 On one synthetic imported cylinder, a local Vitest run
 measured 44.6 ms for this preview and 1956.8 ms for full evaluation; this is
 not a frame-rate or real-project benchmark. Complete lifecycle qualification,

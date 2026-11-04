@@ -211,18 +211,18 @@ export class SurfaceDraft {
   }
 
   /** Full experimental cylinder evaluation, kept separate from normal Apply. */
-  async evaluateCylinderForExport(): Promise<{ mesh: Mesh; step: string }> {
+  async evaluateCylinderForExport(): Promise<{ mesh: Mesh; step: string; previewRevision:number }> {
     this.ensureActive()
     const snapshot = this.snapshot, net = this.requireNet(), session = snapshot.cylinderSession
     if (session === null) throw new Error('Scegli prima una faccia cilindrica.')
     this.checkEdit(net)
     const epoch = this.epoch
-    const value = await this.runtime.worker.ask<{ mesh: Mesh; step: string }>({ action: 'evaluateCylinder', session, net })
+    const value = await this.runtime.worker.ask<{ mesh: Mesh; step: string; previewRevision:number }>({ action: 'evaluateCylinder', session, net })
     this.ensureActive()
     if (epoch !== this.epoch || this.snapshot.net !== net || this.snapshot.cylinderSession !== session ||
         this.snapshot.continuity !== snapshot.continuity || this.snapshot.freeBoundary !== snapshot.freeBoundary)
       throw new Error('La bozza è cambiata durante la valutazione STEP.')
-    if (!value.mesh || typeof value.step !== 'string' || !value.step.length) throw new Error('Valutazione cilindrica non valida.')
+    if (!value.mesh || typeof value.step !== 'string' || !value.step.length || !Number.isSafeInteger(value.previewRevision)) throw new Error('Valutazione cilindrica non valida.')
     return value
   }
 

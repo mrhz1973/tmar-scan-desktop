@@ -3,16 +3,22 @@
 import assert from 'node:assert/strict'
 import { OcctKernel } from 'occt-wasm'
 import { launchApp } from '../../../scripts/e2e-lib.mjs'
+import { mkdtempSync, readdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 assert.equal(process.env.SCANRULER_ISOLATED,'1')
 assert.equal(process.env.APP_URL,'http://127.0.0.1:17723/')
 const k=await OcctKernel.init(),body=k.makeCylinder(10,20)
 let step;try {step=k.exportStep(body)} finally {k.release(body);k[Symbol.dispose]()}
 const {browser,page,consoleErrors}=await launchApp({url:process.env.APP_URL,width:1440,height:1000,agentDataOk:false})
 try {
+  const downloads=mkdtempSync(join(tmpdir(),'scanruler-cylinder-qa-'))
+  const cdp=await page.createCDPSession();await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:downloads,eventsEnabled:true})
   await page.evaluate(async step=>{
     const {runCommand}=await import('/src/commands/registry.ts')
     const {useShell}=await import('/src/state/shellStore.ts')
     const {useReverse}=await import('/plugins/reverse/state/reStore.ts')
+    const {useNotes}=await import('/plugins/reverse/state/noteStore.ts')
     const {reverseSession}=await import('/plugins/reverse/app/reSession.ts')
     const {useWorkspaceEditor}=await import('/src/plugins/workspaceEditors.ts')
     const {sceneOf}=await import('/src/commands/host.ts')
@@ -24,7 +30,7 @@ try {
     await reverseSession().settled()
     if(!useReverse.getState().bodies.length)throw Error('Cylinder missing')
     const scene=sceneOf();if(!scene)throw Error('Scene missing');scene.fitToView()
-    window.cylinderQa={useWorkspaceEditor,useReverse,scene,runCommand}
+    window.cylinderQa={useWorkspaceEditor,useReverse,useNotes,scene,runCommand}
   },step)
   const original=await page.evaluate(async()=>{const q=window.cylinderQa,id=q.useReverse.getState().bodies[0].id;return Array.from((await q.runCommand('reverse.export.step',{bodies:[id]})).file.bytes)})
   await page.waitForSelector('[data-test=feature-edit-surface]:enabled',{timeout:60000})
@@ -68,12 +74,28 @@ try {
   await page.waitForSelector('[data-test=surface-validate-cylinder]:enabled',{timeout:60000})
   await page.click('[data-test=surface-validate-cylinder]')
   await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind==='valid',{timeout:120000})
-  assert.equal(await page.$eval('[data-test=surface-note-add]',e=>e.disabled),true)
+  await page.click('[data-test=surface-zebra]')
+  await page.click('[data-test=surface-note-add]')
+  await page.evaluate(async()=>{
+    const c=window.cylinderQa.useWorkspaceEditor.getState().controller,v=c.getViewState(),m=v.provisionalPreview.faceMeshes[v.face],i=m.indices
+    const point=[0,1,2].map(d=>(m.positions[3*i[0]+d]+m.positions[3*i[1]+d]+m.positions[3*i[2]+d])/3)
+    await c.placeNote(point)
+  })
+  await page.waitForSelector('[data-test=surface-note-text]')
+  await page.type('[data-test=surface-note-text]','Nota sul cilindro')
+  await page.click('[data-test=surface-undo]')
+  await page.waitForFunction(()=>window.cylinderQa.useWorkspaceEditor.getState().snapshot?.validation.kind!=='valid',{timeout:60000})
+  await page.click('[data-test=surface-redo]')
+  await page.waitForSelector('[data-test=surface-validate-cylinder]:enabled',{timeout:60000})
+  await page.click('[data-test=surface-validate-cylinder]')
+  await page.waitForFunction(()=>{const s=window.cylinderQa.useWorkspaceEditor.getState();return s.snapshot?.validation.kind==='valid'&&s.controller.getPanelState().notes[0]?.text==='Nota sul cilindro'}, {timeout:120000})
   await page.waitForSelector('[data-test=workspace-editor-apply]:enabled',{timeout:60000})
   await page.click('[data-test=workspace-editor-apply]')
   await page.waitForFunction(()=>{const s=window.cylinderQa.useWorkspaceEditor.getState();return s.phase==='closed'||!!s.error},{timeout:120000})
   const applied=await page.evaluate(()=>{const q=window.cylinderQa,s=q.useWorkspaceEditor.getState();return {phase:s.phase,error:s.error,bodies:q.useReverse.getState().bodies.length,receipt:s.receipt}})
   assert.equal(applied.error,null);assert.equal(applied.phase,'closed');assert.equal(applied.bodies,2)
+  assert.equal(applied.receipt?.mode,'annotated-cad-copy')
+  await page.waitForFunction(()=>window.cylinderQa.useNotes.getState().notes.some(n=>n.text==='Nota sul cilindro' && n.attachment?.status==='verified'),{timeout:60000})
   const exported=await page.evaluate(async()=>{
     const q=window.cylinderQa,ids=q.useReverse.getState().bodies.map(b=>b.id)
     return Promise.all(ids.map(async id=>Array.from((await q.runCommand('reverse.export.step',{bodies:[id]})).file.bytes)))
@@ -82,6 +104,20 @@ try {
   assert.equal(data(exported[0]),data(original),'original CAD STEP data remains unchanged (header timestamp excluded)')
   const verify=await OcctKernel.init(),copy=verify.importStep(new TextDecoder().decode(new Uint8Array(exported[1])))
   try {assert.equal(verify.isValid(copy),true)} finally {verify.release(copy);verify[Symbol.dispose]()}
+  await page.waitForSelector('[data-test=save-project]:enabled');await page.click('[data-test=save-project]')
+  let saved
+  for(let i=0;i<200&&!saved;i++){saved=readdirSync(downloads).find(n=>n.endsWith('.scanruler'));if(!saved)await new Promise(r=>setTimeout(r,100))}
+  assert(saved,'saved project missing')
+  const reopened=await browser.newPage()
+  await reopened.goto(process.env.APP_URL,{waitUntil:'domcontentloaded'});await reopened.waitForSelector('[data-test=project-input]')
+  await (await reopened.$('[data-test=project-input]')).uploadFile(join(downloads,saved))
+  await reopened.click('[data-test=workspace-reverse]')
+  await reopened.evaluate(async()=>{
+    const {useNotes}=await import('/plugins/reverse/state/noteStore.ts'),{useReverse}=await import('/plugins/reverse/state/reStore.ts')
+    window.reopenedCylinderQa={useNotes,useReverse}
+  })
+  await reopened.waitForFunction(()=>window.reopenedCylinderQa.useReverse.getState().bodies.length===2 && window.reopenedCylinderQa.useNotes.getState().notes.some(n=>n.text==='Nota sul cilindro'&&n.attachment?.status==='verified'),{timeout:90000})
+  await reopened.close()
   assert.deepEqual(consoleErrors,[])
-  console.log(JSON.stringify({status:'PASS',scope:'isolated source host; synthetic cylinder; shared-view pointer gesture and CAD copy',...result,applied:applied.phase,bodies:applied.bodies}))
+  console.log(JSON.stringify({status:'PASS',scope:'isolated source host; synthetic cylinder; shared-view pointer gesture, annotated CAD copy and project reopen',...result,applied:applied.phase,bodies:applied.bodies}))
 } finally {await browser.close()}

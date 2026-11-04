@@ -137,7 +137,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private busy = false
   private exportGeneration = 0
   private cylinderValidationSerial = 0
-  private cylinderValidated: {net:Net;session:number;draftEpoch:number;selectionEpoch:number;requestId:number;step:string}|null = null
+  private cylinderValidated: {net:Net;session:number;historyRevision:number;selectionEpoch:number;requestId:number;previewRevision:number;step:string}|null = null
   private gesture: 'idle' | 'pole' | 'strip' = 'idle'
   private gestureNet: Net | null = null
   private strip: StripMode | null = null
@@ -664,7 +664,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }, false, false, true)
   }
   setPlacingNote(value: boolean): void { this.change(() => {
-    if(value && this.draft.getSnapshot().cylinderSession!==null) throw new Error('Le note sul cilindro sperimentale non sono ancora disponibili.')
+    if(value && this.draft.getSnapshot().cylinderSession!==null && !this.currentValidatedCylinder()) throw new Error('Verifica prima la faccia cilindrica.')
     this.placingNote = value
   }) }
   setNoteText(id: string, text: string): void {
@@ -682,7 +682,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }) }
   retryNoteResolution(): void {
     this.assertMutable()
-    const revision = this.draft.getSnapshot().preview?.previewRevision
+    const revision = this.currentValidatedCylinder()?.previewRevision ?? this.draft.getSnapshot().preview?.previewRevision
     if (revision === undefined || revision !== this.failedNoteRevision || this.notes !== this.failedNoteSet) return
     this.failedNoteRevision = null; this.failedNoteSet = null; this.message = null
     this.resolveNotes(); this.refresh()
@@ -693,18 +693,19 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (this.strip || this.stripPending) throw new Error('Chiudi prima la modifica del bordo.')
     if (this.notes.length >= 200) throw new Error('Sono consentite al massimo 200 note per questa modifica.')
     if (!point || !finitePoint(point)) throw new Error('Clicca sulla faccia CAD.')
-    const draft = this.draft.getSnapshot(), revision = draft.preview?.previewRevision
-    if (!draft.net || draft.validNet !== draft.net || draft.calculating || revision === undefined)
+    const draft = this.draft.getSnapshot(), cylinder=this.currentValidatedCylinder(), revision = cylinder?.previewRevision ?? draft.preview?.previewRevision
+    if (!draft.net || (!cylinder && draft.validNet !== draft.net) || draft.calculating || revision === undefined)
       throw new Error('Attendi la verifica CAD della faccia.')
     this.change(() => { this.busy = true; this.message = null })
     const epoch = this.selectionEpoch, net = draft.net
     try {
       const pin = await this.runtime.worker.ask<{anchor: DraftAnchor; at: Point; normal: Point}>(
-        { action: 'notePick', point: pointCopy(point), previewRevision: revision }, this.context.signal)
+        cylinder ? { action:'cylinderNotePick', session:cylinder.session, point:pointCopy(point), previewRevision:revision }
+          : { action: 'notePick', point: pointCopy(point), previewRevision: revision }, this.context.signal)
       this.assertLive()
       const current = this.draft.getSnapshot()
-      if (epoch !== this.selectionEpoch || current.net !== net || current.validNet !== net ||
-          current.preview?.previewRevision !== revision || !finitePoint(pin.at) || !finitePoint(pin.normal) ||
+      if (epoch !== this.selectionEpoch || current.net !== net ||
+          (cylinder ? this.currentValidatedCylinder()!==cylinder : current.validNet !== net || current.preview?.previewRevision !== revision) || !finitePoint(pin.at) || !finitePoint(pin.normal) ||
           !pin.anchor || pin.anchor.face !== this.face || !Number.isSafeInteger(pin.anchor.selectionRevision) ||
           !Number.isFinite(pin.anchor.u) || !Number.isFinite(pin.anchor.v)) throw new Error('La faccia è cambiata durante la scelta della nota.')
       this.change(() => {
@@ -727,7 +728,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   async validateCylinder(): Promise<void> {
     this.assertMutable()
     const draft=this.draft.getSnapshot(),net=draft.net,session=draft.cylinderSession
-    if(!net || session===null || draft.calculating || this.gesture!=='idle' || this.notes.length || this.placingNote)
+    if(!net || session===null || draft.calculating || this.gesture!=='idle' || this.placingNote)
       throw new Error('Termina il trascinamento e attendi l’anteprima prima di verificare.')
     const draftEpoch=this.draftEpoch,selectionEpoch=this.selectionEpoch,requestId=++this.cylinderValidationSerial
     this.cylinderValidated=null;this.busy=true;this.message='Verifica CAD del cilindro in corso…';this.refresh()
@@ -738,12 +739,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if(current.net!==net || current.cylinderSession!==session || this.draftEpoch!==draftEpoch ||
          this.selectionEpoch!==selectionEpoch || requestId!==this.cylinderValidationSerial || !result.step.trim())
         throw new Error('La bozza è cambiata durante la verifica CAD.')
-      this.cylinderValidated={net,session,draftEpoch,selectionEpoch,requestId,step:result.step}
+      this.cylinderValidated={net,session,historyRevision:this.historyRevision,selectionEpoch,requestId,previewRevision:result.previewRevision,step:result.step}
       this.message='Cilindro verificato con controlli sperimentali: puoi creare una copia CAD.'
     } catch(error) {
       if(!this.disposed) this.message=String((error as Error)?.message ?? error)
       throw error
-    } finally {if(!this.disposed){this.busy=false;this.refresh()}}
+    } finally {if(!this.disposed){this.busy=false;this.refresh();this.resolveNotes()}}
   }
 
   freeze(ticket: ApplyTicket): () => void {
@@ -766,7 +767,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   freezeAnnotated(ticket: AnnotatedTicketV1): () => void {
     this.assertLive()
     if (!this.supportsAnnotatedCopy()) throw new Error('Il progetto non supporta ancora il salvataggio delle note con la copia CAD.')
-    const d = this.draft.getSnapshot(), revision = d.preview?.previewRevision
+    const d = this.draft.getSnapshot(), revision = this.currentValidatedCylinder()?.previewRevision ?? d.preview?.previewRevision
     if (this.frozen || this.mutating || this.busy || this.placingNote || this.gesture !== 'idle' || this.strip || this.stripPending ||
         !this.notes.length || this.notes.length > 200 || revision === undefined ||
         this.notes.some(note => !note.text.trim() || note.revision !== revision))
@@ -813,14 +814,16 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.assertFrozenAnnotated(ticket, frozen, signal)
     frozen.preparing = true
     try {
-      const result = await this.draft.evaluateForExport()
+      const cylinder=this.currentValidatedCylinder()
+      const result = cylinder ? {step:cylinder.step,previewRevision:cylinder.previewRevision} : await this.draft.evaluateForExport()
       this.assertFrozenAnnotated(ticket, frozen, signal)
       if (!result.step.trim() || result.step.charCodeAt(0) === 0xfeff || !Number.isSafeInteger(result.previewRevision))
         throw new Error('Esportazione STEP annotata non valida.')
       const step = new TextEncoder().encode(result.step)
       if (!step.length || step.length > 128_000_000) throw new Error('Dimensione STEP annotato non valida.')
       const witness = await this.runtime.worker.ask<{face:number;selectionRevision:number;previewRevision:number;faceBrep:string}>(
-        { action: 'finalFaceWitness', previewRevision: result.previewRevision }, signal)
+        cylinder ? {action:'cylinderFaceWitness',session:cylinder.session,previewRevision:result.previewRevision}
+          : { action: 'finalFaceWitness', previewRevision: result.previewRevision }, signal)
       this.assertFrozenAnnotated(ticket, frozen, signal)
       if (!witness || witness.face !== this.face || witness.previewRevision !== result.previewRevision ||
           !Number.isSafeInteger(witness.selectionRevision) || typeof witness.faceBrep !== 'string' ||
@@ -832,7 +835,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
             !Number.isFinite(note.anchor.u) || !Number.isFinite(note.anchor.v) || !note.text.trim())
           throw new Error('Una nota non appartiene alla faccia finale.')
         const resolved = await this.runtime.worker.ask<{at:Point;normal:Point}>(
-          { action: 'noteResolve', anchor: note.anchor, previewRevision: result.previewRevision }, signal)
+          cylinder ? {action:'cylinderNoteResolve',session:cylinder.session,anchor:note.anchor,previewRevision:result.previewRevision}
+            : { action: 'noteResolve', anchor: note.anchor, previewRevision: result.previewRevision }, signal)
         this.assertFrozenAnnotated(ticket, frozen, signal)
         if (!finitePoint(resolved?.at) || !finitePoint(resolved?.normal) || Math.abs(Math.hypot(...resolved.normal) - 1) > 1e-6)
           throw new Error('Posizione o normale finale della nota non valida.')
@@ -918,7 +922,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private currentValidatedCylinder() {
     const value=this.cylinderValidated,draft=this.draft.getSnapshot()
     return value && draft.net===value.net && draft.cylinderSession===value.session &&
-      this.draftEpoch===value.draftEpoch && this.selectionEpoch===value.selectionEpoch ? value : null
+      this.historyRevision===value.historyRevision && this.selectionEpoch===value.selectionEpoch ? value : null
   }
   private assertMutable(allowBusy = false): void {
     this.assertLive()
@@ -1085,8 +1089,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const annotatedCopyAvailable = this.supportsAnnotatedCopy()
     const checkNotes = annotatedCopyAvailable && this.notes.length > 0 && !this.frozen?.notes
     const noteMessage = checkNotes && this.notes.some(note => !note.text.trim()) ? 'Scrivi il testo di tutte le note prima di applicare.' : null
-    const notesPending = checkNotes && this.notes.some(note => note.revision !== d.preview?.previewRevision)
-    const noteResolutionError = d.preview?.previewRevision !== undefined && this.failedNoteRevision === d.preview.previewRevision &&
+    const noteRevision=cylinder?.previewRevision ?? d.preview?.previewRevision
+    const notesPending = checkNotes && this.notes.some(note => note.revision !== noteRevision)
+    const noteResolutionError = noteRevision !== undefined && this.failedNoteRevision === noteRevision &&
       this.failedNoteSet === this.notes
     const validation = geometryValidation.kind !== 'valid' ? geometryValidation : noteMessage
       ? { kind: 'invalid' as const, stamp, message: noteMessage }
@@ -1107,8 +1112,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const preview = stripResult?.preview ?? d.preview ?? (!d.net ? this.sourcePreview : null)
     // Positioning a new note blocks Apply but does not invalidate existing
     // anchors verified against the still-current CAD preview.
-    const validRevision = d.net && d.validNet === d.net && !d.calculating && !d.previewStale
-      ? preview?.previewRevision : undefined
+    const validRevision = cylinder?.previewRevision ?? (d.net && d.validNet === d.net && !d.calculating && !d.previewStale
+      ? preview?.previewRevision : undefined)
     if (!this.pinCache || this.pinCache.notes !== this.notes || this.pinCache.revision !== validRevision)
       this.pinCache = { notes: this.notes, revision: validRevision,
         value: Object.freeze(this.notes.filter(note => note.revision === validRevision).map(note => note.at)) }
@@ -1159,20 +1164,21 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     for (const listener of this.listeners) listener()
   }
   private resolveNotes(): void {
-    const d = this.draft.getSnapshot(), revision = d.preview?.previewRevision
-    if (this.disposed || this.frozen || this.resolvingNotes || !d.net || d.validNet !== d.net ||
+    const d = this.draft.getSnapshot(), cylinder=this.currentValidatedCylinder(), revision = cylinder?.previewRevision ?? d.preview?.previewRevision
+    if (this.disposed || this.frozen || this.resolvingNotes || !d.net || (!cylinder && d.validNet !== d.net) ||
         d.calculating || revision === undefined || (revision === this.failedNoteRevision && this.notes === this.failedNoteSet) ||
         !this.notes.some(note => note.revision !== revision)) return
     const notes = this.notes, net = d.net, epoch = this.selectionEpoch
     this.resolvingNotes = true
     void Promise.all(notes.map(async note => note.revision === revision ? note : ({
       ...note, ...await this.runtime.worker.ask<{at: Point; normal: Point}>(
-        { action: 'noteResolve', anchor: note.anchor, previewRevision: revision }, this.context.signal), revision,
+        cylinder ? {action:'cylinderNoteResolve',session:cylinder.session,anchor:note.anchor,previewRevision:revision}
+          : { action: 'noteResolve', anchor: note.anchor, previewRevision: revision }, this.context.signal), revision,
     }))).then(updated => {
       this.assertLive()
       const current = this.draft.getSnapshot()
-      if (this.notes !== notes || epoch !== this.selectionEpoch || current.net !== net || current.validNet !== net ||
-          current.preview?.previewRevision !== revision || this.frozen) return
+      if (this.notes !== notes || epoch !== this.selectionEpoch || current.net !== net ||
+          (cylinder ? this.currentValidatedCylinder()!==cylinder : current.validNet !== net || current.preview?.previewRevision !== revision) || this.frozen) return
       if (updated.some(note => !finitePoint(note.at) || !finitePoint(note.normal))) throw new Error('Posizione nota non valida.')
       this.advanceNotesRevision()
       this.failedNoteRevision = null; this.failedNoteSet = null
@@ -1181,8 +1187,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }).catch(error => {
       const current = this.draft.getSnapshot()
       if (!this.disposed && !this.frozen && this.notes === notes && this.selectionEpoch === epoch &&
-          current.net === net && current.validNet === net && !current.calculating && !current.previewStale &&
-          current.preview?.previewRevision === revision) {
+          current.net === net && !current.calculating && !current.previewStale &&
+          (cylinder ? this.currentValidatedCylinder()===cylinder : current.validNet === net && current.preview?.previewRevision === revision)) {
         this.failedNoteRevision = revision; this.failedNoteSet = notes
         this.message = String((error as Error)?.message ?? error); this.refresh()
       }
