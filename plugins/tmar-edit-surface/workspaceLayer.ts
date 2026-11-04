@@ -672,9 +672,10 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       if (state.placingNote) { void owner.placeNote(pickFace(x, y)?.point ?? null).catch(error => report(errorText(error))); return true }
       const picked = pickNet(x, y)
       if (picked) { owner.selectPoints(picked, additive); return true }
-      if (!state.net) {
-        const hit = pickFace(x, y)
-        if (hit) { faceRequest = true; void owner.chooseFace(hit.face).catch(error => report(errorText(error))).finally(() => { faceRequest = false }) }
+      const hit = pickFace(x, y)
+      if (hit && (!state.net || hit.face !== state.face)) {
+        faceRequest = true
+        void owner.requestFaceSelection(hit.face).catch(error => report(errorText(error))).finally(() => { faceRequest = false })
       }
     } catch (error) { report(errorText(error)) }
     return true

@@ -14,6 +14,8 @@ if (url.protocol !== 'http:' || !['localhost','127.0.0.1','[::1]'].includes(url.
 const sourceFile = process.env.STEP_FILE
 if (sourceFile && (!isAbsolute(sourceFile) || !['.step','.stp'].includes(extname(sourceFile).toLowerCase())))
   throw Error('STEP_FILE must be an absolute STEP path.')
+if (sourceFile && process.env.TEST_FACE_SWITCH === '1')
+  throw Error('TEST_FACE_SWITCH uses only its synthetic box fixture.')
 const requestedFace = process.env.FACE_INDEX
 if (requestedFace !== undefined && (!/^\d+$/.test(requestedFace) || !Number.isSafeInteger(Number(requestedFace))))
   throw Error('FACE_INDEX must be a non-negative integer.')
@@ -47,7 +49,8 @@ try {
   const launched = await launchApp({ url: url.href, width: 1440, height: 1000, agentDataOk: false,
     userDataDir: join(out, 'owned-browser-profile'), protocolTimeout: 120000 })
   browser = launched.browser; page = launched.page; report.consoleErrors = launched.consoleErrors
-  page.on('dialog', dialog => dialog.accept())
+  const dialogChoices = []
+  page.on('dialog', dialog => { void (dialogChoices.shift() === false ? dialog.dismiss() : dialog.accept()) })
   await page.evaluate(async step => {
     const { runCommand } = await import('/src/commands/registry.ts')
     const { useShell } = await import('/src/state/shellStore.ts')
@@ -119,6 +122,87 @@ try {
     const s = window.surfaceQa.useWorkspaceEditor.getState()
     return s.snapshot?.validation.kind === 'valid' && !s.controller?.getPanelState().calculating
   }, { timeout: 120000 })
+  if (process.env.TEST_FACE_SWITCH === '1') {
+    const waitDialog = () => new Promise((resolve,reject) => {
+      const handler = dialog => { clearTimeout(timer); resolve(dialog.message()) }
+      const timer = setTimeout(() => { page.off('dialog',handler); reject(Error('Dialog did not appear')) },10000)
+      page.once('dialog',handler)
+    })
+    // Pick an actually visible, editable face away from the active control
+    // cage. The test uses the same camera, preview meshes and pointer as the UI.
+    const otherFace = () => page.evaluate(async () => {
+      const q=window.surfaceQa, layer=q.scene.layerHost(), c=q.useWorkspaceEditor.getState().controller
+      const state=c.getViewState(), rect=layer.canvas.getBoundingClientRect(), camera=layer.camera(), group=layer.partGroup
+      const preview=group.getObjectByName('tmar-edit-surface-preview')
+      if (!preview) return null
+      const THREE=await import('/node_modules/.vite/deps/three.js')
+      const { pickNetAt }=await import('/plugins/tmar-edit-surface/netPicking.ts')
+      group.updateWorldMatrix(true,true);camera.updateMatrixWorld(true)
+      const caster=new THREE.Raycaster(), eligible=new Set(c.getPanelState().faces.filter(f=>!f.reason).map(f=>f.index))
+      for (const mesh of preview.children) {
+        const id=mesh.userData.face, position=mesh.geometry.getAttribute('position'), index=mesh.geometry.getIndex()
+        if (id===state.face || !eligible.has(id) || !position) continue
+        const count=index ? index.count : position.count
+        for (let i=0;i+2<count;i+=3) {
+          const at=j=>index ? index.getX(j) : j
+          const p=new THREE.Vector3()
+          for (let j=0;j<3;j++) p.add(new THREE.Vector3().fromBufferAttribute(position,at(i+j)))
+          p.multiplyScalar(1/3).applyMatrix4(mesh.matrixWorld)
+          const projected=p.clone().project(camera)
+          if (Math.abs(projected.x)>=.98 || Math.abs(projected.y)>=.98 || Math.abs(projected.z)>=1) continue
+          const x=rect.left+(projected.x+1)*rect.width/2, y=rect.top+(1-projected.y)*rect.height/2
+          if (document.elementFromPoint(x,y)!==layer.canvas ||
+              pickNetAt({net:state.net,mode:state.selectionMode,hiddenPoles:state.hiddenPoles,camera,partWorld:group.matrixWorld,rect,clientX:x,clientY:y})) continue
+          caster.setFromCamera(new THREE.Vector2(projected.x,projected.y),camera)
+          if (caster.intersectObjects(preview.children,false)[0]?.object.userData.face===id) return {id,x,y}
+        }
+      }
+      return null
+    })
+    const firstTarget=await otherFace()
+    assert(firstTarget,'No second visible editable face in the synthetic fixture')
+    await page.mouse.click(firstTarget.x,firstTarget.y)
+    await page.waitForFunction(id => {
+      const s=window.surfaceQa.useWorkspaceEditor.getState()
+      return s.controller?.getPanelState().face===id && s.snapshot?.validation.kind==='valid'
+    },{timeout:120000},firstTarget.id)
+    check(true,'a click changes the active CAD face in the shared viewport')
+    await page.evaluate(() => {
+      const c=window.surfaceQa.useWorkspaceEditor.getState().controller, p=c.getPanelState(), v=c.getViewState()
+      const id=p.net.poles.findIndex((_,i)=>!p.locked.includes(i) && !v.hiddenPoles.includes(i))
+      if(id<0) throw Error('No free point on the second face')
+      c.selectPoints([id],false);c.moveSelected(.05)
+    })
+    await page.waitForFunction(() => {
+      const s=window.surfaceQa.useWorkspaceEditor.getState()
+      return s.snapshot?.dirty && s.snapshot.validation.kind==='valid'
+    },{timeout:120000})
+    const draft=await page.evaluate(() => JSON.stringify(window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().net.poles))
+    const next=await otherFace()
+    assert(next,'No other visible editable face after modification')
+    dialogChoices.push(false)
+    const declined=waitDialog()
+    await page.mouse.click(next.x,next.y)
+    assert.match(await declined,/scartare/i)
+    check(await page.evaluate(({face,draft}) => {
+      const p=window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState()
+      return p.face===face && JSON.stringify(p.net.poles)===draft
+    },{face:firstTarget.id,draft}),'cancelling the face change preserves the modified draft')
+    dialogChoices.push(true)
+    const accepted=waitDialog()
+    await page.mouse.click(next.x,next.y)
+    assert.match(await accepted,/scartare/i)
+    await page.waitForFunction(id => {
+      const s=window.surfaceQa.useWorkspaceEditor.getState()
+      return s.controller?.getPanelState().face===id && s.snapshot?.validation.kind==='valid'
+    },{timeout:120000},next.id)
+    check(true,'confirming the face change selects the clicked face')
+    await page.select('[data-test=surface-face]',String(faceIndex))
+    await page.waitForFunction(id => {
+      const s=window.surfaceQa.useWorkspaceEditor.getState()
+      return s.controller?.getPanelState().face===id && s.snapshot?.validation.kind==='valid'
+    },{timeout:120000},faceIndex)
+  }
   const panelLayout = await page.$eval('.workspace-editor-parameters', element => ({
     clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
   }))

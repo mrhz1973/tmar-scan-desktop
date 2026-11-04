@@ -65,7 +65,7 @@ export interface WorkspaceSurfaceViewState {
 export interface WorkspaceSurfaceLayerOwner {
   getViewState(): WorkspaceSurfaceViewState
   subscribe(listener: () => void): () => void
-  chooseFace(index: number): Promise<void>
+  requestFaceSelection(index: number): Promise<void>
   selectPoints(ids: readonly number[], additive: boolean): void
   beginPoleGesture(): boolean
   previewPoles(poles: Point[]): void

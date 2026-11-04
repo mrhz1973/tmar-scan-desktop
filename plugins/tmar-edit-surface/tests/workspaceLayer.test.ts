@@ -65,7 +65,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     notePins: [], stripes: null }
   const set = (patch: Partial<WorkspaceSurfaceViewState>) => { state = { ...state, ...patch }; for (const listener of listeners) listener() }
   const selectPoints = vi.fn((ids: readonly number[]) => set({ selected: [...ids] }))
-  const chooseFace = vi.fn(async () => {})
+  const requestFaceSelection = vi.fn(async () => {})
   const beginPoleGesture = vi.fn(() => { if (state.directStrip) set({ directStrip: null }); return true })
   const previewPoles = vi.fn((_poles: Point[]) => {})
   const finishPoleGesture = vi.fn((_poles: Point[] | null) => {})
@@ -92,7 +92,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     if (state.strip) set({ strip: { ...state.strip, pending: false, delta: [0, 0, 0] } })
   })
   const owner: WorkspaceSurfaceLayerOwner = { getViewState: () => state, subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn) } },
-    chooseFace, selectPoints, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError,
+    requestFaceSelection, selectPoints, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError,
     beginStripGesture, beginDirectStripGesture, previewStripDelta, finishStripGesture }
   const referenceGeometry = new THREE.PlaneGeometry(10, 10)
   const beforePosition = referenceGeometry.getAttribute('position')
@@ -124,7 +124,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
   const getLayer = () => layer as unknown as NonNullable<typeof layer>
   const getHandlers = () => handlers as unknown as NonNullable<typeof handlers>
   return { view, owner, set, net, group, rect, client, event, getLayer, getHandlers, counts: () => ({ maskCount, restoreCount, captured }),
-    selectPoints, chooseFace, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError, referenceGeometry, beforePosition,
+    selectPoints, requestFaceSelection, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError, referenceGeometry, beforePosition,
     beginStripGesture, beginDirectStripGesture, previewStripDelta, finishStripGesture,
     overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
@@ -140,7 +140,7 @@ it('masks only a valid preview, supports picking and restores the source on disp
   await Promise.resolve()
   await Promise.resolve()
   await Promise.resolve()
-  expect(f.chooseFace).toHaveBeenCalledWith(0)
+  expect(f.requestFaceSelection).toHaveBeenCalledWith(0)
   f.set({ placingNote: true, notePins: [[0, 0, 0]] })
   f.getLayer().click?.(300, 300, false)
   expect(f.placeNote).toHaveBeenCalledWith([0, 0, 0])
@@ -149,6 +149,20 @@ it('masks only a valid preview, supports picking and restores the source on disp
   expect(f.counts().restoreCount).toBe(1)
   expect(f.group.children).toHaveLength(0)
   expect(f.overlay.children).toHaveLength(0)
+})
+
+it('requests another face from the viewport after the first is selected', async () => {
+  const second = { ...mesh, positions: new Float32Array([2.1,-1,0, 2.9,-1,0, 2.9,1,0, 2.1,1,0]) }
+  const f = fixture({ preview: { ...validPreview, faceMeshes: [mesh, second] } })
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  const current = f.client([1.5,0,0]), other = f.client([2.5,0,0])
+  f.getLayer().click?.(current.clientX,current.clientY,false)
+  expect(f.requestFaceSelection).not.toHaveBeenCalled()
+  f.getLayer().click?.(other.clientX,other.clientY,false)
+  await Promise.resolve()
+  expect(f.requestFaceSelection).toHaveBeenCalledOnce()
+  expect(f.requestFaceSelection).toHaveBeenCalledWith(1)
+  layer.dispose()
 })
 
 it('drags in part coordinates with a transformed part and cancels/release capture synchronously', () => {
@@ -676,7 +690,7 @@ it('does not pick clipped or busy strip boundaries and leaves face selection alo
   expect(f.getLayer().pointerDown?.(f.event(2, [0, -1, 0]))).toBe(false)
   f.set({ busy: false })
   f.getLayer().click?.(300, 300, false)
-  expect(f.chooseFace).not.toHaveBeenCalled()
+  expect(f.requestFaceSelection).not.toHaveBeenCalled()
   expect(f.counts().captured).toBeNull()
   layer.dispose()
 })

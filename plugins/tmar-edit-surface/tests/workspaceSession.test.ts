@@ -111,6 +111,59 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 afterEach(()=>vi.useRealTimers())
 
 describe('WorkspaceSurfaceSession',()=>{
+  it('preserves a changed draft if switching faces is cancelled, and switches only after confirmation', async()=>{
+    const t=await setup();await selectFace(t)
+    t.session.selectPoints([12],false);t.session.moveSelected(.2)
+    const before=structuredClone(t.session.getPanelState().net!.poles)
+    const decline=vi.fn(()=>false)
+    await expect(t.session.requestFaceSelection(1,decline)).rejects.toThrow('Attendi la verifica CAD')
+    expect(decline).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    await t.session.requestFaceSelection(1,decline)
+    expect(decline).toHaveBeenCalledOnce()
+    expect(t.session.getPanelState().face).toBe(0)
+    expect(t.session.getPanelState().net!.poles).toEqual(before)
+    const accept=vi.fn(()=>true), pending=t.session.requestFaceSelection(1,accept)
+    const request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('select')
+    t.worker.reply(request.id,plane());await pending
+    expect(accept).toHaveBeenCalledOnce()
+    expect(t.session.getPanelState().face).toBe(1)
+    await t.session.dispose('cancelled')
+  })
+
+  it('keeps the current draft and undo history if loading the new face fails', async()=>{
+    const t=await setup();await selectFace(t)
+    t.session.selectPoints([12],false);t.session.moveSelected(.2)
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    const before=structuredClone(t.session.getPanelState().net!.poles)
+    const pending=t.session.requestFaceSelection(1,()=>true)
+    const request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('select')
+    expect(t.session.getPanelState().net!.poles).toEqual(before)
+    t.worker.fail(request.id,'Caricamento non riuscito')
+    await expect(pending).rejects.toThrow('Caricamento non riuscito')
+    expect(t.session.getPanelState().face).toBe(0)
+    expect(t.session.getPanelState().net!.poles).toEqual(before)
+    expect(t.session.getPanelState().canUndo).toBe(true)
+    t.session.undo()
+    expect(t.session.getPanelState().net!.poles[12][2]).toBe(0)
+    await t.session.dispose('cancelled')
+  })
+
+  it('keeps draft notes and refuses a face switch before asking to discard changes', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    await addNote(t,'Nota da conservare',.5)
+    const confirm=vi.fn(()=>true)
+    await expect(t.session.requestFaceSelection(1,confirm)).rejects.toThrow('note')
+    expect(confirm).not.toHaveBeenCalled()
+    expect(t.session.getPanelState().notes).toMatchObject([{text:'Nota da conservare'}])
+    expect(t.session.getPanelState().face).toBe(0)
+    await t.session.dispose('cancelled')
+  })
+
   it('ignores a failed stale note resolution after a note is removed', async()=>{
     const t=await setup({annotated:true});await selectFace(t)
     const removed=await addNote(t,'Da rimuovere',.25)
@@ -590,8 +643,12 @@ describe('WorkspaceSurfaceSession',()=>{
     await expect(t.session.chooseFace(1)).rejects.toThrow('conferma')
     expect(t.session.getPanelState().net).toBe(net)
     expect(t.session.getPanelState().face).toBe(0)
+    await expect(t.session.chooseFace(1,true)).rejects.toThrow('Attendi la verifica CAD')
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
     const switching=t.session.chooseFace(1,true)
-    expect(t.session.getSnapshot().validation.kind).toBe('none')
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    expect(t.session.getPanelState().net).toBe(net)
     t.worker.reply(t.worker.sent.at(-1)!.id,plane())
     await switching
     expect(t.session.getPanelState().face).toBe(1)

@@ -272,6 +272,19 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }
   }
 
+  async requestFaceSelection(index: number, confirmDiscard = (message: string) => window.confirm(message)): Promise<void> {
+    this.assertMutable()
+    const face = this.faces[index]
+    if (!face || !Number.isInteger(index)) throw new Error('Faccia non disponibile.')
+    if (face.reason) throw new Error(face.reason)
+    if (index === this.face && this.draft.getSnapshot().net) return
+    if (this.notes.length) throw new Error('Rimuovi le note in bozza prima di cambiare faccia.')
+    if (this.draft.getSnapshot().calculating) throw new Error('Attendi la verifica CAD prima di cambiare faccia.')
+    const dirty = this.snapshot.dirty
+    if (dirty && !confirmDiscard('Cambiare faccia e scartare la modifica corrente?')) return
+    await this.chooseFace(index, dirty)
+  }
+
   async chooseFace(index: number, discardChanges = false): Promise<void> {
     this.assertMutable()
     if (this.strip || this.stripPending) throw new Error('Chiudi prima la modifica del bordo.')
@@ -282,21 +295,27 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (index === this.face && this.draft.getSnapshot().net) return
     if (this.notes.length) throw new Error('Rimuovi le note prima di cambiare faccia.')
     if (this.snapshot.dirty && !discardChanges) throw new Error('La bozza contiene modifiche: conferma prima di cambiare faccia.')
-    const previousContinuity = this.draft.getSnapshot().continuity
+    const currentDraft = this.draft.getSnapshot()
+    // Do not let an old queued evaluation run after the worker has selected a
+    // different face. Keep the current draft and history until selection succeeds.
+    if (currentDraft.calculating) throw new Error('Attendi la verifica CAD prima di cambiare faccia.')
+    const previousContinuity = currentDraft.continuity
     this.change(() => {
-      this.busy = true; this.selectionEpoch++; this.face = -1; this.message = null
-      this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
-      this.draft.reset({ preserveContinuity: true })
+      this.busy = true; this.message = null
     })
     const epoch = this.selectionEpoch
     try {
       const net = await this.runtime.worker.ask<Net>({ action: 'select', face: index }, this.context.signal)
       this.assertLive()
       if (epoch !== this.selectionEpoch) throw new Error('Selezione faccia superata.')
-      this.change(() => { this.draft.install(net, { continuity: previousContinuity, trimLocks: face.trimLocks }); this.face = index; this.busy = false }, true)
+      this.change(() => {
+        this.draft.install(net, { continuity: previousContinuity, trimLocks: face.trimLocks })
+        this.selectionEpoch++; this.face = index; this.busy = false
+        this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
+      }, true)
     } catch (error) {
       if (!this.disposed && epoch === this.selectionEpoch) {
-        this.busy = false; this.face = -1; this.message = String((error as Error)?.message ?? error); this.refresh()
+        this.busy = false; this.message = String((error as Error)?.message ?? error); this.refresh()
       }
       throw error
     }

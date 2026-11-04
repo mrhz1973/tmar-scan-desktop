@@ -26,11 +26,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
   }
   const chooseFace = (index: number) => {
-    if (index === state.face) return
-    if (state.notes.length) { setError('Rimuovi le note in bozza prima di cambiare faccia.'); return }
-    const dirty = controller.getSnapshot().dirty
-    if (dirty && !window.confirm('Cambiare faccia e scartare la modifica corrente?')) return
-    attempt(() => controller.chooseFace(index, dirty))
+    attempt(() => controller.requestFaceSelection(index))
   }
   const closeStrip = () => {
     if (!strip) return

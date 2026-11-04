@@ -98,6 +98,7 @@ describe('STEP solids with mixed support surfaces', () => {
       const result = editor.evaluate(changed, 'G1', true)
       expect(result.valid).toBe(true)
       expect(result.maxBoundaryError).toBeLessThan(1e-8)
+      expect(Math.abs(result.volume-k.getVolume(solid))).toBeGreaterThan(1e-6)
       const copy = k.importStep(result.step!)
       try {
         expect(k.isValid(copy)).toBe(true)

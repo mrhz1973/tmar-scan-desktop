@@ -102,6 +102,11 @@ host state. A host without this capability keeps the original behavior.
   case also passed the isolated shared-view numeric move, pointer drag,
   Undo/Redo and Apply workflow (`run-OASliT`), with both STEP bodies valid and
   the input hash unchanged. This is not direct editing of those curved faces.
+- A synthetic STEP box in the isolated shared view passed pointer selection of
+  a second CAD face, preservation of a modified draft when the change was
+  cancelled, and a confirmed change (`run-jx0E4G`). Failed face loading also
+  preserves the draft and its Undo history in session tests. An in-progress CAD
+  evaluation must finish before changing faces; draft notes still block a change.
 - An isolated box test in the shared view selected a control pole, enabled
   symmetry, moved the reflected pair, checked preview-only transparency and
   Undo, then applied a valid modified solid copy (`run-n8jr0q`). The test must
@@ -150,6 +155,8 @@ absolute `EDIT_SURFACE_QA_OUT` outside the app checkout. `STEP_FILE` is optional
 and is read only; without it a synthetic box is created. `TEST_ZEBRA_NOTES=1`
 adds the note/Zebra checks. Evidence, including user-derived screenshots, stays
 in the selected local QA output, not in this repository.
+`TEST_FACE_SWITCH=1` adds the viewport face-switch scenario and requires the
+script's synthetic box rather than an operator-supplied STEP.
 The separate `tests/e2e-workspace-snap.mjs` exercises the synthetic snap cases;
 `EDIT_SURFACE_DRAG_MODE=axis|local|screen` selects the movement mode.
 `tests/e2e-workspace-strip.mjs` and `tests/e2e-workspace-strip-drag.mjs` cover
