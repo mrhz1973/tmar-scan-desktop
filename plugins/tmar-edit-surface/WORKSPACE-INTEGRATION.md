@@ -195,6 +195,15 @@ host state. A host without this capability keeps the original behavior.
   Equivalent but differently serialized curves can be rejected. Sampling is not
   a global proof; other BREP encodings fail closed. It is a diagnostic only,
   not a production gate.
+  `cylinderPreparation.ts` combines the source screen, native identity
+  conversion, sampled face/border comparisons in both directions, seam audit
+  and exact V refinement. Tests retain the source unchanged and reimport one
+  coupled-pole edit as a valid STEP for straight and rotated synthetic bodies;
+  a cut cylinder is refused. Face correspondence uses returned OCCT ordering,
+  and sampling does not prove equality everywhere. The function returns both
+  kernel volume readings without declaring either transformed reading accurate;
+  the known volume discrepancy, exact seam identity, recipe/history and real
+  STEP qualification remain unresolved. It is not wired to the editor or UI.
   Net edge/cell picking and cage drawing now include cyclic connections for
   periodic dimensions with more than two rows. Ambiguous two-row periodic
   picking and unqualified periodic frame conventions fail closed; periodic
