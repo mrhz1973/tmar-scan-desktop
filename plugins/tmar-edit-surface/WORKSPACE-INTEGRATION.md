@@ -139,6 +139,20 @@ host state. A host without this capability keeps the original behavior.
   volume remained `6296.4133 mm³` versus `6283.1853 mm³` on the source. This
   wire-repair approach therefore does not qualify cylindrical editing; the
   diagnostic used one synthetic cylinder and did not assert a global bound.
+  A different isolated experiment used the existing OCCT general transform
+  with an identity matrix. On that cylinder it yielded a valid periodic-U
+  B-spline solid with `1e-7 mm` edge/vertex tolerances and a sampled surface
+  gap below `4e-14 mm`. Its reported OCCT volume was `6337.3174 mm³` rather
+  than the source `6283.1853 mm³`; independently sampled signed triangle
+  volumes converged to `6283.1664` and `6283.1644 mm³` respectively at the
+  finest tested deflection, without proving the source of the discrepancy.
+  The periodic record can now be read and round-tripped without enabling
+  editing. Exact V elevation/refinement exposed an interior row; on this
+  one synthetic solid an interior pole move preserved sampled caps/seam,
+  edge tolerances and a valid STEP round trip. A different pole changed the
+  seam tangent despite preserving its sampled position. This is not a UI
+  capability: seam/trim pcurves, controls, recipes and other STEP topologies
+  remain unqualified, and periodic editing is still explicitly rejected.
 - A synthetic STEP box in the isolated shared view passed pointer selection of
   a second CAD face, preservation of a modified draft when the change was
   cancelled, and a confirmed change (`run-jx0E4G`). Failed face loading also

@@ -7,8 +7,10 @@ export interface Net {
   nu: number; nv: number; du: number; dv: number
   poles: Point[]; weights: number[]; rational: [number, number]
   ku: number[]; kv: number[]; mu: number[]; mv: number[]
+  // Read-only representation; editing periodic nets remains unsupported.
+  periodic?: [number, number]
 }
-export interface RecordSpan { start: number; end: number; kind: number; values: number[]; net?: Net }
+export interface RecordSpan { start: number; end: number; kind: number; values: number[]; net?: Net; periodicNet?: Net }
 export function surfaceTable(brep: string): RecordSpan[] {
   if (!brep.includes('CASCADE Topology V3') || !/^Locations 0\s*$/m.test(brep)) throw new Error('BREP con trasformazioni o versione non supportata. Esportare prima il corpo in STEP.')
   const header = /^Surfaces (\d+)\s*$/m.exec(brep)
@@ -43,7 +45,7 @@ export function surfaceTable(brep: string): RecordSpan[] {
   }
   const record = (): RecordSpan => {
     const first = cursor, kind = integer(1, 11)
-    let net: Net | undefined
+    let net: Net | undefined, periodicNet: Net | undefined
     if (kind <= 5) skip([0, 12, 13, 14, 13, 14][kind])
     else if (kind === 6 || kind === 7) { skip(kind === 6 ? 3 : 6); curve3d() }
     else if (kind === 9 || kind === 8) {
@@ -60,11 +62,15 @@ export function surfaceTable(brep: string): RecordSpan[] {
         for (let i = 0; i < nku; i++) { ku.push(take()); mu.push(integer(1, du + 1)) }
         for (let i = 0; i < nkv; i++) { kv.push(take()); mv.push(integer(1, dv + 1)) }
       }
-      if (kind === 9 && !periodic.some(Boolean)) net = { nu, nv, du, dv, poles, weights, rational, ku, kv, mu, mv }
+      if (kind === 9) {
+        const parsed = { nu, nv, du, dv, poles, weights, rational, ku, kv, mu, mv }
+        if (periodic.some(Boolean)) periodicNet = { ...parsed, periodic: periodic as [number, number] }
+        else net = parsed
+      }
     } else if (kind === 10) { skip(4); record() }
     else if (kind === 11) { skip(1); record() }
     else throw new Error('Superfici di rivoluzione/estrusione generiche non ancora supportate dall’adattatore.')
-    return { start: tokens[first].start, end: tokens[cursor - 1].end, kind, values: tokens.slice(first, cursor).map(t => t.value), net }
+    return { start: tokens[first].start, end: tokens[cursor - 1].end, kind, values: tokens.slice(first, cursor).map(t => t.value), net, periodicNet }
   }
   const count = Number(header[1]); if (count > 10000) throw new Error('Troppe superfici.')
   const records = Array.from({ length: count }, record)
@@ -74,7 +80,7 @@ export function surfaceTable(brep: string): RecordSpan[] {
 export const signature = (r: RecordSpan) => r.values.join(' ')
 export function encodeNet(n: Net): string {
   const poles = n.poles.map((p, i) => [...p, ...(n.rational.some(Boolean) ? [n.weights[i]] : [])].join(' '))
-  return `9 ${n.rational.join(' ')} 0 0 ${n.du} ${n.dv} ${n.nu} ${n.nv} ${n.ku.length} ${n.kv.length}\n${poles.join('\n')}\n${n.ku.map((k, i) => `${k} ${n.mu[i]}`).join(' ')}\n${n.kv.map((k, i) => `${k} ${n.mv[i]}`).join(' ')}`
+  return `9 ${n.rational.join(' ')} ${(n.periodic ?? [0, 0]).join(' ')} ${n.du} ${n.dv} ${n.nu} ${n.nv} ${n.ku.length} ${n.kv.length}\n${poles.join('\n')}\n${n.ku.map((k, i) => `${k} ${n.mu[i]}`).join(' ')}\n${n.kv.map((k, i) => `${k} ${n.mv[i]}`).join(' ')}`
 }
 export function replaceSurface(brep: string, r: RecordSpan, net: Net): string { return brep.slice(0, r.start) + encodeNet(net) + brep.slice(r.end) }
 export function planeNet(r: RecordSpan, bounds: [number, number, number, number]): Net {
@@ -125,6 +131,7 @@ export function enrichBicubic(n: Net): Net {
     weights: points.map(p => p[3]), ku: midpoint(n.ku), kv: midpoint(n.kv), mu: [4, 1, 4], mv: [4, 1, 4] }
 }
 export function assertNet(base: Net, n: Net, continuity: 'G0' | 'G1', freeBoundary = false) {
+  if (base.periodic?.some(Boolean) || n.periodic?.some(Boolean)) throw new Error('La modifica di reticoli periodici non è ancora supportata.')
   if (n.poles.length !== base.poles.length || JSON.stringify({ ...base, poles: [] }) !== JSON.stringify({ ...n, poles: [] })) throw new Error('Grado, nodi, pesi e parametrizzazione devono restare invariati.')
   n.poles.forEach((p, i) => {
     if (p.length !== 3 || p.some(x => !Number.isFinite(x))) throw new Error('Coordinate non valide.')
