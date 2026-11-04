@@ -358,8 +358,10 @@ claimed.
 
 `previewPreparedCylinder` returns a display-only tessellation tagged `provisional`;
 it does not check shape validity, export STEP, or authorize Apply. The current
-revision must separately pass the full cylinder evaluation. It is not connected
-to the worker or UI. On one synthetic imported cylinder, a local Vitest run
+revision must separately pass the full cylinder evaluation. The experimental
+worker exposes `previewCylinder`; an isolated browser source-worker test on a
+synthetic cylinder verifies its provisional response, no STEP or validity flag,
+and rejection of a protected-pole edit. It is not connected to the UI. On one synthetic imported cylinder, a local Vitest run
 measured 44.6 ms for this preview and 1956.8 ms for full evaluation; this is
 not a frame-rate or real-project benchmark. Worker scheduling, stale-result
 rejection, interaction and end-to-end qualification remain open.
