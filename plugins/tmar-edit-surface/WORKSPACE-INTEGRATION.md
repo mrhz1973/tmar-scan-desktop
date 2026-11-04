@@ -178,6 +178,13 @@ host state. A host without this capability keeps the original behavior.
   captured starting frame and a validator rejects unexpected pole, weight or
   knot edits. These helpers are not yet connected to the worker or UI; the
   source-face/topology qualification and history/recipe integration remain.
+  `cylinderSource.ts` adds a preliminary source-topology gate, tested on a
+  synthetic STEP cylinder in two positions, a cut cylinder, and a box. It
+  checks a single solid, caps, shared borders and a sampled UV interior; it
+  does not prove the absence of every possible trim or validate both seam
+  pcurves, conversion, volume, recipes or arbitrary imported STEP geometry.
+  This preliminary helper is not connected to the editor and enables no
+  additional surface editing.
   Net edge/cell picking and cage drawing now include cyclic connections for
   periodic dimensions with more than two rows. Ambiguous two-row periodic
   picking and unqualified periodic frame conventions fail closed; periodic
