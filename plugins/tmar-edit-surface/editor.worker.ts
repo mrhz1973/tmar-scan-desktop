@@ -5,6 +5,7 @@ import type { Net, Point } from './brep'
 import type { StripMove } from './sheetExtension'
 import { previewPreparedCylinder } from './cylinderPreview'
 import { evaluatePreparedCylinder } from './cylinderEvaluation'
+import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'sheetEdges'; previewRevision: number }
@@ -16,13 +17,17 @@ export type Request = { id: number } & (
   // Experimental display only; this is not an evaluate/Apply result.
   | { action: 'prepareCylinder'; face:number }
   | { action: 'previewCylinder' | 'evaluateCylinder'; session:number; net:Net }
+  | { action: 'cylinderNotePick'; session:number; previewRevision:number; point:Point }
+  | { action: 'cylinderNoteResolve'; session:number; previewRevision:number; anchor:DraftAnchor }
+  | { action: 'cylinderFaceWitness'; session:number; previewRevision:number }
   | { action: 'createRecipe'; net: Net; continuity: 'G0' | 'G1'; lockedPoles: number[]; bodyId: string; freeBoundary?: boolean }
   | { action: 'restoreRecipe' | 'replayRecipe'; step: string; recipe: unknown; bodyId: string }
 )
 let editor: SurfaceEditorKernel | undefined
 let chain = Promise.resolve()
 let cylinderSerial=0
-let cylinder:{session:number;prepared:{brep:string;net:Net};face:number}|null=null
+let cylinder:{session:number;prepared:{brep:string;net:Net};face:number;noteFace?:string;noteRevision?:number}|null=null
+let cylinderNoteSerial=0
 const resetCylinder=()=>{cylinder=null;cylinderSerial++}
 self.onmessage = (event: MessageEvent<Request>) => {
   const req = event.data
@@ -48,9 +53,21 @@ self.onmessage = (event: MessageEvent<Request>) => {
         }
         case 'previewCylinder': case 'evaluateCylinder': {
           if(!cylinder || req.session!==cylinder.session) throw new Error('La faccia cilindrica non è più attiva.')
-          result=req.action==='previewCylinder'
-            ? previewPreparedCylinder(editor.kernel,cylinder.prepared,req.net)
-            : evaluatePreparedCylinder(editor.kernel,cylinder.prepared,cylinder.face,req.net)
+          cylinder.noteFace=undefined;cylinder.noteRevision=undefined
+          if(req.action==='previewCylinder') result=previewPreparedCylinder(editor.kernel,cylinder.prepared,req.net)
+          else {
+            const evaluated=evaluatePreparedCylinder(editor.kernel,cylinder.prepared,cylinder.face,req.net)
+            cylinder.noteFace=evaluated.faceBrep;cylinder.noteRevision=++cylinderNoteSerial
+            result={mesh:evaluated.mesh,step:evaluated.step,previewRevision:cylinder.noteRevision}
+          }
+          break
+        }
+        case 'cylinderNotePick': case 'cylinderNoteResolve': case 'cylinderFaceWitness': {
+          if(!cylinder || req.session!==cylinder.session || !cylinder.noteFace || req.previewRevision!==cylinder.noteRevision)
+            throw new Error('Anteprima cilindrica cambiata: verifica di nuovo la faccia.')
+          if(req.action==='cylinderNotePick') result=cylinderAnchorFromPick(editor.kernel,cylinder.noteFace,cylinder.face,cylinder.session,req.point)
+          else if(req.action==='cylinderNoteResolve') result=resolveCylinderAnchor(editor.kernel,cylinder.noteFace,cylinder.face,cylinder.session,req.anchor)
+          else result={face:cylinder.face,selectionRevision:cylinder.session,previewRevision:cylinder.noteRevision,faceBrep:cylinder.noteFace}
           break
         }
         case 'createRecipe': result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.freeBoundary); break

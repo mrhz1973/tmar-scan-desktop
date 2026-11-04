@@ -7,7 +7,7 @@ import { assertMatchedCylinderTolerances } from './cylinderTolerance'
 
 /** Experimental cylinder preview only. No trusted volume is returned. Checks
  * are sampled and this does not enable editor Apply or certify arbitrary STEP. */
-export function evaluatePreparedCylinder(k: OcctKernel, prepared: {brep:string;net:Net}, faceIndex:number, candidate:Net): {mesh:Mesh;step:string} {
+export function evaluatePreparedCylinder(k: OcctKernel, prepared: {brep:string;net:Net}, faceIndex:number, candidate:Net): {mesh:Mesh;step:string;faceBrep:string} {
   assertSmoothCylinderMove(prepared.net,candidate)
   const records=surfaceTable(prepared.brep), entries=records.filter(r=>r.periodicNet)
   if(entries.length!==1 || JSON.stringify(entries[0].periodicNet)!==JSON.stringify(prepared.net)) throw new Error('Base cilindrica non corrispondente.')
@@ -57,6 +57,6 @@ export function evaluatePreparedCylinder(k: OcctKernel, prepared: {brep:string;n
         } finally {[...edges,...vertices].forEach(h=>k.release(h));k.release(section)}
       }
     } finally {boundaries.forEach(h=>k.release(h))}
-    return {mesh:k.tessellate(edited,{linearDeflection:.08,angularDeflection:.15}),step:k.exportStep(edited)}
+    return {mesh:k.tessellate(edited,{linearDeflection:.08,angularDeflection:.15}),step:k.exportStep(edited),faceBrep:k.toBREP(face)}
   } finally {[...before,...after].forEach(h=>k.release(h));if(edited)k.release(edited);k.release(base)}
 }
