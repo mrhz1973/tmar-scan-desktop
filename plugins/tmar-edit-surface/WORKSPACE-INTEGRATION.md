@@ -354,3 +354,12 @@ tessellation, not exact B-rep targets. Large-scan performance, real-world
 snapping, real-project save/reopen and cancellation under delayed staging
 require their own integrated checks. No Zebra equivalence with QuickSurface is
 claimed.
+# Experimental cylindrical drag preview
+
+`previewPreparedCylinder` returns a display-only tessellation tagged `provisional`;
+it does not check shape validity, export STEP, or authorize Apply. The current
+revision must separately pass the full cylinder evaluation. It is not connected
+to the worker or UI. On one synthetic imported cylinder, a local Vitest run
+measured 44.6 ms for this preview and 1956.8 ms for full evaluation; this is
+not a frame-rate or real-project benchmark. Worker scheduling, stale-result
+rejection, interaction and end-to-end qualification remain open.
