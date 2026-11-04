@@ -274,6 +274,15 @@ Save/Load scenario; it needs an annotated-capable host with the corrected
 oriented-normal handling, `SCANRULER_ISOLATED=1`, `APP_URL` fixed to
 `http://127.0.0.1:17723/` and an absolute output folder outside the checkout.
 
+## Face selection with draft notes
+
+Changing the active face now offers to discard draft notes and edits together.
+The notes remain if the confirmation is declined, the worker fails, or the CAD
+source changes while the other face loads; they are cleared after successful
+selection. `workspaceSession.test.ts` covers these paths through the session
+controller, including a simulated worker failure and source change. A real UI
+run and packaged desktop qualification have not been performed for this change.
+
 ## Not yet qualified
 
 The new adapter has not yet been qualified in a packaged desktop release or

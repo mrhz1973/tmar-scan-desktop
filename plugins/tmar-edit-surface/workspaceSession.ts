@@ -278,10 +278,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (!face || !Number.isInteger(index)) throw new Error('Faccia non disponibile.')
     if (face.reason) throw new Error(face.reason)
     if (index === this.face && this.draft.getSnapshot().net) return
-    if (this.notes.length) throw new Error('Rimuovi le note in bozza prima di cambiare faccia.')
     if (this.draft.getSnapshot().calculating) throw new Error('Attendi la verifica CAD prima di cambiare faccia.')
     const dirty = this.snapshot.dirty
-    if (dirty && !confirmDiscard('Cambiare faccia e scartare la modifica corrente?')) return
+    const prompt = this.notes.length
+      ? 'Cambiare faccia e scartare le modifiche e le note in bozza?'
+      : 'Cambiare faccia e scartare la modifica corrente?'
+    if (dirty && !confirmDiscard(prompt)) return
     await this.chooseFace(index, dirty)
   }
 
@@ -293,8 +295,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (face.reason) throw new Error(face.reason)
     if (this.gesture !== 'idle') throw new Error('Termina prima il trascinamento.')
     if (index === this.face && this.draft.getSnapshot().net) return
-    if (this.notes.length) throw new Error('Rimuovi le note prima di cambiare faccia.')
+    if (this.notes.length && !discardChanges) throw new Error('La bozza contiene note: conferma prima di cambiare faccia.')
     if (this.snapshot.dirty && !discardChanges) throw new Error('La bozza contiene modifiche: conferma prima di cambiare faccia.')
+    if (this.notes.length && (!Number.isSafeInteger(this.notesRevision) || this.notesRevision >= Number.MAX_SAFE_INTEGER))
+      throw new Error('Revisione delle note non valida.')
     const currentDraft = this.draft.getSnapshot()
     // Do not let an old queued evaluation run after the worker has selected a
     // different face. Keep the current draft and history until selection succeeds.
@@ -310,6 +314,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (epoch !== this.selectionEpoch) throw new Error('Selezione faccia superata.')
       this.change(() => {
         this.draft.install(net, { continuity: previousContinuity, trimLocks: face.trimLocks })
+        if (this.notes.length) { this.advanceNotesRevision(); this.notes = Object.freeze([]) }
         this.selectionEpoch++; this.face = index; this.busy = false
         this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
       }, true)
