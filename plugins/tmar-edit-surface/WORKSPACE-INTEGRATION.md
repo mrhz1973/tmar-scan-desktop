@@ -391,3 +391,14 @@ On one synthetic imported cylinder, a local Vitest run
 measured 44.6 ms for this preview and 1956.8 ms for full evaluation; this is
 not a frame-rate or real-project benchmark. Complete lifecycle qualification,
 control-net framing and real-project qualification remain open.
+
+Isolated source-host QA additionally exercised a planar face of a 51-face CAD
+solid derived from an earlier real-STEP test (`modified-test.step`, input
+SHA-256 `29eba285dc5ed8622c933fc6e2507a774f9342c2b542d538da3e8dd27f98fef4`).
+The viewport pointer gesture, numeric normal move, Undo/Redo and Apply-copy
+passed; input hash stayed unchanged and both exported shapes reimported as
+valid 51-face solids. The first attempt was obstructed by the support card;
+the QA now dismisses it and picks only points actually over the canvas.
+This is one planar face in a derived CAD file, not the cylindrical path,
+packaged desktop qualification, or general QuickSurface parity. Evidence:
+`scanruler-edit-surface-qa/run-sU9P0t/result.json` outside the checkout.

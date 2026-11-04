@@ -51,6 +51,8 @@ try {
   const launched = await launchApp({ url: url.href, width: 1440, height: 1000, agentDataOk: false,
     userDataDir: join(out, 'owned-browser-profile'), protocolTimeout: 120000 })
   browser = launched.browser; page = launched.page; report.consoleErrors = launched.consoleErrors
+  const supportClose = await page.$('[data-test="support-card"] button[aria-label="Close"]')
+  if (supportClose) await supportClose.click()
   const dialogChoices = []
   page.on('dialog', dialog => { void (dialogChoices.shift() === false ? dialog.dismiss() : dialog.accept()) })
   await page.evaluate(async step => {
@@ -417,7 +419,7 @@ try {
         visible: vector.z >= -1 && vector.z <= 1 }
     })
     const candidates = locations.filter(p => p.visible && !state.locked.includes(p.id) && !state.hiddenPoles.includes(p.id) &&
-      p.x > rect.left+12 && p.x < rect.right-12 && p.y > rect.top+12 && p.y < rect.bottom-12)
+      p.x > rect.left+12 && p.x < rect.right-12 && p.y > rect.top+12 && p.y < rect.bottom-12 && document.elementFromPoint(p.x,p.y)===canvas)
     candidates.forEach(p => { p.distance = Math.min(...locations.filter(other => other.id !== p.id).map(other => Math.hypot(p.x-other.x,p.y-other.y))) })
     candidates.sort((a,b) => b.distance-a.distance)
     return candidates[0] ?? null
