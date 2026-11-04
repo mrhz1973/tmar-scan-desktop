@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, it } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
-import { assertToleranceDistribution, isOnCylinderEquivalent, prepareCylinder } from '../cylinderPreparation'
+import { assertToleranceDistribution, isOnCylinderEquivalent, prepareCylinder, projectionWitnessMatches } from '../cylinderPreparation'
 import { moveSmoothCylinderPole, assertSmoothCylinderMove, canonicalizeCylinderGesture } from '../periodic'
 import { localFrame } from '../localFrame'
 import { evaluatePreparedCylinder } from '../cylinderEvaluation'
@@ -13,6 +13,13 @@ it('rejects increased or missing topological tolerances',()=>{
   expect(()=>assertToleranceDistribution(source,source)).not.toThrow()
   expect(()=>assertToleranceDistribution(source,'Ed\n 0.1 1 1 0\nVe\n1e-7\n')).toThrow(/Tolleranze/)
   expect(()=>assertToleranceDistribution(source,'Ed\n 1e-7 1 1 0\n')).toThrow(/Tolleranze/)
+})
+
+it('rejects an inconsistent UV witness even when the separate projected point matches',()=>{
+  const p={x:1,y:2,z:3}
+  expect(projectionWitnessMatches(p,p,{x:1+2e-6,y:2,z:3})).toBe(false)
+  expect(projectionWitnessMatches(p,p,{x:1+1e-8,y:2,z:3})).toBe(true)
+  expect(projectionWitnessMatches(p,p,{x:NaN,y:2,z:3})).toBe(false)
 })
 
 it('recognizes a cylinder seam on the equivalent angular branch without accepting a point beyond its caps',async()=>{

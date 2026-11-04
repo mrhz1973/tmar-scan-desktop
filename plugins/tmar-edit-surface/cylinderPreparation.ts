@@ -36,6 +36,14 @@ export function isOnCylinderEquivalent(k: OcctKernel, face: ShapeHandle, u: numb
   })
 }
 
+/** Both projection APIs must identify the same point on the same support. */
+export function projectionWitnessMatches(p: {x:number;y:number;z:number}, q: {x:number;y:number;z:number}, uvPoint: {x:number;y:number;z:number}): boolean {
+  return [q,uvPoint].every(x=>{
+    const gap=Math.hypot(p.x-x.x,p.y-x.y,p.z-x.z)
+    return Number.isFinite(gap) && gap<=1e-6
+  })
+}
+
 /** Experimental native conversion for a full cylindrical face in one solid. Never
  * mutates the borrowed source or enables editing. Comparisons are sampled;
  * arbitrary BREP encodings and seam identities still require qualification.
@@ -65,9 +73,9 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
             const u=bounds.uMin+(bounds.uMax-bounds.uMin)*i/8,v=bounds.vMin+(bounds.vMax-bounds.vMin)*j/8
             if(k.classifyPointOnFace(from,u,v)==='out') continue
             const p=k.pointOnSurface(from,u,v),q=k.projectPointOnFace(to,p),uv=k.uvFromPoint(to,p)
-            const n=k.surfaceNormal(from,u,v),m=k.surfaceNormal(to,uv.u,uv.v)
-            const gap=Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z),dot=n.x*m.x+n.y*m.y+n.z*m.z
-            if(!Number.isFinite(gap)||gap>1e-6||!Number.isFinite(dot)||dot<1-1e-7 ||
+            const n=k.surfaceNormal(from,u,v),m=k.surfaceNormal(to,uv.u,uv.v),uvPoint=k.pointOnSurface(to,uv.u,uv.v)
+            const dot=n.x*m.x+n.y*m.y+n.z*m.z
+            if(!projectionWitnessMatches(p,q,uvPoint)||!Number.isFinite(dot)||dot<1-1e-7 ||
                 !Number.isFinite(uv.u)||!Number.isFinite(uv.v)||!isOnCylinderEquivalent(k,to,uv.u,uv.v))
               throw new Error('Geometria della conversione cilindrica alterata.')
           }
