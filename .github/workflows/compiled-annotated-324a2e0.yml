@@ -1,0 +1,123 @@
+name: Compiled annotated integration 324a2e0 (no deployment)
+on:
+  push:
+    branches: [review/compiled-annotated-324a2e0-20261104]
+    paths:
+      - .github/workflows/compiled-annotated-324a2e0.yml
+      - review/compiled-annotated-324a2e0/**
+permissions:
+  contents: read
+jobs:
+  exact-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: 5f39ff521d0095e01fb9b7f1a5af833bca9e28ba
+          path: app
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          sparse-checkout: review/compiled-annotated-324a2e0
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.18.0
+      - name: Verify exact integration provenance and snapshot
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,pathlib,shutil,subprocess
+          r=pathlib.Path.cwd();a=r/'app';o=r/'full-cycle-results';o.mkdir()
+          def git(*args):return subprocess.check_output(['git',*args],cwd=a,text=True).strip()
+          assert git('rev-parse','HEAD')=='5f39ff521d0095e01fb9b7f1a5af833bca9e28ba'
+          assert git('rev-parse','HEAD:plugins/tmar-edit-surface')=='48d9da15efc45d172e1f93a384315717fcbaccb0'
+          subprocess.run(['git','fetch','--no-tags','--depth=1','origin','5684f5f27eaaa6ee460eef2300b010eb622b4507'],cwd=a,check=True)
+          changed=git('diff','--name-only','5684f5f27eaaa6ee460eef2300b010eb622b4507','HEAD').splitlines()
+          assert changed and all(n.startswith('plugins/tmar-edit-surface/') for n in changed)
+          paths=[n for n in git('ls-files').splitlines() if n.startswith(('src/','plugins/'))]
+          hashes={n:hashlib.sha256((a/n).read_bytes()).hexdigest() for n in paths}
+          t=r/'tooling/review/compiled-annotated-324a2e0/full-compiled-annotated.mjs'
+          shutil.copyfile(t,a/'plugins/reverse/scripts/e2e-compiled-full-annotated.mjs')
+          report={'integration':git('rev-parse','HEAD'),'host':'5684f5f27eaaa6ee460eef2300b010eb622b4507','plugin':'324a2e00bfd35c40d86e199015ea7718c2e946b7','pluginTree':git('rev-parse','HEAD:plugins/tmar-edit-surface'),'runtimeSha256':hashes,'qaScriptSha256':hashlib.sha256(t.read_bytes()).hexdigest()}
+          (o/'snapshot.json').write_text(json.dumps(report,indent=2))
+          PY
+      - name: Locked dependencies, no lifecycle scripts
+        working-directory: app
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: TypeScript and fixed OCCT version
+        working-directory: app
+        run: |
+          node --check plugins/reverse/scripts/e2e-compiled-full-annotated.mjs
+          node -e "if(require('./node_modules/occt-wasm/package.json').version!=='5.7.1')process.exit(1)"
+          node node_modules/typescript/bin/tsc --noEmit
+      - name: Targeted switching, orientation, annotated transaction and history tests
+        working-directory: app
+        run: |
+          node node_modules/vitest/vitest.mjs run plugins/tmar-edit-surface/tests/workspaceSession.test.ts plugins/tmar-edit-surface/tests/workspaceLayer.test.ts plugins/tmar-edit-surface/tests/mixed-support-step.test.ts plugins/tmar-edit-surface/tests/note-orientation.test.ts plugins/reverse/tests/annotatedCopy.test.ts plugins/reverse/tests/annotatedNormal.qa.test.ts tests/workspaceEditors.test.ts tests/history.test.ts --reporter=default --reporter=json --outputFile=../full-cycle-results/targeted-tests.json
+      - name: Production build of exact integration
+        working-directory: app
+        run: npm run build
+      - name: Source face switching and complete compiled annotated flow
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess,time,urllib.request
+          r=pathlib.Path.cwd();a=r/'app';o=r/'full-cycle-results'
+          env={**os.environ,'SCANRULER_ISOLATED':'1','CHROME':'/usr/bin/google-chrome'}
+          def server(port,compiled,fn):
+              e={**env,'APP_URL':f'http://127.0.0.1:{port}/'}
+              with (o/f'server-{port}.log').open('w') as log:
+                  args=['node','node_modules/vite/bin/vite.js']+(['preview'] if compiled else [])+['--host','127.0.0.1','--port',str(port),'--strictPort']
+                  p=subprocess.Popen(args,cwd=a,env=e,stdout=log,stderr=subprocess.STDOUT)
+                  try:
+                      for _ in range(100):
+                          if p.poll() is not None:raise RuntimeError('Owned server stopped')
+                          try:
+                              with urllib.request.urlopen(e['APP_URL'],timeout=1) as resp:
+                                  if resp.status==200:break
+                          except Exception:time.sleep(.2)
+                      else:raise TimeoutError('Owned server startup')
+                      fn(e)
+                  finally:
+                      p.terminate()
+                      try:p.wait(timeout=10)
+                      except subprocess.TimeoutExpired:p.kill();p.wait()
+          def source(e):
+              target=o/'source-face-switch';target.mkdir()
+              subprocess.run(['node','plugins/tmar-edit-surface/tests/e2e-workspace-integration.mjs'],cwd=a,env={**e,'EDIT_SURFACE_QA_OUT':str(target),'TEST_FACE_SWITCH':'1'},check=True,timeout=300)
+          def compiled(e):
+              target=o/'compiled-full';target.mkdir()
+              subprocess.run(['node','plugins/reverse/scripts/e2e-compiled-full-annotated.mjs'],cwd=a,env={**e,'OUT_DIR':str(target)},check=True,timeout=480)
+          try:
+              server(17723,False,source)
+              server(17726,True,compiled)
+          finally:
+              data=json.loads((o/'snapshot.json').read_text())
+              changed=[n for n,h in data['runtimeSha256'].items() if hashlib.sha256((a/n).read_bytes()).hexdigest()!=h]
+              (o/'final-integrity.json').write_text(json.dumps({'runtimeUnchanged':not changed,'changed':changed,'integration':data['integration']},indent=2))
+              assert not changed
+          PY
+      - name: Retain bounded results and synthetic projects only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-annotated-324a2e0-review
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            full-cycle-results/snapshot.json
+            full-cycle-results/final-integrity.json
+            full-cycle-results/targeted-tests.json
+            full-cycle-results/server-*.log
+            full-cycle-results/source-face-switch/**/result.json
+            full-cycle-results/source-face-switch/**/*.png
+            full-cycle-results/compiled-full/result.json
+            full-cycle-results/compiled-full/*.png
+            full-cycle-results/compiled-full/failure-dom.html
+            full-cycle-results/compiled-full/synthetic-box.step
+            full-cycle-results/compiled-full/downloads/**/*.scanruler
+            full-cycle-results/compiled-full/downloads/**/*.step
