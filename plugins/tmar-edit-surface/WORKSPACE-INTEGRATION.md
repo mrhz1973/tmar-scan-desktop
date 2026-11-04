@@ -118,13 +118,20 @@ host state. A host without this capability keeps the original behavior.
 - A separate, synthetic cylinder conversion spike is research only: the
   sampled support and 3D boundaries coincided, but the kernel's volume changed
   and the original BREP was invalid until healing. Signed mesh volumes at three
-  finer resolutions moved toward the analytic reference; pcurve and seam
-  correspondence still need independent verification. The public source of
+  finer resolutions moved toward the analytic reference. Healing raised the
+  circular edge and vertex tolerance from `1e-7` to about `0.156576 mm`.
+  The lateral pcurves remained linear in the circular edge parameter; at 257
+  samples per circular edge the curve/surface discrepancy reached about
+  `0.160357 mm`, versus zero on the source. This is a sampled discrepancy, not
+  a global maximum; the tolerance is a permitted bound, not measured motion.
+  The seam and all face/pcurve combinations still need verification. The public source of
   `occt-wasm` v5.7.1 shows that `getVolume` uses the default OCCT overload:
   https://github.com/andymai/occt-wasm/blob/v5.7.1/facade/generated/kernel.cpp
   The OCCT report https://github.com/Open-Cascade-SAS/OCCT/issues/1675 concerns
   primarily the Eps overload, so its defect cannot be attributed to this call.
   The spike remains outside production and cylinder editing is not enabled.
+  A separate supported planar-cap edit on a synthetic cylinder preserved the
+  original edge and vertex tolerances at `1e-7 mm` in its STEP round trip.
 - A synthetic STEP box in the isolated shared view passed pointer selection of
   a second CAD face, preservation of a modified draft when the change was
   cancelled, and a confirmed change (`run-jx0E4G`). Failed face loading also
