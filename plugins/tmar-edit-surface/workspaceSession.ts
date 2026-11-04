@@ -1106,7 +1106,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const locks = new Set([...d.locks, ...d.trimLocks])
       cached = { net: d.net, locks: d.locks, trim: d.trimLocks, continuity: d.continuity, free: d.freeBoundary,
         value: Object.freeze(d.net ? d.net.poles.flatMap((_,i) =>
-          locks.has(i) || (d.cylinderSession !== null ? i !== 3*d.net!.nv+2 : (!d.freeBoundary && boundaryLocked(d.net!,i,d.continuity))) ? [i] : []) : []) }
+          locks.has(i) || (d.cylinderSession !== null ? !(Math.floor(i/d.net!.nv) === 3 && i%d.net!.nv >= 2 && i%d.net!.nv <= d.net!.nv-3) : (!d.freeBoundary && boundaryLocked(d.net!,i,d.continuity))) ? [i] : []) : []) }
       this.lockCache = cached
     }
     const locked = cached.value, face = this.faces[this.face]

@@ -76,7 +76,7 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
       if(headers.length!==1) throw new Error('Superficie cilindrica non identificabile.')
       const own=surfaceTable(faceText)[Number(headers[0][1])-1],matches=own?surfaceTable(text).filter(r=>signature(r)===signature(own)):[]
       if(matches.length!==1 || !matches[0].periodicNet) throw new Error('Reticolo cilindrico ambiguo.')
-      const net=refineLinearPeriodicV(matches[0].periodicNet)
+      const net=refineLinearPeriodicV(matches[0].periodicNet,6)
       moveSmoothCylinderPole(net,[0,0,0]) // Reject unsupported weights/knot conventions before exposing the net.
       const brep=replaceSurface(text,matches[0],net)
       refined=k.fromBREP(brep)

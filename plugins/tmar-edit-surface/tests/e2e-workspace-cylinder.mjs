@@ -59,6 +59,18 @@ try {
   await page.mouse.move(before.x,before.y);await page.mouse.down()
   await page.mouse.move(before.x+30,before.y-20,{steps:5});await page.mouse.up()
   await page.waitForFunction(({point,index})=>{const c=window.cylinderQa.useWorkspaceEditor.getState().controller,p=c.getPanelState();return p.net.poles[index].some((x,i)=>Math.abs(x-point[i])>1e-5)&&!!c.getViewState().provisionalPreview},{timeout:120000},before)
+  const second=await page.evaluate(()=>{
+    const q=window.cylinderQa,c=q.useWorkspaceEditor.getState().controller,p=c.getPanelState(),index=3*p.net.nv+3
+    const layer=q.scene.layerHost(),rect=layer.canvas.getBoundingClientRect(),camera=layer.camera(),group=layer.partGroup
+    group.updateWorldMatrix(true,true);camera.updateMatrixWorld(true)
+    const v=group.position.clone().set(...p.net.poles[index]).applyMatrix4(group.matrixWorld).project(camera)
+    const x=rect.left+(v.x+1)*rect.width/2,y=rect.top+(1-v.y)*rect.height/2
+    return {point:p.net.poles[index],index,x,y,canvas:document.elementFromPoint(x,y)===layer.canvas,locked:c.getViewState().locked.includes(index)}
+  })
+  assert(second.canvas && !second.locked,'second control point must be available: '+JSON.stringify(second))
+  await page.mouse.move(second.x,second.y);await page.mouse.down()
+  await page.mouse.move(second.x-20,second.y-15,{steps:5});await page.mouse.up()
+  await page.waitForFunction(({point,index})=>{const c=window.cylinderQa.useWorkspaceEditor.getState().controller,p=c.getPanelState();return p.net.poles[index].some((x,i)=>Math.abs(x-point[i])>1e-5)&&!!c.getViewState().provisionalPreview},{timeout:120000},second)
   const result=await page.evaluate(()=>{
     const state=window.cylinderQa.useWorkspaceEditor.getState(),c=state.controller,p=c.getPanelState()
     return {validation:state.snapshot.validation.kind,canExport:p.canExportStep,canUndo:p.canUndo,faces:c.getViewState().provisionalPreview.faceMeshes.length}

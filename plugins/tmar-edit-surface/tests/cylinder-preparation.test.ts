@@ -2,7 +2,9 @@
 import { expect, it } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { assertToleranceDistribution, prepareCylinder } from '../cylinderPreparation'
-import { moveSmoothCylinderPole, assertSmoothCylinderMove } from '../periodic'
+import { moveSmoothCylinderPole, assertSmoothCylinderMove, canonicalizeCylinderGesture } from '../periodic'
+import { localFrame } from '../localFrame'
+import { evaluatePreparedCylinder } from '../cylinderEvaluation'
 import { replaceSurface, surfaceTable } from '../brep'
 import { auditCylinderSeam } from '../cylinderSeam'
 
@@ -22,18 +24,35 @@ it.each([false,true])('prepares the converted cylindrical STEP support without m
     expect(index).toBeGreaterThanOrEqual(0)
     const result=prepareCylinder(k,source,index)
     expect(k.toBREP(source)).toBe(before)
-    expect(result.net.periodic).toEqual([1,0]);expect(result.net.nv).toBe(5)
+    expect(result.net.periodic).toEqual([1,0]);expect(result.net.nv).toBe(6)
+    expect(result.net.mv).toEqual([4,1,1,4])
     // Keep both readings visible without requiring a known kernel discrepancy
     // to persist or treating the prepared reading as an accurate volume.
     expect(result.sourceVolume).toBeCloseTo(Math.PI*100*20,5)
     expect(Number.isFinite(result.preparedVolume)).toBe(true)
-    const records=surfaceTable(result.brep),entry=records.find(x=>x.periodicNet)!,next=moveSmoothCylinderPole(result.net,[.2,-.1,.15])
+    const records=surfaceTable(result.brep),entry=records.find(x=>x.periodicNet)!
+    const first=moveSmoothCylinderPole(result.net,[.2,-.1,.15],2)
+    const next=moveSmoothCylinderPole(first,[-.12,.08,-.05],3)
     expect(()=>assertSmoothCylinderMove(result.net,next)).not.toThrow()
-    const edited=k.fromBREP(replaceSurface(result.brep,entry,next)),round=k.importStep(k.exportStep(edited)),roundFaces=k.getSubShapes(round,'face')
+    expect(localFrame(result.net,20)).not.toBeNull();expect(localFrame(result.net,21)).not.toBeNull()
+    const gesture=structuredClone(first);gesture.poles[21][2]+=.15
+    expect(canonicalizeCylinderGesture(first,gesture).poles[15][2]).not.toBe(first.poles[15][2])
+    const invalid=structuredClone(next);invalid.poles[15][0]+=.01
+    expect(()=>assertSmoothCylinderMove(result.net,invalid)).toThrow()
+    const evaluation=evaluatePreparedCylinder(k,result,index,next),checked=k.importStep(evaluation.step)
+    try {expect(k.isValid(checked)).toBe(true)} finally {k.release(checked)}
+    const edited=k.fromBREP(replaceSurface(result.brep,entry,next)),round=k.importStep(k.exportStep(edited)),roundFaces=k.getSubShapes(round,'face'),editedFaces=k.getSubShapes(edited,'face')
     try {
       expect(k.isValid(round)).toBe(true);expect(roundFaces).toHaveLength(3)
       expect(()=>auditCylinderSeam(k,roundFaces[index])).not.toThrow()
-    } finally {roundFaces.forEach(h=>k.release(h));k.release(round);k.release(edited)}
+      for(const u of result.net.ku.slice(1,-1)) for(const v of result.net.kv.slice(1,-1)) {
+        const pairs=[[u-1e-7,v,u+1e-7,v],[u,v-1e-7,u,v+1e-7]]
+        for(const [u1,v1,u2,v2] of pairs) {
+          const a=k.surfaceNormal(editedFaces[index],u1,v1),b=k.surfaceNormal(editedFaces[index],u2,v2)
+          expect(a.x*b.x+a.y*b.y+a.z*b.z).toBeGreaterThan(1-1e-8)
+        }
+      }
+    } finally {[...roundFaces,...editedFaces].forEach(h=>k.release(h));k.release(round);k.release(edited)}
     expect(()=>prepareCylinder(k,source,faces.findIndex(f=>k.surfaceType(f)==='plane'))).toThrow()
   } finally {faces.forEach(h=>k.release(h));k.release(source);if(positioned)k.release(positioned);if(r)k.release(r);k.release(p);e.dispose()}
 },60000)

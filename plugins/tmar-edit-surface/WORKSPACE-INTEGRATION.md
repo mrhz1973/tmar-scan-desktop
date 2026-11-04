@@ -402,3 +402,7 @@ the QA now dismisses it and picks only points actually over the canvas.
 This is one planar face in a derived CAD file, not the cylindrical path,
 packaged desktop qualification, or general QuickSurface parity. Evidence:
 `scanruler-edit-surface-qa/run-sU9P0t/result.json` outside the checkout.
+
+### Two axial handles on a simple cylinder
+
+The experimental full-cylinder path uses exact cubic V refinement with two independently draggable axial controls. Coupled U poles protect the existing seam and the end rows. Isolated source-host QA exercised two pointer drags, sampled CAD validation, undo/redo, notes, Zebra, STEP and project reopen on a generated cylinder; this does not qualify other cylindrical faces or a packaged desktop build. Checks are finite and do not prove global absence of self-intersection. The previously observed periodic-cylinder volume discrepancy remains unresolved.
