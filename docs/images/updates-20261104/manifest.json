@@ -1,0 +1,41 @@
+{
+  "reviewed_on": "2026-11-04",
+  "run": 41747790210,
+  "artifact": 13283244553,
+  "artifact_sha256": "f3095266aeb1d6b7b6bdd52bad79fa2bac757a4159fb73edea58fe95579828ea",
+  "runtime": "5f39ff521d0095e01fb9b7f1a5af833bca9e28ba",
+  "host": "5684f5f27eaaa6ee460eef2300b010eb622b4507",
+  "plugin": "324a2e00bfd35c40d86e199015ea7718c2e946b7",
+  "qa_revision": "0e50b929fc191f87b5f72d4fec3d2d9f0844abae",
+  "scope": "Unmerged production-compiled review; synthetic STEP box; not deployed preview",
+  "transformations": "None: PNG bytes unchanged; HTML display width only",
+  "images": [
+    {
+      "file": "edit-surface-annotated.png",
+      "artifact_member": "compiled-full/annotated-draft.png",
+      "sha256": "b98502f21c526db535e8b32d0a7795c10a4c16b15c2ee9bb36c6264e531f0918",
+      "bytes": 242397,
+      "width": 1440,
+      "height": 1000,
+      "caption": "CAD control net, Zebra, draft note and Local N displacement in the main viewport."
+    },
+    {
+      "file": "edited-copy-note.png",
+      "artifact_member": "compiled-full/applied.png",
+      "sha256": "83cb738a439ba1325f97870725e0c621c7d1009f31aca33ca8a9e95487a32b6f",
+      "bytes": 158743,
+      "width": 1440,
+      "height": 1000,
+      "caption": "Modified copy and verified note; original retained but hidden."
+    },
+    {
+      "file": "reopened-note.png",
+      "artifact_member": "compiled-full/reopened.png",
+      "sha256": "ab8e4bddcb19b2d1aac9e39d267b304d3f3f90a520bd629609e7f0435716223a",
+      "bytes": 140353,
+      "width": 1440,
+      "height": 1000,
+      "caption": "Fresh-page native Load preserves the CAD copy and its note."
+    }
+  ]
+}

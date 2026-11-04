@@ -7,7 +7,33 @@
 
 *Martino's original Zebra screenshot, published unchanged. The file is an imported STL shown as Scan, not a CAD continuity certificate. **Work in progress — user review ongoing; not final acceptance.***
 
-## Screenshot overview
+## What is new — November 4, 2026
+
+**Available on the hosted preview, verified in a review build, and still under development are different states. A screenshot or targeted test does not promote a feature to the public application.**
+
+[Open TMAR web preview](https://scanruler.31-70-139-73.sslip.io/) · [Download the 10 test models](https://scanruler.31-70-139-73.sslip.io/samples/tmar-tests/) · [Check the served build](https://scanruler.31-70-139-73.sslip.io/tmar-preview-version.json)
+
+| Area | Latest verified progress | Availability |
+| --- | --- | --- |
+| **Hosted browser preview** | HTTPS site and ten synthetic sample entries checked on November 4. Its manifest reports upstream 0.9.4, source `935f07f`. | Public test instance; no installation. Not the latest unmerged Edit Surface branch. |
+| **Edit Surface in the main viewport** | Select an eligible imported STEP face and edit its CAD control net in the existing canvas, with a contextual panel, numeric displacement, pointer movement and local Undo/Redo. | Review integration [PR #23](https://github.com/mrhz1973/tmar-scan-desktop/pull/23), runtime `5f39ff5`; **not merged or deployed**. |
+| **Zebra and persistent CAD notes** | Add a note while editing; Apply a modified copy while preserving/hiding the original; project Undo/Redo, native Save/Load and STEP export. | Exact compiled synthetic-box case: **16 checks**, plus **155 targeted tests** and **15 source-UI checks**. [Evidence and limits](https://github.com/mrhz1973/tmar-scan-desktop/blob/4349ebca42edd43fe685d8d76919a9f18960e588/docs/coordination/integration-host5684-plugin324a2e0-compiled-20261104.md); not full-product qualification. |
+| **Improved drag and snapping** | Author work defaults pole drag to local N, provides depth drag near view alignment and records scan/CAD snap with Alt/off. Latest work adds boundary-tolerance regression tests for an eligible planar cap. | Author checkpoint [`73a4f36`](https://github.com/mrhz1973/tmar-scan-desktop/commit/73a4f36b2e807499cd0fab488fc0cebb1badc0fa); these increments are **separate from** the compiled `5f39ff5` qualification. [Author handoff](https://github.com/mrhz1973/tmar-scan-desktop/blob/73a4f36b2e807499cd0fab488fc0cebb1badc0fa/plugins/tmar-edit-surface/WORKSPACE-INTEGRATION.md). |
+| **CI repair** | Gallery-import fix passes boundary/unit-policy checks, app unit tests, MCP tests and build; run `41755844420` still fails its browser regression stage. | [PR #24](https://github.com/mrhz1973/tmar-scan-desktop/pull/24), **not merged**; the complete pipeline is not green. |
+
+**Not delivered:** unrestricted cylindrical/periodic face editing, arbitrary trim/topology support, a persistent parametric `surfaceEdit` feature, native desktop installers or full QUICKSURFACE equivalence. Editing an eligible planar cap on a cylinder does **not** enable editing its cylindrical side. Patch Network normal-motion work is separate: [PR #18](https://github.com/mrhz1973/tmar-scan-desktop/pull/18) is a foundation, not an available UI mode.
+
+### New screenshots — actual review build, not the hosted version
+
+These three unretouched captures come from successful **production-compiled** [Actions run 41747790210](https://github.com/mrhz1973/tmar-scan-desktop/actions/runs/41747790210), using a synthetic 20 × 30 × 10 mm STEP box. Click for the full image.
+
+| Edit Surface, Zebra and a draft note | Applied CAD copy with its note | Native project reopened with its note |
+| --- | --- | --- |
+| [<img src="docs/images/updates-20261104/edit-surface-annotated.png" alt="Review build: CAD control net, Zebra and draft note in the main viewport" width="280">](docs/images/updates-20261104/edit-surface-annotated.png) | [<img src="docs/images/updates-20261104/edited-copy-note.png" alt="Review build: modified copy and verified note, original preserved but hidden" width="280">](docs/images/updates-20261104/edited-copy-note.png) | [<img src="docs/images/updates-20261104/reopened-note.png" alt="Review build: native project reopened with its CAD note" width="280">](docs/images/updates-20261104/reopened-note.png) |
+
+The inherited **Versione 1** badge and upstream support card are intentionally unchanged. They do not identify a new release or imply these controls are deployed. Camera orientation changes on reopening; identity and geometry are checked in the test, not inferred from the images. [Captions, provenance and limitations](docs/tmar-edit-surface-preview-gallery.md).
+
+## Screenshot overview — features already in main
 
 **Click any thumbnail to open the full-size image.** The eleven new UI screenshots
 use generated demo geometry in the actual app, with the Dark interface; the real-part
@@ -39,14 +65,14 @@ previews do not update automatically. [Verification](docs/tmar-dark-gallery-vali
 
 An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/ScanRuler), maintained at [mrhz1973/tmar-scan-desktop](https://github.com/mrhz1973/tmar-scan-desktop). This is not an official CNC Kitchen distribution.
 
-> **Status as of November 3, 2026: web-source usability extensions implemented.**
-> This source includes Zebra, local notes with a configurable shortcut and Go to note, feature/note multi-selection, collapsible lists, lower-bar Labels controls and one Export body dialog for STEP/STL. **No installable desktop release is provided.** The original site and already open previews do not update automatically. Desktop recovery, AI pause/resume, managed updates and GPU compute remain separate goals.
+> **Status as of November 4, 2026: main-based web preview online; newer CAD editing stays in review.**
+> The hosted/main app includes Zebra, local notes and navigation, feature selection, Labels, regional Smooth and unified STEP/STL body export. The new editor and annotated Apply above are **unmerged review work**, not public features. **No installable desktop release is provided.** Active tabs are not forcibly reloaded; desktop recovery, AI pause/resume, desktop updates and GPU compute remain separate goals.
 
-**Documentation language:** English is the primary language of this README. Italian localization of the application and documentation is planned for a later stage; it is not available yet.
+**Documentation language:** English remains the primary README language. Some experimental editor controls are Italian; full localization and a maintained Italian manual are not declared complete.
 
-[Available now](#web-extensions-available-on-main) | [Body STL](#cad-body-stl-export) | [Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Deviation notes](#notes-directly-in-deviation) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
+[Latest progress](#what-is-new--november-4-2026) · [Hosted preview](#how-to-try-it-today) · [Available now](#web-extensions-available-on-main) | [Body STL](#cad-body-stl-export) | [Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Deviation notes](#notes-directly-in-deviation) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
 
-## Latest: regional Smooth and Shift navigation
+## Available: regional Smooth and Shift navigation
 
 **Marked region only** snapshots the exact selection and never silently falls
 back to the whole object. **Smooth whole part** is separately and explicitly
@@ -60,7 +86,7 @@ navigation does not add or erase selected surface.
 [Checks and unresolved real-project reproduction](docs/tmar-smooth-brush-validation.md).
 User review remains open; this is an updated web build, not a desktop release.
 
-## Latest: Mesh Tools review and repeatable Smooth
+## Available: Mesh Tools review and repeatable Smooth
 
 **Mesh Tools** now offers local **Note** and **Zebra** controls, shared note
 selection/navigation and inspection of the actual scan or edited/reduced preview.
@@ -79,7 +105,7 @@ the edited copy is explicitly taken into use.
 [Actual validation](docs/tmar-mesh-review-validation.md).
 **Visual review remains open; this is web source, not a desktop release.**
 
-## Latest: STEP-as-Scan borders and visible TMAR version
+## Available: STEP-as-Scan borders and visible TMAR version
 
 **STEP opened as Scan now keeps its CAD face boundaries with Zebra.** The
 reported import route is supported without reimporting the file as a CAD body.
@@ -100,7 +126,7 @@ Zebra now also offers the single-view reference target. Notes remain local;
 Deviation insertion is still scan-side. [Usage and limits](plugins/tmar-cad-edges/README.md)
 | [Actual validation](docs/tmar-cad-edges-validation.md). **User review remains open.**
 
-## Latest: category-scoped feature controls
+## Available: category-scoped feature controls
 
 **Select All / Hide in Sketches no longer acts on the completed body.**
 Features are grouped into **Sketches / profiles**, **Sketches from sections**,
@@ -118,7 +144,7 @@ update when the source changes.
 See [category validation](docs/tmar-feature-categories-validation.md) for the
 Windows/Chrome checks and limits. This remains a web build, not a desktop release.
 
-## Latest usability follow-up
+## Available usability follow-up
 
 The saved-note target now receives a large, high-contrast viewport reticle and a
 visible navigation message. Hidden or changed CAD references no longer prevent
@@ -169,7 +195,7 @@ This project is intended for personal use and community sharing. Modification so
 | Your need | Recommended choice today |
 | --- | --- |
 | Use ScanRuler immediately without installing anything | Use the [original application](https://scanruler.com/) and its documentation. |
-| Use body STL export and scan-side Deviation notes now | Run this fork's web source; see the instructions and explicit limits below. |
+| Use TMAR body export, Zebra, Smooth and local notes now | Open the [hosted test preview](https://scanruler.31-70-139-73.sslip.io/), or run the fork locally; save work before changing versions. |
 | Follow or contribute to a desktop edition with persistent workflow management | The web plugins are already in `main`; the desktop application remains planned. |
 | Install a stable TMAR application on Windows or Mac today | No installer is available yet. Wait for an explicitly qualified release. |
 | Obtain CUDA or Metal acceleration immediately | Not implemented: this is a later phase, subject to benchmarks. |
@@ -205,13 +231,15 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | Desktop application | Planned | Windows x64 and macOS Apple Silicon packages, with declared requirements and platform testing. |
 | Disk saves and recovery | Planned | Explicit saves, configurable autosave, snapshots and verified restoration. |
 | AI workflow pause and resume | Planned | Persistent checkpoints, operation state and reconstruction of operational context. |
-| Updates and rollback | Planned | Automated builds and tests, versioned packages, stable/fast channels and safe activation. |
+| Hosted preview and samples | Available, test-only | HTTPS access and ten synthetic STL downloads; deployed SHA exposed in the live manifest. |
+| Edit Surface and annotated copy | Review builds; not main/VPS | Main-viewport CAD editing, preserved source and bounded note/Undo/Save/Load/STEP tests in PR #23. |
+| Updates and rollback | Web preview configured; desktop planned | Main-only web update checks and retained releases; desktop packages/channels remain future work. |
 | Resources and backend selection | Planned | Monitoring, RAM/GPU-memory budgets, controlled concurrency and a CPU execution path. |
 | GPU computation on Windows and Mac | Later investigation | Evaluate WebGPU and CUDA/Metal modules where a benefit can be demonstrated. |
 | Zebra surface analysis plugin | Implemented; user result review ongoing | View-only bands and local notes. The published example is WIP, not final acceptance; broader qualification remains open. |
 | [Zebra result review](docs/tmar-review-backlog.md#zebra-review-001) | Open | Record remaining feedback and explicit acceptance separately from feature implementation and screenshot publication. |
 | [Split view with Zebra and local notes](docs/tmar-review-backlog.md#zebra-split-002) | Planned | Two-pane review, explicit camera/focus behavior, per-pane labels and shared local note records. |
-| [UI screenshot gallery](docs/tmar-ui-gallery.md) | Original WIP Zebra hero and eleven synthetic UI examples published | Clickable thumbnails show implemented changes. Broader real-part validation and final visual acceptance remain open. |
+| [UI screenshot gallery](docs/tmar-ui-gallery.md) | Existing hero/examples plus three compiled-review captures | Available features and unmerged previews have separate captions; screenshots are not release approval. |
 | Model-tree multi-selection and bulk-actions plugin | Implemented, initial feature-list scope | Ctrl/Cmd/Shift/Select All and undoable output visibility. Original body-list selection is retained; broader list coverage and destructive operations remain future work. |
 | Quick-note access and navigation plugin | Implemented, initial web scope | Settings-configurable letter (default N), local Note action, note multi-selection, double-click/target Go to note and Return to previous view. |
 | Notes directly in Deviation | Implemented in web source; scan-side scope | Add/edit/save notes in the single scan-side comparison view; shared IDs and project round trips verified. Reference-side/split-view anchors and comparison metadata remain planned. |
@@ -237,7 +265,11 @@ Windows/Mac portability does not mean automatic cloud synchronization: project t
 
 ## Updates without manual builds
 
-**Approved architecture, not yet implemented:**
+**Hosted web preview:** an isolated updater was configured on November 3 to check this fork's `main` approximately every 15 minutes, test/build candidates and retain the previous release on failure. This documentation check confirmed the served manifest and samples, **not a fresh SSH audit of the timer**. It does not auto-merge CNC Kitchen releases or publish unmerged Codex branches. Save before deliberately refreshing; no forced reload or cross-computer project synchronization.
+
+[Deployment PR #15](https://github.com/mrhz1973/tmar-scan-desktop/pull/15) records a temporary explicit exception for the pre-existing gallery-only boundary violation. Its source repair is PR #24; the exception is not a green default-CI result and needs separate cleanup after adoption.
+
+**Desktop update architecture — approved direction, not yet implemented:**
 
 1. **Desktop shell:** an initial installation for each platform and independent updates, including security maintenance.
 2. **ScanRuler web bundle:** a separately downloadable local version, without rebuilding the entire installer for every upstream change.
@@ -413,7 +445,7 @@ Advanced **Settings > Display** category controls, a global reset and a separate
 - [ ] Provide maintained Italian documentation, including a future `README.it.md` linked to the primary English README once it exists.
 - [ ] Test longer translated labels, numeric presentation and platform shortcuts. Changing language must not change model units, stored numeric values, object IDs or MCP command identifiers.
 
-Existing developer documentation retains its original language unless explicitly translated. Neither Italian UI support nor a translated README is declared delivered by this roadmap.
+Existing developer documentation retains its original language unless explicitly translated. Some preview-editor controls are Italian; full Italian coverage, a language selector and a maintained translated README are not declared complete.
 
 ## Quality, security and personal data
 
@@ -427,7 +459,11 @@ A desktop application does not make a remote AI service local: what an agent rea
 
 ## How to try it today
 
-**To use the new TMAR controls, run this fork's web application.** The original [ScanRuler website](https://scanruler.com/) is still an option for upstream-only use, but publishing these changes does not add them to that site. No prebuilt TMAR release or desktop installer is published yet.
+**No-install option:** open the [TMAR web preview](https://scanruler.31-70-139-73.sslip.io/). Its [sample gallery](https://scanruler.31-70-139-73.sslip.io/samples/tmar-tests/) contains ten synthetic STL downloads: planar plate, two ramps, convex dome, concave bowl, saddle, raised ridge, twin bosses, central pocket and wave. Download a sample and open it as **Scan**. These meshes test import, sections and fitting; **they are not editable STEP bodies qualifying Edit Surface**.
+
+The [live manifest](https://scanruler.31-70-139-73.sslip.io/tmar-preview-version.json) identifies the served bundle; on November 4 it reported `935f07f`, upstream 0.9.4. The newer Edit Surface branches illustrated above are not in that bundle. Use test data, retain local `.scanruler` backups and follow your workplace's network/browser rules. Projects are not synchronized across computers.
+
+**Local-source option:** run `main` with the commands below. The [original ScanRuler website](https://scanruler.com/) remains upstream-only; publishing this fork does not update it. No prebuilt TMAR desktop installer is available.
 
 With Git and Node.js 22 or later, as declared in [package.json](package.json):
 
@@ -443,7 +479,7 @@ Open the local address printed by Vite. This explicit port avoids silently selec
 
 In the fork, use **Reverse engineer > Export body...** and choose STEP or STL. **Note** is available locally in Reverse engineer and scan-side Deviation; its shortcut is in **Settings > Shortcuts** (default N). Double-click a note row or its target icon to locate it. Use Ctrl/Cmd/Shift for list selection and the lower **Labels** control for text visibility. **Reverse engineer > Zebra surface analysis** retains the integrated Zebra tool. Connecting an agent is optional and retains its privacy warning. See each plugin's README for restrictions.
 
-For an existing clone, preserve any local changes and check its branch before updating; do not reset or overwrite an active worktree to follow these instructions. A production web bundle can be built with `npm run build` and served locally with `npm run preview`. This is still a web application, not a desktop package or public deployment.
+For an existing clone, preserve any local changes and check its branch before updating; do not reset or overwrite an active worktree to follow these instructions. A production web bundle can be built with `npm run build` and served locally with `npm run preview`. That command starts a local web application, not a desktop package; the separate hosted test instance is linked above.
 
 Development/test details are in [docs/development.md](docs/development.md), and the precise recorded test scope is in [docs/tmar-web-validation.md](docs/tmar-web-validation.md). The complete upstream test suite has not been qualified by the targeted checks. Some tests require additional fixtures or prerequisites.
 
@@ -463,6 +499,7 @@ Fork documentation must track releases: a capability moves from **planned** to *
 | [plugins/README.md](plugins/README.md) | Plugin catalog, upstream extension points and implemented TMAR host hooks. |
 | [Body STL plugin](plugins/tmar-body-export/README.md) | Available UI, selection/units rules, source layout and tests. |
 | [Deviation notes plugin](plugins/tmar-quick-notes/README.md) | Available scan-side annotation workflow, dependencies and remaining scope. |
+| [New Edit Surface gallery](docs/tmar-edit-surface-preview-gallery.md) | Three real compiled-review captures, provenance and bounded qualification. |
 | [Web validation](docs/tmar-web-validation.md) | Recorded implementation checks, baseline and explicit qualification limits. |
 | [Zebra handoff](docs/tmar-zebra-handoff.md) | Coordination, source baseline, integration boundaries and contribution delivery. |
 | [plugins/reverse/README.md](plugins/reverse/README.md) | Inherited Reverse engineer behavior, including existing body-list selection. |
