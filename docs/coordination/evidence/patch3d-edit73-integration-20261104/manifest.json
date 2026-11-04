@@ -1,0 +1,200 @@
+{
+  "integration": "ce6004c629165658f4291a2c2eeaa0210854f861",
+  "patchCheckpoint": "0db2026f21bc858338d934f24d7481a80cb2f321",
+  "plugin": "73a4f36b2e807499cd0fab488fc0cebb1badc0fa",
+  "sourceFiles": {
+    "pair-snapshot.json": {
+      "originalSha256": "166a07840353a3ea66f254e08c5cc6ca6f90d6787b914747ecc0b5f9df1473aa",
+      "publishedSha256": "166a07840353a3ea66f254e08c5cc6ca6f90d6787b914747ecc0b5f9df1473aa"
+    },
+    "final-integrity.json": {
+      "originalSha256": "293a42f2a00fe8255e2bbb12f28c9092543cb737a4f616264d99dcfde1aa4b0e",
+      "publishedSha256": "293a42f2a00fe8255e2bbb12f28c9092543cb737a4f616264d99dcfde1aa4b0e"
+    },
+    "annotated-wait-change.json": {
+      "originalSha256": "952a2063de9040a985bb43024291960275b41f89e2e44e48f6971f8462713560",
+      "publishedSha256": "952a2063de9040a985bb43024291960275b41f89e2e44e48f6971f8462713560"
+    },
+    "browser-pair-execution.json": {
+      "originalSha256": "c1c3ecaf99bfc164e802b59f45ebc4c9fa8c5d01e3c31336969e5cdbe86d89b9",
+      "publishedSha256": "c1c3ecaf99bfc164e802b59f45ebc4c9fa8c5d01e3c31336969e5cdbe86d89b9"
+    },
+    "executed-compiled-annotated.mjs": {
+      "originalSha256": "96903b1ac21f1e224ab839876ac510e40f3633ec992549a21cdfdc5d2552f447",
+      "publishedSha256": "96903b1ac21f1e224ab839876ac510e40f3633ec992549a21cdfdc5d2552f447"
+    },
+    "executed-compiled-annotated-wait.mjs": {
+      "originalSha256": "2cbc65e967d2b926e40483cea261ae78cc41e999d2728d5a8fba274fd790590a",
+      "publishedSha256": "2cbc65e967d2b926e40483cea261ae78cc41e999d2728d5a8fba274fd790590a"
+    },
+    "pending-reopen-test.mjs": {
+      "originalSha256": "ec9f808e0294ab4b56ca961506f87b5a57ef97cd39be237f161e806d9ad9c2d7",
+      "publishedSha256": "ec9f808e0294ab4b56ca961506f87b5a57ef97cd39be237f161e806d9ad9c2d7"
+    },
+    "validation/result.json": {
+      "originalSha256": "bf92f092d97e420ca8faf9c858cff598c57f1b1f7947a67d00cafd36203dfc57",
+      "publishedSha256": "bf92f092d97e420ca8faf9c858cff598c57f1b1f7947a67d00cafd36203dfc57"
+    },
+    "validation/boundary.log": {
+      "originalSha256": "6cc511072f3fc13402bd80cc0ce1fb3e6b68eae480e799f29690f0174d45d6c1",
+      "publishedSha256": "6cc511072f3fc13402bd80cc0ce1fb3e6b68eae480e799f29690f0174d45d6c1"
+    },
+    "network-source/result.json": {
+      "originalSha256": "44554aa423ac5a97ef593cba80d45827b81f7be9f4910c34764d64ad925f19b9",
+      "publishedSha256": "eea391e6714da56a670c9aed3fbbb2239f222a1399a58cac71f404bbaddad457"
+    },
+    "network-source/points-3d.png": {
+      "originalSha256": "cc87906478019c61aacd1fb115df30d8ea65506f6949c145bbe8d070f522a709",
+      "publishedSha256": "cc87906478019c61aacd1fb115df30d8ea65506f6949c145bbe8d070f522a709"
+    },
+    "network-source/reopened.png": {
+      "originalSha256": "6fb4ce8cf49a6cc162d5dc3c633e1254bbd21d0b2da168ecbea60527165d866f",
+      "publishedSha256": "6fb4ce8cf49a6cc162d5dc3c633e1254bbd21d0b2da168ecbea60527165d866f"
+    },
+    "network-source/downloads/baseline/synthetic-plane.scanruler": {
+      "originalSha256": "25e514918d487a6cc5f5a9c7dbf0cf17123da98259d4ae2214bb076fa205f439",
+      "publishedSha256": "25e514918d487a6cc5f5a9c7dbf0cf17123da98259d4ae2214bb076fa205f439"
+    },
+    "network-source/downloads/centre/synthetic-plane.scanruler": {
+      "originalSha256": "aaabf6efa5e275bfe4d877639a4a0225e38222bce5b6c726e7de4ec5cbd623b4",
+      "publishedSha256": "aaabf6efa5e275bfe4d877639a4a0225e38222bce5b6c726e7de4ec5cbd623b4"
+    },
+    "network-source/downloads/export/synthetic-plane-body.step": {
+      "originalSha256": "e29bf12c901b525447849f1830a0ad474f5aef680448bfe822111eb758e05209",
+      "publishedSha256": "e29bf12c901b525447849f1830a0ad474f5aef680448bfe822111eb758e05209"
+    },
+    "network-source/downloads/moved/synthetic-plane.scanruler": {
+      "originalSha256": "298d7931a5d6207c8210ce8a675f53316778c2b40c75671fd60d9aafddb67594",
+      "publishedSha256": "298d7931a5d6207c8210ce8a675f53316778c2b40c75671fd60d9aafddb67594"
+    },
+    "network-compiled/result.json": {
+      "originalSha256": "bb8120cf6d90489ad0f7d098487e1b7a59c79034beb65a72d7e9bcf8cf07e31d",
+      "publishedSha256": "bb8120cf6d90489ad0f7d098487e1b7a59c79034beb65a72d7e9bcf8cf07e31d"
+    },
+    "network-compiled/compiled-edit.png": {
+      "originalSha256": "a46173bf95d551296ff955682325e9f6faf85d3521fef657df1d3be9963c18c2",
+      "publishedSha256": "a46173bf95d551296ff955682325e9f6faf85d3521fef657df1d3be9963c18c2"
+    },
+    "network-compiled/compiled-reopened.png": {
+      "originalSha256": "fce6bea7c04e13dd81ef7e5e96dedfae916e45ef99a1d5eb8fb6d9366b89d090",
+      "publishedSha256": "fce6bea7c04e13dd81ef7e5e96dedfae916e45ef99a1d5eb8fb6d9366b89d090"
+    },
+    "network-compiled/downloads/applied/synthetic-plane.scanruler": {
+      "originalSha256": "b400f188c9973656292f36d7d751efa3f9ada5d3e71edd298d45394a70e682e9",
+      "publishedSha256": "b400f188c9973656292f36d7d751efa3f9ada5d3e71edd298d45394a70e682e9"
+    },
+    "network-compiled/downloads/export/synthetic-plane-body.step": {
+      "originalSha256": "8c837317b65c54fd138954f5526fb0a6e187531df331c3a56fc33a517505a130",
+      "publishedSha256": "8c837317b65c54fd138954f5526fb0a6e187531df331c3a56fc33a517505a130"
+    },
+    "network-compiled/downloads/redone/synthetic-plane.scanruler": {
+      "originalSha256": "cff051fe0ed98bfa49517591fcaa07c89c7e6e9b734028c492654fe1477b30e5",
+      "publishedSha256": "cff051fe0ed98bfa49517591fcaa07c89c7e6e9b734028c492654fe1477b30e5"
+    },
+    "network-compiled/downloads/reopened/synthetic-plane.scanruler": {
+      "originalSha256": "09e16e03ffab7379475e0548059d48875c0939c88d7bc8ed9534d48de51ed2d7",
+      "publishedSha256": "09e16e03ffab7379475e0548059d48875c0939c88d7bc8ed9534d48de51ed2d7"
+    },
+    "network-compiled/downloads/undone/synthetic-plane.scanruler": {
+      "originalSha256": "2519968e208e6c85d7dd7af11c75fffdfede6bfb163242ddc82e663e49009527",
+      "publishedSha256": "2519968e208e6c85d7dd7af11c75fffdfede6bfb163242ddc82e663e49009527"
+    },
+    "edit-depth/result.json": {
+      "originalSha256": "ddb69efc0451731375030687ad53bdbe35823dee6678a836ef9fa495f2b4d9c7",
+      "publishedSha256": "ddb69efc0451731375030687ad53bdbe35823dee6678a836ef9fa495f2b4d9c7"
+    },
+    "edit-depth/before.png": {
+      "originalSha256": "b6f0adcb2b95303fc1b9edf8e1ad3a5e361fedc18e22d5d025b3011e6a0a3b61",
+      "publishedSha256": "b6f0adcb2b95303fc1b9edf8e1ad3a5e361fedc18e22d5d025b3011e6a0a3b61"
+    },
+    "edit-depth/during-aligned-drag.png": {
+      "originalSha256": "e1a09cce01c350125987864a8191b5460760c783ec5c544c47cc13f38dc617ae",
+      "publishedSha256": "e1a09cce01c350125987864a8191b5460760c783ec5c544c47cc13f38dc617ae"
+    },
+    "edit-depth/modified.png": {
+      "originalSha256": "44e854346960d977602846c0f2bcb21b66f3d55d8d6c7b443eb134c4cc8e8de7",
+      "publishedSha256": "44e854346960d977602846c0f2bcb21b66f3d55d8d6c7b443eb134c4cc8e8de7"
+    },
+    "annotated-compiled/result.json": {
+      "originalSha256": "d3c33d825914e719c20ed9da55b1075ec00364bcf9d72b20948b389979500cd4",
+      "publishedSha256": "d3c33d825914e719c20ed9da55b1075ec00364bcf9d72b20948b389979500cd4"
+    },
+    "annotated-compiled/annotated-draft.png": {
+      "originalSha256": "7e23554e8d63fac3e50217841b444406d16deb7e0f2285ef5dd9a2e906e05517",
+      "publishedSha256": "7e23554e8d63fac3e50217841b444406d16deb7e0f2285ef5dd9a2e906e05517"
+    },
+    "annotated-compiled/failure.png": {
+      "originalSha256": "5e67269d833621c6196436aa637b34661f623cfdf52acae993210e25ab64ab07",
+      "publishedSha256": "5e67269d833621c6196436aa637b34661f623cfdf52acae993210e25ab64ab07"
+    },
+    "annotated-compiled/downloads/applied/project.scanruler": {
+      "originalSha256": "a02d7214c53900e01c4cb3bf5300dd11202fe50c0be6fa3b9f7aeaba6b1528a7",
+      "publishedSha256": "a02d7214c53900e01c4cb3bf5300dd11202fe50c0be6fa3b9f7aeaba6b1528a7"
+    },
+    "annotated-compiled/downloads/baseline/project.scanruler": {
+      "originalSha256": "2881e366a796cc74dba7582373ec27674312b916052becf8b68341a0f736e39e",
+      "publishedSha256": "2881e366a796cc74dba7582373ec27674312b916052becf8b68341a0f736e39e"
+    },
+    "annotated-compiled-verified/result.json": {
+      "originalSha256": "825fde4dc663c595fdf16ce77fe58d32ebb2d440f7f131508a83c14d94c14fc9",
+      "publishedSha256": "825fde4dc663c595fdf16ce77fe58d32ebb2d440f7f131508a83c14d94c14fc9"
+    },
+    "annotated-compiled-verified/annotated-draft.png": {
+      "originalSha256": "7e23554e8d63fac3e50217841b444406d16deb7e0f2285ef5dd9a2e906e05517",
+      "publishedSha256": "7e23554e8d63fac3e50217841b444406d16deb7e0f2285ef5dd9a2e906e05517"
+    },
+    "annotated-compiled-verified/applied.png": {
+      "originalSha256": "d6f9330f28fc3b64681b809edd154304e77238130d75298cb49f3b324716e896",
+      "publishedSha256": "d6f9330f28fc3b64681b809edd154304e77238130d75298cb49f3b324716e896"
+    },
+    "annotated-compiled-verified/reopened.png": {
+      "originalSha256": "7a128ee3d719797b628db937d798ce08465186c7afee34578aeef5dcb2b2d830",
+      "publishedSha256": "7a128ee3d719797b628db937d798ce08465186c7afee34578aeef5dcb2b2d830"
+    },
+    "annotated-compiled-verified/downloads/applied-validation-0/project.scanruler": {
+      "originalSha256": "85d87fda8c0acb1d59b940ddb6764b4916fcd1f4b61e311c9f4e60a57a49498d",
+      "publishedSha256": "85d87fda8c0acb1d59b940ddb6764b4916fcd1f4b61e311c9f4e60a57a49498d"
+    },
+    "annotated-compiled-verified/downloads/applied-validation-1/project.scanruler": {
+      "originalSha256": "b769f91ebddbbdd1b4974f3b1ad4edae0dcf55aa27b984dd8db07c1297292dcf",
+      "publishedSha256": "b769f91ebddbbdd1b4974f3b1ad4edae0dcf55aa27b984dd8db07c1297292dcf"
+    },
+    "annotated-compiled-verified/downloads/baseline/project.scanruler": {
+      "originalSha256": "76f3239b312c2065a2d0fa357c1091d690a1fd4a98b5beb3777558a1f5ae2525",
+      "publishedSha256": "76f3239b312c2065a2d0fa357c1091d690a1fd4a98b5beb3777558a1f5ae2525"
+    },
+    "annotated-compiled-verified/downloads/export/model-body.step": {
+      "originalSha256": "f227d7b8b7844d89b03c8431468532fc51682241c0d4811b9f03586b1d51926e",
+      "publishedSha256": "f227d7b8b7844d89b03c8431468532fc51682241c0d4811b9f03586b1d51926e"
+    },
+    "annotated-compiled-verified/downloads/redone-validation-0/project.scanruler": {
+      "originalSha256": "a8dae799ca272af342f5e2d98a95786da712b119b61ab43a68324777726667f1",
+      "publishedSha256": "a8dae799ca272af342f5e2d98a95786da712b119b61ab43a68324777726667f1"
+    },
+    "annotated-compiled-verified/downloads/redone-validation-1/project.scanruler": {
+      "originalSha256": "da92ea58a587c385a49ceead2375373e0467a589be82e512d26e8b7608f523a0",
+      "publishedSha256": "da92ea58a587c385a49ceead2375373e0467a589be82e512d26e8b7608f523a0"
+    },
+    "annotated-compiled-verified/downloads/reopened-validation-0/project.scanruler": {
+      "originalSha256": "e8c4b25e1cce8913fe63f900e3798f0477f84c1ea06e3159d862782c359f9f09",
+      "publishedSha256": "e8c4b25e1cce8913fe63f900e3798f0477f84c1ea06e3159d862782c359f9f09"
+    },
+    "annotated-compiled-verified/downloads/undone/project.scanruler": {
+      "originalSha256": "1286af6dc75c695e59cb25b275646dc5525f7bcb45d16e00f82a087a7e9c7748",
+      "publishedSha256": "1286af6dc75c695e59cb25b275646dc5525f7bcb45d16e00f82a087a7e9c7748"
+    },
+    "pending-reopened/result.json": {
+      "originalSha256": "f0820da53880277418e54a684ae98a8ecca5d57ad1801f4a8ebf3558ba1e1683",
+      "publishedSha256": "f0820da53880277418e54a684ae98a8ecca5d57ad1801f4a8ebf3558ba1e1683"
+    },
+    "pending-reopened/pending-reopened.png": {
+      "originalSha256": "e963092b0e0da0daaacbcd73160753c011cf3a54a0643804c302158424c5b236",
+      "publishedSha256": "e963092b0e0da0daaacbcd73160753c011cf3a54a0643804c302158424c5b236"
+    },
+    "pending-reopened/downloads/attempt-0/project.scanruler": {
+      "originalSha256": "dae78250e3e4748a7c5e9e5e50f16baf95306613cd7cc9129721a06e4e2d15c1",
+      "publishedSha256": "dae78250e3e4748a7c5e9e5e50f16baf95306613cd7cc9129721a06e4e2d15c1"
+    }
+  },
+  "note": "JSON paths anonymized and text normalized to LF; original and published hashes kept separate. Native CAD/project bytes unchanged."
+}

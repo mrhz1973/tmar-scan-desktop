@@ -1,0 +1,5 @@
+Code outside plugins/ reaches into it (1):
+
+  scripts/capture-tmar-gallery.mjs:11  ../plugins/tmar-mesh-review/scripts/fixture.mjs
+
+A build may not have that plugin. Go through the plugin registry instead — see plugins/README.md.

@@ -1,0 +1,32 @@
+{
+  "integration": "ce6004c629165658f4291a2c2eeaa0210854f861",
+  "plugin": "73a4f36b2e807499cd0fab488fc0cebb1badc0fa",
+  "files": [
+    "plugins/tmar-edit-surface/tests/dragFrame.test.ts",
+    "plugins/tmar-edit-surface/tests/outer-trim.test.ts",
+    "plugins/tmar-edit-surface/tests/workspaceSession.test.ts",
+    "plugins/tmar-edit-surface/tests/workspaceLayer.test.ts",
+    "plugins/tmar-edit-surface/tests/note-orientation.test.ts",
+    "plugins/reverse/tests/reNetworkPointMotion.test.ts",
+    "plugins/reverse/tests/reNetworkNormal.test.ts",
+    "plugins/reverse/tests/annotatedCopy.test.ts",
+    "plugins/reverse/tests/annotatedNormal.qa.test.ts",
+    "tests/history.test.ts",
+    "tests/workspaceEditors.test.ts"
+  ],
+  "checks": {
+    "typescript": {
+      "exitCode": 0
+    },
+    "tests": {
+      "exitCode": 0
+    },
+    "build": {
+      "exitCode": 0
+    },
+    "boundary": {
+      "exitCode": 1
+    }
+  },
+  "trackedRuntimeUnchanged": true
+}

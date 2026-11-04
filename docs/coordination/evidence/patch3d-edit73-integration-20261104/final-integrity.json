@@ -1,0 +1,9 @@
+{
+  "integration": "ce6004c629165658f4291a2c2eeaa0210854f861",
+  "base": "0db2026f21bc858338d934f24d7481a80cb2f321",
+  "plugin": "73a4f36b2e807499cd0fab488fc0cebb1badc0fa",
+  "pluginTree": "bb26828d9ca1d7ae80a6abb520541228660e68e8",
+  "allTrackedRuntimeHashesUnchanged": true,
+  "recoveredOriginalFilesAndIndexUnchanged": true,
+  "worktreeClean": true
+}

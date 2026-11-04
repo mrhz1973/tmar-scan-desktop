@@ -1,0 +1,102 @@
+{
+  "scope": "Synthetic source app; fixture seeded explicitly, later controls/pointer operations real",
+  "checks": [
+    "existing on-scan pointer mode projects the point onto the mesh without a 3D offset",
+    "normal numeric movement persists a signed off-scan node target",
+    "numeric movement creates exactly one local Undo",
+    "changing the motion axis never reinterprets or moves the point",
+    "captured 3D drag blocks Create without disabling live preview",
+    "a second pointer cannot change the active gesture",
+    "Ctrl+Z cannot interrupt an active 3D gesture; Escape owns cancellation",
+    "global and local Undo controls are disabled during the captured gesture",
+    "Escape restores the entire pre-drag node state and history",
+    "a completed pointer drag contributes one local Undo and releases capture",
+    "real pointer drag changes the 3D target",
+    "editing a point does not rotate or reset the shared camera",
+    "local Undo restores the exact previous 3D targets",
+    "local Redo restores the exact completed drag",
+    "an internal shared-curve grip can leave the scan too",
+    "UI distinguishes scan projection from unimplemented 3D scan/CAD magnet",
+    "native save contains all node/grip offsets, not a flattened preview",
+    "fresh-page rebuild retains node and grip targets",
+    "reopened CAD keeps four sewn faces with measured shared gap below 0.005 mm",
+    "independent OCCT validates the exported four-face CAD sheet",
+    "derived internal centre has a persistent normal displacement",
+    "internal centre preview is lifted without losing any baseline-produced patch",
+    "internal centre Undo removes only its explicit offset",
+    "internal centre Redo restores the normal displacement",
+    "native save retains the derived-centre displacement",
+    "synthetic scan input is byte-for-byte unchanged",
+    "no application console errors"
+  ],
+  "consoleErrors": [],
+  "verdict": "PASS",
+  "fixture": {
+    "path": "[QA_EVIDENCE]\\network-source\\source-network-o0bXfr\\downloads\\baseline\\synthetic-plane.scanruler",
+    "sha256": "25e514918d487a6cc5f5a9c7dbf0cf17123da98259d4ae2214bb076fa205f439"
+  },
+  "saved": {
+    "path": "[QA_EVIDENCE]\\network-source\\source-network-o0bXfr\\downloads\\moved\\synthetic-plane.scanruler",
+    "sha256": "298d7931a5d6207c8210ce8a675f53316778c2b40c75671fd60d9aafddb67594"
+  },
+  "centreBaseline": {
+    "patches": 2
+  },
+  "centreDiagnostic": {
+    "cell": {
+      "seed": [
+        20,
+        15,
+        0
+      ],
+      "corners": [
+        1,
+        2,
+        3
+      ],
+      "centre": [
+        19.594783082354837,
+        14.777031485578078,
+        0
+      ],
+      "centreOffset": {
+        "version": 1,
+        "units": "mm",
+        "coordinateFrame": "part",
+        "anchor": [
+          19.594783082354837,
+          14.777031485578078,
+          0
+        ],
+        "direction": [
+          0,
+          0,
+          1
+        ],
+        "distance": 0.5
+      }
+    },
+    "centres": [
+      {
+        "cell": 0,
+        "node": 1000000,
+        "at": [
+          19.594783082354837,
+          14.777031485578078,
+          0.5
+        ]
+      }
+    ],
+    "patches": 2
+  },
+  "centreLimit": "This planar triangular fixture already produces only two patches before movement; this UI case is not a qualification of all three sectors. The separate curved-cap OCCT test checks three sewn faces.",
+  "centre": {
+    "sha256": "aaabf6efa5e275bfe4d877639a4a0225e38222bce5b6c726e7de4ec5cbd623b4",
+    "faces": 2
+  },
+  "reopened": {
+    "faces": 4,
+    "worstGap": 0.0009676439875026526,
+    "worstAngle": 0.043564208632213296
+  }
+}

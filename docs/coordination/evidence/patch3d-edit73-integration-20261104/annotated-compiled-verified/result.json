@@ -1,0 +1,280 @@
+{
+  "scope": "Fresh STEP import, real Edit Surface, Zebra, mouse note, deformation, annotated Apply, Undo/Redo, Save/Load and export in production-compiled browser only",
+  "integration": "ce6004c629165658f4291a2c2eeaa0210854f861",
+  "host": "5684f5f27eaaa6ee460eef2300b010eb622b4507",
+  "plugin": "73a4f36b2e807499cd0fab488fc0cebb1badc0fa",
+  "checks": [
+    "fresh synthetic STEP imported through compiled UI with no pre-existing annotation",
+    "Edit Surface runs in the same main canvas without a modal",
+    "real viewport click selects an editable CAD face",
+    "Zebra and a mouse-placed typed note coexist in the compiled editor",
+    "draft note blocks a face change without losing text or selected face",
+    "local STEP export cannot silently discard the draft note",
+    "compiled Apply creates a geometrically changed valid copy with the complete verified note",
+    "original remains intact and hidden while the annotated copy is visible",
+    "one toolbar Undo removes both copy and note and restores original visibility",
+    "one toolbar Redo restores the same note UUID, feature, body, geometry and orientation",
+    "fresh-page native Load and Save preserve exact UUIDs, text, body/face association and both UV records",
+    "reopened note is CAD-verified, with finite correctly oriented normal and valid solid",
+    "compiled UI export independently reimports original and edited copy as two valid solids",
+    "synthetic source STEP is byte-for-byte unchanged",
+    "browser loads compiled assets only, with no source modules or injected controller",
+    "zero application console errors throughout the full compiled cycle"
+  ],
+  "consoleErrors": [],
+  "sourceRequests": [],
+  "stage": "completed",
+  "verdict": "PASS",
+  "files": {
+    "baseline": {
+      "name": "downloads\\baseline\\project.scanruler",
+      "sha256": "76f3239b312c2065a2d0fa357c1091d690a1fd4a98b5beb3777558a1f5ae2525"
+    },
+    "applied-validation-0": {
+      "name": "downloads\\applied-validation-0\\project.scanruler",
+      "sha256": "85d87fda8c0acb1d59b940ddb6764b4916fcd1f4b61e311c9f4e60a57a49498d"
+    },
+    "applied-validation-1": {
+      "name": "downloads\\applied-validation-1\\project.scanruler",
+      "sha256": "b769f91ebddbbdd1b4974f3b1ad4edae0dcf55aa27b984dd8db07c1297292dcf"
+    },
+    "undone": {
+      "name": "downloads\\undone\\project.scanruler",
+      "sha256": "1286af6dc75c695e59cb25b275646dc5525f7bcb45d16e00f82a087a7e9c7748"
+    },
+    "redone-validation-0": {
+      "name": "downloads\\redone-validation-0\\project.scanruler",
+      "sha256": "a8dae799ca272af342f5e2d98a95786da712b119b61ab43a68324777726667f1"
+    },
+    "redone-validation-1": {
+      "name": "downloads\\redone-validation-1\\project.scanruler",
+      "sha256": "da92ea58a587c385a49ceead2375373e0467a589be82e512d26e8b7608f523a0"
+    },
+    "reopened-validation-0": {
+      "name": "downloads\\reopened-validation-0\\project.scanruler",
+      "sha256": "e8c4b25e1cce8913fe63f900e3798f0477f84c1ea06e3159d862782c359f9f09"
+    },
+    "export": {
+      "name": "downloads\\export\\model-body.step",
+      "sha256": "f227d7b8b7844d89b03c8431468532fc51682241c0d4811b9f03586b1d51926e"
+    }
+  },
+  "inputSha256": "89c8c4df0c34bbb4020d60d8ff00c51ca455e2c4a0667f5455547bd5aa672824",
+  "faceClick": {
+    "x": 734,
+    "y": 511
+  },
+  "selectedFace": "5",
+  "verificationWaits": {
+    "applied": [
+      {
+        "attempt": 0,
+        "status": "unresolved",
+        "identity": {
+          "noteUuid": "32bb51bb-3694-4858-b400-9437aeb53a16",
+          "featureUuid": "40954d11-34e2-4193-988c-476b108f52a9",
+          "body": 2,
+          "operationId": "12f6ea32-e0cd-4a12-a81c-9ad49c54cdd0",
+          "draftId": "6181a9af-8a4a-4017-bbab-f7d9805cd993",
+          "stepSha256": "2bb745537afce3d45b36abab6e5f456f0598010553d7202162263669fbfe7494",
+          "witnessSha256": "8311b4365d0050db1402980ceb573d61d6f3d47e07b320433e7e5c0812621666"
+        },
+        "projectSha256": "85d87fda8c0acb1d59b940ddb6764b4916fcd1f4b61e311c9f4e60a57a49498d"
+      },
+      {
+        "attempt": 1,
+        "status": "verified",
+        "identity": {
+          "noteUuid": "32bb51bb-3694-4858-b400-9437aeb53a16",
+          "featureUuid": "40954d11-34e2-4193-988c-476b108f52a9",
+          "body": 2,
+          "operationId": "12f6ea32-e0cd-4a12-a81c-9ad49c54cdd0",
+          "draftId": "6181a9af-8a4a-4017-bbab-f7d9805cd993",
+          "stepSha256": "2bb745537afce3d45b36abab6e5f456f0598010553d7202162263669fbfe7494",
+          "witnessSha256": "8311b4365d0050db1402980ceb573d61d6f3d47e07b320433e7e5c0812621666"
+        },
+        "projectSha256": "b769f91ebddbbdd1b4974f3b1ad4edae0dcf55aa27b984dd8db07c1297292dcf"
+      }
+    ],
+    "redone": [
+      {
+        "attempt": 0,
+        "status": "unresolved",
+        "identity": {
+          "noteUuid": "32bb51bb-3694-4858-b400-9437aeb53a16",
+          "featureUuid": "40954d11-34e2-4193-988c-476b108f52a9",
+          "body": 2,
+          "operationId": "12f6ea32-e0cd-4a12-a81c-9ad49c54cdd0",
+          "draftId": "6181a9af-8a4a-4017-bbab-f7d9805cd993",
+          "stepSha256": "2bb745537afce3d45b36abab6e5f456f0598010553d7202162263669fbfe7494",
+          "witnessSha256": "8311b4365d0050db1402980ceb573d61d6f3d47e07b320433e7e5c0812621666"
+        },
+        "projectSha256": "a8dae799ca272af342f5e2d98a95786da712b119b61ab43a68324777726667f1"
+      },
+      {
+        "attempt": 1,
+        "status": "verified",
+        "identity": {
+          "noteUuid": "32bb51bb-3694-4858-b400-9437aeb53a16",
+          "featureUuid": "40954d11-34e2-4193-988c-476b108f52a9",
+          "body": 2,
+          "operationId": "12f6ea32-e0cd-4a12-a81c-9ad49c54cdd0",
+          "draftId": "6181a9af-8a4a-4017-bbab-f7d9805cd993",
+          "stepSha256": "2bb745537afce3d45b36abab6e5f456f0598010553d7202162263669fbfe7494",
+          "witnessSha256": "8311b4365d0050db1402980ceb573d61d6f3d47e07b320433e7e5c0812621666"
+        },
+        "projectSha256": "da92ea58a587c385a49ceead2375373e0467a589be82e512d26e8b7608f523a0"
+      }
+    ],
+    "reopened": [
+      {
+        "attempt": 0,
+        "status": "verified",
+        "identity": {
+          "noteUuid": "32bb51bb-3694-4858-b400-9437aeb53a16",
+          "featureUuid": "40954d11-34e2-4193-988c-476b108f52a9",
+          "body": 2,
+          "operationId": "12f6ea32-e0cd-4a12-a81c-9ad49c54cdd0",
+          "draftId": "6181a9af-8a4a-4017-bbab-f7d9805cd993",
+          "stepSha256": "2bb745537afce3d45b36abab6e5f456f0598010553d7202162263669fbfe7494",
+          "witnessSha256": "8311b4365d0050db1402980ceb573d61d6f3d47e07b320433e7e5c0812621666"
+        },
+        "projectSha256": "e8c4b25e1cce8913fe63f900e3798f0477f84c1ea06e3159d862782c359f9f09"
+      }
+    ]
+  },
+  "applied": {
+    "identity": {
+      "noteUuid": "32bb51bb-3694-4858-b400-9437aeb53a16",
+      "featureUuid": "40954d11-34e2-4193-988c-476b108f52a9",
+      "body": 2,
+      "operationId": "12f6ea32-e0cd-4a12-a81c-9ad49c54cdd0"
+    },
+    "note": {
+      "id": 1,
+      "text": "Collaudo compilato — nota CAD persistente 73a4f36",
+      "at": [
+        16.545454545454575,
+        6.363636363636324,
+        10.00133384531537
+      ],
+      "normal": [
+        0.0006566961472183233,
+        -0.00033654759961461905,
+        0.9999997277429047
+      ],
+      "on": [
+        {
+          "kind": "face",
+          "body": 2,
+          "face": {
+            "kind": "other",
+            "centroid": [
+              10,
+              15,
+              10.003124757261505
+            ],
+            "dir": [
+              -1.734723475976721e-19,
+              3.180326372624146e-19,
+              1
+            ],
+            "area": 600.000301928545,
+            "origin": 2
+          }
+        }
+      ],
+      "attachment": {
+        "version": 1,
+        "noteUuid": "32bb51bb-3694-4858-b400-9437aeb53a16",
+        "operationId": "12f6ea32-e0cd-4a12-a81c-9ad49c54cdd0",
+        "draftId": "6181a9af-8a4a-4017-bbab-f7d9805cd993",
+        "featureUuid": "40954d11-34e2-4193-988c-476b108f52a9",
+        "stepSha256": "2bb745537afce3d45b36abab6e5f456f0598010553d7202162263669fbfe7494",
+        "witnessSha256": "8311b4365d0050db1402980ceb573d61d6f3d47e07b320433e7e5c0812621666",
+        "witnessUV": [
+          16.54545454545457,
+          6.363636363636324
+        ],
+        "uv": [
+          16.54545454545439,
+          6.363636363636324
+        ],
+        "status": "verified"
+      }
+    },
+    "volume": 6001.875048749859,
+    "orientation": "forward"
+  },
+  "reopened": {
+    "identity": {
+      "noteUuid": "32bb51bb-3694-4858-b400-9437aeb53a16",
+      "featureUuid": "40954d11-34e2-4193-988c-476b108f52a9",
+      "body": 2,
+      "operationId": "12f6ea32-e0cd-4a12-a81c-9ad49c54cdd0"
+    },
+    "note": {
+      "id": 1,
+      "text": "Collaudo compilato — nota CAD persistente 73a4f36",
+      "at": [
+        16.545454545454575,
+        6.363636363636324,
+        10.00133384531537
+      ],
+      "normal": [
+        0.0006566961472183233,
+        -0.00033654759961461905,
+        0.9999997277429047
+      ],
+      "on": [
+        {
+          "kind": "face",
+          "body": 2,
+          "face": {
+            "kind": "other",
+            "centroid": [
+              10,
+              15,
+              10.003124757261505
+            ],
+            "dir": [
+              -1.734723475976721e-19,
+              3.180326372624146e-19,
+              1
+            ],
+            "area": 600.000301928545,
+            "origin": 2
+          }
+        }
+      ],
+      "attachment": {
+        "version": 1,
+        "noteUuid": "32bb51bb-3694-4858-b400-9437aeb53a16",
+        "operationId": "12f6ea32-e0cd-4a12-a81c-9ad49c54cdd0",
+        "draftId": "6181a9af-8a4a-4017-bbab-f7d9805cd993",
+        "featureUuid": "40954d11-34e2-4193-988c-476b108f52a9",
+        "stepSha256": "2bb745537afce3d45b36abab6e5f456f0598010553d7202162263669fbfe7494",
+        "witnessSha256": "8311b4365d0050db1402980ceb573d61d6f3d47e07b320433e7e5c0812621666",
+        "witnessUV": [
+          16.54545454545457,
+          6.363636363636324
+        ],
+        "uv": [
+          16.54545454545439,
+          6.363636363636324
+        ],
+        "status": "verified"
+      }
+    },
+    "volume": 6001.875048749859,
+    "orientation": "forward"
+  },
+  "export": {
+    "valid": true,
+    "solids": 2,
+    "volumes": [
+      6000,
+      6001.875048749859
+    ]
+  }
+}

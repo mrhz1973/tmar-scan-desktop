@@ -1,0 +1,20 @@
+{
+  "checks": [
+    "a project saved as unresolved automatically revalidates in a fresh compiled page",
+    "exact note/feature/body identity survives pending-state persistence",
+    "position and oriented normal remain unchanged",
+    "recovered annotated copy is independently valid CAD",
+    "pending-state input file is unchanged",
+    "compiled-only browser with no application errors"
+  ],
+  "consoleErrors": [],
+  "sourceRequests": [],
+  "verdict": "PASS",
+  "inputSha256": "85d87fda8c0acb1d59b940ddb6764b4916fcd1f4b61e311c9f4e60a57a49498d",
+  "savedObservations": [
+    {
+      "status": "verified",
+      "sha256": "dae78250e3e4748a7c5e9e5e50f16baf95306613cd7cc9129721a06e4e2d15c1"
+    }
+  ]
+}

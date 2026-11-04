@@ -1,0 +1,35 @@
+{
+  "scope": "Fresh STEP import, real Edit Surface, Zebra, mouse note, deformation, annotated Apply, Undo/Redo, Save/Load and export in production-compiled browser only",
+  "integration": "ce6004c629165658f4291a2c2eeaa0210854f861",
+  "host": "5684f5f27eaaa6ee460eef2300b010eb622b4507",
+  "plugin": "73a4f36b2e807499cd0fab488fc0cebb1badc0fa",
+  "checks": [
+    "fresh synthetic STEP imported through compiled UI with no pre-existing annotation",
+    "Edit Surface runs in the same main canvas without a modal",
+    "real viewport click selects an editable CAD face",
+    "Zebra and a mouse-placed typed note coexist in the compiled editor",
+    "draft note blocks a face change without losing text or selected face",
+    "local STEP export cannot silently discard the draft note"
+  ],
+  "consoleErrors": [],
+  "sourceRequests": [],
+  "stage": "numerical deformation and compiled annotated Apply",
+  "verdict": "INCOMPLETE",
+  "files": {
+    "baseline": {
+      "name": "downloads\\baseline\\project.scanruler",
+      "sha256": "2881e366a796cc74dba7582373ec27674312b916052becf8b68341a0f736e39e"
+    },
+    "applied": {
+      "name": "downloads\\applied\\project.scanruler",
+      "sha256": "a02d7214c53900e01c4cb3bf5300dd11202fe50c0be6fa3b9f7aeaba6b1528a7"
+    }
+  },
+  "inputSha256": "ad815230f8d7a49dcf60106d418a55a918cbbea883d9e5587ebbbd76da0041a3",
+  "faceClick": {
+    "x": 734,
+    "y": 511
+  },
+  "selectedFace": "5",
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'unresolved'\n- 'verified'\n\n    at assertAnnotated (file:///D:/TMAR-QA/tmar-patch3d-edit73-integration-20261104/plugins/reverse/scripts/e2e-integration73-compiled.mjs:86:72)\n    at file:///D:/TMAR-QA/tmar-patch3d-edit73-integration-20261104/plugins/reverse/scripts/e2e-integration73-compiled.mjs:167:61"
+}

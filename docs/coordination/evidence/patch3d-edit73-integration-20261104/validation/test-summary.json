@@ -1,0 +1,793 @@
+{
+  "passed": 180,
+  "failed": 0,
+  "skipped": 0,
+  "files": [
+    {
+      "name": "tests/history.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "project history undoes and redoes chronologically across all four workspaces with stable IDs",
+          "status": "passed"
+        },
+        {
+          "name": "project history restores a deleted element, its dimension, and the deviation target and pins together",
+          "status": "passed"
+        },
+        {
+          "name": "project history restores a deleted section and its active 2D sheet as one step",
+          "status": "passed"
+        },
+        {
+          "name": "project history restores the correct 2D sheet after sheet navigation",
+          "status": "passed"
+        },
+        {
+          "name": "project history restores calibration and the measurements derived from it",
+          "status": "passed"
+        },
+        {
+          "name": "project history groups a gesture and nested commands into one undo step",
+          "status": "passed"
+        },
+        {
+          "name": "project history does not record worker results, navigation, or empty commits",
+          "status": "passed"
+        },
+        {
+          "name": "project history restores count edits and groups live note edits without an empty finish step",
+          "status": "passed"
+        },
+        {
+          "name": "project history drops redo on a new edit and bounds retained history",
+          "status": "passed"
+        },
+        {
+          "name": "project history blocks document undo while an unfinished editor or computation owns state",
+          "status": "passed"
+        },
+        {
+          "name": "project history preserves the entry if geometry restoration fails before state is changed",
+          "status": "passed"
+        },
+        {
+          "name": "project history does not resurrect an async command belonging to a replaced source",
+          "status": "passed"
+        },
+        {
+          "name": "project history restores the external marked region together with its settings and pins",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "tests/workspaceEditors.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "workspace editor lifecycle owns cleanup once in reverse order even when one throws",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle rejects concurrent editors and keeps a single controller",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle coalesces double Apply, returns a receipt and closes resources exactly once",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle blocks pending, invalid, notes and active gesture without a project change",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle rejects a stale validated stamp even if the plugin says valid",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle keeps the draft and unfreezes on a failed staging, allowing a retry",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle refuses malformed plugin payloads before staging",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle rechecks the exact draft after asynchronous staging",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle cancellation during prepare never publishes late completion",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle source invalidation closes and releases input without a project change",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle a late create after Cancel disposes the controller and never attaches",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle failed session construction runs acquired cleanup",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle cancellation after staging refuses publication and disposes the staged resource",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle rechecks source after staging even without an invalidation notification",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle rechecks draft after committing observers run, without awaiting before publish",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle reentrant disposal callbacks close the controller only once",
+          "status": "passed"
+        },
+        {
+          "name": "workspace editor lifecycle a fatal report from a disposed session cannot close the replacement session",
+          "status": "passed"
+        },
+        {
+          "name": "workspace Apply reference notification boundary does not re-enter old-source reference listeners during successful publication",
+          "status": "passed"
+        },
+        {
+          "name": "workspace Apply reference notification boundary refreshes the restored source exactly once after failed publication, then permits retry",
+          "status": "passed"
+        },
+        {
+          "name": "workspace Apply reference notification boundary does not hide a real source replacement immediately before publication",
+          "status": "passed"
+        },
+        {
+          "name": "host-owned Apply display choice defaults to hiding the source and freezes the choice before asynchronous Apply",
+          "status": "passed"
+        },
+        {
+          "name": "host-owned Apply display choice can retain both bodies without modifying the plugin ticket or geometry package",
+          "status": "passed"
+        },
+        {
+          "name": "host-owned Apply display choice does not publish a source visibility change when the user cancels",
+          "status": "passed"
+        },
+        {
+          "name": "annotated workspace contract negotiation keeps notes blocked without BOTH host and controller support; no plain-copy fallback",
+          "status": "passed"
+        },
+        {
+          "name": "annotated workspace contract negotiation requires explicit annotation version negotiation",
+          "status": "passed"
+        },
+        {
+          "name": "annotated workspace contract negotiation rejects a changed notesRevision while preparation is awaiting",
+          "status": "passed"
+        },
+        {
+          "name": "annotated workspace contract negotiation requires the package to include every draft note",
+          "status": "passed"
+        },
+        {
+          "name": "annotated workspace contract negotiation coalesces annotated double Apply and keeps the display option with its transaction",
+          "status": "passed"
+        },
+        {
+          "name": "annotated workspace contract negotiation refuses a prepared annotated result after session cancellation",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "plugins/reverse/tests/annotatedCopy.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "real annotated CAD-copy publication blocks unsafe Undo with unowned dependent notes before any mutation",
+          "status": "passed"
+        },
+        {
+          "name": "real annotated CAD-copy publication rolls back an injected note publication failure without notifying a half-state",
+          "status": "passed"
+        },
+        {
+          "name": "real annotated CAD-copy publication rejects reentrant note mutation during committed notifications, preserving the committed receipt",
+          "status": "passed"
+        },
+        {
+          "name": "real annotated CAD-copy publication validates attachment schemas and marks modified destination CAD unresolved without fallback",
+          "status": "passed"
+        },
+        {
+          "name": "real annotated CAD-copy publication publishes body/resources/notes/history without a half-visible subscriber state",
+          "status": "passed"
+        },
+        {
+          "name": "real annotated CAD-copy publication selective Undo/Redo retains unrelated edits, latest owned text and explicit deletion",
+          "status": "passed"
+        },
+        {
+          "name": "real annotated CAD-copy publication refuses wrong normal or witness before committed state changes",
+          "status": "passed"
+        },
+        {
+          "name": "real annotated CAD-copy publication hashes note content as well as the STEP and refuses stale note revision",
+          "status": "passed"
+        },
+        {
+          "name": "real annotated CAD-copy publication reopens native model/note data with attachments and retains a valid exact destination",
+          "status": "passed"
+        },
+        {
+          "name": "real annotated CAD-copy publication revokes a staged annotated copy on Cancel without body/note/history residue",
+          "status": "passed"
+        },
+        {
+          "name": "annotated persistence and publication guards preserves source hiding together with selective note Undo/Redo",
+          "status": "passed"
+        },
+        {
+          "name": "annotated persistence and publication guards does not lose unrelated notes changed after staging when publication fails",
+          "status": "passed"
+        },
+        {
+          "name": "annotated persistence and publication guards refuses a real document change after annotated staging",
+          "status": "passed"
+        },
+        {
+          "name": "annotated persistence and publication guards retains an unresolved note if its persisted STEP member is absent",
+          "status": "passed"
+        },
+        {
+          "name": "annotated persistence and publication guards keeps witness parameters separate and refreshes only a CAD-verified fingerprint",
+          "status": "passed"
+        },
+        {
+          "name": "annotated persistence and publication guards rejects malformed and duplicate bundles without filtering notes",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "plugins/reverse/tests/annotatedNormal.qa.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "accepts the outward normal and rejects its inverse on a reversed STEP box face",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "plugins/reverse/tests/reNetworkNormal.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "split-centre displacement through coupled fitting and persistence raises the shared centre while keeping scan topology, cells and original arrays unchanged",
+          "status": "passed"
+        },
+        {
+          "name": "split-centre displacement through coupled fitting and persistence retains the sign, rejects unsupported offset versions and does not silently lift a quad",
+          "status": "passed"
+        },
+        {
+          "name": "split-centre displacement through coupled fitting and persistence stores numeric movement as one local Undo, prunes Redo and survives strict JSON reopening",
+          "status": "passed"
+        },
+        {
+          "name": "split-centre displacement through coupled fitting and persistence builds sewn CAD, valid STEP and an equivalent CAD result from the reopened feature",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "plugins/reverse/tests/reNetworkPointMotion.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "network nodes and curve grips: topology anchors versus 3D targets keeps every scan array and cell while lifting the node shared by four patches",
+          "status": "passed"
+        },
+        {
+          "name": "network nodes and curve grips: topology anchors versus 3D targets moves an interior curve grip without changing its scan route or treating it as an exact interpolated pole",
+          "status": "passed"
+        },
+        {
+          "name": "network nodes and curve grips: topology anchors versus 3D targets handles a true tilted normal, not only world Z",
+          "status": "passed"
+        },
+        {
+          "name": "network nodes and curve grips: topology anchors versus 3D targets stores one local action, restores Undo/Redo and rejects a stale/malformed saved offset",
+          "status": "passed"
+        },
+        {
+          "name": "network nodes and curve grips: topology anchors versus 3D targets reanchors on-scan movement without dropping the accumulated vector",
+          "status": "passed"
+        },
+        {
+          "name": "network nodes and curve grips: topology anchors versus 3D targets does not silently erase a displaced grip when removing or promoting it",
+          "status": "passed"
+        },
+        {
+          "name": "network nodes and curve grips: topology anchors versus 3D targets protects body-constrained points and rejects mismatched grip arrays",
+          "status": "passed"
+        },
+        {
+          "name": "network nodes and curve grips: topology anchors versus 3D targets has exact unambiguous UI point identifiers",
+          "status": "passed"
+        },
+        {
+          "name": "network nodes and curve grips: topology anchors versus 3D targets builds sewn CAD and reopens node and grip offsets without flattening them",
+          "status": "passed"
+        },
+        {
+          "name": "invalidates old geometry immediately but not for selection or direction alone",
+          "status": "passed"
+        },
+        {
+          "name": "keeps active-drag data and local history intact until release or cancellation",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "plugins/tmar-edit-surface/tests/dragFrame.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "orthographic camera moves along an oblique CAD direction without approximating its perspective projection",
+          "status": "passed"
+        },
+        {
+          "name": "orthographic camera returns part-frame movement for a rotated and translated part",
+          "status": "passed"
+        },
+        {
+          "name": "orthographic camera moves in the screen plane while returning part-frame coordinates",
+          "status": "passed"
+        },
+        {
+          "name": "orthographic camera returns no gesture when looking directly along the permitted axis",
+          "status": "passed"
+        },
+        {
+          "name": "orthographic camera lets a pole move in depth with a vertical drag when explicitly enabled",
+          "status": "passed"
+        },
+        {
+          "name": "orthographic camera keeps depth displacement in part coordinates when the part is rotated",
+          "status": "passed"
+        },
+        {
+          "name": "orthographic camera keeps near-aligned depth movement on the chosen axis with a frozen camera",
+          "status": "passed"
+        },
+        {
+          "name": "perspective camera moves along an oblique CAD direction without approximating its perspective projection",
+          "status": "passed"
+        },
+        {
+          "name": "perspective camera returns part-frame movement for a rotated and translated part",
+          "status": "passed"
+        },
+        {
+          "name": "perspective camera moves in the screen plane while returning part-frame coordinates",
+          "status": "passed"
+        },
+        {
+          "name": "perspective camera returns no gesture when looking directly along the permitted axis",
+          "status": "passed"
+        },
+        {
+          "name": "perspective camera lets a pole move in depth with a vertical drag when explicitly enabled",
+          "status": "passed"
+        },
+        {
+          "name": "perspective camera keeps depth displacement in part coordinates when the part is rotated",
+          "status": "passed"
+        },
+        {
+          "name": "perspective camera keeps near-aligned depth movement on the chosen axis with a frozen camera",
+          "status": "passed"
+        },
+        {
+          "name": "does not jump when a handle is grabbed off-centre",
+          "status": "passed"
+        },
+        {
+          "name": "freezes the camera, part transform and viewport for the gesture without changing inputs",
+          "status": "passed"
+        },
+        {
+          "name": "rejects a non-rigid part, invalid viewport, direction or coordinates",
+          "status": "passed"
+        },
+        {
+          "name": "rejects unsupported cameras and anchors outside camera near/far depth",
+          "status": "passed"
+        },
+        {
+          "name": "returns null for non-finite pointer updates instead of corrupting the draft",
+          "status": "passed"
+        },
+        {
+          "name": "rejects an axis solution lying behind a perspective camera",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "plugins/tmar-edit-surface/tests/note-orientation.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "returns unit, face-oriented note normals on forward, reversed and curved STEP faces without changing anchors",
+          "status": "passed"
+        },
+        {
+          "name": "refuses unsupported face orientation and degenerate or non-finite normals",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "plugins/tmar-edit-surface/tests/outer-trim.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "deforms the middle of a STEP disk while keeping its circular outside edge",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "plugins/tmar-edit-surface/tests/workspaceLayer.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "masks only a valid preview, supports picking and restores the source on disposal",
+          "status": "passed"
+        },
+        {
+          "name": "requests another face from the viewport after the first is selected",
+          "status": "passed"
+        },
+        {
+          "name": "drags in part coordinates with a transformed part and cancels/release capture synchronously",
+          "status": "passed"
+        },
+        {
+          "name": "moves a pole in the local surface-normal direction when the camera is oblique",
+          "status": "passed"
+        },
+        {
+          "name": "snap on scan reference provides snap feedback and Alt restores free movement without modifying the borrowed geometry",
+          "status": "passed"
+        },
+        {
+          "name": "snap on cad-face reference provides snap feedback and Alt restores free movement without modifying the borrowed geometry",
+          "status": "passed"
+        },
+        {
+          "name": "keeps snap calculations in the part frame after rotating and translating the body",
+          "status": "passed"
+        },
+        {
+          "name": "cancels on viewport resize and does not commit a click",
+          "status": "passed"
+        },
+        {
+          "name": "renders Zebra only on its preview and restores resources when it is disabled",
+          "status": "passed"
+        },
+        {
+          "name": "shows the symmetry plane and matched poles, and refreshes them when symmetry changes",
+          "status": "passed"
+        },
+        {
+          "name": "does not begin a blocked symmetric drag and explains how to resolve it",
+          "status": "passed"
+        },
+        {
+          "name": "applies transparency to owned preview and Zebra only, including after preview replacement",
+          "status": "passed"
+        },
+        {
+          "name": "ignores an invalidated reference during a captured drag",
+          "status": "passed"
+        },
+        {
+          "name": "does not propagate a revoked source or frozen error reporter through a host reference notification",
+          "status": "passed"
+        },
+        {
+          "name": "cleans the layer without propagating when state and reporting are both revoked during notification",
+          "status": "passed"
+        },
+        {
+          "name": "selects locked poles without starting a drag",
+          "status": "passed"
+        },
+        {
+          "name": "ignores controller updates after the host has removed the layer first",
+          "status": "passed"
+        },
+        {
+          "name": "highlights the selected strip boundary and drags it in the rotated part frame",
+          "status": "passed"
+        },
+        {
+          "name": "selects an edge without a commit on click and ignores unrelated pointers",
+          "status": "passed"
+        },
+        {
+          "name": "constrains the D handle to part axis +0 and commits the resulting delta",
+          "status": "passed"
+        },
+        {
+          "name": "constrains the D handle to part axis 1 and commits the resulting delta",
+          "status": "passed"
+        },
+        {
+          "name": "constrains the D handle to part axis 2 and commits the resulting delta",
+          "status": "passed"
+        },
+        {
+          "name": "constrains the D handle to part axis +0 and commits the resulting delta",
+          "status": "passed"
+        },
+        {
+          "name": "rejects an axis aligned or almost aligned to the view (false) with a useful message",
+          "status": "passed"
+        },
+        {
+          "name": "rejects an axis aligned or almost aligned to the view (true) with a useful message",
+          "status": "passed"
+        },
+        {
+          "name": "shows D on a direct free-edge click, promotes only when D is dragged and returns to the poles on cancel",
+          "status": "passed"
+        },
+        {
+          "name": "preserves net-edge selection alongside D and gives individual poles precedence",
+          "status": "passed"
+        },
+        {
+          "name": "starts a coincident net drag only at 4 pixels and finishes even when released outside the viewport",
+          "status": "passed"
+        },
+        {
+          "name": "releases a deferred pointer on lost capture or Escape and preserves Ctrl/Meta selection routing",
+          "status": "passed"
+        },
+        {
+          "name": "clears the local direct selection on revision, paths, note mode and lease interruption",
+          "status": "passed"
+        },
+        {
+          "name": "hides D for unselected, clipped or disposed borders and cancels the captured drag on interruption",
+          "status": "passed"
+        },
+        {
+          "name": "keeps the panel-selected edge when two boundaries overlap in the projection",
+          "status": "passed"
+        },
+        {
+          "name": "cancels the strip synchronously on interruption and does not commit afterward",
+          "status": "passed"
+        },
+        {
+          "name": "does not pick clipped or busy strip boundaries and leaves face selection alone",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "plugins/tmar-edit-surface/tests/workspaceSession.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "WorkspaceSurfaceSession starts by moving a point along the normal of a rotated surface",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession preserves a changed draft if switching faces is cancelled, and switches only after confirmation",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession keeps the current draft and undo history if loading the new face fails",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession keeps draft notes and refuses a face switch before asking to discard changes",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession ignores a failed stale note resolution after a note is removed",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession keeps a failed note and retries only when requested",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession prepares a modified STEP solid and a Zebra note on a real reversed face",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession prepares every annotated note from the final CAD evaluation without publishing the draft",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession requires a capable host, complete text, and a matching note revision",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession does not offer annotated publication for a disabled or incompatible host",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession rejects a final note failure without returning a partial package or losing either note",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession refuses an annotated result if the source changes while the witness is pending",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession rejects an invalid final normal instead of publishing an ambiguous note",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession loads a verified source and prepares exactly the frozen validated CAD copy",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession rejects stale tickets and cancels pointer capture before leaving a gesture",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession rejects an abort and a changed source after awaiting STEP export",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession exports a validated pole draft locally and rejects changes while its worker result is pending",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession refuses STEP export while notes exist without removing or reanchoring them",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession rejects an old prepare even if a fresh freeze uses the same ticket",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession keeps host Apply disabled while placing a note and while its CAD pick is pending",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession stores notes in the draft, exposes verified pins and blocks cad-copy Apply",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession retains notes but hides stale pins until their anchors resolve on the new CAD preview",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession edits one free pole, respects manual locks, and restores geometry with undo and redo",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession terminates the session and rejects a pending export when the host aborts",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession preserves a dirty draft unless switching faces is explicitly confirmed",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession rejects reentrant freeze while a geometry mutation is scheduling its preview",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession allows pointer release without a CAD mutation after host revocation",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession moves a symmetric pair numerically, preserves undo and blocks symmetry settings during freeze",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession mirrors gesture preview and commit, and restores both poles on cancellation",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession refuses ambiguous or locked mirror partners without modifying the draft",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession mirrors smoothing, flattening and stretching; projection affects selected free poles only",
+          "status": "passed"
+        },
+        {
+          "name": "WorkspaceSurfaceSession fails closed when the supplied STEP hash does not match the source binding",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip releases a deferred layer capture on Escape before a pole gesture begins",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip preloads immutable boundaries without blocking or mutating the draft and retains their identity",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip promotes the selected direct edge synchronously and Escape returns to poles without history",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip commits direct D through the existing validated strip history",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip discards late boundaries after a pole gesture and loads only the newly validated revision",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip removes direct edges while placing or holding a note, then reloads after its deletion",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip invalidates boundaries on freeze, source revocation and disposal",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip reports a failed direct edge read, avoids automatic retry loops, and retries successfully on request",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip passes a real STEP sheet through session, OCCT extension and frozen export",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip requires a single open face and a valid preview",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip shares a validated D direction with the panel and holds it fixed during a drag",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip exports the exact validated extension with freeze and immutable inputs",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip keeps a separate strip history and requires confirmation even after undo",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip rejects invalid or late results without discarding previous work",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip blocks Apply during a gesture and does not briefly unfreeze on release",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip rejects a changed edge history and invalidates work after disposal",
+          "status": "passed"
+        },
+        {
+          "name": "workspace free-edge strip does not adopt a result after the source changes, and respects abort at export",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

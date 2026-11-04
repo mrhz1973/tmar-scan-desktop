@@ -1,0 +1,30 @@
+{
+  "integration": "ce6004c629165658f4291a2c2eeaa0210854f861",
+  "checks": {
+    "network-source": {
+      "exitCode": 0
+    },
+    "network-compiled": {
+      "exitCode": 0
+    },
+    "edit-depth": {
+      "exitCode": 0
+    },
+    "annotated-compiled": {
+      "exitCode": 1
+    }
+  },
+  "compiledHarness": {
+    "upstreamSha": "4349ebca42edd43fe685d8d76919a9f18960e588",
+    "originalSha256": "e9a4ff93cfbd9b5c25bae0ddacc2a66cdd82eee430334de7111b9065874a580c",
+    "executedSha256": "96903b1ac21f1e224ab839876ac510e40f3633ec992549a21cdfdc5d2552f447",
+    "changes": "historical empty hiddenBodies reader fix and current pair/report labels only; all assertions retained"
+  },
+  "ownedServersStopped": [
+    17740,
+    17741,
+    17723,
+    17726
+  ],
+  "runtimeUnchanged": true
+}

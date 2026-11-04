@@ -1,0 +1,57 @@
+{
+  "scope": "isolated source host with actual Edit Surface controller",
+  "inputKind": "synthetic box",
+  "inputHash": "9dbc77a3f7f3eb3d31631cb57d9b5165b084ddedc54683aca19d50ce965657d3",
+  "faceIndex": 5,
+  "checks": [
+    "actual editor uses the same canvas and camera; source geometry is borrowed unchanged",
+    "editor controls fit the dock without horizontal clipping",
+    "selected imported CAD face has an editable control point",
+    "the initial drag direction is the surface normal",
+    "the displayed CAD preview updates while the pointer is still held",
+    "a real vertical drag moves the point along the view-aligned normal",
+    "Undo restores the point after the view-aligned drag",
+    "normal move changes the actual validated CAD draft",
+    "local undo and redo restore the previous validated draft",
+    "pointer drag owns the live gesture and blocks Apply",
+    "a real pointer drag changes and validates a control point in the main view",
+    "Apply publishes one CAD copy and one project history step",
+    "source render mask and editor overlay are released",
+    "both exported STEP bodies reimport as valid solids with the same face count",
+    "the copy differs geometrically from the source",
+    "no browser application errors"
+  ],
+  "consoleErrors": [],
+  "verdict": "PASS",
+  "panelLayout": {
+    "clientWidth": 319,
+    "scrollWidth": 319
+  },
+  "geometry": [
+    {
+      "id": 1,
+      "valid": true,
+      "solids": 1,
+      "faces": 6,
+      "volume": 6000
+    },
+    {
+      "id": 2,
+      "valid": true,
+      "solids": 1,
+      "faces": 6,
+      "volume": 6002.848542693508
+    }
+  ],
+  "entered": {
+    "sameCanvas": true,
+    "sameCamera": true,
+    "samePose": true,
+    "sameGeometry": true,
+    "sameCanvasCount": true,
+    "phase": "editing",
+    "noSeparateDialog": true
+  },
+  "beforeVolume": 6000,
+  "afterVolume": 6001.875048749858
+}
