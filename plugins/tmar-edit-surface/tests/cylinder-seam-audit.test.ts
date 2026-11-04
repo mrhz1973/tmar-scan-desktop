@@ -40,6 +40,27 @@ it.each([false,true])('audits both serialized seam curves on a converted STEP cy
       }
       const altered=faceText.slice(0,table.index)+table[0].replace(table[2],tokens.join(' '))+faceText.slice(table.index+table[0].length)
       vi.spyOn(k,'toBREP').mockReturnValueOnce(altered)
+      expect(()=>auditCylinderSeam(k,faces[0])).toThrow(/ambiguo/)
+      vi.restoreAllMocks()
+      // Corrupt both the face and its seam edge representation consistently:
+      // identity-like matching must then reach and fail the 3D sample check.
+      vi.spyOn(k,'toBREP').mockImplementation(handle=>{
+        const raw=original(handle)
+        if(handle===faces[0]) return altered
+        const edgeSeam=/^3\s+(\d+)\s+(\d+)\s*(?:CN|C[0-9]|G[0-9])\s+(\d+)\s+\d+\s+([\deE+.-]+)\s+([\deE+.-]+)\s*$/m.exec(raw)
+        if(!edgeSeam) return raw
+        const section=/Curve2ds\s+(\d+)\s*\n([\s\S]*?)\nCurves\s+\d+/.exec(raw)!
+        const parts=section[2].trim().split(/\s+/);let offset=0
+        for(let i=0;i<Number(section[1]);i++) {
+          let type=Number(parts[offset++]);if(type===8){offset+=2;type=Number(parts[offset++])}
+          expect(type).toBe(7)
+          const rational=Number(parts[offset++]);offset+=2
+          const poleCount=Number(parts[offset++]),knotCount=Number(parts[offset++])
+          if(i===Number(edgeSeam[1])-1) parts[offset]=String(Number(parts[offset])+.1)
+          offset+=poleCount*(rational?3:2)+knotCount*2
+        }
+        return raw.slice(0,section.index)+section[0].replace(section[2],parts.join(' '))+raw.slice(section.index+section[0].length)
+      })
       expect(()=>auditCylinderSeam(k,faces[0])).toThrow(/non coincidono/)
       vi.restoreAllMocks()
       expect(original(converted)).toBe(text)

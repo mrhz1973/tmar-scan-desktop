@@ -188,10 +188,13 @@ host state. A host without this capability keeps the original behavior.
   `cylinderSeam.ts` separately compares both serialized quadratic seam
   pcurves with a 3D edge at 65 samples. Synthetic straight and rotated STEP
   fixtures pass after conversion, deformation and STEP reopening; deliberately
-  duplicated or shifted 2D representations are rejected. Its edge matching
-  uses the parameter interval rather than proving topological identity, so
-  coincident edges may remain ambiguous. Sampling is not a global proof; other
-  BREP encodings fail closed. It is a diagnostic only, not a production gate.
+  duplicated or shifted 2D representations are rejected. A candidate edge now
+  must itself contain the same serialized support and two pcurves as the face;
+  inconsistent records are rejected before geometric sampling. Matching still
+  does not prove topological identity, so coincident edges may remain ambiguous.
+  Equivalent but differently serialized curves can be rejected. Sampling is not
+  a global proof; other BREP encodings fail closed. It is a diagnostic only,
+  not a production gate.
   Net edge/cell picking and cage drawing now include cyclic connections for
   periodic dimensions with more than two rows. Ambiguous two-row periodic
   picking and unqualified periodic frame conventions fail closed; periodic
