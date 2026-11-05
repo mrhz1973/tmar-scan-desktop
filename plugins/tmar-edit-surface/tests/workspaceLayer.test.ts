@@ -342,6 +342,22 @@ it('ignores an invalidated reference during a captured drag', () => {
   expect(f.counts().captured).toBeNull()
 })
 
+it('keeps valid snap references when another reference cannot be read', () => {
+  const f = fixture({ reference: 'scan' })
+  const existing = f.view.references()
+  vi.spyOn(f.view, 'references').mockReturnValue([
+    { ...existing[0], id: 'broken', isCurrent: () => { throw new Error('revoked') } },
+    existing[0],
+  ])
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  expect(f.reportViewError).toHaveBeenCalledWith('Magnete: 1 riferimento non disponibile; gli altri restano utilizzabili.')
+  expect(f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))).toBe(true)
+  f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
+  expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(0)
+  expect(f.overlay.children[0].textContent).toContain('Agganciato')
+  layer.dispose()
+})
+
 it('does not propagate a revoked source or frozen error reporter through a host reference notification', () => {
   const f = fixture({ reference: 'scan' }), layer = createWorkspaceLayer(f.view, f.owner)
   const materialDispose = vi.spyOn(THREE.MeshBasicMaterial.prototype, 'dispose')

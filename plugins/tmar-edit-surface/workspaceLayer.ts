@@ -230,13 +230,16 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (!referencesDirty || disposed || !owner.getViewState().snap) return
     referencesDirty = false
     const next: Target[] = []
+    let skipped = 0
     try {
       for (const ref of view.references() as readonly ReferenceDescriptor[]) {
-        if (!ref.visible || !ref.isCurrent()) continue
-        const matrix = new THREE.Matrix4().fromArray([...ref.partFromGeometry])
-        if (!matrix.elements.every(Number.isFinite)) throw new Error('Trasformazione del riferimento non valida.')
-        next.push(targetFor(ref.geometry, matrix, ref.kind === 'scan' ? 'scan' : 'cad',
-          ref.kind === 'scan' ? 'Scansione' : `Corpo CAD ${ref.bodyId ?? ''}`, () => ref.isCurrent()))
+        try {
+          if (!ref.visible || !ref.isCurrent()) continue
+          const matrix = new THREE.Matrix4().fromArray([...ref.partFromGeometry])
+          if (!matrix.elements.every(Number.isFinite)) throw new Error('Trasformazione del riferimento non valida.')
+          next.push(targetFor(ref.geometry, matrix, ref.kind === 'scan' ? 'scan' : 'cad',
+            ref.kind === 'scan' ? 'Scansione' : `Corpo CAD ${ref.bodyId ?? ''}`, () => ref.isCurrent()))
+        } catch { skipped++ }
       }
     } catch (error) {
       // Never retain stale targets after a failed reference refresh. Both the
@@ -248,6 +251,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     }
     disposeTargets(referenceTargets)
     referenceTargets = next
+    if (skipped) report(`Magnete: ${skipped} ${skipped === 1 ? 'riferimento non disponibile' : 'riferimenti non disponibili'}; ${next.length ? 'gli altri restano utilizzabili' : 'nessun riferimento esterno disponibile'}.`)
   }
   const refreshNeighbours = () => {
     if (!neighboursDirty || disposed || !owner.getViewState().snap) return
