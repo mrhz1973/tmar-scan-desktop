@@ -25,7 +25,8 @@ replace replay/validation within the host's atomic commit.
 
 `WorkspaceSurfaceSession.restoreHistoryRecipe(value)` restores a validated
 recipe into a fresh, empty workspace session only. It rejects another body or
-changed STEP bytes; a failed worker restore closes the session. A real OCCT
+changed STEP bytes; a failed worker restore reports a fatal error to the host
+and closes the session. A real OCCT
 test restores an edited reversed STEP face and validates the resulting solid.
 This API does not restore notes or implement host project persistence.
 

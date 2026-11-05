@@ -357,6 +357,19 @@ describe('WorkspaceSurfaceSession',()=>{
         expect(restored.getSnapshot().validation.kind).toBe('valid')
         expect(restored.isHistoryRecipeStampCurrent(recipe)).toBe(false)
       } finally { if(restored)await restored.dispose('cancelled');restoredEditor.dispose() }
+      const failedEditor=new SurfaceEditorKernel(k), failedWorker=new KernelWorker(failedEditor)
+      const failedRuntime=new SurfaceRuntime(()=>failedWorker as unknown as Worker), fatal=vi.fn()
+      const failedContext={...context,sessionId:'failed-restore',reportFatal:fatal}
+      let failed:WorkspaceSurfaceSession | undefined
+      try {
+        failed=await createWorkspaceSurfaceSession(failedContext as never,vi.fn() as never,{runtime:failedRuntime,sha256:async bytes=>sha(bytes)})
+        const corrupted=JSON.parse(JSON.stringify(recipe.recipe))
+        corrupted.baseNetSha256='0'.repeat(64)
+        await expect(failed.restoreHistoryRecipe(corrupted)).rejects.toThrow()
+        expect(fatal).toHaveBeenCalledOnce()
+        expect(failedRuntime.active).toBe(false)
+        expect(session.getSnapshot().validation.kind).toBe('valid')
+      } finally { if(failed)await failed.dispose('cancelled');failedEditor.dispose() }
       session.setStripes({orientation:'horizontal',width:3,color:'#5288b2'})
       session.setPlacingNote(true);await session.placeNote(seed)
       const note=session.getPanelState().notes[0]

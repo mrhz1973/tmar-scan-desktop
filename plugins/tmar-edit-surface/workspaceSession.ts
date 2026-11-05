@@ -917,12 +917,14 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.busy = true
     this.refresh()
     this.mutating = true
+    let workerRestoreStarted = false
     try {
       const bytes = this.context.step.slice()
       const digest = await this.digest(bytes)
       this.assertLive()
       if (digest.toLowerCase() !== this.source.stepSha256.toLowerCase()) throw new Error('Il contenuto STEP non corrisponde alla sorgente.')
       const step = new TextDecoder().decode(bytes)
+      workerRestoreStarted = true
       const result = version === 6
         ? await this.draft.restoreCurvedRecipe(step, recipe, this.source.bodyKey)
         : await this.draft.restoreRecipe(step, recipe, this.source.bodyKey)
@@ -934,7 +936,11 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     } catch (error) {
       // A failed worker restore may have replaced its internal model. Do not
       // leave a partially adopted session available to the host.
-      this.releaseOwned()
+      if (workerRestoreStarted) {
+        const message = `Impossibile ripristinare Edit Surface: ${String((error as Error)?.message ?? error)}`
+        try { this.context.reportFatal(message) } catch { /* Preserve the original restore error. */ }
+        this.releaseOwned()
+      }
       throw error
     } finally {
       this.mutating = false
