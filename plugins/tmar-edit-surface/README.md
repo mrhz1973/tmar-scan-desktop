@@ -93,6 +93,17 @@ Revo Design Pro 8.0.123, QA document `modified-solid`: the imported solid displa
 
 ## Limits / next acceptance
 
+### Owner STEP kernel inspection, 2026-11-06
+
+The opt-in `tests/realStepInspection.test.ts` reads a STEP provided via
+`SURFACE_QA_STEP`; it does not write the source. On the owner's `lego mod
+qs.stp`, OCCT found two solids. The first has 10 faces and none eligible for
+the standard editor; the second has 81 faces, of which 21 were eligible.
+Editing one interior pole of face 5 on the second solid by 0.05 mm produced a
+STEP that reimported as valid (volume 1084.0807603 to 1083.9916541 mm³).
+The source file SHA-256 was unchanged. This is a kernel-only check of one
+face, not an app/UI test, preservation proof for all faces or QS parity.
+
 - Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Periodic cylinders, arbitrary trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
 - One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.
 - OCCT validity, face/solid counts, positive volume, original boundary preservation, sampled normals and face intersections are checked. This is not exhaustive certification against every possible self-intersection; intersection edges and normals have sampled checks.
