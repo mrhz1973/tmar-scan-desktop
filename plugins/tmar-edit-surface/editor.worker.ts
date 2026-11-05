@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { SurfaceEditorKernel, type DraftAnchor, type G1PlaneProposalRequest, type G1PlaneValidationRequest, type G1PlaneEvaluationRequest } from './editorKernel'
+import { SurfaceEditorKernel, type DraftAnchor, type G1PlaneProposalRequest, type G1PlaneValidationRequest, type G1PlaneEvaluationRequest,
+  type G1CurvedProposalRequest, type G1CurvedValidationRequest, type G1CurvedEvaluationRequest } from './editorKernel'
 import wasmUrl from 'occt-wasm/dist/occt-wasm.wasm?url'
 import type { Net, Point } from './brep'
 import type { KnotInsertion } from './refineClampedNet'
@@ -16,6 +17,11 @@ export type Request = { id: number } & (
   | ({ action: 'validateG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneValidationRequest)
   | ({ action: 'publishG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneValidationRequest)
   | ({ action: 'evaluateG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneEvaluationRequest)
+  | { action: 'g1CurvedSupportCandidates' }
+  | ({ action: 'proposeG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedProposalRequest)
+  | ({ action: 'validateG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedValidationRequest)
+  | ({ action: 'publishG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedValidationRequest)
+  | ({ action: 'evaluateG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedEvaluationRequest)
   | { action: 'sheetEdges'; previewRevision: number }
   | { action: 'duplicateSheetEdge'; previewRevision: number; edge: number; delta: Point; previous?: StripMove[]; path?: Point[] }
   | { action: 'finalFaceWitness'; previewRevision: number }
@@ -55,6 +61,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
           break
         }
         case 'g1SupportCandidates': result = await editor.g1SupportCandidates(); break
+        case 'g1CurvedSupportCandidates': result = await editor.g1CurvedSupportCandidates(); break
         case 'proposeG1PlaneTangency': case 'validateG1PlaneTangency': case 'publishG1PlaneTangency': case 'evaluateG1PlaneTangency': {
           // Never auto-reselect for G1: that would discard preview, anchors
           // and kernel-owned constraint identity instead of rejecting stale work.
@@ -70,6 +77,23 @@ self.onmessage = (event: MessageEvent<Request>) => {
               : req.action==='publishG1PlaneTangency'
                 ? await editor.publishG1PlaneTangency(request as G1PlaneValidationRequest)
                 : await editor.evaluateG1PlaneTangency(request as G1PlaneEvaluationRequest)
+          break
+        }
+        case 'proposeG1CurvedTangency': case 'validateG1CurvedTangency': case 'publishG1CurvedTangency': case 'evaluateG1CurvedTangency': {
+          // Curved constraints keep the same strict preparation fence as planes.
+          // Re-selecting here would invalidate the kernel-owned accepted token.
+          if(cylinder) throw new Error('La tangenza G1 non è disponibile per la sessione cilindrica attiva.')
+          if(!req.selection || selectionKey===null || selectionKey!==JSON.stringify(req.selection) ||
+              (req.action!=='evaluateG1CurvedTangency' && req.choice?.stamp?.faceIndex!==req.selection.face))
+            throw new Error('Selezione G1 scaduta: seleziona di nuovo la faccia.')
+          const {id: _id, action: _action, selection: _selection, ...request}=req
+          result = req.action==='proposeG1CurvedTangency'
+            ? await editor.proposeG1CurvedTangency(request as G1CurvedProposalRequest)
+            : req.action==='validateG1CurvedTangency'
+              ? await editor.validateG1CurvedTangency(request as G1CurvedValidationRequest)
+              : req.action==='publishG1CurvedTangency'
+                ? await editor.publishG1CurvedTangency(request as G1CurvedValidationRequest)
+                : await editor.evaluateG1CurvedTangency(request as G1CurvedEvaluationRequest)
           break
         }
         case 'sheetEdges': result = editor.sheetEdges(req.previewRevision); break
