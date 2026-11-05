@@ -37,6 +37,7 @@ export interface WorkspaceSurfacePanelState {
   readonly canRefineNet: boolean
   readonly g1Candidates: readonly WorkspaceG1Candidate[]
   readonly g1Choice: string | null
+  readonly g1SearchNotice: string | null
   readonly canLoadG1: boolean
   readonly canApplyG1: boolean
   readonly planeTangencyActive: boolean
@@ -171,6 +172,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private historyRevision = 0
   private g1Candidates: readonly WorkspaceG1Candidate[] = Object.freeze([])
   private g1Choice: string | null = null
+  private g1SearchNotice: string | null = null
   private g1Basis: { selectionEpoch: number; refinements: SurfaceDraftSnapshot['refinements'] } | null = null
   private g1ValidationSerial = 0
   private g1DraftIdentity: { net: Net; constraint: NonNullable<SurfaceDraftSnapshot['planeTangency'] | SurfaceDraftSnapshot['curvedTangency']>; requestId: number } | null = null
@@ -609,7 +611,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.assertMutable()
     if (!this.panel.canLoadG1) throw new Error('Attendi una bozza CAD valida con bordi protetti prima di caricare i supporti.')
     const before = this.draft.getSnapshot(), epoch = this.selectionEpoch
-    this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null
+    this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null; this.g1SearchNotice = null
     this.busy = true; this.message = null; this.refresh()
     try {
       const lists = await Promise.allSettled([
@@ -621,11 +623,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         throw new Error('Elenco dei supporti G1 scaduto.')
       const candidates: WorkspaceG1Candidate[] = []
       let stamp: string | undefined, available = 0
+      const unavailable: string[] = []
       const sides = ['uMin', 'uMax', 'vMin', 'vMax']
       for (const [family, outcome] of lists.entries()) {
         // Each topology classifier may explicitly refuse an unsupported selected
         // surface. Keep the other independently certified family available.
-        if (outcome.status === 'rejected') continue
+        if (outcome.status === 'rejected') { unavailable.push(family === 0 ? 'piani' : 'B-spline compatibili'); continue }
         available++
         const result = outcome.value
         if (!result?.stamp || result.stamp.faceIndex !== this.face || !/^brep-sha256:[a-f0-9]{64}$/i.test(result.stamp.sourceId) ||
@@ -646,7 +649,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
           candidates.push(structuredClone(candidate))
         }
       }
-      if (!available) throw new Error('Nessun supporto G1 certificabile per questa faccia.')
+      if (!available) throw new Error('Impossibile completare la ricerca dei supporti G1. Riprova o scegli un’altra faccia.')
       if (new Set(candidates.map(candidate => candidate.id)).size !== candidates.length) throw new Error('Scelte dei supporti G1 ambigue.')
       for (const candidate of candidates) {
         Object.freeze(candidate.stamp)
@@ -658,6 +661,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.g1Candidates = Object.freeze(candidates)
       this.g1Choice = null
       this.g1Basis = { selectionEpoch: epoch, refinements: before.refinements }
+      this.g1SearchNotice = unavailable.length ? `Ricerca incompleta: impossibile verificare i supporti ${unavailable.join(' e ')}. I risultati mostrati riguardano solo gli altri supporti verificati.` : null
       this.message = candidates.length ? (available === 2 ? null : 'Disponibili solo i supporti della famiglia certificabile per questa faccia.')
         : 'Nessun bordo naturale con un supporto adiacente compatibile disponibile.'
     } catch (error) {
@@ -1218,7 +1222,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const d: SurfaceDraftSnapshot = this.draft.getSnapshot()
     const tangency = d.planeTangency ?? d.curvedTangency
     if (this.g1Basis && (this.g1Basis.selectionEpoch !== this.selectionEpoch || this.g1Basis.refinements !== d.refinements)) {
-      this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null
+      this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null; this.g1SearchNotice = null
     }
     // The logical G1 draft token stays stable when export republishes the same
     // geometry with a new CAD note witness. A frozen Apply ticket uses this token.
@@ -1307,7 +1311,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       !d.calculating && !d.previewStale && !d.freeBoundary && !tangency && d.cylinderSession === null
     this.panel = Object.freeze({ faces: this.faces, face: this.face, net: d.net, selected: d.selected,
       locked, manualLocks: d.locks, continuity: d.continuity, freeBoundary: d.freeBoundary,
-      g1Candidates: this.g1Candidates, g1Choice: this.g1Choice, canLoadG1,
+      g1Candidates: this.g1Candidates, g1Choice: this.g1Choice, g1SearchNotice: this.g1SearchNotice, canLoadG1,
       canApplyG1: canLoadG1 && !!this.g1Choice && this.g1Candidates.some(candidate => candidate.id === this.g1Choice),
       planeTangencyActive: !!d.planeTangency,
       curvedTangencyActive: !!d.curvedTangency,
@@ -1376,7 +1380,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     try { this.draft.dispose() } catch (error) { failure ??= error }
     try { this.runtime.dispose() } catch (error) { failure ??= error }
     this.notes = Object.freeze([]); this.failedNoteSet = null; this.faces = Object.freeze([]); this.sourcePreview = null; this.symmetryCache = null
-    this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null; this.g1DraftIdentity = null
+    this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null; this.g1SearchNotice = null; this.g1DraftIdentity = null
     this.face = -1; this.busy = false; this.gesture = 'idle'; this.gestureNet = null
     this.placingNote = false; this.message = 'Editor chiuso.'
     try { this.refresh() } catch (error) { failure ??= error }

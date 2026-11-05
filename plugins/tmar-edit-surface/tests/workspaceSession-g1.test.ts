@@ -77,6 +77,28 @@ async function apply(t:Context){
 afterEach(async()=>{for(const session of contexts.splice(0))await session.dispose('cancelled');vi.useRealTimers()})
 
 describe('workspace session local planar G1 orchestration (controlled worker)',()=>{
+  it('reports a partial support search without hiding it after selection, and clears it on face change',async()=>{
+    const t=await setup(), pending=t.session.loadG1Supports()
+    const plane=[...t.worker.sent].reverse().find(message=>message.action==='g1SupportCandidates')!
+    const curved=[...t.worker.sent].reverse().find(message=>message.action==='g1CurvedSupportCandidates')!
+    t.worker.reply({stamp:candidate.stamp,candidates:[candidate]},plane.id)
+    t.worker.onmessage?.({data:{id:curved.id,error:'unsupported'}} as MessageEvent<unknown>)
+    await pending
+    expect(t.session.getPanelState().g1SearchNotice).toMatch(/Ricerca incompleta.*B-spline/)
+    t.session.chooseG1Support(candidate.id)
+    expect(t.session.getPanelState().g1SearchNotice).toMatch(/Ricerca incompleta/)
+    const changing=t.session.chooseFace(1,true);t.worker.reply(net());await changing
+    expect(t.session.getPanelState().g1SearchNotice).toBeNull()
+  })
+  it('reports a failed search rather than claiming no support exists',async()=>{
+    const t=await setup(),pending=t.session.loadG1Supports(),rejected=expect(pending).rejects.toThrow(/Impossibile completare/)
+    for(const action of ['g1SupportCandidates','g1CurvedSupportCandidates']) {
+      const message=[...t.worker.sent].reverse().find(item=>item.action===action)!
+      t.worker.onmessage?.({data:{id:message.id,error:'unavailable'}} as MessageEvent<unknown>)
+    }
+    await rejected
+    expect(t.session.getPanelState().g1Candidates).toHaveLength(0)
+  })
   it('loads immutable candidates and requires explicit support selection',async()=>{
     const t=await setup()
     expect(t.session.getPanelState()).toMatchObject({canLoadG1:true,canApplyG1:false,g1Choice:null,g1Candidates:[]})
