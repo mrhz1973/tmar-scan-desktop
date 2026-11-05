@@ -343,6 +343,13 @@ describe('WorkspaceSurfaceSession',()=>{
           JSON.parse(JSON.stringify(recipe.recipe)),undefined,()=>replayWorker as unknown as Worker)
         expect(independent.valid).toBe(true)
         expect(independent.step).toBeTruthy()
+        const independentSolid=k.importStep(independent.step)
+        try {
+          expect(k.isValid(independentSolid)).toBe(true)
+          expect(k.getVolume(independentSolid)).toBeCloseTo(replay.volume,7)
+          const shapes=k.getSubShapes(independentSolid,'solid')
+          try { expect(shapes).toHaveLength(1) } finally { shapes.forEach(shape=>k.release(shape)) }
+        } finally { k.release(independentSolid) }
         expect(replayWorker.terminate).toHaveBeenCalledOnce()
         expect(session.getPanelState().net?.poles).toEqual(netBeforeReplay)
       } finally { replayEditor.dispose() }
