@@ -4,7 +4,8 @@ import type { ApplyTicket, DraftStamp, EditorSnapshot, ExitReason, PreparedCadCo
 // @ts-ignore -- this optional V1 contract is supplied by annotation-capable hosts.
 import type { AnnotatedTicketV1, PreparedAnnotatedCopyV1 } from '../../src/plugins/annotatedCopyTypes'
 import { boundaryLocked, type Net, type Point } from './brep'
-import type { DraftAnchor, FaceInfo, Preview } from './editorKernel'
+import type { DraftAnchor, FaceInfo, Preview, G1SupportCandidates } from './editorKernel'
+import type { G1SupportCandidate } from './g1SupportTopology'
 import { dragDirection, type DragMode } from './localFrame'
 import { selectNetPoints, type NetSelectionMode } from './netSelection'
 import { SurfaceDraft, type SurfaceDraftSnapshot } from './surfaceDraft'
@@ -32,6 +33,11 @@ export interface WorkspaceSurfacePanelState {
   readonly freeBoundary: boolean
   readonly canFreeBoundary: boolean
   readonly canRefineNet: boolean
+  readonly g1Candidates: readonly G1SupportCandidate[]
+  readonly g1Choice: string | null
+  readonly canLoadG1: boolean
+  readonly canApplyG1: boolean
+  readonly planeTangencyActive: boolean
   readonly canUndo: boolean
   readonly canRedo: boolean
   readonly calculating: boolean
@@ -159,6 +165,11 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private selectionEpoch = 0
   private draftEpoch = 0
   private historyRevision = 0
+  private g1Candidates: readonly G1SupportCandidate[] = Object.freeze([])
+  private g1Choice: string | null = null
+  private g1Basis: { selectionEpoch: number; refinements: SurfaceDraftSnapshot['refinements'] } | null = null
+  private g1ValidationSerial = 0
+  private g1DraftIdentity: { net: Net; constraint: NonNullable<SurfaceDraftSnapshot['planeTangency']>; requestId: number } | null = null
   private revision = 0
   private message: string | null = null
   private snap = true
@@ -180,7 +191,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private failedNoteRevision: number | null = null
   private failedNoteSet: readonly Note[] | null = null
   private symmetryCache: { net: Net; axis: number; offset: number; partners: number[] } | null = null
-  private lockCache: { net: Net | null; locks: readonly number[]; trim: readonly number[]; continuity: 'G0' | 'G1'; free: boolean; value: readonly number[] } | null = null
+  private lockCache: { net: Net | null; locks: readonly number[]; trim: readonly number[]; continuity: 'G0' | 'G1'; free: boolean; plane: SurfaceDraftSnapshot['planeTangency']; value: readonly number[] } | null = null
   private pinCache: { notes: readonly Note[]; revision: number | undefined; value: readonly Point[] } | null = null
   private snapshot!: EditorSnapshot
   private panel!: WorkspaceSurfacePanelState
@@ -587,6 +598,64 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }
   }
 
+  async loadG1Supports(): Promise<void> {
+    this.assertMutable()
+    if (!this.panel.canLoadG1) throw new Error('Attendi una bozza CAD valida con bordi protetti prima di caricare i supporti.')
+    const before = this.draft.getSnapshot(), epoch = this.selectionEpoch
+    this.busy = true; this.message = null; this.refresh()
+    try {
+      const result = await this.runtime.worker.ask<G1SupportCandidates>({ action: 'g1SupportCandidates' }, this.context.signal)
+      this.assertLive()
+      if (epoch !== this.selectionEpoch || before.refinements !== this.draft.getSnapshot().refinements ||
+          result?.stamp?.faceIndex !== this.face || !Array.isArray(result.candidates) ||
+          result.candidates.some(candidate => candidate.stamp.faceIndex !== this.face ||
+            JSON.stringify(candidate.stamp) !== JSON.stringify(result.stamp)))
+        throw new Error('Elenco dei supporti G1 scaduto.')
+      const candidates = structuredClone(result.candidates)
+      for (const candidate of candidates) {
+        Object.freeze(candidate.stamp); Object.freeze(candidate.plane.origin); Object.freeze(candidate.plane.normal)
+        Object.freeze(candidate.plane); Object.freeze(candidate)
+      }
+      this.g1Candidates = Object.freeze(candidates)
+      this.g1Choice = null
+      this.g1Basis = { selectionEpoch: epoch, refinements: before.refinements }
+      this.message = candidates.length ? null : 'Nessun bordo naturale con una faccia piana adiacente disponibile.'
+    } catch (error) {
+      if (!this.disposed) this.message = String((error as Error)?.message ?? error)
+      throw error
+    } finally { if (!this.disposed) { this.busy = false; this.refresh(); this.resolveNotes() } }
+  }
+
+  chooseG1Support(id: string): void {
+    this.assertMutable()
+    if (!this.panel.canLoadG1 || !this.g1Basis || !this.g1Candidates.some(candidate => candidate.id === id))
+      throw new Error('Supporto G1 non disponibile: carica di nuovo i supporti.')
+    this.g1Choice = id; this.message = null; this.refresh()
+  }
+
+  async applyG1(): Promise<void> {
+    this.assertMutable()
+    const choice = this.g1Candidates.find(candidate => candidate.id === this.g1Choice)
+    if (!this.panel.canApplyG1 || !choice) throw new Error('Scegli un supporto G1 e attendi la verifica CAD della bozza.')
+    const before = this.draft.getSnapshot()
+    this.busy = true; this.message = null; this.refresh()
+    try {
+      await this.draft.applyPlaneTangency(choice)
+      this.assertLive()
+    } catch (error) {
+      if (!this.disposed) this.message = String((error as Error)?.message ?? error)
+      throw error
+    } finally {
+      if (!this.disposed) {
+        const after = this.draft.getSnapshot()
+        if (before.committedNet !== after.committedNet || before.planeTangency !== after.planeTangency) {
+          this.draftEpoch++; this.historyRevision++
+        }
+        this.busy = false; this.refresh(); this.resolveNotes()
+      }
+    }
+  }
+
   setContinuity(value: 'G0' | 'G1'): void { this.change(() => this.draft.setContinuity(value)) }
   setFreeBoundary(value: boolean): void {
     this.change(() => {
@@ -900,7 +969,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const stripResult = strip?.frames[strip.at] ?? null
     const queue = this.runtime.previews.getSnapshot()
     if (draft.validNet !== net || draft.calculating || draft.previewStale ||
-        (!strip && (!draft.preview?.valid || queue.current?.revision !== stamp.requestId || queue.validRevision !== stamp.requestId)) ||
+        (!strip && (!draft.preview?.valid || (draft.planeTangency
+          ? this.g1DraftIdentity?.requestId !== stamp.requestId
+          : queue.current?.revision !== stamp.requestId || queue.validRevision !== stamp.requestId))) ||
         (strip && (!stripResult || strip.error)))
       throw new Error('La preview CAD non corrisponde alla bozza corrente.')
 
@@ -915,9 +986,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const after = this.draft.getSnapshot(), currentQueue = this.runtime.previews.getSnapshot()
       if (generation !== this.exportGeneration || this.selectionEpoch !== selectionEpoch || this.draftEpoch !== draftEpoch ||
           this.requireNet() !== net || after.validNet !== net || after.calculating || after.previewStale ||
-          after.continuity !== continuity || after.freeBoundary !== freeBoundary || this.strip !== strip ||
+          after.continuity !== continuity || after.freeBoundary !== freeBoundary || after.planeTangency !== draft.planeTangency || this.strip !== strip ||
           (strip ? (strip.frames[strip.at] !== stripResult || !stripResult) :
-            (currentQueue.current?.revision !== stamp.requestId || currentQueue.validRevision !== stamp.requestId)) ||
+            (draft.planeTangency ? this.g1DraftIdentity?.requestId !== stamp.requestId :
+              currentQueue.current?.revision !== stamp.requestId || currentQueue.validRevision !== stamp.requestId)) ||
           this.notes.length || this.placingNote || this.gesture !== 'idle')
         throw new Error('La bozza è cambiata durante l’esportazione STEP.')
       const resultValid = stripResult ? stripResult.preview.valid : (result as Preview).valid
@@ -1086,25 +1158,37 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const after = this.draft.getSnapshot()
       if (applied || before !== after) this.draftEpoch++
       if (before.committedNet !== after.committedNet || before.continuity !== after.continuity ||
-          before.freeBoundary !== after.freeBoundary || !sameArray(before.locks, after.locks)) this.historyRevision++
+          before.freeBoundary !== after.freeBoundary || before.planeTangency !== after.planeTangency ||
+          !sameArray(before.locks, after.locks)) this.historyRevision++
       this.mutating = false
       if (!this.disposed) { this.refresh(); this.resolveNotes() }
     }
   }
   private refresh(): void {
     const d: SurfaceDraftSnapshot = this.draft.getSnapshot()
+    if (this.g1Basis && (this.g1Basis.selectionEpoch !== this.selectionEpoch || this.g1Basis.refinements !== d.refinements)) {
+      this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null
+    }
+    // The logical G1 draft token stays stable when export republishes the same
+    // geometry with a new CAD note witness. A frozen Apply ticket uses this token.
+    if (d.planeTangency && d.net) {
+      if (this.g1DraftIdentity?.net !== d.net || this.g1DraftIdentity.constraint !== d.planeTangency)
+        this.g1DraftIdentity = { net: d.net, constraint: d.planeTangency, requestId: ++this.g1ValidationSerial }
+    } else this.g1DraftIdentity = null
     const current: DraftStamp = Object.freeze({ sessionId: this.context.sessionId, sourceEpoch: this.source.sourceEpoch,
       selectionEpoch: this.selectionEpoch, draftEpoch: this.draftEpoch })
     const queue = this.runtime.previews.getSnapshot()
     const strip = this.strip, stripResult = strip?.frames[strip.at] ?? null
     const cylinder=this.currentValidatedCylinder()
-    const stamp: PreviewStamp = Object.freeze({ ...current, requestId: strip ? (stripResult?.requestId ?? 0) : (d.cylinderSession!==null ? (cylinder?.requestId ?? 0) : (queue.current?.revision ?? 0)) })
+    const stamp: PreviewStamp = Object.freeze({ ...current, requestId: strip ? (stripResult?.requestId ?? 0) : (d.cylinderSession!==null ? (cylinder?.requestId ?? 0) : d.planeTangency ? (this.g1DraftIdentity?.requestId ?? 0) : (queue.current?.revision ?? 0)) })
     const geometryValidation = !d.net ? { kind: 'none' as const } :
       (d.calculating || this.busy || this.placingNote || this.gesture === 'strip') ? { kind: 'pending' as const, wanted: stamp } :
       strip?.error ? { kind: 'invalid' as const, stamp, message: strip.error } :
       strip ? (stripResult ? { kind: 'valid' as const, stamp } : { kind: 'pending' as const, wanted: stamp }) :
       d.cylinderSession!==null ? (cylinder ? {kind:'valid' as const,stamp} : {kind:'pending' as const,wanted:stamp}) :
-      d.validNet === d.net && !d.previewStale && d.preview?.valid && queue.validRevision === queue.current?.revision
+      d.validNet === d.net && !d.previewStale && d.preview?.valid &&
+        (d.planeTangency ? Number.isSafeInteger(d.preview.previewRevision) :
+          !!queue.current && queue.validRevision === queue.current.revision)
         ? { kind: 'valid' as const, stamp } :
         d.error ? { kind: 'invalid' as const, stamp, message: d.error } : { kind: 'pending' as const, wanted: stamp }
     const annotatedCopyAvailable = this.supportsAnnotatedCopy()
@@ -1122,11 +1206,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       !!(d.net && original && !d.canUndo && JSON.stringify(d.net.poles) !== JSON.stringify(original.poles))
     let cached = this.lockCache
     if (!cached || cached.net !== d.net || cached.locks !== d.locks || cached.trim !== d.trimLocks ||
-        cached.continuity !== d.continuity || cached.free !== d.freeBoundary) {
-      const locks = new Set([...d.locks, ...d.trimLocks])
+        cached.continuity !== d.continuity || cached.free !== d.freeBoundary || cached.plane !== d.planeTangency) {
+      const locks = new Set([...d.locks, ...d.trimLocks, ...(d.planeTangency?.lockedPoles ?? [])])
       cached = { net: d.net, locks: d.locks, trim: d.trimLocks, continuity: d.continuity, free: d.freeBoundary,
+        plane: d.planeTangency,
         value: Object.freeze(d.net ? d.net.poles.flatMap((_,i) =>
-          locks.has(i) || (d.cylinderSession !== null ? !(Math.floor(i/d.net!.nv) === 3 && i%d.net!.nv >= 2 && i%d.net!.nv <= d.net!.nv-3) : (!d.freeBoundary && boundaryLocked(d.net!,i,d.continuity))) ? [i] : []) : []) }
+          locks.has(i) || (d.cylinderSession !== null ? !(Math.floor(i/d.net!.nv) === 3 && i%d.net!.nv >= 2 && i%d.net!.nv <= d.net!.nv-3) : (!d.freeBoundary && boundaryLocked(d.net!,i,d.planeTangency ? 'G1' : d.continuity))) ? [i] : []) : []) }
       this.lockCache = cached
     }
     const locked = cached.value, face = this.faces[this.face]
@@ -1150,7 +1235,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       pending:this.stripPending || this.gesture === 'strip', canUndo, canRedo,
       addedArea:stripResult?.addedArea ?? null, totalArea:stripResult?.totalArea ?? null, hasResult:!!stripResult,
     }) : null
-    const canBeginStrip = !strip && !this.stripPending && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
+    const canBeginStrip = !d.planeTangency && !strip && !this.stripPending && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
       this.gesture === 'idle' && this.faces.length === 1 && !!face?.openSheet && d.preview?.faceMeshes.length === 1 &&
       validation.kind === 'valid'
     const canExportStep = !this.disposed && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
@@ -1166,9 +1251,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       canUndo, canRedo, undoLabel: canUndo ? (strip ? 'Annulla striscia' : 'Annulla modifica superficie') : null,
       redoLabel: canRedo ? (strip ? 'Ripeti striscia' : 'Ripeti modifica superficie') : null, historyRevision: this.historyRevision,
       draftNoteCount: this.notes.length, notesRevision:this.notesRevision, message })
+    const canLoadG1 = !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
+      this.gesture === 'idle' && !!d.net && d.net === d.committedNet && d.validNet === d.net &&
+      !d.calculating && !d.previewStale && !d.freeBoundary && !d.planeTangency && d.cylinderSession === null
     this.panel = Object.freeze({ faces: this.faces, face: this.face, net: d.net, selected: d.selected,
       locked, manualLocks: d.locks, continuity: d.continuity, freeBoundary: d.freeBoundary,
-      canFreeBoundary: !!face?.freeBoundary, canRefineNet: !!d.net && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
+      g1Candidates: this.g1Candidates, g1Choice: this.g1Choice, canLoadG1,
+      canApplyG1: canLoadG1 && !!this.g1Choice && this.g1Candidates.some(candidate => candidate.id === this.g1Choice),
+      planeTangencyActive: !!d.planeTangency,
+      canFreeBoundary: !!face?.freeBoundary && !d.planeTangency, canRefineNet: !!d.net && !d.planeTangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
         !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,
@@ -1233,6 +1324,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     try { this.draft.dispose() } catch (error) { failure ??= error }
     try { this.runtime.dispose() } catch (error) { failure ??= error }
     this.notes = Object.freeze([]); this.failedNoteSet = null; this.faces = Object.freeze([]); this.sourcePreview = null; this.symmetryCache = null
+    this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null; this.g1DraftIdentity = null
     this.face = -1; this.busy = false; this.gesture = 'idle'; this.gestureNet = null
     this.placingNote = false; this.message = 'Editor chiuso.'
     try { this.refresh() } catch (error) { failure ??= error }
