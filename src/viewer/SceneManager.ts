@@ -653,10 +653,9 @@ export class SceneManager {
    *  aside for both. While a marking gesture is live the grips never get a
    *  look-in: that one asked first. */
   private handlePointerDown(e: PointerEvent): boolean {
-    // Editor ownership also precedes the navigation gizmo and secondary pointers.
-    if (this.editorInput) return this.editorInput.pointerDown?.(e) ?? false
-    // The gizmo corner is a button before it is anything else: tested here
-    // rather than read off the hover, because a finger has no hover.
+    // The corner gizmo remains an explicit camera control even while an editor
+    // owns the CAD viewport. Test it before routing other presses to the editor;
+    // an accepted gizmo press stops the click machinery and cannot pick a pole.
     if (e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       const axis = this.gizmoAt(e.clientX, e.clientY)
       if (axis !== null) {
@@ -664,6 +663,9 @@ export class SceneManager {
         return true
       }
     }
+    // All non-gizmo gestures, including captured pole/cell drags, remain
+    // exclusive to the editor while its input lease is active.
+    if (this.editorInput) return this.editorInput.pointerDown?.(e) ?? false
     if (this.marking.pointerGesture() !== null) return this.marking.handlePointerDown(e)
     if (this.grips.handlePointerDown(e)) return true
     for (const layer of this.sortedLayers()) if (layer.pointerDown?.(e)) return true
