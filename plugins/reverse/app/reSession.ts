@@ -785,6 +785,8 @@ export function createReverseSession({
     }
     const feature: ImportFeature = { ...(record ? {surfaceEditHistory:record} : {}), ...(annotation?{annotationSource:{version:1 as const,featureUuid:crypto.randomUUID(),stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256,faceBrep:annotation.prepared.witnesses[0].brep}}:{}), id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
       file: { key: stepFileKey(text), name, size: text.length } }
+    if (record && record.source.file.key === feature.file.key)
+      throw new Error('La sorgente e il risultato condividono la stessa chiave STEP: history rifiutata.')
     if (before.stepFiles[feature.file.key] !== undefined && before.stepFiles[feature.file.key] !== text)
       throw new Error('Collisione della chiave STEP: importazione rifiutata.')
     if (record && before.stepFiles[record.source.file.key] !== undefined &&
