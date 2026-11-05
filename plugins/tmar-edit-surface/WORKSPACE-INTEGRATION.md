@@ -441,3 +441,14 @@ packaged desktop and broad QuickSurface parity qualification remain open.
 Evidence: `scanruler-edit-surface-qa/cylinder-snap-0a47Pi/result.json`, outside
 the source checkout. An initial sandboxed browser launch failed before UI work;
 the isolated run subsequently passed using the authorized local execution.
+
+An isolated source-host run with the nine-row net on the previously modified
+51-face STEP exercised two pointer gestures, validation, Undo/Redo, Zebra,
+note placement, Apply-copy and project reopen. Its functional report was PASS
+and the input SHA-256 remained
+`29eba285dc5ed8622c933fc6e2507a774f9342c2b542d538da3e8dd27f98fef4`.
+The test process nevertheless exited with code 1 because removal of its
+temporary Puppeteer profile returned EPERM; overall test cleanup is therefore
+not a pass. This is one derived STEP fixture, not general STEP, physical mouse,
+real scan or packaged-desktop qualification. The resulting volume discrepancy
+and unsampled self-intersection risk remain unresolved.
