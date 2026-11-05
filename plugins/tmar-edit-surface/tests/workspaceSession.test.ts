@@ -31,12 +31,12 @@ const preview = (revision: number) => ({ valid:true, previewRevision:revision, m
 const info = { index:0,kind:'plane',reason:null,converted:true,enriched:false,
   openSheet:false,freeBoundary:false,trimLocks:[],hiddenPoles:[] }
 async function flush() { for (let i=0;i<8;i++) await Promise.resolve() }
-async function setup(options: {sheet?:boolean;annotated?:boolean} = {}) {
+async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number} = {}) {
   vi.useFakeTimers()
   const worker = new FakeWorker(), runtime = new SurfaceRuntime(() => worker as unknown as Worker)
   const abort = new AbortController(), hash = 'a'.repeat(64)
   let sourceCurrent = true
-  const binding = { documentEpoch:'doc-1',sourceEpoch:3,bodyId:4,bodyKey:'body-key',
+  const binding = { documentEpoch:'doc-1',sourceEpoch:3,bodyId:options.bodyId??4,bodyKey:'body-key',
     buildVersion:5,kernelGeneration:6,frameRevision:7,stepSha256:hash,units:'mm',coordinateFrame:'part' }
   const owned = new Set<() => void>()
   const context = { apiVersion:1,sessionId:'session-1',source:binding,step:new Uint8Array([1,2,3]),
@@ -113,6 +113,13 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 afterEach(()=>vi.useRealTimers())
 
 describe('WorkspaceSurfaceSession',()=>{
+  it('accepts the fractional body IDs used by multi-part STEP imports',async()=>{
+    const t=await setup({bodyId:1.0009765625})
+    await selectFace(t)
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    expect(t.session.getSnapshot().current.sourceEpoch).toBe(t.binding.sourceEpoch)
+    await t.session.dispose('cancelled')
+  })
   it('prepares a history recipe only for the same live source and validated draft', async()=>{
     const t=await setup(); await selectFace(t)
     const marker={version:2,source:{bodyId:t.binding.bodyKey}} as never

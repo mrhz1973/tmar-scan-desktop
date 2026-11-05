@@ -249,7 +249,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         context.capabilities.apiVersion !== 1 || !context.capabilities.commitKinds.includes('cad-copy') ||
         context.source?.units !== 'mm' || context.source.coordinateFrame !== 'part' ||
         !context.source.documentEpoch || !context.source.bodyKey ||
-        !Number.isSafeInteger(context.source.bodyId) || context.source.bodyId < 0 ||
+        !Number.isFinite(context.source.bodyId) || context.source.bodyId <= 0 ||
         ![context.source.sourceEpoch, context.source.buildVersion, context.source.kernelGeneration, context.source.frameRevision]
           .every((value: number) => Number.isSafeInteger(value) && value >= 0) ||
         !/^[a-f0-9]{64}$/i.test(context.source.stepSha256) ||

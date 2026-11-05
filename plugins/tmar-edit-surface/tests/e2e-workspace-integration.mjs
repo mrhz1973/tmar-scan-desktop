@@ -92,7 +92,14 @@ try {
   if(chooser){
     const id=await page.evaluate(()=>String(window.surfaceQa.id))
     await page.select('[data-test=surface-source-body]',id)
+    await page.waitForFunction(()=>[...document.querySelectorAll('[role=dialog][aria-label="Scegli corpo CAD"] button')].some(b=>b.textContent.trim()==='Continua'&&!b.disabled))
     await page.evaluate(()=>[...document.querySelectorAll('[role=dialog][aria-label="Scegli corpo CAD"] button')].find(b=>b.textContent.trim()==='Continua').click())
+    await page.waitForFunction(async()=>{
+      const {useStore}=await import('/src/state/store.ts')
+      return !!document.querySelector('[data-test=workspace-surface-parameters]') || !!useStore.getState().errorText
+    },{timeout:120000})
+    const error=await page.evaluate(async()=>{const {useStore}=await import('/src/state/store.ts');return useStore.getState().errorText})
+    if(error)throw Error(`Apertura Edit Surface rifiutata: ${error}`)
   }
   await page.waitForSelector('[data-test=workspace-surface-parameters]', { timeout: 120000 })
   const entered = await page.evaluate(() => {
