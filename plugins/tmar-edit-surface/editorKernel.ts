@@ -91,6 +91,8 @@ export class SurfaceEditorKernel {
   private editRecord: RecordSpan | null = null
   private solids = 0
   private revision = 0
+  // Anchor identity follows the logical source/face selection, not net preparation.
+  private anchorSelectionRevision = 0
   private previewRevision = 0
   private validatedFace: ShapeHandle | null = null
   private validatedSheetBrep: string | null = null
@@ -285,6 +287,14 @@ export class SurfaceEditorKernel {
     }
   }
   select(index: number, refinements: readonly KnotInsertion[] = []) {
+    return this.prepareSelection(index, refinements, false)
+  }
+  /** Reprepare the active face without invalidating its UV anchors. Switching
+   * face still starts a new logical selection; failed preparation commits neither. */
+  selectRefined(index: number, refinements: readonly KnotInsertion[] = []) {
+    return this.prepareSelection(index, refinements, true)
+  }
+  private prepareSelection(index: number, refinements: readonly KnotInsertion[], preserveAnchors: boolean) {
     const info = this.netFor(index, refinements), net = info.net, record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
     if (record.kind === 1) {
@@ -314,6 +324,7 @@ export class SurfaceEditorKernel {
     }
     this.releasePreviewFace()
     this.revision++
+    if (!preserveAnchors || this.chosen !== index) this.anchorSelectionRevision++
     this.chosen = index; this.originalNet = structuredClone(net); this.editBrep = text; this.editRecord = editRecord
     this.refinements = structuredClone(refinements) as KnotInsertion[]
     this.infos[index] = { ...this.infos[index], trimLocks: info.trimLocks, hiddenPoles: info.hiddenPoles }
@@ -439,12 +450,12 @@ export class SurfaceEditorKernel {
   }
   finalFaceWitness(previewRevision: number) {
     const face = this.noteFace(previewRevision)
-    return { face: this.chosen, selectionRevision: this.revision, previewRevision,
+    return { face: this.chosen, selectionRevision: this.anchorSelectionRevision, previewRevision,
       faceBrep: this.kernel.toBREP(face) }
   }
   resolveAnchor(anchor: DraftAnchor, previewRevision: number) {
     const face = this.noteFace(previewRevision), k = this.kernel
-    if (anchor.face !== this.chosen || anchor.selectionRevision !== this.revision ||
+    if (anchor.face !== this.chosen || anchor.selectionRevision !== this.anchorSelectionRevision ||
         !Number.isFinite(anchor.u) || !Number.isFinite(anchor.v))
       throw new Error('Riferimento della nota estraneo alla faccia attiva.')
     const location = k.classifyPointOnFace(face,anchor.u,anchor.v)
@@ -457,7 +468,7 @@ export class SurfaceEditorKernel {
     const face = this.noteFace(previewRevision)
     if (point.length !== 3 || !point.every(Number.isFinite)) throw new Error('Punto della nota non valido.')
     const uv = this.kernel.uvFromPoint(face,{x:point[0],y:point[1],z:point[2]})
-    const anchor = { face:this.chosen, selectionRevision:this.revision, u:uv.u, v:uv.v }
+    const anchor = { face:this.chosen, selectionRevision:this.anchorSelectionRevision, u:uv.u, v:uv.v }
     const placement = this.resolveAnchor(anchor,previewRevision)
     // A visible tessellated triangle is only the pick seed; reject unrelated
     // geometry instead of silently taking the nearest face across the part.
@@ -540,6 +551,6 @@ export class SurfaceEditorKernel {
       return { ...preview, volume, maxBoundaryError, minimumNormalDot, step, previewRevision: ++this.previewRevision }
     } finally { fs.forEach(f => k.release(f)); k.release(edited) }
   }
-  clear() { this.releasePreviewFace(); this.revision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null; this.refinements = [] }
+  clear() { this.releasePreviewFace(); this.revision++; this.anchorSelectionRevision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null; this.refinements = [] }
   dispose() { this.clear(); if (this.ownsKernel) this.kernel[Symbol.dispose]() }
 }

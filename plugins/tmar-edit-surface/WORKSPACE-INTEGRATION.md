@@ -473,10 +473,19 @@ Follow-up: the shared workspace now exposes U, V and combined knot-span
 refinement for supported clamped, nonperiodic faces. Refinement retains the
 current deformed surface; Undo/Redo restore the corresponding baseline, trim
 locks and hidden controls, with worker selection tied to each preview. Manual
-locks and draft notes must currently be cleared first. Experimental cylinders
+locks must currently be cleared first. Experimental cylinders
 are excluded from this command. An isolated source-host UI run refined both
 directions, exercised Undo/Redo and edited a pole, then applied and reimported
 a CAD copy. It passed on a synthetic box and on a planar face of the 51-face
 real-derived STEP (`scanruler-edit-surface-qa/run-Nej6YC/result.json`), whose
 input hash remained unchanged. This does not qualify all trims, real scans,
 packaged desktop, physical input, QS parity or global self-intersection.
+
+Notes may remain on the same selected face while refining. Logical anchor
+identity survives exact re-preparation while operational and preview revisions
+still advance; explicit face selection or reopening a source invalidates old
+anchors. A synthetic-box source-host UI run with Zebra active verified note
+identity and position through refinement, Undo/Redo and a subsequent edit;
+see `scanruler-edit-surface-qa/run-rGy4Yn/result.json`. It removed the note
+before Apply, so this run does not independently qualify annotated-copy
+persistence after refinement. Physical input and packaged desktop remain open.

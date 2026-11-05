@@ -43,7 +43,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
         case 'select': resetCylinder(); selectionKey=null; result = editor.select(req.face); selectionKey=JSON.stringify({face:req.face,refinements:[]}); break
         case 'selectRefined': {
           resetCylinder(); selectionKey=null
-          const net=editor.select(req.face,req.refinements), info=editor.infos[req.face]
+          const net=editor.selectRefined(req.face,req.refinements), info=editor.infos[req.face]
           selectionKey=JSON.stringify({face:req.face,refinements:req.refinements})
           result={net,trimLocks:info.trimLocks,hiddenPoles:info.hiddenPoles}
           break
@@ -55,7 +55,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
         case 'noteResolve': result = editor.resolveAnchor(req.anchor,req.previewRevision); break
         case 'evaluate': {
           if(req.selection && selectionKey!==JSON.stringify(req.selection)) {
-            selectionKey=null; editor.select(req.selection.face,req.selection.refinements); selectionKey=JSON.stringify(req.selection)
+            selectionKey=null; editor.selectRefined(req.selection.face,req.selection.refinements); selectionKey=JSON.stringify(req.selection)
           }
           result = editor.evaluate(req.net, req.continuity, req.exportStep, req.freeBoundary); break
         }
@@ -87,7 +87,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
         }
         case 'createRecipe': {
           if(req.selection && selectionKey!==JSON.stringify(req.selection)) {
-            selectionKey=null; editor.select(req.selection.face,req.selection.refinements); selectionKey=JSON.stringify(req.selection)
+            selectionKey=null; editor.selectRefined(req.selection.face,req.selection.refinements); selectionKey=JSON.stringify(req.selection)
           }
           result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.freeBoundary); break
         }

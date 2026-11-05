@@ -1169,7 +1169,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.panel = Object.freeze({ faces: this.faces, face: this.face, net: d.net, selected: d.selected,
       locked, manualLocks: d.locks, continuity: d.continuity, freeBoundary: d.freeBoundary,
       canFreeBoundary: !!face?.freeBoundary, canRefineNet: !!d.net && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
-        !d.locks.length && !this.busy && !this.frozen && !this.notes.length && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
+        !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,
       dragMode: this.dragMode, axis: this.axis, dragStrength: this.dragStrength, selectionMode: this.selectionMode,

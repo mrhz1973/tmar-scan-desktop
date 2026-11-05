@@ -477,10 +477,25 @@ try {
     const note = await page.evaluate(() => {
       const s = window.surfaceQa.useWorkspaceEditor.getState(), v = s.controller.getViewState()
       return { count: s.snapshot.draftNoteCount, text: s.controller.getPanelState().notes[0]?.text,
-        pins: v.notePins.length, blocked: document.querySelector('[data-test=workspace-editor-apply]').disabled }
+        pins: v.notePins.length, annotated: s.controller.getPanelState().annotatedCopyAvailable,
+        blocked: document.querySelector('[data-test=workspace-editor-apply]').disabled }
     })
-    check(note.count === 1 && note.text === 'Nota durante Zebra' && note.pins === 1 && note.blocked,
-      'note text and resolved pin coexist with Zebra and prevent an unannotated Apply')
+    check(note.count === 1 && note.text === 'Nota durante Zebra' && note.pins === 1 && (note.annotated || note.blocked),
+      'note text and resolved pin coexist with Zebra; plain Apply is blocked where annotations are unavailable')
+    if (process.env.TEST_REFINE_NOTES === '1') {
+      const before=await page.evaluate(() => structuredClone(window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().notes[0]))
+      const waitResolved=() => page.waitForFunction(() => {
+        const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller.getPanelState(),v=s.controller.getViewState()
+        return s.snapshot?.validation.kind==='valid' && !p.busy && !p.calculating && p.notes[0]?.revision===v.preview?.previewRevision && v.notePins.length===1
+      },{timeout:120000})
+      await page.waitForSelector('[data-test=surface-refine-both]:enabled',{timeout:60000})
+      await page.click('[data-test=surface-refine-both]'); await waitResolved()
+      await page.click('[data-test=surface-undo]'); await waitResolved()
+      await page.click('[data-test=surface-redo]'); await waitResolved()
+      const after=await page.evaluate(() => window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().notes[0])
+      check(before.id===after.id && before.text===after.text && Math.hypot(...before.at.map((v,i)=>v-after.at[i]))<1e-6,
+        'note identity and position survive exact refinement and Undo/Redo')
+    }
     await page.screenshot({ path: join(out, 'zebra-note.png') })
     await page.select('[data-test=surface-drag-mode]', 'local')
     await page.click('[data-test=surface-axis-2]')
