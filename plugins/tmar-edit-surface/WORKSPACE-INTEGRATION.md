@@ -498,3 +498,13 @@ UUID, text, verified face binding and normal were retained. Evidence:
 `scanruler-edit-surface-qa/annotated-edit-hR1mUf/result.json`. This qualifies
 only that synthetic fixture and source host, not a production STEP, physical
 input, desktop package or full QuickSurface equivalence.
+
+Experimental G1 building blocks: a topology helper enumerates certain natural
+straight edges with an adjacent planar face, using OCCT shape identity. A
+separate solver projects the interior pole row toward that plane while
+protecting the boundary and refusing conflicting locks or degenerate edges.
+The solver currently accepts a single along-edge span; its remaining surface
+checks are sampled and it explicitly does not certify global G1. The helpers
+are not connected to the worker, UI, history or recipe and do not provide a
+user-facing tangency operation. OCCT/STEP tests cover synthetic examples only;
+curved neighbors, general trims and multi-span edges remain open.
