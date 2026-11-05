@@ -7,6 +7,7 @@ import type { StripMove } from './sheetExtension'
 import { previewPreparedCylinder } from './cylinderPreview'
 import { evaluatePreparedCylinder } from './cylinderEvaluation'
 import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
+import { readRecipe } from './recipe'
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectRefined'; face: number; refinements: KnotInsertion[] }
@@ -114,8 +115,19 @@ self.onmessage = (event: MessageEvent<Request>) => {
           }
           result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.freeBoundary); break
         }
-        case 'restoreRecipe': resetCylinder(); selectionKey=null; result = await editor.restoreRecipe(req.step, req.recipe, req.bodyId); break
-        case 'replayRecipe': resetCylinder(); selectionKey=null; result = await editor.replayRecipe(req.step, req.recipe, req.bodyId); break
+        case 'restoreRecipe': {
+          // The kernel validates in isolation. A refusal must retain the active
+          // cylinder, selection key, G1 registration and note witness together.
+          const recipe = readRecipe(req.recipe)
+          const restored = await editor.restoreRecipe(req.step, recipe, req.bodyId)
+          resetCylinder()
+          selectionKey=JSON.stringify({face:recipe.faceIndex,refinements:recipe.version===4?recipe.refinements:[]})
+          result = restored
+          break
+        }
+        // Replay owns a temporary kernel editor and never replaces the active
+        // session, on success or failure. Keep its worker metadata unchanged.
+        case 'replayRecipe': result = await editor.replayRecipe(req.step, req.recipe, req.bodyId); break
         default: throw new Error('Comando Edit Surface non supportato.')
       }
       self.postMessage({ id: req.id, result })
