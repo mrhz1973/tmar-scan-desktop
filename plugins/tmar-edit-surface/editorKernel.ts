@@ -11,9 +11,33 @@ import { prepareCylinder } from './cylinderPreparation'
 import { assertSimpleCylinderSource } from './cylinderSource'
 import { listG1SupportCandidates, resolveG1SupportCandidate as resolveSupport, type G1SourceStamp, type G1SupportCandidate } from './g1SupportTopology'
 import { proposePlaneTangency, validatePlaneTangencyResult, validatePlaneTangencyConstraint, type NaturalEdge, type PlaneTangencyRequest, type PlaneTangencyValidation } from './planeTangency'
+import { listCompatibleCurvedSupportCandidates, resolveCompatibleCurvedSupportCandidate, type CompatibleCurvedSupportCandidate, type ResolvedCompatibleCurvedSupport } from './compatibleCurvedSupportTopology'
+import { proposeCompatibleCurvedTangency, validateCompatibleCurvedTangencyResult, type CompatibleCurvedTangencyRequest, type CompatibleCurvedTangencyValidation } from './compatibleCurvedTangency'
 
 export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[]; experimentalCylinder?: boolean }
 export interface G1SupportCandidates { stamp: G1SourceStamp; candidates: G1SupportCandidate[] }
+export interface G1CurvedSupportCandidates { stamp: G1SourceStamp; candidates: CompatibleCurvedSupportCandidate[] }
+export interface G1CurvedProposalRequest {
+  net: Net
+  choice: CompatibleCurvedSupportCandidate
+  lockedPoles?: readonly number[]
+  scale?: number
+  distanceTolerance?: number
+  derivativeTolerance?: number
+  exportStep?: boolean
+}
+export interface G1CurvedValidationRequest extends G1CurvedProposalRequest { baseNet: Net }
+export interface G1CurvedResult {
+  net: Net
+  changedIndices: number[]
+  choice: CompatibleCurvedSupportCandidate
+  stamp: G1SourceStamp
+  revisions: { edit: number; preview: number; anchorSelection: number }
+  validation: CompatibleCurvedTangencyValidation
+  /** Isolated result: deliberately has no interactive previewRevision. */
+  preview: Preview
+  step?: string
+}
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 export interface G1PlaneProposalRequest {
@@ -411,6 +435,142 @@ export class SurfaceEditorKernel {
         stamp.selectionRevision !== this.g1SelectionRevision || stamp.faceIndex !== this.g1Selected)
       throw new Error('Scelta del supporto scaduta.')
     return resolveSupport(this.kernel, this.source, stamp, choice)
+  }
+  /** Curved candidates are a separate contract; no planar choice is widened. */
+  async g1CurvedSupportCandidates(): Promise<G1CurvedSupportCandidates> {
+    if (!this.g1SourceReady || this.source === null || this.g1Selected < 0 || !this.originalNet)
+      throw new Error('Seleziona prima una faccia per i supporti curvi G1.')
+    const sourceRevision = this.g1SourceRevision, selectionRevision = this.g1SelectionRevision, faceIndex = this.g1Selected, brep = this.brep
+    const sourceId = 'brep-sha256:' + await (this.g1Fingerprint ??= sha256(brep))
+    const stamp: G1SourceStamp = { sourceId, sourceRevision, selectionRevision, faceIndex }
+    const current = () => this.g1SourceReady && this.source !== null && this.brep === brep &&
+      this.g1SourceRevision === sourceRevision && this.g1SelectionRevision === selectionRevision && this.g1Selected === faceIndex
+    if (!current()) throw new Error('Elenco dei supporti curvi G1 scaduto.')
+    const candidates = await listCompatibleCurvedSupportCandidates(this.kernel, brep, stamp)
+    if (!current()) throw new Error('Elenco dei supporti curvi G1 scaduto.')
+    return { stamp, candidates }
+  }
+  async resolveG1CurvedSupportCandidate(choice: CompatibleCurvedSupportCandidate): Promise<ResolvedCompatibleCurvedSupport> {
+    // Own client fields before the first digest await, just as the planar path.
+    const requested = structuredClone(choice), brep = this.brep
+    const { stamp } = await this.g1CurvedSupportCandidates()
+    const result = await resolveCompatibleCurvedSupportCandidate(this.kernel, brep, stamp, requested)
+    if (!this.g1SourceReady || this.source === null || this.brep !== brep || this.g1Selected !== stamp.faceIndex ||
+        this.g1SourceRevision !== stamp.sourceRevision || this.g1SelectionRevision !== stamp.selectionRevision)
+      throw new Error('Scelta del supporto curvo G1 scaduta.')
+    return result
+  }
+  async proposeG1CurvedTangency(request: G1CurvedProposalRequest): Promise<G1CurvedResult> {
+    return this.curvedTangency(request, true)
+  }
+  async validateG1CurvedTangency(request: G1CurvedValidationRequest): Promise<G1CurvedResult> {
+    return this.curvedTangency(request, false)
+  }
+  private sameCurvedNet(a: Net, b: Net, readback = false): boolean {
+    const same = (x: readonly number[], y: readonly number[]) => x.length === y.length && x.every((v, i) => Object.is(v, y[i]))
+    return a.nu === b.nu && a.nv === b.nv && a.du === b.du && a.dv === b.dv && a.poles.length === b.poles.length &&
+      same(a.ku, b.ku) && same(a.kv, b.kv) && same(a.mu, b.mu) && same(a.mv, b.mv) && same(a.weights, b.weights) &&
+      same(a.rational, b.rational) && same(a.periodic ?? [0, 0], b.periodic ?? [0, 0]) &&
+      a.poles.every((p, i) => p.length === b.poles[i].length && p.every((x, d) => readback
+        ? Number.isFinite(x) && Number.isFinite(b.poles[i][d]) && Math.abs(x - b.poles[i][d]) <= 1e-8 : Object.is(x, b.poles[i][d])))
+  }
+  /** Recheck the actual serialized pair. This does not reuse client normals or
+   * a plane proxy for a support whose normal varies along the common edge. */
+  private async checkCurvedTangencyReadback(shape: ShapeHandle, expected: Net, resolved: ResolvedCompatibleCurvedSupport,
+    request: CompatibleCurvedTangencyRequest): Promise<void> {
+    const k = this.kernel, choice = resolved.candidate
+    this.checkUnselectedTangencyFaces(shape)
+    const text = k.toBREP(shape), stamp = { ...choice.stamp, sourceId: 'brep-sha256:' + await sha256(text) }
+    const candidates = (await listCompatibleCurvedSupportCandidates(k, text, stamp)).filter(c =>
+      c.supportFaceIndex === choice.supportFaceIndex && c.edgeIndex === choice.edgeIndex && c.side === choice.side &&
+      c.supportSide === choice.supportSide && c.reverseSupport === choice.reverseSupport)
+    if (candidates.length !== 1) throw new Error('Adiacenza naturale del CAD G1 curvo finale diversa o ambigua.')
+    const actual = await resolveCompatibleCurvedSupportCandidate(k, text, stamp, candidates[0])
+    if (!this.sameCurvedNet(expected, actual.selectedNet, true) || !this.sameCurvedNet(resolved.supportNet, actual.supportNet, true))
+      throw new Error('Reticolo CAD finale o supporto curvo diverso dai coefficienti verificati.')
+    // Protected coefficients were already checked exactly BEFORE serialization.
+    // Reassess the read-back pair itself, with its own coefficients as baseline.
+    validateCompatibleCurvedTangencyResult({ ...request, net: actual.selectedNet, supportNet: actual.supportNet,
+      lockIndices: [], preserveTangentEdges: [] }, actual.selectedNet)
+    const faces = k.getSubShapes(shape, 'face')
+    try {
+      const a = faces[choice.stamp.faceIndex], b = faces[choice.supportFaceIndex]
+      if (a === undefined || b === undefined) throw new Error('Coppia di facce G1 curve non disponibile.')
+      const at = (n: Net, side: CompatibleCurvedSupportCandidate['side'], t: number): [number, number] => {
+        const u0 = n.ku[0], u1 = n.ku.at(-1)!, v0 = n.kv[0], v1 = n.kv.at(-1)!
+        return [side === 'uMin' ? u0 : side === 'uMax' ? u1 : u0 + (u1 - u0) * t,
+          side === 'vMin' ? v0 : side === 'vMax' ? v1 : v0 + (v1 - v0) * t]
+      }
+      for (let i = 0; i <= 32; i++) {
+        const t = i / 32, [u, v] = at(actual.selectedNet, choice.side, t), [s, w] = at(actual.supportNet, choice.supportSide, choice.reverseSupport ? 1 - t : t)
+        if (!['in', 'on'].includes(k.classifyPointOnFace(a, u, v)) || !['in', 'on'].includes(k.classifyPointOnFace(b, s, w)))
+          throw new Error('Bordo G1 curvo finale fuori dal trim CAD.')
+        const p = tuple(k.pointOnSurface(a, u, v)), q = tuple(k.pointOnSurface(b, s, w))
+        if (!p.every(Number.isFinite) || !q.every(Number.isFinite)) throw new Error('Coordinate CAD del bordo G1 curvo non finite.')
+        const na = orientedSurfaceNormal(k, a, u, v), nb = orientedSurfaceNormal(k, b, s, w)
+        const sin = Math.hypot(na[1] * nb[2] - na[2] * nb[1], na[2] * nb[0] - na[0] * nb[2], na[0] * nb[1] - na[1] * nb[0])
+        const gap = dist(p, q), dot = na.reduce((sum, x, d) => sum + x * nb[d], 0)
+        if (!Number.isFinite(gap) || !Number.isFinite(sin) || !Number.isFinite(dot) ||
+            gap > (request.distanceTolerance ?? 1e-8) || sin > 1e-7 || dot <= 0)
+          throw new Error('Posizione, tangenza o orientazione del bordo CAD curvo finale non verificata.')
+      }
+    } finally { faces.forEach(f => k.release(f)) }
+  }
+  private async curvedTangency(input: G1CurvedProposalRequest | G1CurvedValidationRequest, propose: boolean): Promise<G1CurvedResult> {
+    const request = structuredClone(input), edit = this.revision, preview = this.previewRevision, anchor = this.anchorSelectionRevision
+    const source = this.g1SourceRevision, selection = this.g1SelectionRevision, brep = this.brep
+    const fence = () => {
+      if (!this.g1SourceReady || this.source === null || this.revision !== edit || this.previewRevision !== preview ||
+          this.anchorSelectionRevision !== anchor || this.g1SourceRevision !== source || this.g1SelectionRevision !== selection || this.brep !== brep)
+        throw new Error('Scelta del supporto curvo G1 scaduta durante la verifica.')
+    }
+    const resolved = await this.resolveG1CurvedSupportCandidate(request.choice)
+    fence()
+    if (!this.originalNet || !this.editRecord || this.chosen !== resolved.candidate.stamp.faceIndex ||
+        !this.sameCurvedNet(this.originalNet, resolved.selectedNet))
+      throw new Error('La preparazione selezionata non coincide con il reticolo nativo certificato; nessun raffinamento implicito.')
+    if (request.exportStep !== undefined && typeof request.exportStep !== 'boolean') throw new Error('Opzione STEP non valida.')
+    const base = propose ? request.net : (request as G1CurvedValidationRequest).baseNet
+    const info = this.netFor(this.chosen, this.refinements)
+    if (!info.natural) throw new Error('La tangenza curva richiede una faccia naturale senza ritagli.')
+    const locked = request.lockedPoles ?? []
+    if (!Array.isArray(locked) || Array.from(locked).some(i => !Number.isSafeInteger(i) || i < 0 || i >= base.poles.length))
+      throw new Error('Blocco di un polo inesistente.')
+    const edge = ({ uMin: 'U0', uMax: 'U1', vMin: 'V0', vMax: 'V1' } as const)[resolved.candidate.side]
+    const supportEdge = ({ uMin: 'U0', uMax: 'U1', vMin: 'V0', vMax: 'V1' } as const)[resolved.candidate.supportSide]
+    const pure: CompatibleCurvedTangencyRequest = { net: base, supportNet: resolved.supportNet, edge, supportEdge,
+      reverseSupport: resolved.candidate.reverseSupport, scale: request.scale,
+      lockIndices: [...new Set([...locked, ...info.trimLocks, ...info.hiddenPoles])],
+      preserveTangentEdges: (['U0', 'U1', 'V0', 'V1'] as NaturalEdge[]).filter(e => e !== edge),
+      distanceTolerance: request.distanceTolerance, derivativeTolerance: request.derivativeTolerance }
+    const isolated = new SurfaceEditorKernel(this.kernel), k = this.kernel
+    try {
+      isolated.source = k.fromBREP(brep); isolated.faces = k.getSubShapes(isolated.source, 'face')
+      isolated.solids = this.solids; isolated.infos = structuredClone(this.infos); isolated.chosen = this.chosen
+      isolated.originalNet = structuredClone(this.originalNet); isolated.editBrep = this.editBrep; isolated.editRecord = structuredClone(this.editRecord)
+      isolated.evaluate(base, 'G0')
+      const net = propose ? proposeCompatibleCurvedTangency(pure).net : request.net
+      const validation = validateCompatibleCurvedTangencyResult(pure, net)
+      // The curved prototype always qualifies the STEP roundtrip, even when
+      // the caller only asks for an isolated preview and no STEP payload.
+      const evaluated = isolated.evaluate(net, 'G0', true)
+      if (isolated.validatedFace === null) throw new Error('Faccia CAD G1 curva finale non determinata.')
+      const faceText = k.toBREP(isolated.validatedFace), faceHeaders = [...faceText.matchAll(/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/gm)]
+      const retained = faceHeaders.length === 1 ? surfaceTable(faceText)[Number(faceHeaders[0][1]) - 1]?.net : undefined
+      if (!retained || !this.sameCurvedNet(net, retained, true)) throw new Error('Faccia CAD G1 curva trattenuta diversa dai coefficienti verificati.')
+      validateCompatibleCurvedTangencyResult({ ...pure, net: retained, lockIndices: [], preserveTangentEdges: [] }, retained)
+      const rebuilt = k.fromBREP(replaceSurface(this.editBrep, this.editRecord, net))
+      try { await this.checkCurvedTangencyReadback(rebuilt, net, resolved, pure) } finally { k.release(rebuilt) }
+      fence()
+      if (typeof evaluated.step !== 'string' || !evaluated.step.trim()) throw new Error('STEP della proposta G1 curva non disponibile.')
+      const imported = k.importStep(evaluated.step)
+      try { await this.checkCurvedTangencyReadback(imported, net, resolved, pure) } finally { k.release(imported) }
+      fence()
+      const { step, previewRevision: _isolatedRevision, ...resultPreview } = evaluated
+      return { net: structuredClone(net), changedIndices: net.poles.flatMap((p, i) => p.some((x, d) => !Object.is(x, base.poles[i][d])) ? [i] : []),
+        choice: structuredClone(resolved.candidate), stamp: { ...resolved.candidate.stamp }, revisions: { edit, preview, anchorSelection: anchor },
+        validation, preview: resultPreview, step: request.exportStep ? step : undefined }
+    } finally { isolated.clear() }
   }
   /** Internal CAD prototype: never changes the interactive draft, preview, anchors
    * or recipes. All three other tangent rings are preserved relative to net.

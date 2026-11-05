@@ -143,4 +143,52 @@ describe('frozen BREP identification of compatible curved G1 supports',()=>{
       expect(k.toBREP(f.shell)).toBe(brep)
     }finally{f.dispose()}
   },60000)
+
+  it('refuses unsupported PC7 variants and partial ranges on controlled reads of an unchanged real STEP snapshot',async()=>{
+    const {listCompatibleCurvedSupportCandidates:list}=await import('../compatibleCurvedSupportTopology')
+    const f=await fixture(),{k}=f,source=k.importStep(f.step)
+    try{
+      const brep=k.toBREP(source),stamp=await sourceStamp(brep)
+      expect(await list(k,brep,stamp)).toHaveLength(1)
+      const pc7=/^7\s+0\s+0\s+1\s+2\s+2\s+([-+\deE.]+)\s+([-+\deE.]+)\s+([-+\deE.]+)\s+([-+\deE.]+)\s*\n\s*([-+\deE.]+)\s+2\s+([-+\deE.]+)\s+2\s*$/m
+      const mutations:{label:string;apply:(text:string)=>string}[]=[
+        {label:'degree2',apply:text=>text.replace(pc7,match=>match.replace(/^7\s+0\s+0\s+1/,'7 0 0 2'))},
+        {label:'rational',apply:text=>text.replace(pc7,match=>match.replace(/^7\s+0\s+0/,'7 1 0'))},
+        {label:'periodic',apply:text=>text.replace(pc7,match=>match.replace(/^7\s+0\s+0/,'7 0 1'))},
+        {label:'multispan',apply:text=>text.replace(pc7,match=>match.replace(/^7\s+0\s+0\s+1\s+2\s+2/,'7 0 0 1 3 3'))},
+        {label:'nonaxial',apply:text=>text.replace(pc7,(_m,x0:string,y0:string,x1:string,y1:string,a:string,b:string)=>{
+          const ax=Number(x0),ay=Number(y0),bx=Number(x1),by=Number(y1)
+          return `7 0 0 1 2 2 ${ax} ${ay} ${ax===bx?bx+1:bx} ${ay===by?by+1:by}\n ${a} 2 ${b} 2`
+        })},
+        {label:'partialrange',apply:text=>{
+          if(!pc7.test(text))return text
+          return text.replace(/^Ed\s*\n([^\n]*)\n([\s\S]*?)^0\s*$/gm,(_m,header:string,body:string)=>
+            'Ed\n'+header+'\n'+body.trim().split(/\r?\n/).map(line=>{
+              const tokens=line.trim().split(/\s+/)
+              if((tokens[0]==='1'&&tokens.length===5)||(tokens[0]==='2'&&tokens.length===6))tokens[tokens.length-2]=String(Number(tokens[tokens.length-2])+1)
+              return tokens.join(' ')
+            }).join('\n')+'\n0\n')
+        }},
+      ]
+      for(const mutation of mutations){
+        let changedReads=0
+        const fault=new Proxy(k,{get(target,key){
+          if(key==='toBREP')return(shape:ShapeHandle)=>{
+            const text=k.toBREP(shape)
+            if(!/^Ed\s*\n/m.test(text))return text
+            const changed=mutation.apply(text);if(changed!==text)changedReads++
+            return changed
+          }
+          const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value
+        }})
+        const rejected=await list(fault,brep,stamp).then(candidates=>candidates.length===0,()=>true)
+        expect(rejected,mutation.label+' must never produce a candidate').toBe(true)
+        expect(changedReads,mutation.label+' reached the PC7 read').toBeGreaterThan(0)
+        expect(k.toBREP(source)).toBe(brep)
+      }
+      expect(await list(k,brep,stamp)).toHaveLength(1)
+    }finally{k.release(source);f.dispose()}
+  },60000)
+
 })
+

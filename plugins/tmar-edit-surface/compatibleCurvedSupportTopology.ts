@@ -104,16 +104,23 @@ function parameterBudgetFor(n: Net, domain: NaturalPcurveWitness['domain']) {
   return { budget, derivativeSum }
 }
 
-interface Line2 { origin: [number, number]; direction: [number, number]; trims: [number, number][] }
+interface Line2 { kind: 'line'; origin: [number, number]; direction: [number, number]; trims: [number, number][] }
+interface Degree1Pcurve {
+  kind: 'degree1-bspline'
+  poles: [[number, number], [number, number]]
+  knots: [number, number]
+  trims: [number, number][]
+}
+type AxisPcurve = Line2 | Degree1Pcurve
 /** Deliberately bounded BREP V3 parser. Unsupported UV curves are refused,
  * never approximated by sampled projection. Trimmed lines retain their ranges. */
-function pcurves(text: string): Line2[] {
+function pcurves(text: string): AxisPcurve[] {
   const match = /^Curve2ds (\d+)\s*\n([\s\S]*?)^Curves /m.exec(text)
   if (!match) fail('tabella pcurve assente')
   const count = integer(match[1], 0, 100000), tokens = match[2].trim().split(/\s+/).filter(Boolean)
   let cursor = 0
   const take = () => { const t = tokens[cursor++]; if (t === undefined) fail('pcurve incompleta'); return t }
-  const curve = (depth = 0): Line2 => {
+  const curve = (depth = 0): AxisPcurve => {
     if (depth > 8) fail('pcurve annidata oltre il limite')
     const kind = integer(take(), 1, 9)
     if (kind === 8) {
@@ -121,8 +128,20 @@ function pcurves(text: string): Line2[] {
       if (!(last > first)) fail('intervallo della pcurve non valido')
       const line = curve(depth + 1); line.trims.push([first, last]); return line
     }
-    if (kind !== 1) fail('pcurve diversa da linea assiale o trimmed-line: certificazione non disponibile')
-    return { origin: [finite(take()), finite(take())], direction: [finite(take()), finite(take())], trims: [] }
+    if (kind === 7) {
+      // A clamped nonrational degree-1 curve with two poles and two knots
+      // is exactly the affine segment between its poles. No fit/conversion.
+      const rational = integer(take(), 0, 1), periodic = integer(take(), 0, 1), degree = integer(take(), 1, 25)
+      const poles = integer(take(), 2, 25000), knots = integer(take(), 2, 25000)
+      if (rational !== 0 || periodic !== 0 || degree !== 1 || poles !== 2 || knots !== 2)
+        fail('pcurve B-spline diversa dal segmento non razionale grado 1 a due poli/nodi')
+      const a: [number, number] = [finite(take()), finite(take())], b: [number, number] = [finite(take()), finite(take())]
+      const first = finite(take()), m0 = integer(take(), 1, 26), last = finite(take()), m1 = integer(take(), 1, 26)
+      if (!(last > first) || m0 !== 2 || m1 !== 2) fail('segmento pcurve B-spline non clamped o con nodi invalidi')
+      return { kind: 'degree1-bspline', poles: [a, b], knots: [first, last], trims: [] }
+    }
+    if (kind !== 1) fail('pcurve diversa da linea assiale o segmento B-spline certificabile')
+    return { kind: 'line', origin: [finite(take()), finite(take())], direction: [finite(take()), finite(take())], trims: [] }
   }
   const result = Array.from({ length: count }, () => curve())
   if (cursor !== tokens.length) fail('token inattesi nella tabella pcurve')
@@ -188,15 +207,40 @@ function linearPcurveSide(domain: NaturalPcurveWitness['domain'], parameterBudge
   const varying = axis === 0 ? 1 : 0
   const coordinate = input.origin[axis], ends = input.parameterRange.map(t =>
     add(scalar(input.origin[varying]), mul(scalar(input.direction[varying]), scalar(t))))
+  return endpointPcurveSide(domain, parameterBudget, axis, coordinate, ends as [I, I], input.direction[varying] > 0, input.parameterRange)
+}
+function endpointPcurveSide(domain: NaturalPcurveWitness['domain'], parameterBudget: number, axis: 0 | 1, coordinate: number,
+  ends: [I, I], increasing: boolean, range: [number, number]) {
   const low = axis === 0 ? domain[2] : domain[0], high = axis === 0 ? domain[3] : domain[1]
-  const increasing = input.direction[varying] > 0, first = ends[increasing ? 0 : 1], last = ends[increasing ? 1 : 0]
+  const first = ends[increasing ? 0 : 1], last = ends[increasing ? 1 : 0]
   const options = axis === 0 ? [0, 1] : [2, 3]
   const hits = options.filter(i => abs(sub(scalar(coordinate), scalar(domain[i]))) <= parameterBudget)
   const residual = Math.max(abs(sub(first, scalar(low))), abs(sub(last, scalar(high))),
     ...hits.map(i => abs(sub(scalar(coordinate), scalar(domain[i])))))
   if (hits.length !== 1 || residual > parameterBudget) fail('pcurve non copre esattamente un lato naturale entro il budget numerico')
   return { side: sides[hits[0]], direction: (increasing ? 1 : -1) as 1 | -1,
-    parameterRange: [...input.parameterRange] as [number, number], maxParameterResidual: residual }
+    parameterRange: [...range] as [number, number], maxParameterResidual: residual }
+}
+/** Pure parameter-domain guard also used by the CAD parser. Parameters T are
+ * arbitrary: neither a UV nor a model-space tolerance can relax containment. */
+export function assertCompleteDegree1PcurveDomain(knots: readonly [number, number], range: readonly [number, number],
+  trims: readonly (readonly [number, number])[] = []): void {
+  const interval = (a: readonly number[]) => Array.isArray(a) && a.length === 2 && Array.from(a).every(Number.isFinite) && a[1] > a[0]
+  if (!interval(knots) || !interval(range) || !Array.isArray(trims) || Array.from(trims).some(t => !t || !interval(t)))
+    fail('intervallo parametrico del segmento pcurve B-spline non valido')
+  if (!eq(range, knots)) fail('pcurve B-spline usata su un intervallo parziale: segmento completo richiesto')
+  if (trims.some(([a, b]) => range[0] < a || range[1] > b)) fail('intervallo del segmento pcurve B-spline oltre il trim')
+}
+function degree1PcurveSide(domain: NaturalPcurveWitness['domain'], parameterBudget: number, curve: Degree1Pcurve, range: [number, number]) {
+  assertCompleteDegree1PcurveDomain(curve.knots, range, curve.trims)
+  const [a, b] = curve.poles
+  const axis = Object.is(a[0], b[0]) && !Object.is(a[1], b[1]) ? 0 : Object.is(a[1], b[1]) && !Object.is(a[0], b[0]) ? 1 : -1
+  if (axis !== 0 && axis !== 1) fail('segmento pcurve B-spline non assiale o degenere')
+  const varying = axis === 0 ? 1 : 0
+  if (a[varying] === b[varying]) fail('segmento pcurve B-spline degenere')
+  // For the FULL degree-1 knot domain these are exact endpoint coefficients;
+  // avoid dividing knot spans or normalizing a nearly axial direction.
+  return endpointPcurveSide(domain, parameterBudget, axis, a[axis], [scalar(a[varying]), scalar(b[varying])], b[varying] > a[varying], range)
 }
 /** Pure arithmetic certificate used by the CAD path below. It establishes UV
  * coverage and a geometric error bound, NOT edge ownership or CAD validity. */
@@ -226,10 +270,11 @@ function naturalWitness(k: OcctKernel, face: ShapeHandle, faceIndex: number, edg
     const reps = data.reps.filter(rep => geometry[rep.surface - 1] && signature(geometry[rep.surface - 1]) === surfaceSignature)
     if (reps.length !== 1) fail('pcurve propria del bordo assente o non univoca')
     const rep = reps[0], line = lines[rep.curve - 1]
-    if (!line || line.trims.some(([a, b]) => rep.range[0] < a - parameterBudget || rep.range[1] > b + parameterBudget))
+    // B-spline wrappers are checked exactly in degree1PcurveSide below.
+    if (!line || (line.kind === 'line' && line.trims.some(([a, b]) => rep.range[0] < a - parameterBudget || rep.range[1] > b + parameterBudget)))
       fail('pcurve mancante o intervallo oltre il trim')
-    return { edgeIndex, ...linearPcurveSide(domain, parameterBudget, {
-      origin: line.origin, direction: line.direction, parameterRange: rep.range }) }
+    return { edgeIndex, ...(line.kind === 'line' ? linearPcurveSide(domain, parameterBudget, {
+      origin: line.origin, direction: line.direction, parameterRange: rep.range }) : degree1PcurveSide(domain, parameterBudget, line, rep.range)) }
   })
   if (new Set(found.map(x => x.side)).size !== 4) fail('quattro lati naturali distinti non comprovati')
   const maxGeometricDeviationBound = mul(scalar(Math.max(...found.map(side => side.maxParameterResidual))), scalar(derivativeSum))[1]
