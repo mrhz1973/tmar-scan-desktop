@@ -39,12 +39,19 @@ export function evaluatePreparedCylinder(k: OcctKernel, prepared: {brep:string;n
     const original=before[faceIndex],face=after[faceIndex],bounds=k.uvBounds(original)
     if(k.shapeOrientation(original)!==k.shapeOrientation(face)) throw new Error('Orientamento della faccia alterato.')
     auditCylinderSeam(k,face)
-    for(let i=0;i<=32;i++) for(let j=0;j<=16;j++) {
-      const u=bounds.uMin+(bounds.uMax-bounds.uMin)*i/32,v=bounds.vMin+(bounds.vMax-bounds.vMin)*j/16
+    // Retain the original sampling and also inspect each refined knot span.
+    // This remains a finite check, not a proof of global surface validity.
+    const vSamples=Array.from({length:17},(_,j)=>bounds.vMin+(bounds.vMax-bounds.vMin)*j/16)
+    for(let j=1;j<candidate.kv.length;j++) for(let s=0;s<=4;s++) {
+      const v=candidate.kv[j-1]+(candidate.kv[j]-candidate.kv[j-1])*s/4
+      if(v>bounds.vMin && v<bounds.vMax) vSamples.push(v)
+    }
+    for(let i=0;i<=32;i++) for(const v of vSamples) {
+      const u=bounds.uMin+(bounds.uMax-bounds.uMin)*i/32
       const p=k.pointOnSurface(original,u,v),q=k.pointOnSurface(face,u,v),a=k.surfaceNormal(original,u,v),b=k.surfaceNormal(face,u,v)
       const gap=Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z),dot=a.x*b.x+a.y*b.y+a.z*b.z
       if(!Number.isFinite(gap)||!Number.isFinite(dot)||dot<.05) throw new Error('Deformazione cilindrica troppo forte.')
-      if((i===0||i===32||j===0||j===16) && (gap>1e-6||dot<1-1e-8)) throw new Error('Bordo cilindrico o tangente alterata.')
+      if((i===0||i===32||v===bounds.vMin||v===bounds.vMax) && (gap>1e-6||dot<1-1e-8)) throw new Error('Bordo cilindrico o tangente alterata.')
     }
     // Check exact sections against the original boundary, as in the existing
     // planar editor. The finite edge samples do not prove no self-intersection.

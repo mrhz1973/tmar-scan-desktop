@@ -5,15 +5,15 @@ import { replaceSurface, surfaceTable } from '../brep'
 import { assertSmoothCylinderMove, canonicalizeCylinderGesture, moveSmoothCylinderPole, refineLinearPeriodicV } from '../periodic'
 import { localFrame } from '../localFrame'
 
-it('refines a periodic STEP cylinder in V without changing its support or protected boundaries', async () => {
+it.each([5, 9] as const)('refines a periodic STEP cylinder to %i V poles without changing its support or protected boundaries', async rows => {
   const e = await SurfaceEditorKernel.load(), k = e.kernel, cylinder = k.makeCylinder(10,20)
   const source = k.importStep(k.exportStep(cylinder)), converted = k.generalTransform(source,[1,0,0,0,0,1,0,0,0,0,1,0])
   let refined: ReturnType<typeof k.fromBREP> | undefined, edited: ReturnType<typeof k.fromBREP> | undefined, round: ReturnType<typeof k.importStep> | undefined
   try {
     const text = k.toBREP(converted), rec = surfaceTable(text).find(r => r.periodicNet)!, net = rec.periodicNet!
-    const snapshot = structuredClone(net), next = refineLinearPeriodicV(net)
+    const snapshot = structuredClone(net), next = refineLinearPeriodicV(net, rows)
     expect(net).toEqual(snapshot)
-    expect(next.periodic).toEqual([1,0]); expect(next.nv).toBe(5); expect(next.dv).toBe(3)
+    expect(next.periodic).toEqual([1,0]); expect(next.nv).toBe(rows); expect(next.dv).toBe(3)
     expect(() => refineLinearPeriodicV({ ...net, periodic: [0,1] })).toThrow()
     expect(() => refineLinearPeriodicV({ ...net, weights: net.weights.map(() => 0) })).toThrow()
     expect(() => refineLinearPeriodicV({ ...net, mu: [] })).toThrow()
@@ -46,7 +46,8 @@ it('refines a periodic STEP cylinder in V without changing its support or protec
       expect(interiorGap).toBeGreaterThan(0.01)
       // An isolated pole displacement can kink a quadratic double knot,
       // even though the seam, caps and BREP validity checks all pass.
-      const u=next.ku[1],v=(next.kv[0]+next.kv.at(-1)!)/2
+      // Row 2 has compact support after refinement; sample inside it.
+      const u=next.ku[1],v=next.kv[0]+(next.kv.at(-1)!-next.kv[0])/4
       const left=k.surfaceNormal(changed[0],u-1e-7,v),right=k.surfaceNormal(changed[0],u+1e-7,v)
       expect(left.x*right.x+left.y*right.y+left.z*right.z).toBeLessThan(1-1e-9)
       expect(localFrame(candidate,2*next.nv+2)).toBeNull()
@@ -107,7 +108,7 @@ it('refines a periodic STEP cylinder in V without changing its support or protec
       const rational=structuredClone(net)
       rational.weights=rational.weights.map((w,i)=>i%2 ? w*1.25 : w)
       const rationalBody=k.fromBREP(replaceSurface(text,rec,rational))
-      const rationalRefined=k.fromBREP(replaceSurface(text,rec,refineLinearPeriodicV(rational)))
+      const rationalRefined=k.fromBREP(replaceSurface(text,rec,refineLinearPeriodicV(rational, rows)))
       const rf=k.getSubShapes(rationalBody,'face'), rr=k.getSubShapes(rationalRefined,'face')
       try {
         for(let i=0;i<=16;i++) for(let j=0;j<=8;j++) {

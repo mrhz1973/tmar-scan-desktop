@@ -122,7 +122,7 @@ export function prepareCylinder(k: OcctKernel, source: ShapeHandle, index: numbe
       assertMatchedCylinderTolerances(k,source,converted)
       const support=exclusiveFaceSurface(text,faceText,convertedFaces.length)
       if(!support.periodicNet) throw new Error('Reticolo cilindrico ambiguo.')
-      const net=refineLinearPeriodicV(support.periodicNet,6)
+      const net=refineLinearPeriodicV(support.periodicNet,9)
       moveSmoothCylinderPole(net,[0,0,0]) // Reject unsupported weights/knot conventions before exposing the net.
       const brep=replaceSurface(text,support,net)
       refined=k.fromBREP(brep)

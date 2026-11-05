@@ -24,10 +24,10 @@ const { importStep, writeBinarySTL } = await import('meshstep')
 const { launchApp, loadScan } = await import('../../../scripts/e2e-lib.mjs')
 const kernel = await OcctKernel.init()
 const cylinder = kernel.makeCylinder(10, 20)
-// Six exactly refined V rows place editable row 2 at z = 20/3.
+// Nine exactly refined V rows place editable row 2 at z = 20/6.
 // A broad slab gives an independently known target plane, including poles
 // outside the cylinder skin. This tests pole snapping, not skin coincidence.
-const targetZ = 20 / 3 + 2
+const targetZ = 20 / 6 + 2
 const slab = kernel.makeBox(100, 100, 1)
 const shifted = kernel.translate(slab, -50, -50, targetZ)
 let source, reference
@@ -114,7 +114,7 @@ async function runCase(kind) {
     await page.select('[data-test=surface-face]', String(faceIndex))
     await page.waitForFunction(() => {
       const s = window.workspaceSnapQa.useWorkspaceEditor.getState(), p = s.controller?.getPanelState()
-      return p?.face === window.workspaceSnapQa.faceIndex && !p.calculating && p.net?.nv === 6 && !!s.controller.getViewState().provisionalPreview
+      return p?.face === window.workspaceSnapQa.faceIndex && !p.calculating && p.net?.nv === 9 && !!s.controller.getViewState().provisionalPreview
     }, { timeout: 120000 })
     await page.select('[data-test=surface-selection-mode]', 'points')
     await page.select('[data-test=surface-drag-mode]', dragMode)
@@ -146,7 +146,7 @@ async function runCase(kind) {
     })
     assert(target && target.distance > 8, `No separately clickable editable pole: ${JSON.stringify(target)}`)
     item.poleIndex = target.id; item.start = target.pole
-    check(Math.abs(target.pole[2] - 20/3) < 1e-4, item, 'known cylinder centre pole selected')
+    check(Math.abs(target.pole[2] - 20/6) < 1e-4, item, 'known cylinder centre pole selected')
     const baseline = await page.evaluate(() => structuredClone(window.workspaceSnapQa.useWorkspaceEditor.getState().controller.getViewState().net))
     item.baseline = baseline
     const checkCoupling = async label => {

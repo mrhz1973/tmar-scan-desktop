@@ -422,3 +422,22 @@ A subsequent isolated source-host UI run on that same real-derived STEP selected
 ### Cylindrical pole snapping in shared view
 
 The isolated source-host UI test `e2e-cylinder-snap.mjs` passed separately for a synthetic STL scan and a synthetic STEP CAD plane. Automated mouse gestures snapped a control pole to each plane (measured pole-to-plane gap about `3.18e-7 mm`), preserved coupled and protected poles, and exercised Undo, Alt and snap off. The output is evidence about control-pole interaction with synthetic displayed references, not a skin-to-scan deviation measurement, a real scan, physical mouse input, packaged desktop, or full CAD qualification. Evidence: `scanruler-edit-surface-qa/cylinder-snap-NpnYUa/result.json` outside the checkout.
+# Cylinder refinement checkpoint — 2026-11-05
+
+Full periodic cylinders now use nine exact axial poles, with five editable
+interior rows instead of two. This improves locality along the cylinder axis;
+it does not add independent circumferential controls. The original support,
+protected ends, coupled motion and unchanged source were checked with OCCT on
+synthetic straight and rotated cylinders and boss fixtures. Knot-span samples
+were added to the existing finite deformation checks; these samples do not
+prove global validity or rule out every self-intersection.
+
+The isolated source-host UI passed a synthetic cylinder drag, application as a
+CAD copy and project reopen. A separate pointer-driven UI check passed scan and
+CAD plane snapping, Alt, magnet off and Undo for one editable row; the pole's
+distance to the reference plane was approximately 0.00000016 mm. This is not a
+measurement of surface-to-scan deviation. A full real-scan, physical input,
+packaged desktop and broad QuickSurface parity qualification remain open.
+Evidence: `scanruler-edit-surface-qa/cylinder-snap-0a47Pi/result.json`, outside
+the source checkout. An initial sandboxed browser launch failed before UI work;
+the isolated run subsequently passed using the authorized local execution.

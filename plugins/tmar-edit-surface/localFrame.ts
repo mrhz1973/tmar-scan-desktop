@@ -18,9 +18,9 @@ export function localFrame(net: Net, index: number): [Point, Point, Point] | nul
     // OCCT's native conversion of the qualified full cylinder uses a
     // six-pole quadratic cyclic U net with three equal double-knot spans.
     // Other periodic conventions need their own mapping and fail closed.
-    if (!periodicU || periodicV || net.nu !== 6 || net.du !== 2 || (net.nv !== 5 && net.nv !== 6) || net.dv !== 3 || net.ku.length !== 4 ||
+    if (!periodicU || periodicV || net.nu !== 6 || net.du !== 2 || ![5,6,9].includes(net.nv) || net.dv !== 3 || net.ku.length !== 4 ||
         net.mu.join() !== '2,2,2,2' || net.poles.length !== net.nu*net.nv || net.weights.length !== net.poles.length ||
-        net.kv.length !== net.nv-2 || net.mv.join() !== (net.nv === 5 ? '4,1,4' : '4,1,1,4') || net.kv.some((x,i)=>!Number.isFinite(x) || (i>0 && x<=net.kv[i-1])) ||
+        net.kv.length !== net.nv-2 || net.mv.join() !== [4,...Array(net.nv-4).fill(1),4].join() || net.kv.some((x,i)=>!Number.isFinite(x) || (i>0 && x<=net.kv[i-1])) ||
         net.poles.some(p=>p.length!==3 || p.some(x=>!Number.isFinite(x))) || net.weights.some(w=>!Number.isFinite(w) || w<=0) ||
         net.ku.some(x => !Number.isFinite(x)) || net.ku.some((x,i) => i>0 && x<=net.ku[i-1])) return null
     const step=(net.ku[3]-net.ku[0])/3

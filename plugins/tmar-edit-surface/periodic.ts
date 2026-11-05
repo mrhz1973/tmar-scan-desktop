@@ -3,12 +3,12 @@ import type { Net, Point } from './brep'
 
 /**
  * Exactly elevate a periodic-U, linear-V rational surface and insert its
- * knots. Five rows expose one interior V row; six expose two independent rows,
+ * knots. Five, six or nine rows expose one, two or five independent V rows,
  * without fitting the surface.
  * It does not establish seam/trim safety and does not enable editing.
  */
-export function refineLinearPeriodicV(n: Net, rows: 5 | 6 = 5): Net {
-  if ((rows !== 5 && rows !== 6) || n.periodic?.join() !== '1,0' || n.dv !== 1 || n.nv !== 2 ||
+export function refineLinearPeriodicV(n: Net, rows: 5 | 6 | 9 = 5): Net {
+  if ((rows !== 5 && rows !== 6 && rows !== 9) || n.periodic?.join() !== '1,0' || n.dv !== 1 || n.nv !== 2 ||
       !Number.isInteger(n.nu) || n.nu < 2 || !Number.isInteger(n.du) || n.du < 1 || n.du >= n.nu ||
       n.ku.length < 2 || n.ku.length !== n.mu.length ||
       n.ku.some((k,i) => !Number.isFinite(k) || (i > 0 && k <= n.ku[i-1])) ||
@@ -22,7 +22,7 @@ export function refineLinearPeriodicV(n: Net, rows: 5 | 6 = 5): Net {
       (!n.rational.some(Boolean) && n.weights.some(w => w !== 1)))
     throw new Error('Reticolo periodico non supportato per il raffinamento esatto.')
   const poles: Point[] = [], weights: number[] = []
-  const parameters = rows === 6 ? [0, 1/9, 1/3, 2/3, 8/9, 1] : [0, 1/6, 1/2, 5/6, 1]
+  const parameters = rows === 9 ? [0,1/18,1/6,1/3,1/2,2/3,5/6,17/18,1] : rows === 6 ? [0, 1/9, 1/3, 2/3, 8/9, 1] : [0, 1/6, 1/2, 5/6, 1]
   for (let u = 0; u < n.nu; u++) for (const t of parameters) {
     const a = u*2, b = a+1, w = (1-t)*n.weights[a] + t*n.weights[b]
     const p = [0,1,2].map(d => ((1-t)*n.poles[a][d]*n.weights[a] + t*n.poles[b][d]*n.weights[b]) / w) as Point
@@ -34,7 +34,9 @@ export function refineLinearPeriodicV(n: Net, rows: 5 | 6 = 5): Net {
   if (!(midpoint > n.kv[0] && midpoint < n.kv[1])) throw new Error('Intervallo periodico troppo piccolo per il raffinamento.')
   const a=n.kv[0], b=n.kv[1], one=a+(b-a)/3, two=b-(b-a)/3
   if (rows === 6 && !(one>a && two>one && two<b)) throw new Error('Intervallo periodico troppo piccolo per il raffinamento.')
-  return { ...n, poles, weights, nv: rows, dv: 3, kv: rows === 6 ? [a,one,two,b] : [a,midpoint,b], mv: rows === 6 ? [4,1,1,4] : [4,1,4] }
+  const kv=rows===9 ? Array.from({length:7},(_,i)=>i===0?a:i===6?b:a+(b-a)*i/6) : rows===6 ? [a,one,two,b] : [a,midpoint,b]
+  if(kv.some((k,i)=>!Number.isFinite(k)||(i>0&&k<=kv[i-1]))) throw new Error('Intervallo periodico troppo piccolo per il raffinamento.')
+  return { ...n, poles, weights, nv: rows, dv: 3, kv, mv: [4,...Array(rows-4).fill(1),4] }
 }
 
 /**
@@ -47,9 +49,9 @@ export function refineLinearPeriodicV(n: Net, rows: 5 | 6 = 5): Net {
  */
 export function moveSmoothCylinderPole(n: Net, delta: Point, row = 2): Net {
   const step = (n.ku[3]-n.ku[0])/3
-  if (n.periodic?.join() !== '1,0' || n.nu !== 6 || (n.nv !== 5 && n.nv !== 6) || n.du !== 2 || n.dv !== 3 ||
+  if (n.periodic?.join() !== '1,0' || n.nu !== 6 || ![5,6,9].includes(n.nv) || n.du !== 2 || n.dv !== 3 ||
       !Number.isInteger(row) || row < 2 || row > n.nv-3 ||
-      n.ku.length !== 4 || n.mu.join() !== '2,2,2,2' || n.mv.join() !== (n.nv === 5 ? '4,1,4' : '4,1,1,4') ||
+      n.ku.length !== 4 || n.mu.join() !== '2,2,2,2' || n.mv.join() !== [4,...Array(n.nv-4).fill(1),4].join() ||
       n.ku.some(x=>!Number.isFinite(x)) || n.rational.length !== 2 || n.rational.some(r=>r!==0 && r!==1) ||
       n.kv.length !== n.nv-2 || n.kv.some((x,i)=>!Number.isFinite(x) || (i>0 && x<=n.kv[i-1])) ||
       !Number.isFinite(step) || step <= 0 || Math.abs(n.ku[1]-n.ku[0]-step)>1e-10*step || Math.abs(n.ku[2]-n.ku[1]-step)>1e-10*step ||

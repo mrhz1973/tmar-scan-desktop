@@ -45,8 +45,8 @@ it.each([false,true])('prepares the converted cylindrical STEP support without m
     expect(index).toBeGreaterThanOrEqual(0)
     const result=prepareCylinder(k,source,index)
     expect(k.toBREP(source)).toBe(before)
-    expect(result.net.periodic).toEqual([1,0]);expect(result.net.nv).toBe(6)
-    expect(result.net.mv).toEqual([4,1,1,4])
+    expect(result.net.periodic).toEqual([1,0]);expect(result.net.nv).toBe(9)
+    expect(result.net.mv).toEqual([4,1,1,1,1,1,4])
     // Keep both readings visible without requiring a known kernel discrepancy
     // to persist or treating the prepared reading as an accurate volume.
     expect(result.sourceVolume).toBeCloseTo(Math.PI*100*20,5)
@@ -55,10 +55,24 @@ it.each([false,true])('prepares the converted cylindrical STEP support without m
     const first=moveSmoothCylinderPole(result.net,[.2,-.1,.15],2)
     const next=moveSmoothCylinderPole(first,[-.12,.08,-.05],3)
     expect(()=>assertSmoothCylinderMove(result.net,next)).not.toThrow()
-    expect(localFrame(result.net,20)).not.toBeNull();expect(localFrame(result.net,21)).not.toBeNull()
-    const gesture=structuredClone(first);gesture.poles[21][2]+=.15
-    expect(canonicalizeCylinderGesture(first,gesture).poles[15][2]).not.toBe(first.poles[15][2])
-    const invalid=structuredClone(next);invalid.poles[15][0]+=.01
+    let all=result.net
+    for(let row=2;row<=6;row++) all=moveSmoothCylinderPole(all,[.01*row,-.005*row,.002*row],row)
+    expect(()=>assertSmoothCylinderMove(result.net,all)).not.toThrow()
+    const localShape=k.fromBREP(replaceSurface(result.brep,entry,first)),unchanged=k.fromBREP(result.brep)
+    const localFaces=k.getSubShapes(localShape,'face'),unchangedFaces=k.getSubShapes(unchanged,'face')
+    try {
+      const bounds=k.uvBounds(localFaces[index])
+      for(let i=0;i<=12;i++) for(const fraction of [.55,.7,.85,1]) {
+        const u=bounds.uMin+(bounds.uMax-bounds.uMin)*i/12,v=bounds.vMin+(bounds.vMax-bounds.vMin)*fraction
+        const p=k.pointOnSurface(localFaces[index],u,v),q=k.pointOnSurface(unchangedFaces[index],u,v)
+        expect(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)).toBeLessThan(1e-8)
+      }
+    } finally {[...localFaces,...unchangedFaces].forEach(h=>k.release(h));k.release(localShape);k.release(unchanged)}
+    const nv=result.net.nv
+    for(let row=2;row<=6;row++) expect(localFrame(result.net,3*nv+row)).not.toBeNull()
+    const gesture=structuredClone(first);gesture.poles[3*nv+3][2]+=.15
+    expect(canonicalizeCylinderGesture(first,gesture).poles[2*nv+3][2]).not.toBe(first.poles[2*nv+3][2])
+    const invalid=structuredClone(next);invalid.poles[2*nv+3][0]+=.01
     expect(()=>assertSmoothCylinderMove(result.net,invalid)).toThrow()
     const evaluation=evaluatePreparedCylinder(k,result,index,next),checked=k.importStep(evaluation.step)
     try {expect(k.isValid(checked)).toBe(true)} finally {k.release(checked)}

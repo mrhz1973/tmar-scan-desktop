@@ -43,7 +43,7 @@ it.each([false,true])('evaluates and reopens a coupled cylindrical deformation (
     const base=k.fromBREP(prepared.brep),baseFaces=k.getSubShapes(base,'face')
     try {
       expect(k.isValid(round)).toBe(true);expect(after).toHaveLength(3);expect(result.mesh.triangleCount).toBeGreaterThan(0)
-      const b=k.uvBounds(baseFaces[index]),p=k.pointOnSurface(baseFaces[index],(b.uMin+b.uMax)/2,(b.vMin+b.vMax)/2),q=k.projectPointOnFace(after[index],p)
+      const b=k.uvBounds(baseFaces[index]),p=k.pointOnSurface(baseFaces[index],(b.uMin+b.uMax)/2,b.vMin+(b.vMax-b.vMin)/4),q=k.projectPointOnFace(after[index],p)
       expect(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)).toBeGreaterThan(.001)
       expect(k.toBREP(source)).toBe(sourceBefore)
       expect('volume' in result).toBe(false)
