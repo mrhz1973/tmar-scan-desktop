@@ -693,11 +693,21 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       const inverse = new THREE.Matrix3().setFromMatrix4(matrix.clone().invert())
       const snapDirection = state.dragMode === 'screen' ? new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld).applyMatrix3(inverse).normalize() : new THREE.Vector3(...direction!)
       const anchor = new THREE.Vector3(...net.poles[ids[0]])
+      let reportedInvalidTarget = false
       const gesture = createSurfaceGesture({ frame, poles: net.poles, selected: ids, start: mousePoint(event), strength: state.dragStrength,
         resolveDelta: delta => {
           try {
             refreshReferences(); refreshNeighbours()
-            const targets = [...referenceTargets, ...neighbourTargets].filter(target => target.current()).map(target => target.mesh)
+            const targets = [...referenceTargets, ...neighbourTargets].filter(target => {
+              try { return target.current() }
+              catch {
+                if (!reportedInvalidTarget) {
+                  reportedInvalidTarget = true
+                  report('Magnete: un riferimento non è più disponibile; gli eventuali altri restano utilizzabili.')
+                }
+                return false
+              }
+            }).map(target => target.mesh)
             const hit = snapAlong(anchor.clone().add(new THREE.Vector3(...delta)), snapDirection, owner.getViewState().snapDistance, targets)
             if (!hit) { hideFeedback(); return null }
             showFeedback(hit)

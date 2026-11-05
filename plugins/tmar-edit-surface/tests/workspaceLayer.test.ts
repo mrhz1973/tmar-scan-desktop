@@ -358,6 +358,26 @@ it('keeps valid snap references when another reference cannot be read', () => {
   layer.dispose()
 })
 
+it('keeps snapping to valid references if one becomes unreadable during a drag', () => {
+  const f = fixture({ reference: 'scan' })
+  const existing = f.view.references()
+  let revoked = false
+  vi.spyOn(f.view, 'references').mockReturnValue([
+    { ...existing[0], id: 'revocable', isCurrent: () => { if (revoked) throw new Error('revoked'); return true } },
+    existing[0],
+  ])
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  expect(f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))).toBe(true)
+  revoked = true
+  f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
+  f.getHandlers().move(f.event(1, [-0.08, -1, 0]))
+  expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(0)
+  expect(f.overlay.children[0].textContent).toContain('Agganciato')
+  expect(f.reportViewError).toHaveBeenCalledTimes(1)
+  expect(f.reportViewError).toHaveBeenCalledWith('Magnete: un riferimento non è più disponibile; gli eventuali altri restano utilizzabili.')
+  layer.dispose()
+})
+
 it('does not propagate a revoked source or frozen error reporter through a host reference notification', () => {
   const f = fixture({ reference: 'scan' }), layer = createWorkspaceLayer(f.view, f.owner)
   const materialDispose = vi.spyOn(THREE.MeshBasicMaterial.prototype, 'dispose')
