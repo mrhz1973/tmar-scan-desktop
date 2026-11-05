@@ -2,6 +2,23 @@
 
 2026-11-03. Plugin-owned API for the coordinator's proposed `surfaceEdit` feature. Existing Apply-copy behavior remains available. No host feature registration is included here.
 
+## Current integration boundary (2026-11-05)
+
+The worker and `SurfaceDraft` also support version 5 for eligible planar G1
+constraints and opt-in version 6 for compatible curved B-spline G1 constraints.
+Version 6 uses the separate `createCurvedRecipe`, `restoreCurvedRecipe` and
+`replayCurvedRecipe` worker actions; legacy recipe readers do not accept it.
+See `G1-WORKSPACE-CHECKPOINT.md` for the qualified topology and test limits.
+
+The main-viewport `WorkspaceSurfaceSession` does **not** expose a host-facing
+recipe freeze/restore transaction. Worker and draft APIs alone therefore do not
+make a saved project feature editable. An integration needs a versioned host
+contract that binds the recipe to the upstream body and validated draft stamp,
+commits it atomically with the CAD result and notes, and refuses stale sources.
+Reopening must restore and revalidate note anchors against the restored face;
+an existing saved CAD copy must remain intact if restore fails. The existing
+copy-based Apply path remains available until this is implemented and qualified.
+
 ## Worker requests
 
 All requests carry an `id`; replies carry `{id, result}` or `{id, error}`. The worker processes requests sequentially.
