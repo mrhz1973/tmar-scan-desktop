@@ -9,11 +9,31 @@ import { rebuildFreeBoundary } from './freeBoundary'
 import { prepareCylinder } from './cylinderPreparation'
 import { assertSimpleCylinderSource } from './cylinderSource'
 import { listG1SupportCandidates, resolveG1SupportCandidate as resolveSupport, type G1SourceStamp, type G1SupportCandidate } from './g1SupportTopology'
+import { proposePlaneTangency, validatePlaneTangencyResult, type NaturalEdge, type PlaneTangencyRequest, type PlaneTangencyValidation } from './planeTangency'
 
 export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[]; experimentalCylinder?: boolean }
 export interface G1SupportCandidates { stamp: G1SourceStamp; candidates: G1SupportCandidate[] }
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
+export interface G1PlaneProposalRequest {
+  net: Net
+  choice: G1SupportCandidate
+  lockedPoles?: readonly number[]
+  distanceTolerance?: number
+  exportStep?: boolean
+}
+export interface G1PlaneValidationRequest extends G1PlaneProposalRequest { baseNet: Net }
+export interface G1PlaneResult {
+  net: Net
+  changedIndices: number[]
+  choice: G1SupportCandidate
+  stamp: G1SourceStamp
+  /** These identify the untouched interactive state, not a published preview. */
+  revisions: { edit: number; preview: number; anchorSelection: number }
+  validation: PlaneTangencyValidation
+  preview: Preview
+  step?: string
+}
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
 /** Return a finite unit normal with the topological face orientation applied. */
@@ -364,6 +384,149 @@ export class SurfaceEditorKernel {
         stamp.selectionRevision !== this.g1SelectionRevision || stamp.faceIndex !== this.g1Selected)
       throw new Error('Scelta del supporto scaduta.')
     return resolveSupport(this.kernel, this.source, stamp, choice)
+  }
+  /** Internal CAD prototype: never changes the interactive draft, preview, anchors
+   * or recipes. All three other tangent rings are preserved relative to net.
+   * A selected-edge regularity proof is NOT a global G1 certificate. */
+  async proposeG1PlaneTangency(request: G1PlaneProposalRequest): Promise<G1PlaneResult> {
+    return this.planeTangency(request, true)
+  }
+  /** Validate a supplied final net; does not project it or regenerate a proposal. */
+  async validateG1PlaneTangency(request: G1PlaneValidationRequest): Promise<G1PlaneResult> {
+    return this.planeTangency(request, false)
+  }
+  private async planeTangency(input: G1PlaneProposalRequest | G1PlaneValidationRequest, propose: boolean): Promise<G1PlaneResult> {
+    // Snapshot before the asynchronous identity read: client mutation and a
+    // re-selection while hashing must never retarget this operation.
+    const request = structuredClone(input), editRevision = this.revision
+    const previewRevision = this.previewRevision, anchorSelection = this.anchorSelectionRevision
+    const choice = await this.resolveG1SupportCandidate(request.choice)
+    if (this.revision !== editRevision || this.previewRevision !== previewRevision ||
+        this.anchorSelectionRevision !== anchorSelection || !this.originalNet || !this.editRecord ||
+        this.chosen !== choice.stamp.faceIndex || this.g1Selected !== this.chosen)
+      throw new Error('Scelta del supporto scaduta durante la verifica.')
+    if (request.exportStep !== undefined && typeof request.exportStep !== 'boolean') throw new Error('Opzione STEP non valida.')
+    const base = propose ? request.net : (request as G1PlaneValidationRequest).baseNet
+    // Natural-domain eligibility belongs to the kernel, never to the choice.
+    const prepared = this.netFor(this.chosen, this.refinements)
+    if (!prepared.natural) throw new Error('La tangenza richiede una faccia naturale senza ritagli.')
+    const locked = request.lockedPoles ?? []
+    if (!Array.isArray(locked) || locked.some(i => !Number.isInteger(i) || i < 0 || i >= base.poles.length))
+      throw new Error('Blocco di un polo inesistente.')
+    const edge = ({uMin:'U0',uMax:'U1',vMin:'V0',vMax:'V1'} as const)[choice.side]
+    if (!edge) throw new Error('Bordo naturale non supportato.')
+    const pure: PlaneTangencyRequest = { net: base, edge,
+      plane: {point:choice.plane.origin,normal:choice.plane.normal},
+      lockIndices: [...new Set([...locked,...prepared.trimLocks,...prepared.hiddenPoles])],
+      preserveTangentEdges: (['U0','U1','V0','V1'] as NaturalEdge[]).filter(e => e !== edge),
+      distanceTolerance: request.distanceTolerance ?? 1e-8 }
+    const isolated = new SurfaceEditorKernel(this.kernel), k = this.kernel
+    try {
+      // Independent handles, same frozen source and exact prepared record.
+      // Reuse evaluate unchanged, including its intersection/normal/trim gates.
+      isolated.source = k.fromBREP(this.brep)
+      isolated.faces = k.getSubShapes(isolated.source,'face')
+      isolated.solids = this.solids; isolated.infos = structuredClone(this.infos)
+      isolated.chosen = this.chosen; isolated.originalNet = structuredClone(this.originalNet)
+      isolated.editBrep = this.editBrep; isolated.editRecord = structuredClone(this.editRecord)
+      isolated.evaluate(base,'G0')
+      const net = propose ? proposePlaneTangency(pure).net : request.net
+      // Strict validation of the actual final coefficient net, before any BREP
+      // serialization. Protected coefficients never get a roundoff exemption.
+      const validation = validatePlaneTangencyResult(pure,net)
+      const evaluated = isolated.evaluate(net,'G0',request.exportStep ?? false)
+      const finalFace = isolated.validatedFace
+      if (finalFace === null) throw new Error('Faccia CAD finale non determinata.')
+      this.checkPlaneTangencyReadback(finalFace,net,edge,choice,pure.distanceTolerance)
+      // Independently inspect the rebuilt shape as well as the retained face.
+      const rebuilt = k.fromBREP(replaceSurface(this.editBrep,this.editRecord,net))
+      try {this.checkUnselectedTangencyFaces(rebuilt)} finally {k.release(rebuilt)}
+      if (evaluated.step !== undefined) {
+        const imported = k.importStep(evaluated.step)
+        let fs: ShapeHandle[] = []
+        try {
+          fs = k.getSubShapes(imported,'face')
+          if (!k.isValid(imported) || fs.length !== this.faces.length || this.count(imported,'solid') !== this.solids)
+            throw new Error('STEP della tangenza non valido o topologia alterata.')
+          // Refuse reordered/reparameterized deliveries instead of guessing an identity.
+          this.checkPlaneTangencyReadback(fs[this.chosen],net,edge,choice,pure.distanceTolerance)
+          this.checkUnselectedTangencyFaces(imported)
+        } finally {fs.forEach(f=>k.release(f));k.release(imported)}
+      }
+      if (this.revision !== editRevision || this.previewRevision !== previewRevision ||
+          choice.stamp.sourceRevision !== this.g1SourceRevision || choice.stamp.selectionRevision !== this.g1SelectionRevision)
+        throw new Error('Scelta del supporto scaduta durante la verifica CAD.')
+      // This independent preview cannot be used as an interactive note witness.
+      const {step,previewRevision: _isolatedRevision,...preview} = evaluated
+      return { net:structuredClone(net), changedIndices:net.poles.flatMap((p,i)=>p.some((x,d)=>!Object.is(x,base.poles[i][d]))?[i]:[]),
+        choice,stamp:{...choice.stamp},revisions:{edit:editRevision,preview:previewRevision,anchorSelection},validation,preview,step }
+    } finally {isolated.clear()}
+  }
+  private checkUnselectedTangencyFaces(shape: ShapeHandle) {
+    const k=this.kernel, fs=k.getSubShapes(shape,'face')
+    const close=(a:number,b:number)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=1e-12*Math.max(1,Math.abs(a),Math.abs(b))
+    const ownSupport=(face:ShapeHandle)=>{
+      const text=k.toBREP(face),header=/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/m.exec(text)
+      return header?surfaceTable(text)[Number(header[1])-1]:undefined
+    }
+    try {
+      if (fs.length!==this.faces.length || this.count(shape,'solid')!==this.solids || !k.isValid(shape))
+        throw new Error('Topologia della tangenza alterata.')
+      for(let i=0;i<fs.length;i++) if(i!==this.chosen) {
+        const before=ownSupport(this.faces[i]),after=ownSupport(fs[i])
+        if(!before || !after || before.kind!==after.kind || before.values.length!==after.values.length ||
+            before.values.some((x,d)=>!close(x,after.values[d])) ||
+            k.shapeOrientation(this.faces[i])!==k.shapeOrientation(fs[i]))
+          throw new Error('Una faccia di supporto è stata modificata.')
+        const a=k.uvBounds(this.faces[i]),b=k.uvBounds(fs[i])
+        if(![a.uMin,a.uMax,a.vMin,a.vMax].every((x,d)=>close(x,[b.uMin,b.uMax,b.vMin,b.vMax][d])))
+          throw new Error('Dominio di una faccia non selezionata alterato.')
+        const oldEdges=k.getSubShapes(this.faces[i],'edge'),edges:ShapeHandle[]=[]
+        try {
+          edges.push(...k.getSubShapes(fs[i],'edge'))
+          if(edges.length!==oldEdges.length)throw new Error('Bordi di una faccia non selezionata alterati.')
+          for(let e=0;e<edges.length;e++) {
+            const old=k.curveParameters(oldEdges[e]),next=k.curveParameters(edges[e])
+            if(k.curveType(oldEdges[e])!==k.curveType(edges[e]) || !close(old.first,next.first) || !close(old.last,next.last))
+              throw new Error('Bordo di una faccia non selezionata alterato.')
+            for(let j=0;j<=32;j++) if(dist(tuple(k.curvePointAtParam(oldEdges[e],old.first+(old.last-old.first)*j/32)),
+              tuple(k.curvePointAtParam(edges[e],next.first+(next.last-next.first)*j/32)))>1e-7)
+              throw new Error('Contorno di una faccia non selezionata alterato.')
+          }
+        } finally {[...oldEdges,...edges].forEach(e=>k.release(e))}
+      }
+    } finally {fs.forEach(f=>k.release(f))}
+  }
+  /** Read the actual OCCT face support. BREP/STEP formatting is checked with a
+   * separate numeric budget; it does not weaken in-memory protected-pole checks. */
+  private checkPlaneTangencyReadback(face: ShapeHandle, net: Net, edge: NaturalEdge, choice: G1SupportCandidate, tolerance: number) {
+    const k = this.kernel, text = k.toBREP(face)
+    const header = /^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/m.exec(text)
+    const actual = header ? surfaceTable(text)[Number(header[1])-1]?.net : undefined
+    const close = (a: number,b: number) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a-b) <= 1e-12*Math.max(1,Math.abs(a),Math.abs(b))
+    const same = (a: readonly number[],b: readonly number[]) => a.length === b.length && a.every((x,i)=>close(x,b[i]))
+    if (!actual || actual.nu!==net.nu || actual.nv!==net.nv || actual.du!==net.du || actual.dv!==net.dv ||
+        !same(actual.ku,net.ku) || !same(actual.kv,net.kv) || !same(actual.mu,net.mu) || !same(actual.mv,net.mv) ||
+        !same(actual.weights,net.weights) || !same(actual.rational,net.rational) ||
+        !same(actual.periodic??[0,0],net.periodic??[0,0]) || actual.poles.some((p,i)=>!same(p,net.poles[i])))
+      throw new Error('Reticolo CAD finale diverso dalla tangenza verificata.')
+    const b = k.uvBounds(face)
+    if (!same([b.uMin,b.uMax,b.vMin,b.vMax],[net.ku[0],net.ku.at(-1)!,net.kv[0],net.kv.at(-1)!]))
+      throw new Error('Dominio CAD finale diverso dal bordo naturale.')
+    // Repeat residual/continuous selected-edge regularity on serialized CAD
+    // coefficients themselves. Preservation was already checked strictly on
+    // the pre-serialization final net; this is an independent geometry check.
+    validatePlaneTangencyResult({net:actual,edge,plane:{point:choice.plane.origin,normal:choice.plane.normal},
+      lockIndices:[],distanceTolerance:tolerance},actual)
+    for (let i=0;i<=32;i++) {
+      const t=i/32, u=edge==='U0'?b.uMin:edge==='U1'?b.uMax:b.uMin+(b.uMax-b.uMin)*t
+      const v=edge==='V0'?b.vMin:edge==='V1'?b.vMax:b.vMin+(b.vMax-b.vMin)*t
+      const p=tuple(k.pointOnSurface(face,u,v)), normal=orientedSurfaceNormal(k,face,u,v), n=choice.plane.normal
+      const d=p.reduce((sum,x,a)=>sum+(x-choice.plane.origin[a])*n[a],0)
+      const sin=Math.hypot(normal[1]*n[2]-normal[2]*n[1],normal[2]*n[0]-normal[0]*n[2],normal[0]*n[1]-normal[1]*n[0])
+      if (!Number.isFinite(d) || Math.abs(d)>tolerance || !Number.isFinite(sin) || sin>1e-7)
+        throw new Error('Bordo CAD finale non tangente al piano di supporto.')
+    }
   }
   private preparation(): SurfaceEditRecipe['preparation'] {
     const info = this.infos[this.chosen]

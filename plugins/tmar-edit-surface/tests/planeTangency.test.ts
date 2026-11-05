@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { OcctKernel } from 'occt-wasm'
 import { replaceSurface, surfaceTable, type Net, type Point } from '../brep'
-import { proposePlaneTangency, validatePlaneTangencyResult, type NaturalEdge, type PlaneTangencyRequest } from '../planeTangency'
+import { proposePlaneTangency, validatePlaneTangencyResult, validatePlaneTangencyConstraint, type NaturalEdge, type PlaneTangencyRequest } from '../planeTangency'
 import { refineClampedNet } from '../refineClampedNet'
 
 function fixture(edge: NaturalEdge='U0', rational=true): Net {
@@ -236,6 +236,70 @@ describe('pure validation of the actual final net',()=> {
   })
 })
 
+describe('pure reassessment of a persistent plane condition',()=> {
+  it.each(['U0','U1','V0','V1'] as const)('accepts later unconstrained interior edits for %s while the initial before/after validator remains strict',edge=> {
+    const net=refineClampedNet(fixture(edge),[{axis:edge[0]==='U'?'V':'U',value:edge[0]==='U'?7:1,count:2}])
+    const input=request(net,edge), current=proposePlaneTangency(input).net
+    // Choose an interior pole outside the first interior row of this edge.
+    const i=edge[0]==='U'?(edge==='U0'?2:1):2
+    const j=edge[0]==='V'?(edge==='V0'?2:1):2
+    const id=i*current.nv+j
+    current.poles[id][2]+=.125
+    const saved=structuredClone({input,current})
+    const check=validatePlaneTangencyConstraint(input,current)
+    expect(check.edgeRegularity).toBe('outward-rounded-interval-proof')
+    expect(check.proofLeaves).toBeGreaterThanOrEqual(2)
+    expect(check.sampledMaxBoundaryNormalSin).toBeLessThan(1e-12)
+    expect(check.globalG1Certified).toBe(false)
+    expect('protectedPoleCount' in check).toBe(false)
+    expect(()=>validatePlaneTangencyResult(input,current)).toThrow(/punto protetto/)
+    expect({input,current}).toEqual(saved)
+  })
+
+  it('checks current coefficient residuals, continuous edge regularity and observed interior regularity without repairing',()=> {
+    const input=request(fixture('U0',false)), final=proposePlaneTangency(input).net
+    const offPlane=structuredClone(final); offPlane.poles[5][2]=.001
+    const collapsed=structuredClone(final)
+    for(let j=0;j<4;j++) collapsed.poles[4+j]=[...collapsed.poles[j]]
+    const interior=structuredClone(final)
+    interior.poles=interior.poles.map((_,id)=>[[0,2,0,2][Math.floor(id/4)],id%4,0])
+    for(const [net,reason] of [[offPlane,/residuo del piano/],[collapsed,/comprovabile|degenere/],
+      [interior,/superficie degenere nei campioni/]] as const) {
+      const saved=structuredClone(net)
+      expect(()=>validatePlaneTangencyConstraint(input,net)).toThrow(reason)
+      expect(net).toEqual(saved)
+    }
+  })
+
+  it('rejects structural changes and malformed current nets or constraint parameters',()=> {
+    const input=request(), final=proposePlaneTangency(input).net
+    const weights=structuredClone(final); weights.weights[9]+=.01
+    const knots=structuredClone(final); knots.ku[0]-=.01
+    const rational=structuredClone(final); rational.rational=[0,1]
+    const nonfinite=structuredClone(final); nonfinite.poles[9][2]=NaN
+    const refined=refineClampedNet(final,[{axis:'U',value:0,count:1}])
+    for(const net of [weights,knots,rational,nonfinite,refined])
+      expect(()=>validatePlaneTangencyConstraint(input,net)).toThrow()
+    for(const invalid of [{...input,distanceTolerance:Infinity},{...input,distanceTolerance:1e-5},
+      {...input,edge:'U2' as NaturalEdge},{...input,lockIndices:[16]},
+      {...input,preserveTangentEdges:['U0'] as NaturalEdge[]},
+      {...input,plane:{point:[0,0,0] as Point,normal:[0,0,2] as Point}}])
+      expect(()=>validatePlaneTangencyConstraint(invalid,final)).toThrow()
+  })
+
+  it('leaves lock and perimeter comparisons explicitly to the caller',()=> {
+    const net=fixture(); net.poles[5][2]=0
+    const input={...request(net),lockIndices:[9]}
+    const current=proposePlaneTangency(input).net
+    current.poles[9][2]+=.1 // The condition is intact; the edit violates the caller lock.
+    expect(()=>validatePlaneTangencyConstraint(input,current)).not.toThrow()
+    expect(()=>validatePlaneTangencyResult(input,current)).toThrow(/punto protetto/)
+    // A tangent-plane-compatible perimeter move is likewise outside this API's guarantee.
+    current.poles[0][1]-=.01
+    expect(()=>validatePlaneTangencyConstraint(input,current)).not.toThrow()
+  })
+})
+
 it.each([{rational:false,multi:false},{rational:true,multi:false},{rational:false,multi:true},{rational:true,multi:true}])('OCCT verifies plane normals, changed interior and unchanged full boundary; STEP roundtrip (%j)',async ({rational,multi})=> {
   const k=await OcctKernel.init(), owned:ReturnType<typeof k.makeBox>[]=[]
   const own=<T extends ReturnType<typeof k.makeBox>>(h:T):T=>{owned.push(h);return h}
@@ -269,6 +333,19 @@ it.each([{rational:false,multi:false},{rational:true,multi:false},{rational:fals
     }
     const beforeFace=build(before,n), afterFace=build(after,result.net)
     expect(k.isValid(beforeFace)).toBe(true);expect(k.isValid(afterFace)).toBe(true)
+    const later=structuredClone(result.net), laterId=2*later.nv+Math.floor(later.nv/2)
+    later.poles[laterId][2]+=.25
+    const savedLater=structuredClone(later)
+    expect(validatePlaneTangencyConstraint(input,later).globalG1Certified).toBe(false)
+    expect(()=>validatePlaneTangencyResult(input,later)).toThrow(/punto protetto/)
+    const laterFace=build(own(k.fromBREP(replaceSurface(text,record,later))),later)
+    expect(k.isValid(laterFace)).toBe(true)
+    const laterRound=own(k.importStep(k.exportStep(laterFace)))
+    const laterReopened=k.getSubShapes(laterRound,'face'); owned.push(...laterReopened)
+    expect(k.isValid(laterRound)).toBe(true); expect(laterReopened).toHaveLength(1)
+    const midpointU=(bounds.uMin+bounds.uMax)/2, midpointV=(bounds.vMin+bounds.vMax)/2
+    expect(Math.abs(k.pointOnSurface(laterFace,midpointU,midpointV).z-k.pointOnSurface(afterFace,midpointU,midpointV).z)).toBeGreaterThan(.001)
+    expect(later).toEqual(savedLater)
     const readback=surfaceTable(k.toBREP(beforeFace)).find(r=>r.net)!.net!, savedReadback=structuredClone(readback)
     const nativeProposal=proposePlaneTangency({...input,net:readback})
     expect(nativeProposal.proofLeaves).toBeGreaterThanOrEqual(multi?3:1)
@@ -293,7 +370,7 @@ it.each([{rational:false,multi:false},{rational:true,multi:false},{rational:fals
       reNet!.weights.forEach((w,i)=>expect(w).toBeCloseTo(n.weights[i],11))
     }
     let maximumNormalError=0, interiorMovement=0
-    for (const actual of [afterFace,reopened[0]]) {
+    for (const actual of [afterFace,reopened[0],laterFace,laterReopened[0]]) {
       for (let i=0;i<=32;i++) for (let j=0;j<=32;j++) {
         const u=bounds.uMin+(bounds.uMax-bounds.uMin)*i/32,v=bounds.vMin+(bounds.vMax-bounds.vMin)*j/32
         const a=k.pointOnSurface(beforeFace,u,v),b=k.pointOnSurface(actual,u,v)

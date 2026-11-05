@@ -517,3 +517,14 @@ protected poles and metadata remain exact in memory. These are still
 preparatory APIs: proposal, full CAD evaluation, history, recipe and UI for a
 new G1 constraint are not connected. Independent continuity against a target,
 interactive usage and packaged-desktop behavior remain unqualified.
+
+Follow-up internal kernel prototype: a candidate planar tangency can be
+proposed and checked against the frozen source with a separately allocated CAD
+shape, without publishing a draft or invalidating interactive note witnesses.
+The prototype retains legacy evaluation unchanged, verifies protected poles,
+other tangent rows, CAD readback and optional STEP reimport. Five synthetic
+OCCT kernel tests and 36 solver tests passed together; fault cases include CAD
+readback and STEP import cleanup. A separate non-mutating constraint check is
+available for future edits. Worker/UI/history/recipe for the new constraint are
+not integrated. Geometry is restricted to eligible natural edges with planar
+neighbors; interior checks are sampled, not a global G1 certification.

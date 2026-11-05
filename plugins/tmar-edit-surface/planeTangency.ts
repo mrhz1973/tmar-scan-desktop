@@ -29,6 +29,8 @@ export interface PlaneTangencyResult {
 export interface PlaneTangencyValidation extends Omit<PlaneTangencyResult,'net'|'changedIndices'> {
   protectedPoleCount: number
 }
+/** Geometry-only assessment; does not certify edit protections or topology. */
+export type PlaneTangencyConstraintValidation = Omit<PlaneTangencyResult,'net'|'changedIndices'>
 const edges: NaturalEdge[] = ['U0', 'U1', 'V0', 'V1']
 const fail = (reason: string): never => { throw new Error(`Tangenza piano rifiutata: ${reason}`) }
 const dot = (a: readonly number[], b: readonly number[]) => a.reduce((s, x, i) => s + x*b[i], 0)
@@ -250,6 +252,15 @@ function assessFinal(request: PlaneTangencyRequest, n: Net, residualBound: (p: P
     maxPlaneCoefficientResidual,sampledRegularity:{count,minSinAngle},sampledMaxBoundaryNormalSin,globalG1Certified:false}
 }
 
+const sameValues=(a:readonly number[],b:readonly number[])=>a.length===b.length&&a.every((x,i)=>Object.is(x,b[i]))
+
+function validateSameStructure(base: Net, final: Net): void {
+  if (base.nu!==final.nu||base.nv!==final.nv||base.du!==final.du||base.dv!==final.dv||
+      !sameValues(base.ku,final.ku)||!sameValues(base.kv,final.kv)||!sameValues(base.mu,final.mu)||!sameValues(base.mv,final.mv)||
+      !sameValues(base.weights,final.weights)||!sameValues(base.rational,final.rational)||
+      !sameValues(base.periodic??[0,0],final.periodic??[0,0])) fail('struttura, nodi o pesi modificati dal kernel')
+}
+
 /**
  * Validate the actual final in-memory kernel net against the pre-edit request.
  * This function never projects, repairs, mutates, or compares with a regenerated
@@ -268,11 +279,7 @@ function assessFinal(request: PlaneTangencyRequest, n: Net, residualBound: (p: P
 export function validatePlaneTangencyResult(request: PlaneTangencyRequest, finalNet: Net): PlaneTangencyValidation {
   const {n:base,fixed,inner,residualBound}=validatedRequest(request)
   const final=refineClampedNet(finalNet,[])
-  const sameValues=(a:readonly number[],b:readonly number[])=>a.length===b.length&&a.every((x,i)=>Object.is(x,b[i]))
-  if (base.nu!==final.nu||base.nv!==final.nv||base.du!==final.du||base.dv!==final.dv||
-      !sameValues(base.ku,final.ku)||!sameValues(base.kv,final.kv)||!sameValues(base.mu,final.mu)||!sameValues(base.mv,final.mv)||
-      !sameValues(base.weights,final.weights)||!sameValues(base.rational,final.rational)||
-      !sameValues(base.periodic??[0,0],final.periodic??[0,0])) fail('struttura, nodi o pesi modificati dal kernel')
+  validateSameStructure(base,final)
   const editable=new Set(inner)
   let protectedPoleCount=0
   for (let id=0;id<base.poles.length;id++) if (!editable.has(id)||fixed.has(id)) {
@@ -280,4 +287,26 @@ export function validatePlaneTangencyResult(request: PlaneTangencyRequest, final
     protectedPoleCount++
   }
   return {...assessFinal(request,final,residualBound),protectedPoleCount}
+}
+
+/**
+ * Reassess a persistent plane condition on the current in-memory net after
+ * later edits (e.g. moving interior poles outside the constrained rows).
+ * Unlike validatePlaneTangencyResult, this does not restrict edits to the first
+ * interior row or compare protected poles with request.net. The request retains
+ * the original structure, plane and constraint parameters; structure, knots,
+ * weights and parameter domains must still match exactly. No projection,
+ * mutation or repair is performed. The actual current net is assessed afresh.
+ *
+ * The caller must separately enforce perimeter/lock/other-edge protections,
+ * admissible edits, face identity, natural untrimmed-edge topology, absence of
+ * self-intersections, serialization/reimport and transaction atomicity. A pass
+ * proves selected-edge regularity with the reported coefficient residual and
+ * only samples interior regularity; it never certifies global G1 or topology.
+ */
+export function validatePlaneTangencyConstraint(request: PlaneTangencyRequest, currentNet: Net): PlaneTangencyConstraintValidation {
+  const {n:base,residualBound}=validatedRequest(request)
+  const current=refineClampedNet(currentNet,[])
+  validateSameStructure(base,current)
+  return assessFinal(request,current,residualBound)
 }
