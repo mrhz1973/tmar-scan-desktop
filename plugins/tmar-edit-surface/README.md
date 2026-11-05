@@ -103,6 +103,11 @@ Editing one interior pole of face 5 on the second solid by 0.05 mm produced a
 STEP that reimported as valid (volume 1084.0807603 to 1083.9916541 mm³).
 The source file SHA-256 was unchanged. This is a kernel-only check of one
 face, not an app/UI test, preservation proof for all faces or QS parity.
+Follow-up: on that same edit, nine parameter-space positions on each of the
+other 80 faces matched after STEP reimport (maximum sampled gap 0 mm). The
+serialized recipe replayed to a valid STEP with the same measured volume.
+These are finite position and volume checks, not exhaustive topology or
+normal-continuity certification.
 
 - Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Periodic cylinders, arbitrary trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
 - One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.
