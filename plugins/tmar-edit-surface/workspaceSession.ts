@@ -13,7 +13,7 @@ import { SurfaceDraft, type SurfaceDraftSnapshot } from './surfaceDraft'
 import { SurfaceRuntime } from './surfaceRuntime'
 import { mirrorEdit, mirrorPartners } from './symmetry'
 import type { StripMove } from './sheetExtension'
-import type { SurfaceEditRecipe, SurfaceEditRecipeV6 } from './recipe'
+import { readRecipe, readCurvedRecipe, type SurfaceEditRecipe, type SurfaceEditRecipeV6 } from './recipe'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
 
 export interface WorkspaceSurfaceNote {
@@ -903,6 +903,43 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         !this.busy && !this.frozen && this.gesture === 'idle' && !this.placingNote && !this.notes.length &&
         !this.strip && !this.stripPending && this.snapshot.validation.kind === 'valid'
     } catch { return false }
+  }
+
+  /** Restore only into a new session, preserving any existing user draft. */
+  async restoreHistoryRecipe(value: unknown): Promise<void> {
+    this.assertMutable()
+    if (this.face >= 0 || this.draft.getSnapshot().net || this.notes.length || this.placingNote ||
+        this.strip || this.stripPending || this.gesture !== 'idle')
+      throw new Error('Apri una nuova sessione vuota per ripristinare la ricetta.')
+    const version = (value as { version?: unknown } | null)?.version
+    const recipe = version === 6 ? readCurvedRecipe(value) : readRecipe(value)
+    if (recipe.source.bodyId !== this.source.bodyKey) throw new Error('La ricetta appartiene a un altro corpo CAD.')
+    this.busy = true
+    this.refresh()
+    this.mutating = true
+    try {
+      const bytes = this.context.step.slice()
+      const digest = await this.digest(bytes)
+      this.assertLive()
+      if (digest.toLowerCase() !== this.source.stepSha256.toLowerCase()) throw new Error('Il contenuto STEP non corrisponde alla sorgente.')
+      const step = new TextDecoder().decode(bytes)
+      const result = version === 6
+        ? await this.draft.restoreCurvedRecipe(step, recipe, this.source.bodyKey)
+        : await this.draft.restoreRecipe(step, recipe, this.source.bodyKey)
+      this.assertLive()
+      if (result.preparation.face !== recipe.faceIndex || !this.faces[result.preparation.face] || result.faces.length !== this.faces.length)
+        throw new Error('La faccia ripristinata non corrisponde alla sorgente CAD.')
+      this.face = result.preparation.face
+      this.selectionEpoch++; this.draftEpoch++; this.historyRevision++
+    } catch (error) {
+      // A failed worker restore may have replaced its internal model. Do not
+      // leave a partially adopted session available to the host.
+      this.releaseOwned()
+      throw error
+    } finally {
+      this.mutating = false
+      if (!this.disposed) { this.busy = false; this.refresh(); this.resolveNotes() }
+    }
   }
 
   /** Explicit, slower CAD check. A provisional rendering alone cannot Apply. */

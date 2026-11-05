@@ -298,17 +298,20 @@ describe('WorkspaceSurfaceSession',()=>{
       const p=k.pointOnSurface(face,u,v), seed:[number,number,number]=[p.x,p.y,p.z]
       const outward=[p.x-10,p.y-15,p.z-5], length=Math.hypot(...outward)
       class KernelWorker extends FakeWorker {
+        constructor(private readonly target: SurfaceEditorKernel = editor) { super() }
         postMessage(message: Msg) {
           this.sent.push(message)
           void Promise.resolve().then(async()=>{
             try {
-              const m=message as Msg & {step:string;face:number;continuity:'G0'|'G1';freeBoundary:boolean;previewRevision:number;point:Point;bodyId:string;lockedPoles:number[];anchor:Parameters<SurfaceEditorKernel['resolveAnchor']>[0]}
-              const value=m.action==='open' ? editor.open(m.step) : m.action==='select' ? editor.select(m.face) :
-                m.action==='evaluate' ? editor.evaluate(m.net!,m.continuity,!!m.exportStep,m.freeBoundary) :
-                m.action==='createRecipe' ? await editor.createRecipe(m.net!,m.continuity,m.lockedPoles,m.bodyId,m.freeBoundary) :
-                m.action==='notePick' ? editor.anchorFromPick(m.point,m.previewRevision) :
-                m.action==='noteResolve' ? editor.resolveAnchor(m.anchor,m.previewRevision) :
-                m.action==='finalFaceWitness' ? editor.finalFaceWitness(m.previewRevision) : (()=>{throw Error(`unexpected worker action: ${m.action}`)})()
+              const m=message as Msg & {step:string;face:number;continuity:'G0'|'G1';freeBoundary:boolean;previewRevision:number;point:Point;bodyId:string;recipe:unknown;lockedPoles:number[];anchor:Parameters<SurfaceEditorKernel['resolveAnchor']>[0]}
+              const e=this.target
+              const value=m.action==='open' ? e.open(m.step) : m.action==='select' ? e.select(m.face) :
+                m.action==='evaluate' ? e.evaluate(m.net!,m.continuity,!!m.exportStep,m.freeBoundary) :
+                m.action==='createRecipe' ? await e.createRecipe(m.net!,m.continuity,m.lockedPoles,m.bodyId,m.freeBoundary) :
+                m.action==='restoreRecipe' ? await e.restoreRecipe(m.step,m.recipe,m.bodyId) :
+                m.action==='notePick' ? e.anchorFromPick(m.point,m.previewRevision) :
+                m.action==='noteResolve' ? e.resolveAnchor(m.anchor,m.previewRevision) :
+                m.action==='finalFaceWitness' ? e.finalFaceWitness(m.previewRevision) : (()=>{throw Error(`unexpected worker action: ${m.action}`)})()
               this.reply(m.id,value)
             } catch(error) { this.onmessage?.({data:{id:message.id,error:String((error as Error).message)}} as MessageEvent<unknown>) }
           })
@@ -336,6 +339,24 @@ describe('WorkspaceSurfaceSession',()=>{
       await vi.advanceTimersByTimeAsync(90);await flush()
       expect(session.getSnapshot().validation.kind).toBe('valid')
       expect(session.isHistoryRecipeStampCurrent(recipe)).toBe(true)
+      await expect(session.restoreHistoryRecipe(recipe.recipe)).rejects.toThrow('nuova sessione vuota')
+      const restoredEditor=new SurfaceEditorKernel(k), restoredWorker=new KernelWorker(restoredEditor)
+      const restoredRuntime=new SurfaceRuntime(()=>restoredWorker as unknown as Worker)
+      const restoredContext={...context,sessionId:'restored-session'}
+      let restored:WorkspaceSurfaceSession | undefined
+      try {
+        restored=await createWorkspaceSurfaceSession(restoredContext as never,vi.fn() as never,{runtime:restoredRuntime,sha256:async bytes=>sha(bytes)})
+        const wrongBody=JSON.parse(JSON.stringify(recipe.recipe))
+        wrongBody.source.bodyId='another-body'
+        await expect(restored.restoreHistoryRecipe(wrongBody)).rejects.toThrow('altro corpo CAD')
+        expect(restored.getPanelState().face).toBe(-1)
+        await restored.restoreHistoryRecipe(JSON.parse(JSON.stringify(recipe.recipe)))
+        await vi.advanceTimersByTimeAsync(90);await flush()
+        expect(restored.getPanelState().face).toBe(index)
+        expect(restored.getPanelState().net?.poles).toEqual(session.getPanelState().net?.poles)
+        expect(restored.getSnapshot().validation.kind).toBe('valid')
+        expect(restored.isHistoryRecipeStampCurrent(recipe)).toBe(false)
+      } finally { if(restored)await restored.dispose('cancelled');restoredEditor.dispose() }
       session.setStripes({orientation:'horizontal',width:3,color:'#5288b2'})
       session.setPlacingNote(true);await session.placeNote(seed)
       const note=session.getPanelState().notes[0]

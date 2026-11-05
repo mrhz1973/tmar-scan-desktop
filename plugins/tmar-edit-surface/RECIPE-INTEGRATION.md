@@ -23,6 +23,12 @@ atomic host contract can preserve and revalidate them.
 state and a revalidated preview; it does not authenticate recipe contents or
 replace replay/validation within the host's atomic commit.
 
+`WorkspaceSurfaceSession.restoreHistoryRecipe(value)` restores a validated
+recipe into a fresh, empty workspace session only. It rejects another body or
+changed STEP bytes; a failed worker restore closes the session. A real OCCT
+test restores an edited reversed STEP face and validates the resulting solid.
+This API does not restore notes or implement host project persistence.
+
 Worker and draft APIs alone therefore do not
 make a saved project feature editable. An integration needs a versioned host
 contract that binds the recipe to the upstream body and validated draft stamp,
