@@ -25,6 +25,7 @@ export function netCells(n: NetShape): [number, number, number, number][] {
   return cells
 }
 export function selectNetPoints(selected: number[], hit: number[], multi: boolean): number[] {
+  if (!hit.length) return multi ? [...selected] : []
   const all = hit.every(i => selected.includes(i))
   if (!multi) return all ? selected : [...hit]
   return all ? selected.filter(i => !hit.includes(i)) : [...new Set([...selected, ...hit])]

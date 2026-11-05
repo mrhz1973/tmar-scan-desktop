@@ -6,6 +6,7 @@ import type { Net, Point } from '../brep'
 import type { Preview } from '../editorKernel'
 import type { WorkspaceStripViewState, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState } from '../workspaceBridge'
 import { createWorkspaceLayer } from '../workspaceLayer'
+import { selectNetPoints } from '../netSelection'
 
 const net: Net = {
   nu: 2, nv: 2, du: 1, dv: 1, poles: [[-1, -1, 0], [-1, 1, 0], [1, -1, 0], [1, 1, 0]],
@@ -224,6 +225,9 @@ it('leaves an unselected automatic cell press for navigation and allows dragging
   f.getHandlers().move(f.event(2, [0.5, 0, 0]))
   expect(f.previewPoles).toHaveBeenCalled()
   f.getHandlers().up(f.event(2, [0.5, 0, 0]))
+  expect(f.getLayer().click?.(590, 10, false)).toBe(true)
+  expect(f.selectPoints).toHaveBeenLastCalledWith([], false)
+  expect(f.getLayer().pointerDown?.(f.event(3, [0, 0, 0]))).toBe(false)
   layer.dispose()
 })
 
@@ -238,6 +242,11 @@ it('keeps direct cell dragging in explicit cell mode and leaves modified or midd
   expect(f.previewPoles).toHaveBeenCalled()
   f.getHandlers().up(f.event(1, [0.5, 0, 0]))
   layer.dispose()
+})
+
+it('clears the real net selection on an empty plain click but preserves additive selection', () => {
+  expect(selectNetPoints([0, 1, 2, 3], [], false)).toEqual([])
+  expect(selectNetPoints([0, 1, 2, 3], [], true)).toEqual([0, 1, 2, 3])
 })
 
 it('keeps snap calculations in the part frame after rotating and translating the body', () => {

@@ -754,6 +754,10 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       if (hit && (!state.net || hit.face !== state.face)) {
         faceRequest = true
         void owner.requestFaceSelection(hit.face).catch(error => report(errorText(error))).finally(() => { faceRequest = false })
+      } else if (!hit && !additive && state.selected.length) {
+        // Release a selected cell without changing tools, so the next drag
+        // over that cell can navigate again in automatic selection mode.
+        owner.selectPoints([], false)
       }
     } catch (error) { report(errorText(error)) }
     return true
