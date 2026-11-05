@@ -2,12 +2,14 @@
 import { SurfaceEditorKernel, type DraftAnchor } from './editorKernel'
 import wasmUrl from 'occt-wasm/dist/occt-wasm.wasm?url'
 import type { Net, Point } from './brep'
+import type { KnotInsertion } from './refineClampedNet'
 import type { StripMove } from './sheetExtension'
 import { previewPreparedCylinder } from './cylinderPreview'
 import { evaluatePreparedCylinder } from './cylinderEvaluation'
 import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
+  | { action: 'selectRefined'; face: number; refinements: KnotInsertion[] }
   | { action: 'sheetEdges'; previewRevision: number }
   | { action: 'duplicateSheetEdge'; previewRevision: number; edge: number; delta: Point; previous?: StripMove[]; path?: Point[] }
   | { action: 'finalFaceWitness'; previewRevision: number }
@@ -38,6 +40,12 @@ self.onmessage = (event: MessageEvent<Request>) => {
       switch (req.action) {
         case 'open': resetCylinder(); result = editor.open(req.step); break
         case 'select': resetCylinder(); result = editor.select(req.face); break
+        case 'selectRefined': {
+          resetCylinder()
+          const net=editor.select(req.face,req.refinements), info=editor.infos[req.face]
+          result={net,trimLocks:info.trimLocks,hiddenPoles:info.hiddenPoles}
+          break
+        }
         case 'sheetEdges': result = editor.sheetEdges(req.previewRevision); break
         case 'duplicateSheetEdge': result = editor.duplicateSheetEdge(req.previewRevision,req.edge,req.delta,req.previous,req.path); break
         case 'finalFaceWitness': result = editor.finalFaceWitness(req.previewRevision); break

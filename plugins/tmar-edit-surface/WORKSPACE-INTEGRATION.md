@@ -460,3 +460,11 @@ hole, including sampled positions, normals, trim classification and STEP
 roundtrip. It is not connected to any editing control: selecting a refined
 net requires coordinated baseline, protected-pole, history and recipe changes.
 Do not advertise an interactive refinement feature on this evidence.
+
+The CAD kernel now accepts an explicit insertion plan when selecting a
+nonperiodic face, recomputes trim locks for the refined basis and records a v4
+recipe with the insertion plan and refined-baseline hash. A synthetic STEP-box
+test checks edit, recipe restoration, STEP replay and rejection of altered
+plans/hashes. Worker preparation exposes the refined net and new lock metadata.
+There is still no user command: undoable preparation, live draft state, UI,
+and end-to-end qualification are not implemented by this checkpoint.

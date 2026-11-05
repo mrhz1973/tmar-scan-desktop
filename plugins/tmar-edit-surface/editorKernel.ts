@@ -2,6 +2,7 @@
 import { OcctKernel, type Mesh, type BoundingBox, type ShapeHandle } from 'occt-wasm'
 import { assertNet, boundaryLocked, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
 import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
+import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
@@ -85,6 +86,7 @@ export class SurfaceEditorKernel {
   private recordsByFace: number[] = []
   private chosen = -1
   private originalNet: Net | null = null
+  private refinements: KnotInsertion[] = []
   private editBrep = ''
   private editRecord: RecordSpan | null = null
   private solids = 0
@@ -140,7 +142,7 @@ export class SurfaceEditorKernel {
     })
     return { faces: this.infos, preview: this.render(this.source) }
   }
-  private netFor(index: number) {
+  private netFor(index: number, refinements: readonly KnotInsertion[] = []) {
     const face = this.faces[index], id = this.recordsByFace[index], r = this.records[id], k = this.kernel
     if (!face || !r) throw new Error('Superficie ambigua o condivisa: non modificabile.')
     if (this.recordsByFace.filter(n => n === id).length !== 1) throw new Error('Superficie condivisa da più facce.')
@@ -177,9 +179,10 @@ export class SurfaceEditorKernel {
       const trimBoxes = inner.map(w => k.getBoundingBox(w,{useTriangulation:false}))
       if (!rectangular || partial) for (const edge of edges) trimBoxes.push(...outerEdgeBoxes(k,edge))
 
-      const net = r.kind === 1
+      const initialNet = r.kind === 1
         ? (trimBoxes.length ? perforatedPlaneNet(r, bounds) : planeNet(r, bounds))
         : enrichBicubic(structuredClone(r.net!))
+      const net = refinements.length ? refineClampedNet(initialNet, refinements) : initialNet
       if (net.mu[0] !== net.du + 1 || net.mu.at(-1) !== net.du + 1 || net.mv[0] !== net.dv + 1 || net.mv.at(-1) !== net.dv + 1) throw new Error('Servono nodi estremi clamped.')
       if (net.nu * net.nv > 1600) throw new Error('Reticolo oltre 1600 punti: non interattivo in questo prototipo.')
       const trimLocks = new Set<number>()
@@ -281,8 +284,8 @@ export class SurfaceEditorKernel {
         throw new Error('Conversione piana: dominio interno alterato.')
     }
   }
-  select(index: number) {
-    const net = this.netFor(index).net, record = this.records[this.recordsByFace[index]], k = this.kernel
+  select(index: number, refinements: readonly KnotInsertion[] = []) {
+    const info = this.netFor(index, refinements), net = info.net, record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
     if (record.kind === 1) {
       // STEP readers may omit planar pcurves (derived implicitly on a plane).
@@ -294,7 +297,7 @@ export class SurfaceEditorKernel {
         if (!k.isValid(prepared) || fs.length !== this.faces.length || this.count(prepared, 'solid') !== this.solids) throw new Error('Conversione piana esatta non qualificabile per questa faccia.')
         for (let f = 0; f < fs.length; f++) {
           const b = k.uvBounds(this.faces[f])
-          this.checkPreparedArea(this.faces[f],fs[f],f === index && this.infos[index].trimLocks.length > 0)
+          this.checkPreparedArea(this.faces[f],fs[f],f === index && info.trimLocks.length > 0)
           for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
             const u = b.uMin + (b.uMax - b.uMin) * i / 4, v = b.vMin + (b.vMax - b.vMin) * j / 4
             if (dist(tuple(k.pointOnSurface(fs[f], u, v)), tuple(k.pointOnSurface(this.faces[f], u, v))) > 1e-7) throw new Error('Conversione piana: geometria o ordine delle facce alterato.')
@@ -312,6 +315,8 @@ export class SurfaceEditorKernel {
     this.releasePreviewFace()
     this.revision++
     this.chosen = index; this.originalNet = structuredClone(net); this.editBrep = text; this.editRecord = editRecord
+    this.refinements = structuredClone(refinements) as KnotInsertion[]
+    this.infos[index] = { ...this.infos[index], trimLocks: info.trimLocks, hiddenPoles: info.hiddenPoles }
     return net
   }
   private preparation(): SurfaceEditRecipe['preparation'] {
@@ -327,7 +332,9 @@ export class SurfaceEditorKernel {
       throw new Error('Il bordo libero richiede una sola faccia aperta con contorno naturale rettangolare.')
     assertNet(base, next, continuity, freeBoundary)
     const recipe: SurfaceEditRecipe = {
-      schema: 'tmar.surface-edit', ...(freeBoundary ? { version: 3, boundaryMode: 'free-natural' } : { version: 2 }), engine: 'occt-wasm-5.7.1/brep-v3',
+      schema: 'tmar.surface-edit', ...(this.refinements.length
+        ? { version: 4, boundaryMode: freeBoundary ? 'free-natural' : 'locked', refinements: structuredClone(this.refinements) }
+        : freeBoundary ? { version: 3, boundaryMode: 'free-natural' } : { version: 2 }), engine: 'occt-wasm-5.7.1/brep-v3',
       units: 'mm', coordinateFrame: 'imported-step',
       source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids },
       faceIndex: this.chosen, preparation: this.preparation(), baseNetSha256: '', continuity,
@@ -348,13 +355,13 @@ export class SurfaceEditorKernel {
     const fingerprint = await sha256(this.brep)
     if (this.revision !== rev) throw new Error('Sorgente cambiata durante il ripristino.')
     if (fingerprint !== recipe.source.brepSha256 || this.faces.length !== recipe.source.faceCount || this.solids !== recipe.source.solidCount) throw new Error('Geometria sorgente cambiata: ricollegare esplicitamente la modifica della superficie.')
-    const net = this.select(recipe.faceIndex), selectedRevision = this.revision
+    const net = this.select(recipe.faceIndex, recipe.version === 4 ? recipe.refinements : []), selectedRevision = this.revision
     const baseFingerprint = await sha256(JSON.stringify(net))
     if (this.revision !== selectedRevision) throw new Error('Faccia cambiata durante il ripristino.')
     if (baseFingerprint !== recipe.baseNetSha256 || this.preparation() !== recipe.preparation) throw new Error('Base NURBS o raffinamento diverso dalla ricetta.')
     if ([...recipe.edits.map(e => e.index), ...recipe.lockedPoles].some(i => i >= net.poles.length)) throw new Error('La ricetta contiene un polo inesistente.')
     for (const edit of recipe.edits) net.poles[edit.index] = [...edit.point]
-    const freeBoundary = recipe.version === 3
+    const freeBoundary = recipe.version === 3 || (recipe.version === 4 && recipe.boundaryMode === 'free-natural')
     const preview = this.evaluate(net, recipe.continuity, exportStep, freeBoundary)
     return { faces: opened.faces, net, preview, continuity: recipe.continuity, freeBoundary, lockedPoles: recipe.lockedPoles }
   }
@@ -367,7 +374,7 @@ export class SurfaceEditorKernel {
       this.clear()
       this.source = temporary.source; this.faces = temporary.faces
       this.brep = temporary.brep; this.records = temporary.records; this.recordsByFace = temporary.recordsByFace
-      this.chosen = temporary.chosen; this.originalNet = temporary.originalNet
+      this.chosen = temporary.chosen; this.originalNet = temporary.originalNet; this.refinements = temporary.refinements
       this.editBrep = temporary.editBrep; this.editRecord = temporary.editRecord
       this.solids = temporary.solids; this.infos = temporary.infos
       // Transfer handle ownership without disposing the shared OCCT runtime.
@@ -533,6 +540,6 @@ export class SurfaceEditorKernel {
       return { ...preview, volume, maxBoundaryError, minimumNormalDot, step, previewRevision: ++this.previewRevision }
     } finally { fs.forEach(f => k.release(f)); k.release(edited) }
   }
-  clear() { this.releasePreviewFace(); this.revision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null }
+  clear() { this.releasePreviewFace(); this.revision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null; this.refinements = [] }
   dispose() { this.clear(); if (this.ownsKernel) this.kernel[Symbol.dispose]() }
 }
