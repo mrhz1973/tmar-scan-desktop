@@ -452,3 +452,11 @@ temporary Puppeteer profile returned EPERM; overall test cleanup is therefore
 not a pass. This is one derived STEP fixture, not general STEP, physical mouse,
 real scan or packaged-desktop qualification. The resulting volume discrepancy
 and unsampled self-intersection risk remain unresolved.
+
+An independent `refineClampedNet` helper now supports exact rational knot
+insertion in U and V, with explicit nonperiodic and pole-count guards. Four
+isolated OCCT tests cover rational surfaces and a partially trimmed face with a
+hole, including sampled positions, normals, trim classification and STEP
+roundtrip. It is not connected to any editing control: selecting a refined
+net requires coordinated baseline, protected-pole, history and recipe changes.
+Do not advertise an interactive refinement feature on this evidence.
