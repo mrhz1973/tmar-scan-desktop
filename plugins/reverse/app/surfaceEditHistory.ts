@@ -142,7 +142,9 @@ export function readStoredSurfaceHistory(value: unknown): StoredSurfaceEditHisto
       !object(raw.source) || !hasKeys(raw.source,['bodyId','bodyKey','file','stepSha256','sourceReplaySha256']))
     throw new Error('Metadati history Edit Surface non supportati.')
   const source = raw.source
-  if (!Number.isSafeInteger(source.bodyId) || (source.bodyId as number) <= 0 ||
+  // Body IDs are positive finite numbers, including 1 + n/1024 islands;
+  // feature/face/index/revision IDs elsewhere remain integers.
+  if (!Number.isFinite(source.bodyId) || (source.bodyId as number) <= 0 ||
       typeof source.bodyKey !== 'string' || !source.bodyKey.trim() || source.bodyKey.length > 1024 ||
       !validHash(source.stepSha256) || !validHash(source.sourceReplaySha256) || !object(source.file) ||
       !hasKeys(source.file, ['key','name','size']) ||
