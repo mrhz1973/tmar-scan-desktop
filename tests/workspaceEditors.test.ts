@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EditorLifetime } from '../src/plugins/editorLifetime'
 import { EditorReferenceNotifications } from '../src/plugins/editorReferenceNotifications'
 import { configureWorkspaceEditorHost, registerWorkspaceEditor, useWorkspaceEditor, workspaceEditors, type WorkspaceEditorHost } from '../src/plugins/workspaceEditors'
-import type { EditorSnapshot, EditorViewportLease, PreparedCadCopy, WorkspaceEditorController, WorkspaceEditorContext, SourceBinding } from '../src/plugins/workspaceEditorTypes'
+import type { DraftStamp, EditorSnapshot, EditorViewportLease, PreparedCadCopy, ReticleFrame, WorkspaceEditorController, WorkspaceEditorContext, SourceBinding } from '../src/plugins/workspaceEditorTypes'
 
 const deferred = <T>() => { let resolve!: (v: T) => void; const promise = new Promise<T>(r => { resolve = r }); return { promise, resolve } }
 const stops: (() => void)[] = []
@@ -12,6 +12,8 @@ function fixture() {
   const source: SourceBinding = Object.freeze({ documentEpoch: 'document', sourceEpoch: 1, bodyId: 1, bodyKey: 'body', buildVersion: 1, kernelGeneration: 1, frameRevision: 1, stepSha256: 'hash', units: 'mm', coordinateFrame: 'part' })
   let valid = true, sourceChanged = () => {}, changed = () => {}
   let snapshot!: EditorSnapshot, context!: WorkspaceEditorContext
+  let reticle: ReticleFrame | null = null, reticleChanged = () => {}
+  const frameReticle = vi.fn((stamp: DraftStamp) => !!reticle && reticle.stamp.sessionId === stamp.sessionId)
   const assertCurrent = () => { if (!valid) throw new Error('stale source') }
   const unfreeze = vi.fn(), detach = vi.fn(), release = vi.fn(), dispose = vi.fn(async () => {})
   const published: string[] = []
@@ -36,6 +38,9 @@ function fixture() {
       subscribeReferences: (fn: () => void) => references.subscribe(fn),
       references: () => { assertCurrent(); return [] },
     } as unknown as EditorViewportLease, releaseCapture: release,
+      reticleFrame: () => reticle,
+      onReticleFrameChanged: (fn: () => void) => { reticleChanged = fn; return () => { reticleChanged = () => {} } },
+      frameReticle,
       suspendReferenceNotifications: () => references.suspend(), dispose: vi.fn(() => references.dispose()) })),
     stage: vi.fn(async () => ({ publish, dispose: stageDispose })),
   }
@@ -48,10 +53,40 @@ function fixture() {
     }) }
   stops.push(registerWorkspaceEditor(definition), configureWorkspaceEditorHost(adapter))
   const patch = (data: Partial<EditorSnapshot>) => { snapshot = { ...snapshot, ...data }; changed() }
-  return { adapter, definition, controller, publish, published, source, unfreeze, stageDispose, detach, release, dispose, patch,
+  return { adapter, definition, controller, publish, published, source, unfreeze, stageDispose, detach, release, dispose, patch, frameReticle,
+    setReticle: (next: ReticleFrame | null) => { reticle = next; reticleChanged() },
     get snapshot() { return snapshot }, get context() { return context }, invalidate: () => { valid = false; sourceChanged() },
     referenceChanged: (current: boolean) => { valid = current; references.notify() } }
 }
+describe('host-owned explicit reticle framing', () => {
+  it('requires an actual button command: publication never moves the camera', async () => {
+    const f = fixture()
+    await workspaceEditors.open('test-editor', { bodyId: 1 })
+    expect(useWorkspaceEditor.getState().canFrameReticle).toBe(false)
+    f.setReticle({ min: [0, 0, 0], max: [1, 2, 3], stamp: { ...f.snapshot.current } })
+    expect(useWorkspaceEditor.getState().canFrameReticle).toBe(true)
+    expect(f.frameReticle).not.toHaveBeenCalled()
+    expect(workspaceEditors.frameReticle()).toBe(true)
+    expect(f.frameReticle).toHaveBeenCalledExactlyOnceWith(f.snapshot.current)
+  })
+  it('refuses obsolete selection/draft, active gesture and closing editor', async () => {
+    const f = fixture()
+    await workspaceEditors.open('test-editor', { bodyId: 1 })
+    f.setReticle({ min: [0, 0, 0], max: [1, 1, 1], stamp: { ...f.snapshot.current } })
+    f.patch({ current: { ...f.snapshot.current, draftEpoch: 2 } })
+    expect(useWorkspaceEditor.getState().canFrameReticle).toBe(false)
+    expect(workspaceEditors.frameReticle()).toBe(false)
+    f.setReticle({ min: [0, 0, 0], max: [1, 1, 1], stamp: { ...f.snapshot.current } })
+    f.patch({ gesture: 'pole' })
+    expect(useWorkspaceEditor.getState().canFrameReticle).toBe(false)
+    expect(workspaceEditors.frameReticle()).toBe(false)
+    f.patch({ gesture: 'idle' })
+    expect(workspaceEditors.frameReticle()).toBe(true)
+    await workspaceEditors.cancel()
+    expect(workspaceEditors.frameReticle()).toBe(false)
+    expect(f.frameReticle).toHaveBeenCalledTimes(1)
+  })
+})
 describe('workspace editor lifecycle', () => {
   it('owns cleanup once in reverse order even when one throws', () => {
     const life = new EditorLifetime(), order: number[] = []

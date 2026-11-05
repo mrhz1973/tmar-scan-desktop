@@ -32,6 +32,11 @@ export function WorkspaceEditorDock() {
           disabled={state.phase !== 'editing'} onChange={e => { workspaceEditors.setHideSourceAfterApply(e.target.checked) }} />
         <span>Nascondi l’originale dopo Applica</span>
       </label>
+      <div className="keys">
+        <button type="button" data-test="workspace-editor-frame-reticle" disabled={!state.canFrameReticle}
+          title="Inquadra il reticolo corrente senza cambiare l'orientamento della vista; non si attiva automaticamente"
+          onClick={() => { workspaceEditors.frameReticle() }}>Inquadra reticolo</button>
+      </div>
       <div data-slot="workspace.editor.actions" className="keys">
         <button type="button" data-test="workspace-editor-apply" disabled={!state.canApply}
           title="Pubblica una copia CAD verificata come un'unica operazione del progetto"

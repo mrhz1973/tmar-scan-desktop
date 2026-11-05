@@ -4,7 +4,7 @@ import { create } from 'zustand'
 import type { AnnotatedTicketV1 } from './annotatedCopyTypes'
 import { validateAnnotatedCopy } from './annotatedCopyValidation'
 import { EditorLifetime, abortIfNeeded, editorSha256 } from './editorLifetime'
-import type { ApplyTicket, CommitReceipt, EditorCapabilities, EditorSnapshot, EditorViewportLease, ExitReason, PreparedCadCopy, PreviewStamp, SourceBinding, WorkspaceEditorController, WorkspaceEditorDefinition } from './workspaceEditorTypes'
+import type { ApplyTicket, CommitReceipt, DraftStamp, EditorCapabilities, EditorSnapshot, EditorViewportLease, ExitReason, PreparedCadCopy, PreviewStamp, ReticleFrame, SourceBinding, WorkspaceEditorController, WorkspaceEditorDefinition } from './workspaceEditorTypes'
 export type * from './workspaceEditorTypes'
 
 export interface BoundEditorSource {
@@ -16,6 +16,11 @@ export interface BoundEditorSource {
 export interface OwnedEditorViewport {
   view: EditorViewportLease
   releaseCapture(): void
+  /** Optional to preserve compatibility with existing editor adapters. */
+  reticleFrame?(): ReticleFrame | null
+  onReticleFrameChanged?(listener: () => void): () => void
+  /** Host-only explicit action; plugin cannot invoke the camera. */
+  frameReticle?(stamp: DraftStamp): boolean
   /** Host-only publication barrier; public editor/controller contract is unchanged. */
   suspendReferenceNotifications(): () => void
   dispose(): void
@@ -42,10 +47,11 @@ export interface WorkspaceEditorState {
   snapshot: EditorSnapshot | null
   error: string | null
   canApply: boolean
+  canFrameReticle: boolean
   receipt: CommitReceipt | null
   hideSourceAfterApply: boolean
 }
-const CLOSED: WorkspaceEditorState = { phase: 'closed', id: null, controller: null, definition: null, snapshot: null, error: null, canApply: false, receipt: null, hideSourceAfterApply: true }
+const CLOSED: WorkspaceEditorState = { phase: 'closed', id: null, controller: null, definition: null, snapshot: null, error: null, canApply: false, canFrameReticle: false, receipt: null, hideSourceAfterApply: true }
 export const useWorkspaceEditor = create<WorkspaceEditorState>(() => CLOSED)
 const definitions = new Map<string, WorkspaceEditorDefinition>()
 let host: WorkspaceEditorHost | null = null
@@ -57,7 +63,7 @@ interface Session {
 let active: Session | null = null
 const receipts = new Map<string, CommitReceipt>()
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
-export const sameDraft = (a: PreviewStamp, b: EditorSnapshot['current']): boolean =>
+export const sameDraft = (a: DraftStamp, b: EditorSnapshot['current']): boolean =>
   a.sessionId === b.sessionId && a.sourceEpoch === b.sourceEpoch && a.selectionEpoch === b.selectionEpoch && a.draftEpoch === b.draftEpoch
 export const samePreview = (a: PreviewStamp, b: PreviewStamp): boolean => sameDraft(a, b) && a.requestId === b.requestId
 const sameSource = (a: SourceBinding, b: SourceBinding) => (Object.keys(b) as (keyof SourceBinding)[]).every(k => a[k] === b[k])
@@ -96,7 +102,10 @@ function refresh(session: Session): void {
     snapshot.validation.kind === 'valid' && sameDraft(snapshot.validation.stamp, snapshot.current) &&
     snapshot.current.sessionId === session.id && snapshot.current.sourceEpoch === session.source?.binding.sourceEpoch &&
     session.adapter.capabilities.commitKinds.includes('cad-copy')
-  useWorkspaceEditor.setState({ snapshot, canApply })
+  const reticle = session.view?.reticleFrame?.() ?? null
+  const canFrameReticle = !!snapshot && phase === 'editing' && !session.apply && snapshot.gesture === 'idle' &&
+    !!reticle && sameDraft(reticle.stamp, snapshot.current) && !!session.view?.frameReticle
+  useWorkspaceEditor.setState({ snapshot, canApply, canFrameReticle })
 }
 async function open(id: string, input: { bodyId: number }): Promise<void> {
   if (active) throw new Error('Concludi prima la modifica corrente.')
@@ -123,6 +132,8 @@ async function open(id: string, input: { bodyId: number }): Promise<void> {
     try { assertLive(session) } catch (error) { await disposeController(session, 'open-failed'); throw error }
     session.view = adapter.viewport(session.source)
     session.life.own(() => session.view?.dispose())
+    if (session.view.onReticleFrameChanged)
+      session.life.own(session.view.onReticleFrameChanged(() => refresh(session)))
     session.life.own(session.view.view.onInterruption(reason => {
       if (active !== session || session.closing) return
       if (reason === 'blur') cancelGesture()
@@ -154,7 +165,7 @@ async function closeSession(session: Session, reason: ExitReason): Promise<void>
   // Mark closing before abort/release callbacks can re-enter cancellation.
   let resolve!: () => void
   session.closing = new Promise<void>(done => { resolve = done })
-  if (active === session) useWorkspaceEditor.setState({ phase: 'closing', canApply: false })
+  if (active === session) useWorkspaceEditor.setState({ phase: 'closing', canApply: false, canFrameReticle: false })
   session.abort.abort()
   try { session.view?.releaseCapture() } catch (error) { session.life.errors.push(error) }
   void (async () => {
@@ -272,6 +283,16 @@ function apply(): Promise<CommitReceipt> {
 }
 export const workspaceEditors = {
   open, apply, cancel, cancelGesture,
+  frameReticle: (): boolean => {
+    const session = active
+    if (!session?.view || !session.controller || session.apply ||
+        useWorkspaceEditor.getState().phase !== 'editing') return false
+    try { assertLive(session) } catch { return false }
+    const snapshot = session.controller.getSnapshot()
+    const reticle = session.view.reticleFrame?.()
+    if (!reticle || snapshot.gesture !== 'idle' || !sameDraft(reticle.stamp, snapshot.current)) return false
+    return session.view.frameReticle?.(snapshot.current) ?? false
+  },
   setHideSourceAfterApply: (hideSourceAfterApply: boolean): boolean => {
     // Capture the display choice before any asynchronous preparation starts.
     if (!active || active.apply || useWorkspaceEditor.getState().phase !== 'editing' || typeof hideSourceAfterApply !== 'boolean') return false
