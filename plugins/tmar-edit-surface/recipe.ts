@@ -53,6 +53,24 @@ export type SurfaceEditRecipeV5 = Omit<SurfaceEditRecipeBase, 'edits'> & {
 }
 export type SurfaceEditRecipe = LegacySurfaceEditRecipe | SurfaceEditRecipeV5
 
+/** Explicit opt-in format. Existing readRecipe/worker callers must reject v6
+ * until they can adopt a curved constraint, its queue and its fresh tokens. */
+export interface RecipeCurvedTangency extends Omit<RecipePlaneTangency, 'kind'> {
+  kind: 'compatible-bspline'
+  supportSide: 'uMin' | 'uMax' | 'vMin' | 'vMax'
+  reverseSupport: boolean
+  scale: number
+  derivativeTolerance: number
+  supportNetSha256: string
+}
+export type SurfaceEditRecipeV6 = Omit<SurfaceEditRecipeV5, 'version' | 'preparation' | 'refinements' | 'planeTangency'> & {
+  version: 6
+  preparation: 'native-nurbs'
+  /** Current curved certification requires the original native basis exactly. */
+  refinements: []
+  curvedTangency: RecipeCurvedTangency
+}
+
 const serializedCoordinate = (x: unknown): x is SerializedCoordinate => x === '-0' ||
   (typeof x === 'number' && Number.isFinite(x) && !Object.is(x, -0))
 const serializedPoint = (p: unknown): p is SerializedPoint => Array.isArray(p) && p.length === 3 &&
@@ -107,6 +125,37 @@ function readG1Recipe(value: unknown): SurfaceEditRecipeV5 {
   // Actual domains, pole counts, natural topology and coefficient protections
   // belong to kernel replay; schema metadata cannot establish CAD eligibility.
   return structuredClone(value) as SurfaceEditRecipeV5
+}
+
+/** Deliberately separate from readRecipe: no generic caller may drop the curved
+ * constraint and reinterpret these signed-zero coefficients as legacy edits. */
+export function readCurvedRecipe(value: unknown): SurfaceEditRecipeV6 {
+  const object = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
+  const keys = (x: Record<string, unknown>, expected: readonly string[]) => Object.keys(x).length === expected.length &&
+    expected.every(key => Object.prototype.hasOwnProperty.call(x, key))
+  const invalid = (): never => { throw new Error('Ricetta Edit Surface G1 B-spline v6 non supportata o incompleta.') }
+  // Validate the owned snapshot that will actually be returned, including when
+  // a direct kernel caller supplies accessors instead of JSON data.
+  try { value = structuredClone(value) } catch { return invalid() }
+  if (!object(value) || !keys(value, ['schema', 'version', 'engine', 'units', 'coordinateFrame', 'source', 'faceIndex',
+    'preparation', 'baseNetSha256', 'continuity', 'edits', 'lockedPoles', 'boundaryMode', 'refinements', 'curvedTangency'])) return invalid()
+  const c = value.curvedTangency
+  if (value.version !== 6 || value.preparation !== 'native-nurbs' || !Array.isArray(value.refinements) || value.refinements.length !== 0 ||
+      !object(c) || !keys(c, ['kind', 'supportFaceIndex', 'edgeIndex', 'side', 'supportSide', 'reverseSupport', 'scale',
+        'distanceTolerance', 'derivativeTolerance', 'supportNetSha256', 'initialLockedPoles', 'proposalBaseEdits', 'acceptedReferenceEdits']) ||
+      c.kind !== 'compatible-bspline' || !['uMin', 'uMax', 'vMin', 'vMax'].includes(c.supportSide as string) ||
+      typeof c.reverseSupport !== 'boolean' || typeof c.scale !== 'number' || !Number.isFinite(c.scale) || c.scale <= 0 ||
+      typeof c.derivativeTolerance !== 'number' || !Number.isFinite(c.derivativeTolerance) || c.derivativeTolerance <= 0 || c.derivativeTolerance > 1e-6 ||
+      typeof c.supportNetSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(c.supportNetSha256)) return invalid()
+  // Reuse the unchanged v5 policy for every shared field, lock and signed-zero
+  // sparse net. This adapter is validation-only; no v5 recipe escapes this API.
+  const { curvedTangency: _curved, ...common } = value
+  try {
+    readG1Recipe({ ...common, version: 5, planeTangency: { kind: 'plane', supportFaceIndex: c.supportFaceIndex,
+      edgeIndex: c.edgeIndex, side: c.side, distanceTolerance: c.distanceTolerance, initialLockedPoles: c.initialLockedPoles,
+      proposalBaseEdits: c.proposalBaseEdits, acceptedReferenceEdits: c.acceptedReferenceEdits } })
+  } catch { return invalid() }
+  return value as SurfaceEditRecipeV6
 }
 
 export async function sha256(text: string): Promise<string> {

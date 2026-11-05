@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { OcctKernel, type Mesh, type BoundingBox, type ShapeHandle } from 'occt-wasm'
 import { assertNet, boundaryLocked, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
-import { readRecipe, sha256, encodeRecipePoint, decodeRecipePoint, type SurfaceEditRecipe, type SurfaceEditRecipeV5, type SerializedPoleEdit } from './recipe'
-import type { SurfacePlaneTangency, SurfacePreparation } from './surfaceHistory'
+import { readRecipe, readCurvedRecipe, sha256, encodeRecipePoint, decodeRecipePoint, type SurfaceEditRecipe, type SurfaceEditRecipeV5, type SurfaceEditRecipeV6, type SerializedPoleEdit } from './recipe'
+import type { SurfacePlaneTangency, SurfaceCurvedTangency, SurfacePreparation } from './surfaceHistory'
 import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
@@ -99,7 +99,9 @@ export interface RecipeRestoreResult {
   lockedPoles: number[]
   preparation: SurfacePreparation
   planeTangency?: SurfacePlaneTangency
+  curvedTangency?: SurfaceCurvedTangency
 }
+export interface CurvedRecipeRestoreResult extends RecipeRestoreResult { curvedTangency: SurfaceCurvedTangency; planeTangency?: never }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
 /** Return a finite unit normal with the topological face orientation applied. */
@@ -848,6 +850,7 @@ export class SurfaceEditorKernel {
     if (typeof freeBoundary !== 'boolean' || !['G0', 'G1'].includes(continuity)) throw new Error('Modalità bordo non valida.')
     if (constraintId !== undefined) {
       if (freeBoundary) throw new Error('La ricetta G1 richiede bordi protetti.')
+      if (this.g1CurvedConstraints.has(constraintId)) throw new Error('La ricetta G1 B-spline richiede il percorso curvo esplicito.')
       return this.createPlaneRecipe(net, continuity, lockedPoles, bodyId, constraintId)
     }
     const base = structuredClone(this.originalNet), next = structuredClone(net), rev = this.revision
@@ -877,7 +880,7 @@ export class SurfaceEditorKernel {
       choice: registered.request.choice, lockedPoles: [...(registered.request.lockedPoles ?? [])],
       distanceTolerance: registered.request.distanceTolerance ?? 1e-8 })
   }
-  private checkRecipePlaneLocks(registered: RegisteredPlaneTangency, locks: readonly number[]): void {
+  private checkRecipePlaneLocks(registered: { referenceNet: Net; request: { lockedPoles?: readonly number[] } }, locks: readonly number[]): void {
     const n = registered.referenceNet, info = this.infos[this.chosen]
     if (!Array.isArray(locks) || locks.length > 1600 || new Set(locks).size !== locks.length ||
         Array.from(locks).some(i => !Number.isSafeInteger(i) || Object.is(i, -0) || i < 0 || i >= n.poles.length))
@@ -914,20 +917,89 @@ export class SurfaceEditorKernel {
         this.g1Constraints.get(constraintId) !== registered) throw new Error('Sessione cambiata durante il salvataggio della ricetta G1.')
     return readRecipe(recipe) as SurfaceEditRecipeV5
   }
-  private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false): Promise<RecipeRestoreResult> {
-    const recipe = readRecipe(value)
+  private curvedSnapshot(id: number, registered = this.g1CurvedConstraints.get(id)): SurfaceCurvedTangency {
+    if (!registered) throw new Error('Vincolo G1 B-spline scaduto.')
+    return structuredClone({ kind: 'compatible-bspline', constraintId: id, baseNet: registered.request.baseNet,
+      referenceNet: registered.referenceNet, choice: registered.request.choice, lockedPoles: [...(registered.request.lockedPoles ?? [])],
+      scale: registered.request.scale ?? 1, distanceTolerance: registered.request.distanceTolerance ?? 1e-8,
+      derivativeTolerance: registered.request.derivativeTolerance ?? 1e-8, faceCount: this.faces.length })
+  }
+  /** Explicit kernel-only v6 path. Generic worker/draft callers remain closed. */
+  async createCurvedRecipe(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string, constraintId: number): Promise<SurfaceEditRecipeV6> {
+    const registered = this.g1CurvedConstraints.get(constraintId)
+    if (!this.originalNet || !this.source || !Number.isSafeInteger(constraintId) || !registered)
+      throw new Error('Vincolo G1 B-spline scaduto: verifica di nuovo la tangenza.')
+    if (!['G0', 'G1'].includes(continuity) || this.refinements.length || this.preparation() !== 'native-nurbs')
+      throw new Error('La ricetta G1 B-spline richiede il reticolo nativo originale senza raffinamenti.')
+    const sourceNet = structuredClone(this.originalNet), next = structuredClone(net), locks = structuredClone(lockedPoles)
+    const rev = this.revision, preview = this.previewRevision, anchor = this.anchorSelectionRevision
+    this.checkRecipePlaneLocks(registered, locks)
+    await this.curvedTangency({ ...registered.request, net: next, exportStep: false }, false, false, { id: constraintId, registered })
+    const sparse = (n: Net): SerializedPoleEdit[] => n.poles.flatMap((point, index) =>
+      point.some((x, d) => !Object.is(x, sourceNet.poles[index][d])) ? [{ index, point: encodeRecipePoint(point) }] : [])
+    const choice = registered.request.choice
+    const recipe: SurfaceEditRecipeV6 = {
+      schema: 'tmar.surface-edit', version: 6, engine: 'occt-wasm-5.7.1/brep-v3', units: 'mm', coordinateFrame: 'imported-step',
+      source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids }, faceIndex: this.chosen,
+      preparation: 'native-nurbs', baseNetSha256: '', continuity, boundaryMode: 'locked', refinements: [], edits: sparse(next), lockedPoles: locks,
+      curvedTangency: { kind: 'compatible-bspline', supportFaceIndex: choice.supportFaceIndex, edgeIndex: choice.edgeIndex,
+        side: choice.side, supportSide: choice.supportSide, reverseSupport: choice.reverseSupport,
+        scale: registered.request.scale ?? 1, distanceTolerance: registered.request.distanceTolerance ?? 1e-8,
+        derivativeTolerance: registered.request.derivativeTolerance ?? 1e-8, supportNetSha256: '',
+        initialLockedPoles: [...(registered.request.lockedPoles ?? [])], proposalBaseEdits: sparse(registered.request.baseNet),
+        acceptedReferenceEdits: sparse(registered.referenceNet) },
+    }
+    ;[recipe.source.brepSha256, recipe.baseNetSha256, recipe.curvedTangency.supportNetSha256] =
+      await Promise.all([sha256(this.brep), sha256(JSON.stringify(sourceNet)), sha256(JSON.stringify(registered.supportNet))])
+    if (this.revision !== rev || this.previewRevision !== preview || this.anchorSelectionRevision !== anchor ||
+        this.g1CurvedConstraints.get(constraintId) !== registered) throw new Error('Sessione cambiata durante il salvataggio della ricetta G1 B-spline.')
+    return readCurvedRecipe(recipe)
+  }
+  private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false, curved = false): Promise<RecipeRestoreResult> {
+    const recipe = curved ? readCurvedRecipe(value) : readRecipe(value)
     if (recipe.source.bodyId !== bodyId) throw new Error('Corpo sorgente diverso dalla ricetta.')
     const opened = this.open(step), rev = this.revision
     const fingerprint = await sha256(this.brep)
     if (this.revision !== rev) throw new Error('Sorgente cambiata durante il ripristino.')
     if (fingerprint !== recipe.source.brepSha256 || this.faces.length !== recipe.source.faceCount || this.solids !== recipe.source.solidCount) throw new Error('Geometria sorgente cambiata: ricollegare esplicitamente la modifica della superficie.')
-    const net = this.select(recipe.faceIndex, recipe.version === 4 || recipe.version === 5 ? recipe.refinements : []), selectedRevision = this.revision
+    const net = this.select(recipe.faceIndex, recipe.version === 4 || recipe.version === 5 || recipe.version === 6 ? recipe.refinements : []), selectedRevision = this.revision
     const baseFingerprint = await sha256(JSON.stringify(net))
     if (this.revision !== selectedRevision) throw new Error('Faccia cambiata durante il ripristino.')
     if (baseFingerprint !== recipe.baseNetSha256 || this.preparation() !== recipe.preparation) throw new Error('Base NURBS o raffinamento diverso dalla ricetta.')
     const info = this.infos[this.chosen]
     const preparation: SurfacePreparation = { face: this.chosen, refinements: structuredClone(this.refinements), originalNet: structuredClone(net),
       trimLocks: [...info.trimLocks], hiddenPoles: [...info.hiddenPoles] }
+    if (recipe.version === 6) {
+      const constraint = recipe.curvedTangency
+      const apply = (edits: SerializedPoleEdit[]): Net => {
+        const result = structuredClone(net)
+        for (const edit of edits) {
+          if (edit.index >= result.poles.length) throw new Error('La ricetta contiene un polo inesistente.')
+          result.poles[edit.index] = decodeRecipePoint(edit.point)
+        }
+        return result
+      }
+      const baseNet = apply(constraint.proposalBaseEdits), reference = apply(constraint.acceptedReferenceEdits), final = apply(recipe.edits)
+      if (constraint.initialLockedPoles.some(i => i >= net.poles.length)) throw new Error('Blocco iniziale G1 B-spline inesistente.')
+      const choices = (await this.g1CurvedSupportCandidates()).candidates.filter(c => c.kind === constraint.kind &&
+        c.supportFaceIndex === constraint.supportFaceIndex && c.edgeIndex === constraint.edgeIndex && c.side === constraint.side &&
+        c.supportSide === constraint.supportSide && c.reverseSupport === constraint.reverseSupport)
+      if (choices.length !== 1) throw new Error('Supporto originale della ricetta G1 B-spline non disponibile o ambiguo.')
+      const resolved = await this.resolveG1CurvedSupportCandidate(choices[0])
+      if (await sha256(JSON.stringify(resolved.supportNet)) !== constraint.supportNetSha256)
+        throw new Error('Reticolo nativo del supporto originale diverso dalla ricetta G1 B-spline.')
+      // Restore the accepted coefficients verbatim. Never run the projection
+      // again, so repeated save/reopen cannot accumulate a tangency correction.
+      const accepted = await this.publishG1CurvedTangency({ baseNet, net: reference, choice: choices[0],
+        lockedPoles: constraint.initialLockedPoles, scale: constraint.scale, distanceTolerance: constraint.distanceTolerance,
+        derivativeTolerance: constraint.derivativeTolerance })
+      this.checkRecipePlaneLocks(this.g1CurvedConstraints.get(accepted.constraintId)!, recipe.lockedPoles)
+      const evaluated = await this.evaluateG1CurvedTangency({ constraintId: accepted.constraintId, net: final,
+        lockedPoles: recipe.lockedPoles, exportStep })
+      return { faces: opened.faces, net: evaluated.net, preview: { ...evaluated.preview, ...(evaluated.step !== undefined ? { step: evaluated.step } : {}) },
+        continuity: recipe.continuity, freeBoundary: false, lockedPoles: [...recipe.lockedPoles], preparation,
+        curvedTangency: this.curvedSnapshot(accepted.constraintId) }
+    }
     if (recipe.version === 5) {
       const constraint = recipe.planeTangency
       const apply = (edits: SerializedPoleEdit[]): Net => {
@@ -962,12 +1034,37 @@ export class SurfaceEditorKernel {
   }
   /** Validate in isolation; failed restores leave the current edit untouched. */
   async restoreRecipe(step: string, recipe: unknown, bodyId: string) {
+    return this.restoreRecipeIsolated(step, recipe, bodyId, false)
+  }
+  /** Not wired into the legacy worker/host: adoption requires the curved draft contract. */
+  async restoreCurvedRecipe(step: string, recipe: unknown, bodyId: string): Promise<CurvedRecipeRestoreResult> {
+    return this.restoreRecipeIsolated(step, recipe, bodyId, true) as Promise<CurvedRecipeRestoreResult>
+  }
+  private async restoreRecipeIsolated(step: string, recipe: unknown, bodyId: string, curved: boolean): Promise<RecipeRestoreResult> {
     const temporary = new SurfaceEditorKernel(this.kernel), rev = this.revision, preview = this.previewRevision, anchor = this.anchorSelectionRevision
     try {
-      const result = await temporary.prepareRecipe(step, recipe, bodyId)
+      const result = await temporary.prepareRecipe(step, recipe, bodyId, false, curved)
       // Prepare all response/registration allocations before replacing the
       // live session. Temporary stamps and IDs must never escape restoration.
       let restoredConstraint: { id: number; registered: RegisteredPlaneTangency } | undefined
+      let restoredCurved: { id: number; registered: RegisteredCurvedTangency } | undefined
+      if (result.planeTangency && result.curvedTangency) throw new Error('Ripristino di vincoli G1 incompatibili.')
+      if (result.curvedTangency) {
+        const registered = structuredClone(temporary.g1CurvedConstraints.get(result.curvedTangency.constraintId)!)
+        if (!registered || registered.kind !== 'compatible-bspline') throw new Error('Registrazione G1 B-spline ripristinata non disponibile.')
+        const choice = registered.request.choice
+        choice.stamp = { ...choice.stamp, sourceRevision: this.g1SourceRevision + 1,
+          selectionRevision: this.g1SelectionRevision + 1, faceIndex: temporary.chosen }
+        choice.id = JSON.stringify([choice.stamp.sourceId, choice.stamp.sourceRevision, choice.stamp.selectionRevision,
+          choice.stamp.faceIndex, choice.kind, choice.supportFaceIndex, choice.edgeIndex, choice.side, choice.supportSide, choice.reverseSupport])
+        const id = this.g1ConstraintSerial + 1
+        if (![id, this.previewRevision + 1, choice.stamp.sourceRevision, choice.stamp.selectionRevision].every(n => Number.isSafeInteger(n) && n > 0))
+          throw new Error('Limite degli identificativi o delle revisioni G1 B-spline raggiunto.')
+        restoredCurved = { id, registered }
+        // Snapshot from the temporary source's face count, but replace every
+        // transient selection stamp/constraint ID with the new host generation.
+        result.curvedTangency = temporary.curvedSnapshot(id, registered)
+      }
       if (result.planeTangency) {
         const registered = structuredClone(temporary.g1Constraints.get(result.planeTangency.constraintId)!)
         if (!registered) throw new Error('Registrazione G1 ripristinata non disponibile.')
@@ -997,6 +1094,10 @@ export class SurfaceEditorKernel {
         this.g1ConstraintSerial = restoredConstraint.id
         this.g1Constraints.set(restoredConstraint.id, restoredConstraint.registered)
       }
+      if (restoredCurved) {
+        this.g1ConstraintSerial = restoredCurved.id
+        this.g1CurvedConstraints.set(restoredCurved.id, restoredCurved.registered)
+      }
       // Transfer handle ownership without disposing the shared OCCT runtime.
       this.validatedSheetBrep=temporary.validatedSheetBrep
       temporary.validatedSheetBrep=null
@@ -1010,6 +1111,12 @@ export class SurfaceEditorKernel {
   async replayRecipe(step: string, recipe: unknown, bodyId: string) {
     const temporary = new SurfaceEditorKernel(this.kernel)
     try { return (await temporary.prepareRecipe(step, recipe, bodyId, true)).preview }
+    finally { temporary.clear() }
+  }
+  /** Isolated explicit v6 replay, retaining the current source and note witness. */
+  async replayCurvedRecipe(step: string, recipe: unknown, bodyId: string) {
+    const temporary = new SurfaceEditorKernel(this.kernel)
+    try { return (await temporary.prepareRecipe(step, recipe, bodyId, true, true)).preview }
     finally { temporary.clear() }
   }
   private releasePreviewFace() {
