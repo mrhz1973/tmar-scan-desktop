@@ -17,7 +17,7 @@ import { createSurfaceGesture, type SurfaceGesture, type SurfacePointer } from '
 import { drawStrip, pickSheetEdge } from './sheetDrag'
 import { snapAlong, type SnapHit } from './snap'
 import { WorkspacePreview, type WorkspacePreviewClipping } from './workspacePreview'
-import type { WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState } from './workspaceBridge'
+import type { WorkspaceReticleFrame, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState } from './workspaceBridge'
 
 type ZebraOptions = NonNullable<WorkspaceSurfaceViewState['stripes']> & { target: 'visible'; selectedIds: number[] }
 interface Zebra { setOptions(options: ZebraOptions): void; tick(): void; dispose(): void }
@@ -120,6 +120,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   let faceRequest = false
   let lastError = ''
   let hoverKey = ''
+  let reticleKey: string | undefined
   const cleanups: Array<() => void> = []
 
   const cage = new THREE.Group(), hover = new THREE.Group(), pins = new THREE.Group(), stripGroup = new THREE.Group()
@@ -338,6 +339,56 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     syncStripClipping()
   }
 
+  /** Optional PR30 publication is observational; older or revoked leases must
+   * never interrupt CAD editing. Cache before notifying a reentrant host. */
+  const publishReticle = (frame: WorkspaceReticleFrame | null, force = false) => {
+    if (typeof view.publishReticleFrame !== 'function') return
+    const key = frame ? JSON.stringify([frame.stamp.sessionId, frame.stamp.sourceEpoch,
+      frame.stamp.selectionEpoch, frame.stamp.draftEpoch, frame.min, frame.max]) : 'null'
+    if (!force && key === reticleKey) return
+    reticleKey = key
+    try { view.publishReticleFrame(frame) }
+    catch {
+      // Do not retain an earlier valid frame when a new publication fails.
+      // A later owner notification may retry after the host becomes available.
+      reticleKey = undefined
+      if (frame) try { view.publishReticleFrame(null) } catch { /* Lease revoked. */ }
+    }
+  }
+  const publishCageFrame = (state: WorkspaceSurfaceViewState) => {
+    if (typeof view.publishReticleFrame !== 'function') return
+    const stamp = state.reticleStamp
+    if (!state.net || !displayed || !stamp || typeof stamp.sessionId !== 'string' || !stamp.sessionId ||
+        ![stamp.sourceEpoch, stamp.selectionEpoch, stamp.draftEpoch].every(n => Number.isSafeInteger(n) && n >= 0)) {
+      publishReticle(null); return
+    }
+    const box = new THREE.Box3().makeEmpty()
+    let valid = true
+    // Compose only cage-local matrices. matrixWorld would bake the borrowed
+    // part transform into coordinates the host explicitly expects in part-mm.
+    const collect = (object: THREE.Object3D, parent: THREE.Matrix4) => {
+      if (!valid || !object.visible) return
+      if (object.matrixAutoUpdate) object.updateMatrix()
+      const local = parent.clone().multiply(object.matrix)
+      if (!local.elements.every(Number.isFinite)) { valid = false; return }
+      const geometry = (object as THREE.Mesh<THREE.BufferGeometry>).geometry
+      if (geometry?.getAttribute('position')) {
+        if (!geometry.boundingBox) geometry.computeBoundingBox()
+        if (geometry.boundingBox && !geometry.boundingBox.isEmpty()) {
+          const bounds = geometry.boundingBox.clone().applyMatrix4(local)
+          if (![...bounds.min.toArray(), ...bounds.max.toArray()].every(Number.isFinite)) { valid = false; return }
+          box.union(bounds)
+        }
+      }
+      for (const child of object.children) collect(child, local)
+    }
+    collect(cage, new THREE.Matrix4())
+    if (!valid || box.isEmpty()) { publishReticle(null); return }
+    // Spheres, line segments, mirror frame and ArrowHelper line/cone are all
+    // included as actually drawn. Preview meshes, notes and HTML D are not.
+    publishReticle({ min: Object.freeze(point(box.min)), max: Object.freeze(point(box.max)), stamp })
+  }
+
   const sync = () => {
     if (disposed || layerDisposed) return
     try {
@@ -384,6 +435,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         pinState = state.notePins
       }
       syncStrip(state)
+      publishCageFrame(state)
+      if (disposed || layerDisposed) return // The optional host callback may synchronously revoke this layer.
       positionStripHandle()
       if (state.snap && !state.strip) { refreshReferences(); refreshNeighbours() }
       else { disposeTargets(referenceTargets); referenceTargets = []; disposeTargets(neighbourTargets); neighbourTargets = []; referencesDirty = neighboursDirty = true; hideFeedback() }
@@ -401,6 +454,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       neighbourTargets = []; neighboursDirty = true
       stripState = null; directSelection = null; directDrawn = null
       stripHandle.style.display = 'none'
+      publishReticle(null)
       for (const clean of [() => preview.clear(), () => clearOwned(cage), () => clearOwned(hover),
         () => clearOwned(pins), () => clearOwned(stripGroup)]) {
         try { clean() } catch { /* Keep the original error. */ }
@@ -744,6 +798,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       layerDisposed = true
       let failure: unknown
       const attempt = (operation: () => void) => { try { operation() } catch (error) { failure ??= error } }
+      attempt(() => publishReticle(null, true))
       attempt(() => { cancelGesture() }); attempt(stopZebra)
       attempt(() => disposeTargets(referenceTargets)); attempt(() => disposeTargets(neighbourTargets))
       referenceTargets = []; neighbourTargets = []

@@ -1321,7 +1321,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       placingNote: this.placingNote, canPlaceNote:validation.kind==='valid' && this.gesture==='idle' && !this.busy && !this.frozen, notes: this.notes, annotatedCopyAvailable, noteResolutionError, gesture: this.gesture, canBeginStrip, directStripAxis:this.directStripAxis,
       directStripError,
       canExportStep, strip:stripView })
-    this.viewState = Object.freeze({ net: strip ? null : d.net, preview, provisionalPreview:d.cylinderPreview?.faceMeshes ? {kind:'provisional' as const,faceMeshes:d.cylinderPreview.faceMeshes} : null, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
+    this.viewState = Object.freeze({ reticleStamp: current, net: strip ? null : d.net, preview, provisionalPreview:d.cylinderPreview?.faceMeshes ? {kind:'provisional' as const,faceMeshes:d.cylinderPreview.faceMeshes} : null, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
       hiddenPoles: d.hiddenPoles, selectionMode: this.selectionMode, dragMode: this.dragMode,
       axis: this.axis, dragStrength: this.dragStrength, showNet: this.showNet, snap: this.snap,
       snapDistance: this.snapDistance, busy: this.busy || !!this.frozen, placingNote: this.placingNote,

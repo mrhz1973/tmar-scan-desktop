@@ -2,7 +2,7 @@
 // The host is optional on older ScanRuler builds. Integration is type-checked
 // against the actual workspace-editor host in the isolated a28c747 checkout.
 // @ts-ignore -- this optional host type does not exist in older builds.
-import type { EditorViewportLease } from '../../src/plugins/workspaceEditorTypes'
+import type { DraftStamp, EditorViewportLease } from '../../src/plugins/workspaceEditorTypes'
 import type { Net, Point } from './brep'
 import type { Preview } from './editorKernel'
 import type { Mesh } from 'occt-wasm'
@@ -13,6 +13,13 @@ export interface WorkspaceStripeSettings {
   readonly orientation: 'horizontal' | 'vertical'
   readonly width: number
   readonly color: string
+}
+
+/** Part-frame bounds only. The optional host action owns all camera framing. */
+export interface WorkspaceReticleFrame {
+  readonly min: readonly [number, number, number]
+  readonly max: readonly [number, number, number]
+  readonly stamp: DraftStamp
 }
 
 /** Strip paths and delta are borrowed, read-only, in source-part millimetres. */
@@ -32,6 +39,8 @@ export interface WorkspaceStripViewState {
 
 /** Immutable state consumed by the main-view layer. Coordinates are part-mm. */
 export interface WorkspaceSurfaceViewState {
+  /** Exactly the session snapshot's current stamp; never a CAD preview token. */
+  readonly reticleStamp?: DraftStamp
   readonly net: Net | null
   readonly preview: Preview | null
   /** Display only: never authorizes Apply or note anchoring. */
@@ -84,7 +93,11 @@ export interface WorkspaceSurfaceLayerOwner {
   finishStripGesture?(delta: Point | null): Promise<void>
 }
 
-export type WorkspaceSurfaceView = EditorViewportLease
+/** Structural opt-in also type-checks against pre-PR30 hosts without this method. */
+export type WorkspaceSurfaceView = EditorViewportLease & {
+  /** Publishes or clears bounds; never moves the borrowed camera. */
+  publishReticleFrame?(frame: WorkspaceReticleFrame | null): void
+}
 export interface WorkspaceSurfaceLayer {
   /** Cancel and release pointer capture synchronously, restoring any draft gesture. */
   cancelGesture(): boolean
