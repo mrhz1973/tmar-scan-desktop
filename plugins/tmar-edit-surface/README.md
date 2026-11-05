@@ -124,6 +124,11 @@ bodies. The imported file hash remained unchanged. Evidence is the local QA
 `scanruler-owner-lego-qa/run-mTZJAV/result.json`. This does not mean the host
 fix is merged or the released app is updated; project save/reopen and physical
 user input were not verified by this run.
+An opt-in follow-up (`TEST_PROJECT_ROUNDTRIP=1`) also saved and reopened the
+Lego project in a fresh browser page. The edited solid remained valid with
+the expected volume, and the source visibility persisted. Evidence:
+`scanruler-owner-lego-qa/run-5UFK36/result.json`. This remains a CAD-copy
+feature, not editable parametric history, and uses the provisional QA host fix.
 
 - Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Periodic cylinders, arbitrary trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
 - One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.

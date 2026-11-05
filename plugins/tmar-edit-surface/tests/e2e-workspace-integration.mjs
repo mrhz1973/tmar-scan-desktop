@@ -3,7 +3,7 @@
 // means a synthetic box. Never connects to an existing user browser profile.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { readFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { readFileSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 if (process.env.SCANRULER_ISOLATED !== '1') throw Error('Set SCANRULER_ISOLATED=1 for an isolated test app.')
@@ -54,6 +54,11 @@ try {
   const launched = await launchApp({ url: url.href, width: 1440, height: 1000, agentDataOk: false,
     userDataDir: join(out, 'owned-browser-profile'), protocolTimeout: 120000 })
   browser = launched.browser; page = launched.page; report.consoleErrors = launched.consoleErrors
+  if(process.env.TEST_PROJECT_ROUNDTRIP==='1') {
+    const downloads=join(out,'downloads');mkdirSync(downloads)
+    const cdp=await page.createCDPSession()
+    await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:downloads,eventsEnabled:true})
+  }
   const supportClose = await page.$('[data-test="support-card"] button[aria-label="Close"]')
   if (supportClose) await supportClose.click()
   const dialogChoices = []
@@ -564,6 +569,39 @@ try {
   check(report.geometry.every(item => item.valid && item.solids === 1) && sourceGeometry.faces === copyGeometry.faces,
     'exported STEP bodies reimport as valid solids and source/copy retain the same face count')
   check(Math.abs(sourceGeometry.volume - copyGeometry.volume) > 1e-7, 'the copy differs geometrically from the source')
+  if(process.env.TEST_PROJECT_ROUNDTRIP==='1') {
+    await page.waitForSelector('[data-test=save-project]:enabled');await page.click('[data-test=save-project]')
+    let saved
+    for(let i=0;i<400&&!saved;i++){
+      const filename=readdirSync(join(out,'downloads')).find(name=>name.endsWith('.scanruler'))
+      if(filename)saved=join(out,'downloads',filename)
+      else await new Promise(resolve=>setTimeout(resolve,100))
+    }
+    if(!saved)throw Error('Salvataggio progetto non disponibile')
+    report.savedSha256=sha(readFileSync(saved))
+    const reopened=await browser.newPage()
+    reopened.on('dialog',dialog=>void dialog.accept())
+    reopened.on('pageerror',error=>report.consoleErrors.push('reopen: '+error.message))
+    await reopened.goto(url.href,{waitUntil:'domcontentloaded'})
+    await reopened.waitForSelector('[data-test=project-input]')
+    await (await reopened.$('[data-test=project-input]')).uploadFile(saved)
+    await reopened.click('[data-test=workspace-reverse]')
+    await reopened.waitForFunction(async({count,original,copy,hidden})=>{
+      const {useReverse}=await import('/plugins/reverse/state/reStore.ts')
+      const state=useReverse.getState()
+      return !state.building && state.bodies.length===count && state.bodies.some(b=>b.id===copy && b.visible) &&
+        state.bodies.some(b=>b.id===original && b.visible===!hidden)
+    },{timeout:120000},{count:after.steps.length,original:originalId,copy:createdId,hidden:hideSource})
+    const reopenedStep=await reopened.evaluate(async id=>{
+      const {reverseSession}=await import('/plugins/reverse/app/reSession.ts')
+      return (await reverseSession().client().bodyEditSource(id)).text
+    },createdId)
+    const shape=kernel.importStep(reopenedStep), solids=kernel.getSubShapes(shape,'solid')
+    try {check(kernel.isValid(shape)&&solids.length===1&&Math.abs(kernel.getVolume(shape)-copyGeometry.volume)<1e-6,
+      'saved project reopens with the valid edited body, expected volume and source visibility')}
+    finally {solids.forEach(s=>kernel.release(s));kernel.release(shape)}
+    await reopened.close()
+  }
   check(report.consoleErrors.length === 0, 'no browser application errors')
   report.entered = entered; report.beforeVolume = first.volume; report.afterVolume = changed.volume
   report.verdict = 'PASS'
