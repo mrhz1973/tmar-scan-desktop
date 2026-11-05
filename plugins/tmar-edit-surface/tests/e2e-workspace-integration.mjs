@@ -19,6 +19,9 @@ if (sourceFile && process.env.TEST_FACE_SWITCH === '1')
   throw Error('TEST_FACE_SWITCH uses only its synthetic box fixture.')
 if (sourceFile && testAlignedDepth) throw Error('TEST_ALIGNED_DEPTH uses only its synthetic box fixture.')
 const requestedFace = process.env.FACE_INDEX
+const requestedBody = process.env.BODY_INDEX ?? '0'
+if (!/^\d+$/.test(requestedBody) || !Number.isSafeInteger(Number(requestedBody)))
+  throw Error('BODY_INDEX must be a non-negative integer.')
 if (requestedFace !== undefined && (!/^\d+$/.test(requestedFace) || !Number.isSafeInteger(Number(requestedFace))))
   throw Error('FACE_INDEX must be a non-negative integer.')
 const outputRoot = process.env.EDIT_SURFACE_QA_OUT
@@ -55,7 +58,7 @@ try {
   if (supportClose) await supportClose.click()
   const dialogChoices = []
   page.on('dialog', dialog => { void (dialogChoices.shift() === false ? dialog.dismiss() : dialog.accept()) })
-  await page.evaluate(async step => {
+  await page.evaluate(async ({step, bodyIndex}) => {
     const { runCommand } = await import('/src/commands/registry.ts')
     const { useShell } = await import('/src/state/shellStore.ts')
     const { useReverse } = await import('/plugins/reverse/state/reStore.ts')
@@ -70,11 +73,11 @@ try {
     await reverseSession().startKernel(); await reverseSession().settled()
     await runCommand('reverse.import.step', { bytes: new TextEncoder().encode(step), name: 'workspace-test.step' })
     await reverseSession().settled()
-    const scene = sceneOf(), id = useReverse.getState().bodies[0]?.id
+    const scene = sceneOf(), id = useReverse.getState().bodies[bodyIndex]?.id
     if (!scene || !id) throw Error('Imported CAD body unavailable')
     scene.fitToView()
     window.surfaceQa = { runCommand, useReverse, reverseSession, scene, reScene: reSceneOf(scene), useWorkspaceEditor, history, id }
-  }, input.toString('utf8'))
+  }, {step:input.toString('utf8'),bodyIndex:Number(requestedBody)})
   await page.waitForFunction(() => !!window.surfaceQa.reScene.bodyMeshes.get(window.surfaceQa.id), { timeout: 60000 })
   await page.evaluate(() => {
     const q = window.surfaceQa, cam = q.scene.layerHost().camera()
@@ -84,6 +87,13 @@ try {
   })
   await page.waitForSelector('[data-test=feature-edit-surface]:enabled', { timeout: 60000 })
   await page.click('[data-test=feature-edit-surface]')
+  await page.waitForFunction(()=>!!document.querySelector('[data-test=surface-source-body], [data-test=workspace-surface-parameters]'),{timeout:120000})
+  const chooser=await page.$('[data-test=surface-source-body]')
+  if(chooser){
+    const id=await page.evaluate(()=>String(window.surfaceQa.id))
+    await page.select('[data-test=surface-source-body]',id)
+    await page.evaluate(()=>[...document.querySelectorAll('[role=dialog][aria-label="Scegli corpo CAD"] button')].find(b=>b.textContent.trim()==='Continua').click())
+  }
   await page.waitForSelector('[data-test=workspace-surface-parameters]', { timeout: 120000 })
   const entered = await page.evaluate(() => {
     const q = window.surfaceQa, cam = q.scene.layerHost().camera(), state = q.useWorkspaceEditor.getState()
