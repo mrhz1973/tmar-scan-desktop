@@ -191,6 +191,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           <option value="mixed">Punti e segmenti</option>
         </select>
       </label>
+      {state.selectionMode === 'auto' && <p>Per spostare una cella, selezionala con un clic e poi trascinala. Un trascinamento su una cella non selezionata resta disponibile per la navigazione.</p>}
       <fieldset data-test="surface-refine-net"><legend>Raffina reticolo</legend>
         <p>Aggiungi punti di controllo nella direzione scelta per modificare il reticolo più finemente.</p>
         <div className="row">{(['U', 'V', 'both'] as const).map(axis => {

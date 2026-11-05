@@ -213,6 +213,20 @@ describe.each(['scan', 'cad-face'] as const)('snap on %s reference', kind => {
   })
 })
 
+it('leaves an unselected automatic cell press for navigation and allows dragging it after selection', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  f.set({ selectionMode: 'auto' })
+  const at = f.client([0, 0, 0])
+  expect(f.getLayer().pointerDown?.(f.event(1, [0, 0, 0]))).toBe(false)
+  expect(f.getLayer().click?.(at.clientX, at.clientY, false)).toBe(true)
+  expect(f.selectPoints).toHaveBeenLastCalledWith(expect.arrayContaining([0, 1, 2, 3]), false)
+  expect(f.getLayer().pointerDown?.(f.event(2, [0, 0, 0]))).toBe(true)
+  f.getHandlers().move(f.event(2, [0.5, 0, 0]))
+  expect(f.previewPoles).toHaveBeenCalled()
+  f.getHandlers().up(f.event(2, [0.5, 0, 0]))
+  layer.dispose()
+})
+
 it('keeps snap calculations in the part frame after rotating and translating the body', () => {
   const f = fixture({ reference: 'scan', rotated: true }), layer = createWorkspaceLayer(f.view, f.owner)
   f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))

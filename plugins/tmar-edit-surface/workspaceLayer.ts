@@ -673,6 +673,12 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         syncStrip(state); positionStripHandle(); view.invalidate()
       }
       if (!picked) return !!directHit
+      // In automatic mode a cell spans much of the surface. Claiming every
+      // press on it prevents the host from orbiting over the model. An
+      // unselected cell is selected by a click; a subsequent drag edits it.
+      // Explicit cell mode keeps the direct-drag interaction.
+      if (state.selectionMode === 'auto' && picked.length === 4 &&
+          !picked.every(i => state.selected.includes(i))) return false
       if (!directHit && directSelection) { directSelection = null; syncStrip(state); positionStripHandle(); view.invalidate() }
       const selected = picked.every(i => state.selected.includes(i)) ? [...state.selected] : picked
       if (arrow === null) owner.selectPoints(picked, false)
