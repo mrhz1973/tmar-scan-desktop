@@ -38,6 +38,10 @@ export interface HistorySurfaceNote {
   readonly u: number
   readonly v: number
 }
+export interface PreparedAnnotatedHistory extends PreparedHistoryRecipe {
+  readonly notesRevision: number
+  readonly notes: readonly HistorySurfaceNote[]
+}
 interface Note extends WorkspaceSurfaceNote { readonly anchor: DraftAnchor }
 export type WorkspaceG1Candidate = (G1SupportCandidate & { readonly kind?: never }) | CompatibleCurvedSupportCandidate
 export interface WorkspaceSurfacePanelState {
@@ -182,6 +186,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private directGestureOrigin = false
   private face = -1
   private restoredHistory: { selectionEpoch:number; draftEpoch:number; net:Net } | null = null
+  private readonly annotatedHistoryGuards = new WeakMap<PreparedAnnotatedHistory,{net:Net;notes:string}>()
   private faces: readonly FaceInfo[] = Object.freeze([])
   private sourcePreview: Preview | null = null
   private selectionEpoch = 0
@@ -911,6 +916,46 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         prepared.selectionEpoch === this.selectionEpoch && prepared.draftEpoch === this.draftEpoch &&
         !this.busy && !this.frozen && this.gesture === 'idle' && !this.placingNote && !this.notes.length &&
         !this.strip && !this.stripPending && this.snapshot.validation.kind === 'valid'
+    } catch { return false }
+  }
+
+  /** Produce a recipe plus durable UVs; the host must replay and commit both atomically. */
+  async prepareAnnotatedHistory(): Promise<PreparedAnnotatedHistory> {
+    this.assertMutable()
+    const before=this.draft.getSnapshot(), revision=before.preview?.previewRevision, notes=this.notes
+    if (!notes.length || this.gesture!=='idle' || this.placingNote || this.strip || this.stripPending ||
+        this.snapshot.validation.kind!=='valid' || !before.net || before.net!==before.committedNet ||
+        before.validNet!==before.net || before.calculating || before.cylinderSession!==null || revision===undefined ||
+        notes.some(note=>note.revision!==revision || note.anchor.face!==this.face || !note.text.trim() ||
+          !Number.isFinite(note.anchor.u) || !Number.isFinite(note.anchor.v)))
+      throw new Error('Verifica la superficie e tutte le note prima di preparare la cronologia.')
+    const selectionEpoch=this.selectionEpoch,draftEpoch=this.draftEpoch,notesRevision=this.notesRevision,net=before.net
+    const savedNotes=Object.freeze(notes.map(note=>Object.freeze({id:note.id,text:note.text,faceIndex:note.anchor.face,u:note.anchor.u,v:note.anchor.v})))
+    this.busy=true;this.refresh()
+    try {
+      const recipe=before.curvedTangency ? await this.draft.createCurvedRecipe(this.source.bodyKey) : await this.draft.createRecipe(this.source.bodyKey)
+      this.assertLive()
+      if (this.selectionEpoch!==selectionEpoch || this.draftEpoch!==draftEpoch || this.notesRevision!==notesRevision ||
+          this.notes!==notes || this.draft.getSnapshot().net!==net || this.strip || this.gesture!=='idle')
+        throw new Error('Superficie o note cambiate durante la preparazione.')
+      const prepared=Object.freeze({recipe,notes:savedNotes,notesRevision,sessionId:this.context.sessionId,sourceKey:this.sourceId,selectionEpoch,draftEpoch})
+      this.annotatedHistoryGuards.set(prepared,{net,notes:JSON.stringify(savedNotes)})
+      return prepared
+    } finally { if(!this.disposed){this.busy=false;this.refresh();this.resolveNotes()} }
+  }
+
+  /** Freshness only; host must independently validate recipe/notes and commit atomically. */
+  isAnnotatedHistoryStampCurrent(prepared: PreparedAnnotatedHistory): boolean {
+    try {
+      this.assertLive()
+      const d=this.draft.getSnapshot(), revision=d.preview?.previewRevision
+      const guard=this.annotatedHistoryGuards.get(prepared)
+      const content=this.notes.map(note=>({id:note.id,text:note.text,faceIndex:note.anchor.face,u:note.anchor.u,v:note.anchor.v}))
+      return !!prepared && prepared.sessionId===this.context.sessionId && prepared.sourceKey===this.sourceId &&
+        !!guard && prepared.selectionEpoch===this.selectionEpoch && d.net===guard.net &&
+        JSON.stringify(content)===guard.notes && !!this.notes.length &&
+        revision!==undefined && this.notes.every(note=>note.revision===revision) && !this.busy && !this.frozen &&
+        this.gesture==='idle' && !this.placingNote && !this.strip && !this.stripPending && this.snapshot.validation.kind==='valid'
     } catch { return false }
   }
 

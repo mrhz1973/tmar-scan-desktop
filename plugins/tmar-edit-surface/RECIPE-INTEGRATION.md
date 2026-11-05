@@ -23,6 +23,14 @@ atomic host contract can preserve and revalidate them.
 state and a revalidated preview; it does not authenticate recipe contents or
 replace replay/validation within the host's atomic commit.
 
+For a draft with nonempty, currently resolved notes, the separate
+`prepareAnnotatedHistory()` returns the CAD recipe and `{id,text,faceIndex,u,v}`
+records as one bundle. `isAnnotatedHistoryStampCurrent()` requires the same
+session, source, face, net and note contents and a current valid preview; it
+permits an unchanged note to be re-resolved after the serializer refreshes the
+preview. Its local guard is not recipe authentication or a transaction. The
+host must independently replay, validate, bind and atomically commit the bundle.
+
 `WorkspaceSurfaceSession.restoreHistoryRecipe(value)` restores a validated
 recipe into a fresh, empty workspace session only. It rejects another body or
 changed STEP bytes; a failed worker restore reports a fatal error to the host
