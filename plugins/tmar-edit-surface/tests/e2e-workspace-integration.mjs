@@ -83,6 +83,7 @@ try {
     const q = window.surfaceQa, cam = q.scene.layerHost().camera()
     q.before = { canvas: q.scene.layerHost().canvas, camera: cam, pose: JSON.stringify([cam.position.toArray(),cam.quaternion.toArray()]),
       geometry: q.reScene.bodyMeshes.get(q.id).geometry, history: q.history.useHistory.getState().past.length,
+      bodyCount:q.useReverse.getState().bodies.length,
       canvasCount: document.querySelectorAll('.viewport canvas').length }
   })
   await page.waitForSelector('[data-test=feature-edit-surface]:enabled', { timeout: 60000 })
@@ -534,6 +535,7 @@ try {
     check(true, 'removing the draft note restores the possibility of a plain CAD copy')
   }
   await page.waitForSelector('[data-test=workspace-editor-apply]:enabled', { timeout: 120000 })
+  const hideSource=await page.$eval('[data-test=workspace-editor-hide-source]',e=>e.checked)
   await page.click('[data-test=workspace-editor-apply]')
   await page.waitForFunction(() => window.surfaceQa.useWorkspaceEditor.getState().phase === 'closed', { timeout: 120000 })
   const after = await page.evaluate(async () => {
@@ -544,20 +546,24 @@ try {
       steps.push({ id: body.id, text: new TextDecoder().decode(answer.file.bytes) })
     }
     return { steps, receipt, historyDelta: q.history.useHistory.getState().past.length - q.before.history,
-      originalVisible: q.reScene.bodyMeshes.get(q.id)?.material.visible, noOverlay: !document.querySelector('[data-slot="workspace.editor.overlay"]') }
+      originalVisible: !!q.reScene.bodyMeshes.get(q.id)?.visible && !!q.reScene.bodyMeshes.get(q.id)?.material.visible,
+      hiddenBodies:state.hiddenBodies, noOverlay: !document.querySelector('[data-slot="workspace.editor.overlay"]') }
   })
-  check(after.steps.length === 2 && after.receipt?.createdBodyIds?.length === 1 && after.historyDelta === 1,
+  const originalId=await page.evaluate(()=>window.surfaceQa.id), createdId=after.receipt?.createdBodyIds?.[0]
+  const original=after.steps.find(step=>step.id===originalId),copy=after.steps.find(step=>step.id===createdId)
+  check(after.steps.length === (await page.evaluate(()=>window.surfaceQa.before.bodyCount)) + 1 && !!original && !!copy && after.receipt?.createdBodyIds?.length === 1 && after.historyDelta === 1,
     'Apply publishes one CAD copy and one project history step')
-  check(after.originalVisible && after.noOverlay, 'source render mask and editor overlay are released')
+  check(after.originalVisible === !hideSource && after.noOverlay, 'source visibility follows Apply option and editor overlay is released')
   report.geometry = []
   for (const step of after.steps) {
     const shape = kernel.importStep(step.text), solids = kernel.getSubShapes(shape, 'solid'), faces = kernel.getSubShapes(shape, 'face')
     try { report.geometry.push({ id: step.id, valid: kernel.isValid(shape), solids: solids.length, faces: faces.length, volume: kernel.getVolume(shape) }) }
     finally { solids.forEach(item => kernel.release(item)); faces.forEach(item => kernel.release(item)); kernel.release(shape) }
   }
-  check(report.geometry.every(item => item.valid && item.solids === 1) && report.geometry[0].faces === report.geometry[1].faces,
-    'both exported STEP bodies reimport as valid solids with the same face count')
-  check(Math.abs(report.geometry[0].volume - report.geometry[1].volume) > 1e-7, 'the copy differs geometrically from the source')
+  const sourceGeometry=report.geometry.find(item=>item.id===originalId),copyGeometry=report.geometry.find(item=>item.id===createdId)
+  check(report.geometry.every(item => item.valid && item.solids === 1) && sourceGeometry.faces === copyGeometry.faces,
+    'exported STEP bodies reimport as valid solids and source/copy retain the same face count')
+  check(Math.abs(sourceGeometry.volume - copyGeometry.volume) > 1e-7, 'the copy differs geometrically from the source')
   check(report.consoleErrors.length === 0, 'no browser application errors')
   report.entered = entered; report.beforeVolume = first.volume; report.afterVolume = changed.volume
   report.verdict = 'PASS'

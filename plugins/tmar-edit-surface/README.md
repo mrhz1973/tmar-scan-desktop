@@ -117,6 +117,13 @@ selected face 19 and passed normal move, pointer drag and local Undo/Redo.
 Apply did not complete: this QA host separately rejects the same fractional ID
 when hiding the source. The coordinator owns that host correction. The source
 file was unchanged and full app/project acceptance remains pending.
+With a provisional finite-positive ID fix in the isolated QA host, a further
+run passed on the same file: selecting face 19, numeric and pointer moves,
+Undo/Redo, Apply, original visibility and reimport of all three resulting STEP
+bodies. The imported file hash remained unchanged. Evidence is the local QA
+`scanruler-owner-lego-qa/run-mTZJAV/result.json`. This does not mean the host
+fix is merged or the released app is updated; project save/reopen and physical
+user input were not verified by this run.
 
 - Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Periodic cylinders, arbitrary trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
 - One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.
