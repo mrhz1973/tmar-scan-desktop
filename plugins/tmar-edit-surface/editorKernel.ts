@@ -2,13 +2,52 @@
 import { OcctKernel, type Mesh, type BoundingBox, type ShapeHandle } from 'occt-wasm'
 import { assertNet, boundaryLocked, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
 import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
+import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
+import { prepareCylinder } from './cylinderPreparation'
+import { assertSimpleCylinderSource } from './cylinderSource'
+import { listG1SupportCandidates, resolveG1SupportCandidate as resolveSupport, type G1SourceStamp, type G1SupportCandidate } from './g1SupportTopology'
+import { proposePlaneTangency, validatePlaneTangencyResult, validatePlaneTangencyConstraint, type NaturalEdge, type PlaneTangencyRequest, type PlaneTangencyValidation } from './planeTangency'
 
-export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[] }
+export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[]; experimentalCylinder?: boolean }
+export interface G1SupportCandidates { stamp: G1SourceStamp; candidates: G1SupportCandidate[] }
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
+export interface G1PlaneProposalRequest {
+  net: Net
+  choice: G1SupportCandidate
+  lockedPoles?: readonly number[]
+  distanceTolerance?: number
+  exportStep?: boolean
+}
+export interface G1PlaneValidationRequest extends G1PlaneProposalRequest { baseNet: Net }
+export interface G1PlaneResult {
+  net: Net
+  changedIndices: number[]
+  choice: G1SupportCandidate
+  stamp: G1SourceStamp
+  /** These identify the untouched interactive state, not a published preview. */
+  revisions: { edit: number; preview: number; anchorSelection: number }
+  validation: PlaneTangencyValidation
+  preview: Preview
+  step?: string
+}
+export interface G1PublishedPlaneResult extends Omit<G1PlaneResult, 'preview'> {
+  constraintId: number
+  preview: Preview & { previewRevision: number }
+}
+export interface G1PlaneEvaluationRequest {
+  constraintId: number
+  net: Net
+  lockedPoles?: readonly number[]
+  exportStep?: boolean
+}
+interface RegisteredPlaneTangency {
+  request: G1PlaneValidationRequest
+  referenceNet: Net
+}
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
 /** Return a finite unit normal with the topological face orientation applied. */
@@ -77,16 +116,26 @@ function outerEdgeBoxes(k: OcctKernel, edge: ShapeHandle): BoundingBox[] {
 }
 export class SurfaceEditorKernel {
   private source: ShapeHandle | null = null
+  private g1SourceRevision = 0
+  private g1SelectionRevision = 0
+  private g1Selected = -1
+  private g1Fingerprint: Promise<string> | null = null
+  private g1SourceReady = false
+  private g1ConstraintSerial = 0
+  private readonly g1Constraints = new Map<number, RegisteredPlaneTangency>()
   private faces: ShapeHandle[] = []
   private brep = ''
   private records: RecordSpan[] = []
   private recordsByFace: number[] = []
   private chosen = -1
   private originalNet: Net | null = null
+  private refinements: KnotInsertion[] = []
   private editBrep = ''
   private editRecord: RecordSpan | null = null
   private solids = 0
   private revision = 0
+  // Anchor identity follows the logical source/face selection, not net preparation.
+  private anchorSelectionRevision = 0
   private previewRevision = 0
   private validatedFace: ShapeHandle | null = null
   private validatedSheetBrep: string | null = null
@@ -95,6 +144,12 @@ export class SurfaceEditorKernel {
   constructor(readonly kernel: OcctKernel, private readonly ownsKernel = false) {}
   static async load(wasm?: string) { return new SurfaceEditorKernel(await OcctKernel.init(wasm ? { wasm } : undefined), true) }
   private count(s: ShapeHandle, type: 'solid' | 'shell' | 'face') { const a = this.kernel.getSubShapes(s, type); const n = a.length; a.forEach(h => this.kernel.release(h)); return n }
+  /** Experimental cylinder path. Only the worker retains the returned BREP. */
+  prepareCylinderForPreview(face:number) {
+    this.invalidateG1Selection()
+    if(!this.source) throw new Error('Apri prima un corpo CAD.')
+    return prepareCylinder(this.kernel,this.source,face)
+  }
   open(step: string) {
     this.clear()
     const k = this.kernel
@@ -124,12 +179,18 @@ export class SurfaceEditorKernel {
       let natural = false
       try { const info = this.netFor(index); trimLocks = info.trimLocks; hiddenPoles = info.hiddenPoles; natural = info.natural } catch (e) { reason = e instanceof Error ? e.message : String(e) }
       const record = this.records[this.recordsByFace[index]]
+      let experimentalCylinder=false
+      if(reason && k.surfaceType(face)==='cylinder') {
+        try {assertSimpleCylinderSource(k,this.source!,face);experimentalCylinder=true} catch { /* Full preparation remains the final gate. */ }
+      }
       return { index, trimLocks, hiddenPoles, openSheet, freeBoundary: openSheet && this.faces.length === 1 && natural, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
-        enriched: !!record?.net && enrichBicubic(record.net) !== record.net }
+        enriched: !!record?.net && enrichBicubic(record.net) !== record.net, experimentalCylinder }
     })
-    return { faces: this.infos, preview: this.render(this.source) }
+    const preview = this.render(this.source)
+    this.g1SourceReady = true
+    return { faces: this.infos, preview }
   }
-  private netFor(index: number) {
+  private netFor(index: number, refinements: readonly KnotInsertion[] = []) {
     const face = this.faces[index], id = this.recordsByFace[index], r = this.records[id], k = this.kernel
     if (!face || !r) throw new Error('Superficie ambigua o condivisa: non modificabile.')
     if (this.recordsByFace.filter(n => n === id).length !== 1) throw new Error('Superficie condivisa da più facce.')
@@ -166,9 +227,10 @@ export class SurfaceEditorKernel {
       const trimBoxes = inner.map(w => k.getBoundingBox(w,{useTriangulation:false}))
       if (!rectangular || partial) for (const edge of edges) trimBoxes.push(...outerEdgeBoxes(k,edge))
 
-      const net = r.kind === 1
+      const initialNet = r.kind === 1
         ? (trimBoxes.length ? perforatedPlaneNet(r, bounds) : planeNet(r, bounds))
         : enrichBicubic(structuredClone(r.net!))
+      const net = refinements.length ? refineClampedNet(initialNet, refinements) : initialNet
       if (net.mu[0] !== net.du + 1 || net.mu.at(-1) !== net.du + 1 || net.mv[0] !== net.dv + 1 || net.mv.at(-1) !== net.dv + 1) throw new Error('Servono nodi estremi clamped.')
       if (net.nu * net.nv > 1600) throw new Error('Reticolo oltre 1600 punti: non interattivo in questo prototipo.')
       const trimLocks = new Set<number>()
@@ -270,8 +332,17 @@ export class SurfaceEditorKernel {
         throw new Error('Conversione piana: dominio interno alterato.')
     }
   }
-  select(index: number) {
-    const net = this.netFor(index).net, record = this.records[this.recordsByFace[index]], k = this.kernel
+  select(index: number, refinements: readonly KnotInsertion[] = []) {
+    return this.prepareSelection(index, refinements, false)
+  }
+  /** Reprepare the active face without invalidating its UV anchors. Switching
+   * face still starts a new logical selection; failed preparation commits neither. */
+  selectRefined(index: number, refinements: readonly KnotInsertion[] = []) {
+    return this.prepareSelection(index, refinements, true)
+  }
+  private prepareSelection(index: number, refinements: readonly KnotInsertion[], preserveAnchors: boolean) {
+    this.invalidateG1Selection()
+    const info = this.netFor(index, refinements), net = info.net, record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
     if (record.kind === 1) {
       // STEP readers may omit planar pcurves (derived implicitly on a plane).
@@ -283,7 +354,7 @@ export class SurfaceEditorKernel {
         if (!k.isValid(prepared) || fs.length !== this.faces.length || this.count(prepared, 'solid') !== this.solids) throw new Error('Conversione piana esatta non qualificabile per questa faccia.')
         for (let f = 0; f < fs.length; f++) {
           const b = k.uvBounds(this.faces[f])
-          this.checkPreparedArea(this.faces[f],fs[f],f === index && this.infos[index].trimLocks.length > 0)
+          this.checkPreparedArea(this.faces[f],fs[f],f === index && info.trimLocks.length > 0)
           for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
             const u = b.uMin + (b.uMax - b.uMin) * i / 4, v = b.vMin + (b.vMax - b.vMin) * j / 4
             if (dist(tuple(k.pointOnSurface(fs[f], u, v)), tuple(k.pointOnSurface(this.faces[f], u, v))) > 1e-7) throw new Error('Conversione piana: geometria o ordine delle facce alterato.')
@@ -300,8 +371,221 @@ export class SurfaceEditorKernel {
     }
     this.releasePreviewFace()
     this.revision++
+    if (!preserveAnchors || this.chosen !== index) this.anchorSelectionRevision++
     this.chosen = index; this.originalNet = structuredClone(net); this.editBrep = text; this.editRecord = editRecord
+    this.g1Selected = index
+    this.refinements = structuredClone(refinements) as KnotInsertion[]
+    this.infos[index] = { ...this.infos[index], trimLocks: info.trimLocks, hiddenPoles: info.hiddenPoles }
     return net
+  }
+  private invalidateG1Selection() { this.g1Selected = -1; this.g1SelectionRevision++; this.g1Constraints.clear() }
+  /** Read-only original-source topology. Identity and revisions never come from a client.
+   * Fingerprint is captured before tessellation; an async digest cannot cross a
+   * source/selection boundary. No OCCT handle escapes into the worker response. */
+  async g1SupportCandidates(): Promise<G1SupportCandidates> {
+    if (!this.g1SourceReady || this.source === null || this.g1Selected < 0)
+      throw new Error('Seleziona prima una faccia per i supporti G1.')
+    const sourceRevision = this.g1SourceRevision, selectionRevision = this.g1SelectionRevision, faceIndex = this.g1Selected
+    const sourceId = 'brep-sha256:' + await (this.g1Fingerprint ??= sha256(this.brep))
+    if (!this.g1SourceReady || this.source === null || sourceRevision !== this.g1SourceRevision ||
+        selectionRevision !== this.g1SelectionRevision || faceIndex !== this.g1Selected)
+      throw new Error('Elenco dei supporti G1 scaduto: seleziona di nuovo la faccia.')
+    const stamp = { sourceId, sourceRevision, selectionRevision, faceIndex }
+    return { stamp, candidates: listG1SupportCandidates(this.kernel, this.source, stamp) }
+  }
+  /** Read-only revalidation: only current, kernel-stamped choices are accepted. */
+  async resolveG1SupportCandidate(choice: G1SupportCandidate): Promise<G1SupportCandidate> {
+    const { stamp } = await this.g1SupportCandidates()
+    if (this.source === null || stamp.sourceRevision !== this.g1SourceRevision ||
+        stamp.selectionRevision !== this.g1SelectionRevision || stamp.faceIndex !== this.g1Selected)
+      throw new Error('Scelta del supporto scaduta.')
+    return resolveSupport(this.kernel, this.source, stamp, choice)
+  }
+  /** Internal CAD prototype: never changes the interactive draft, preview, anchors
+   * or recipes. All three other tangent rings are preserved relative to net.
+   * A selected-edge regularity proof is NOT a global G1 certificate. */
+  async proposeG1PlaneTangency(request: G1PlaneProposalRequest): Promise<G1PlaneResult> {
+    return this.planeTangency(request, true)
+  }
+  /** Validate a supplied final net; does not project it or regenerate a proposal. */
+  async validateG1PlaneTangency(request: G1PlaneValidationRequest): Promise<G1PlaneResult> {
+    return this.planeTangency(request, false)
+  }
+  /** Register only a strictly verified proposal; source and logical UV selection stay unchanged. */
+  async publishG1PlaneTangency(request: G1PlaneValidationRequest): Promise<G1PublishedPlaneResult> {
+    return this.planeTangency(request, false, true) as Promise<G1PublishedPlaneResult>
+  }
+  /** Reassess the actual current net against a kernel-owned accepted baseline. Never projects or repairs. */
+  async evaluateG1PlaneTangency(input: G1PlaneEvaluationRequest): Promise<G1PublishedPlaneResult> {
+    const request = structuredClone(input), registered = this.g1Constraints.get(request.constraintId)
+    if (!Number.isSafeInteger(request.constraintId) || !registered) throw new Error('Vincolo G1 scaduto: verifica di nuovo la tangenza.')
+    const locks = request.lockedPoles ?? []
+    if (!Array.isArray(locks) || locks.some(i=>!Number.isInteger(i)||i<0||i>=registered.referenceNet.poles.length))
+      throw new Error('Blocco di un polo inesistente.')
+    // Later lock positions need a kernel-owned history token. Until that exists,
+    // refuse new interior locks rather than compare them to a moving last-preview baseline.
+    if (locks.some(i=>!registered.request.lockedPoles!.includes(i)&&!boundaryLocked(registered.referenceNet,i,'G1')))
+      throw new Error('Nuovi blocchi interni richiedono una nuova verifica del vincolo G1.')
+    return this.planeTangency({...registered.request, net:request.net, exportStep:request.exportStep}, false, true,
+      {id:request.constraintId, registered}) as Promise<G1PublishedPlaneResult>
+  }
+  private async planeTangency(input: G1PlaneProposalRequest | G1PlaneValidationRequest, propose: boolean, publish = false,
+    persistent?: {id:number; registered:RegisteredPlaneTangency}): Promise<G1PlaneResult | G1PublishedPlaneResult> {
+    // Snapshot before the asynchronous identity read: client mutation and a
+    // re-selection while hashing must never retarget this operation.
+    const request = structuredClone(input), editRevision = this.revision
+    const previewRevision = this.previewRevision, anchorSelection = this.anchorSelectionRevision
+    const choice = await this.resolveG1SupportCandidate(request.choice)
+    if (this.revision !== editRevision || this.previewRevision !== previewRevision ||
+        this.anchorSelectionRevision !== anchorSelection || !this.originalNet || !this.editRecord ||
+        this.chosen !== choice.stamp.faceIndex || this.g1Selected !== this.chosen)
+      throw new Error('Scelta del supporto scaduta durante la verifica.')
+    if (request.exportStep !== undefined && typeof request.exportStep !== 'boolean') throw new Error('Opzione STEP non valida.')
+    const base = propose ? request.net : (request as G1PlaneValidationRequest).baseNet
+    // Natural-domain eligibility belongs to the kernel, never to the choice.
+    const prepared = this.netFor(this.chosen, this.refinements)
+    if (!prepared.natural) throw new Error('La tangenza richiede una faccia naturale senza ritagli.')
+    const locked = request.lockedPoles ?? []
+    if (!Array.isArray(locked) || locked.some(i => !Number.isInteger(i) || i < 0 || i >= base.poles.length))
+      throw new Error('Blocco di un polo inesistente.')
+    const edge = ({uMin:'U0',uMax:'U1',vMin:'V0',vMax:'V1'} as const)[choice.side]
+    if (!edge) throw new Error('Bordo naturale non supportato.')
+    const pure: PlaneTangencyRequest = { net: base, edge,
+      plane: {point:choice.plane.origin,normal:choice.plane.normal},
+      lockIndices: [...new Set([...locked,...prepared.trimLocks,...prepared.hiddenPoles])],
+      preserveTangentEdges: (['U0','U1','V0','V1'] as NaturalEdge[]).filter(e => e !== edge),
+      distanceTolerance: request.distanceTolerance ?? 1e-8 }
+    const isolated = new SurfaceEditorKernel(this.kernel), k = this.kernel
+    try {
+      // Independent handles, same frozen source and exact prepared record.
+      // Reuse evaluate unchanged, including its intersection/normal/trim gates.
+      isolated.source = k.fromBREP(this.brep)
+      isolated.faces = k.getSubShapes(isolated.source,'face')
+      isolated.solids = this.solids; isolated.infos = structuredClone(this.infos)
+      isolated.chosen = this.chosen; isolated.originalNet = structuredClone(this.originalNet)
+      isolated.editBrep = this.editBrep; isolated.editRecord = structuredClone(this.editRecord)
+      isolated.evaluate(base,'G0')
+      const net = propose ? proposePlaneTangency(pure).net : request.net
+      // Strict validation of the actual final coefficient net, before any BREP
+      // serialization. Protected coefficients never get a roundoff exemption.
+      let validation: PlaneTangencyValidation
+      if (persistent) {
+        const reference = persistent.registered.referenceNet
+        assertNet(reference,net,'G1')
+        const protectedIds = [...new Set([...pure.lockIndices,...net.poles.flatMap((_,i)=>boundaryLocked(net,i,'G1')?[i]:[])])]
+        for (const i of protectedIds) if (net.poles[i].some((x,d)=>!Object.is(x,reference.poles[i][d])))
+          throw new Error('Un punto protetto dal vincolo G1 è stato modificato.')
+        validation = {...validatePlaneTangencyConstraint(pure,net),protectedPoleCount:protectedIds.length}
+      } else validation = validatePlaneTangencyResult(pure,net)
+      const evaluated = isolated.evaluate(net,'G0',request.exportStep ?? false)
+      const finalFace = isolated.validatedFace
+      if (finalFace === null) throw new Error('Faccia CAD finale non determinata.')
+      this.checkPlaneTangencyReadback(finalFace,net,edge,choice,pure.distanceTolerance)
+      // Independently inspect the rebuilt shape as well as the retained face.
+      const rebuilt = k.fromBREP(replaceSurface(this.editBrep,this.editRecord,net))
+      try {this.checkUnselectedTangencyFaces(rebuilt)} finally {k.release(rebuilt)}
+      if (evaluated.step !== undefined) {
+        const imported = k.importStep(evaluated.step)
+        let fs: ShapeHandle[] = []
+        try {
+          fs = k.getSubShapes(imported,'face')
+          if (!k.isValid(imported) || fs.length !== this.faces.length || this.count(imported,'solid') !== this.solids)
+            throw new Error('STEP della tangenza non valido o topologia alterata.')
+          // Refuse reordered/reparameterized deliveries instead of guessing an identity.
+          this.checkPlaneTangencyReadback(fs[this.chosen],net,edge,choice,pure.distanceTolerance)
+          this.checkUnselectedTangencyFaces(imported)
+        } finally {fs.forEach(f=>k.release(f));k.release(imported)}
+      }
+      if (this.revision !== editRevision || this.previewRevision !== previewRevision || this.anchorSelectionRevision !== anchorSelection ||
+          choice.stamp.sourceRevision !== this.g1SourceRevision || choice.stamp.selectionRevision !== this.g1SelectionRevision)
+        throw new Error('Scelta del supporto scaduta durante la verifica CAD.')
+      const {step,previewRevision: _isolatedRevision,...preview} = evaluated
+      const result: G1PlaneResult = { net:structuredClone(net), changedIndices:net.poles.flatMap((p,i)=>p.some((x,d)=>!Object.is(x,base.poles[i][d]))?[i]:[]),
+        choice,stamp:{...choice.stamp},revisions:{edit:editRevision,preview:previewRevision,anchorSelection},validation,preview,step }
+      if (!publish) return result // Isolated proposals never acquire an interactive witness.
+      if (persistent && this.g1Constraints.get(persistent.id)!==persistent.registered)
+        throw new Error('Vincolo G1 scaduto durante la verifica CAD.')
+      // Allocate snapshots and response before transferring any host-owned state.
+      const id = persistent?.id ?? this.g1ConstraintSerial + 1
+      const registered: RegisteredPlaneTangency = persistent ? persistent.registered : {
+        request:structuredClone({...request,choice,lockedPoles:[...pure.lockIndices]} as G1PlaneValidationRequest),
+        referenceNet:structuredClone(net)}
+      const published: G1PublishedPlaneResult = {...result,constraintId:id,preview:{...preview,previewRevision:previewRevision+1}}
+      // No asynchronous work follows the final fence. Only this verified face is transferred.
+      this.releasePreviewFace()
+      this.validatedFace = isolated.validatedFace; isolated.validatedFace = null
+      this.validatedSheetBrep = isolated.validatedSheetBrep; isolated.validatedSheetBrep = null
+      this.previewRevision++
+      this.g1ConstraintSerial = Math.max(this.g1ConstraintSerial,id)
+      this.g1Constraints.set(id,registered)
+      return published
+    } finally {isolated.clear()}
+  }
+  private checkUnselectedTangencyFaces(shape: ShapeHandle) {
+    const k=this.kernel, fs=k.getSubShapes(shape,'face')
+    const close=(a:number,b:number)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=1e-12*Math.max(1,Math.abs(a),Math.abs(b))
+    const ownSupport=(face:ShapeHandle)=>{
+      const text=k.toBREP(face),header=/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/m.exec(text)
+      return header?surfaceTable(text)[Number(header[1])-1]:undefined
+    }
+    try {
+      if (fs.length!==this.faces.length || this.count(shape,'solid')!==this.solids || !k.isValid(shape))
+        throw new Error('Topologia della tangenza alterata.')
+      for(let i=0;i<fs.length;i++) if(i!==this.chosen) {
+        const before=ownSupport(this.faces[i]),after=ownSupport(fs[i])
+        if(!before || !after || before.kind!==after.kind || before.values.length!==after.values.length ||
+            before.values.some((x,d)=>!close(x,after.values[d])) ||
+            k.shapeOrientation(this.faces[i])!==k.shapeOrientation(fs[i]))
+          throw new Error('Una faccia di supporto è stata modificata.')
+        const a=k.uvBounds(this.faces[i]),b=k.uvBounds(fs[i])
+        if(![a.uMin,a.uMax,a.vMin,a.vMax].every((x,d)=>close(x,[b.uMin,b.uMax,b.vMin,b.vMax][d])))
+          throw new Error('Dominio di una faccia non selezionata alterato.')
+        const oldEdges=k.getSubShapes(this.faces[i],'edge'),edges:ShapeHandle[]=[]
+        try {
+          edges.push(...k.getSubShapes(fs[i],'edge'))
+          if(edges.length!==oldEdges.length)throw new Error('Bordi di una faccia non selezionata alterati.')
+          for(let e=0;e<edges.length;e++) {
+            const old=k.curveParameters(oldEdges[e]),next=k.curveParameters(edges[e])
+            if(k.curveType(oldEdges[e])!==k.curveType(edges[e]) || !close(old.first,next.first) || !close(old.last,next.last))
+              throw new Error('Bordo di una faccia non selezionata alterato.')
+            for(let j=0;j<=32;j++) if(dist(tuple(k.curvePointAtParam(oldEdges[e],old.first+(old.last-old.first)*j/32)),
+              tuple(k.curvePointAtParam(edges[e],next.first+(next.last-next.first)*j/32)))>1e-7)
+              throw new Error('Contorno di una faccia non selezionata alterato.')
+          }
+        } finally {[...oldEdges,...edges].forEach(e=>k.release(e))}
+      }
+    } finally {fs.forEach(f=>k.release(f))}
+  }
+  /** Read the actual OCCT face support. BREP/STEP formatting is checked with a
+   * separate numeric budget; it does not weaken in-memory protected-pole checks. */
+  private checkPlaneTangencyReadback(face: ShapeHandle, net: Net, edge: NaturalEdge, choice: G1SupportCandidate, tolerance: number) {
+    const k = this.kernel, text = k.toBREP(face)
+    const header = /^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/m.exec(text)
+    const actual = header ? surfaceTable(text)[Number(header[1])-1]?.net : undefined
+    const close = (a: number,b: number) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a-b) <= 1e-12*Math.max(1,Math.abs(a),Math.abs(b))
+    const same = (a: readonly number[],b: readonly number[]) => a.length === b.length && a.every((x,i)=>close(x,b[i]))
+    if (!actual || actual.nu!==net.nu || actual.nv!==net.nv || actual.du!==net.du || actual.dv!==net.dv ||
+        !same(actual.ku,net.ku) || !same(actual.kv,net.kv) || !same(actual.mu,net.mu) || !same(actual.mv,net.mv) ||
+        !same(actual.weights,net.weights) || !same(actual.rational,net.rational) ||
+        !same(actual.periodic??[0,0],net.periodic??[0,0]) || actual.poles.some((p,i)=>!same(p,net.poles[i])))
+      throw new Error('Reticolo CAD finale diverso dalla tangenza verificata.')
+    const b = k.uvBounds(face)
+    if (!same([b.uMin,b.uMax,b.vMin,b.vMax],[net.ku[0],net.ku.at(-1)!,net.kv[0],net.kv.at(-1)!]))
+      throw new Error('Dominio CAD finale diverso dal bordo naturale.')
+    // Repeat residual/continuous selected-edge regularity on serialized CAD
+    // coefficients themselves. Preservation was already checked strictly on
+    // the pre-serialization final net; this is an independent geometry check.
+    validatePlaneTangencyResult({net:actual,edge,plane:{point:choice.plane.origin,normal:choice.plane.normal},
+      lockIndices:[],distanceTolerance:tolerance},actual)
+    for (let i=0;i<=32;i++) {
+      const t=i/32, u=edge==='U0'?b.uMin:edge==='U1'?b.uMax:b.uMin+(b.uMax-b.uMin)*t
+      const v=edge==='V0'?b.vMin:edge==='V1'?b.vMax:b.vMin+(b.vMax-b.vMin)*t
+      const p=tuple(k.pointOnSurface(face,u,v)), normal=orientedSurfaceNormal(k,face,u,v), n=choice.plane.normal
+      const d=p.reduce((sum,x,a)=>sum+(x-choice.plane.origin[a])*n[a],0)
+      const sin=Math.hypot(normal[1]*n[2]-normal[2]*n[1],normal[2]*n[0]-normal[0]*n[2],normal[0]*n[1]-normal[1]*n[0])
+      if (!Number.isFinite(d) || Math.abs(d)>tolerance || !Number.isFinite(sin) || sin>1e-7)
+        throw new Error('Bordo CAD finale non tangente al piano di supporto.')
+    }
   }
   private preparation(): SurfaceEditRecipe['preparation'] {
     const info = this.infos[this.chosen]
@@ -316,7 +600,9 @@ export class SurfaceEditorKernel {
       throw new Error('Il bordo libero richiede una sola faccia aperta con contorno naturale rettangolare.')
     assertNet(base, next, continuity, freeBoundary)
     const recipe: SurfaceEditRecipe = {
-      schema: 'tmar.surface-edit', ...(freeBoundary ? { version: 3, boundaryMode: 'free-natural' } : { version: 2 }), engine: 'occt-wasm-5.7.1/brep-v3',
+      schema: 'tmar.surface-edit', ...(this.refinements.length
+        ? { version: 4, boundaryMode: freeBoundary ? 'free-natural' : 'locked', refinements: structuredClone(this.refinements) }
+        : freeBoundary ? { version: 3, boundaryMode: 'free-natural' } : { version: 2 }), engine: 'occt-wasm-5.7.1/brep-v3',
       units: 'mm', coordinateFrame: 'imported-step',
       source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids },
       faceIndex: this.chosen, preparation: this.preparation(), baseNetSha256: '', continuity,
@@ -337,13 +623,13 @@ export class SurfaceEditorKernel {
     const fingerprint = await sha256(this.brep)
     if (this.revision !== rev) throw new Error('Sorgente cambiata durante il ripristino.')
     if (fingerprint !== recipe.source.brepSha256 || this.faces.length !== recipe.source.faceCount || this.solids !== recipe.source.solidCount) throw new Error('Geometria sorgente cambiata: ricollegare esplicitamente la modifica della superficie.')
-    const net = this.select(recipe.faceIndex), selectedRevision = this.revision
+    const net = this.select(recipe.faceIndex, recipe.version === 4 ? recipe.refinements : []), selectedRevision = this.revision
     const baseFingerprint = await sha256(JSON.stringify(net))
     if (this.revision !== selectedRevision) throw new Error('Faccia cambiata durante il ripristino.')
     if (baseFingerprint !== recipe.baseNetSha256 || this.preparation() !== recipe.preparation) throw new Error('Base NURBS o raffinamento diverso dalla ricetta.')
     if ([...recipe.edits.map(e => e.index), ...recipe.lockedPoles].some(i => i >= net.poles.length)) throw new Error('La ricetta contiene un polo inesistente.')
     for (const edit of recipe.edits) net.poles[edit.index] = [...edit.point]
-    const freeBoundary = recipe.version === 3
+    const freeBoundary = recipe.version === 3 || (recipe.version === 4 && recipe.boundaryMode === 'free-natural')
     const preview = this.evaluate(net, recipe.continuity, exportStep, freeBoundary)
     return { faces: opened.faces, net, preview, continuity: recipe.continuity, freeBoundary, lockedPoles: recipe.lockedPoles }
   }
@@ -356,9 +642,14 @@ export class SurfaceEditorKernel {
       this.clear()
       this.source = temporary.source; this.faces = temporary.faces
       this.brep = temporary.brep; this.records = temporary.records; this.recordsByFace = temporary.recordsByFace
-      this.chosen = temporary.chosen; this.originalNet = temporary.originalNet
+      this.chosen = temporary.chosen; this.originalNet = temporary.originalNet; this.refinements = temporary.refinements
       this.editBrep = temporary.editBrep; this.editRecord = temporary.editRecord
       this.solids = temporary.solids; this.infos = temporary.infos
+      // clear() above creates a new host-owned generation. Transfer only the
+      // verified source/selection state, never the temporary editor's revisions.
+      this.g1SourceReady = temporary.g1SourceReady
+      this.g1Selected = temporary.g1Selected
+      this.g1Fingerprint = temporary.g1Fingerprint
       // Transfer handle ownership without disposing the shared OCCT runtime.
       this.validatedSheetBrep=temporary.validatedSheetBrep
       this.validatedFace = temporary.validatedFace; temporary.validatedFace = null
@@ -421,12 +712,12 @@ export class SurfaceEditorKernel {
   }
   finalFaceWitness(previewRevision: number) {
     const face = this.noteFace(previewRevision)
-    return { face: this.chosen, selectionRevision: this.revision, previewRevision,
+    return { face: this.chosen, selectionRevision: this.anchorSelectionRevision, previewRevision,
       faceBrep: this.kernel.toBREP(face) }
   }
   resolveAnchor(anchor: DraftAnchor, previewRevision: number) {
     const face = this.noteFace(previewRevision), k = this.kernel
-    if (anchor.face !== this.chosen || anchor.selectionRevision !== this.revision ||
+    if (anchor.face !== this.chosen || anchor.selectionRevision !== this.anchorSelectionRevision ||
         !Number.isFinite(anchor.u) || !Number.isFinite(anchor.v))
       throw new Error('Riferimento della nota estraneo alla faccia attiva.')
     const location = k.classifyPointOnFace(face,anchor.u,anchor.v)
@@ -439,7 +730,7 @@ export class SurfaceEditorKernel {
     const face = this.noteFace(previewRevision)
     if (point.length !== 3 || !point.every(Number.isFinite)) throw new Error('Punto della nota non valido.')
     const uv = this.kernel.uvFromPoint(face,{x:point[0],y:point[1],z:point[2]})
-    const anchor = { face:this.chosen, selectionRevision:this.revision, u:uv.u, v:uv.v }
+    const anchor = { face:this.chosen, selectionRevision:this.anchorSelectionRevision, u:uv.u, v:uv.v }
     const placement = this.resolveAnchor(anchor,previewRevision)
     // A visible tessellated triangle is only the pick seed; reject unrelated
     // geometry instead of silently taking the nearest face across the part.
@@ -522,6 +813,6 @@ export class SurfaceEditorKernel {
       return { ...preview, volume, maxBoundaryError, minimumNormalDot, step, previewRevision: ++this.previewRevision }
     } finally { fs.forEach(f => k.release(f)); k.release(edited) }
   }
-  clear() { this.releasePreviewFace(); this.revision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null }
+  clear() { this.g1SourceRevision++; this.g1Fingerprint = null; this.g1SourceReady = false; this.invalidateG1Selection(); this.releasePreviewFace(); this.revision++; this.anchorSelectionRevision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null; this.refinements = [] }
   dispose() { this.clear(); if (this.ownsKernel) this.kernel[Symbol.dispose]() }
 }

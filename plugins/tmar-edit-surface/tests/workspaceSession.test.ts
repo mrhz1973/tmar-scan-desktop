@@ -128,7 +128,7 @@ describe('WorkspaceSurfaceSession',()=>{
     const t=await setup();await selectFace(t)
     t.session.selectPoints([12],false);t.session.moveSelected(.2)
     const before=structuredClone(t.session.getPanelState().net!.poles)
-    const decline=vi.fn(()=>false)
+    const decline=vi.fn((_message:string)=>false)
     await expect(t.session.requestFaceSelection(1,decline)).rejects.toThrow('Attendi la verifica CAD')
     expect(decline).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(90)
@@ -166,12 +166,35 @@ describe('WorkspaceSurfaceSession',()=>{
     await t.session.dispose('cancelled')
   })
 
-  it('keeps draft notes and refuses a face switch before asking to discard changes', async()=>{
+  it('discards draft notes only after confirmation and successful face loading', async()=>{
     const t=await setup({annotated:true});await selectFace(t)
     await addNote(t,'Nota da conservare',.5)
-    const confirm=vi.fn(()=>true)
-    await expect(t.session.requestFaceSelection(1,confirm)).rejects.toThrow('note')
-    expect(confirm).not.toHaveBeenCalled()
+    const decline=vi.fn((_message:string)=>false)
+    await t.session.requestFaceSelection(1,decline)
+    expect(decline).toHaveBeenCalledOnce()
+    expect(decline.mock.calls[0][0]).toMatch(/note/)
+    expect(t.session.getPanelState().notes).toMatchObject([{text:'Nota da conservare'}])
+    expect(t.session.getPanelState().face).toBe(0)
+    const failed=t.session.requestFaceSelection(1,()=>true), request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('select')
+    t.worker.fail(request.id,'Caricamento non riuscito')
+    await expect(failed).rejects.toThrow('Caricamento non riuscito')
+    expect(t.session.getPanelState().notes).toMatchObject([{text:'Nota da conservare'}])
+    expect(t.session.getPanelState().face).toBe(0)
+    const accepted=t.session.requestFaceSelection(1,()=>true), next=t.worker.sent.at(-1)!
+    t.worker.reply(next.id,plane());await accepted
+    expect(t.session.getPanelState().face).toBe(1)
+    expect(t.session.getPanelState().notes).toHaveLength(0)
+    await t.session.dispose('cancelled')
+  })
+
+  it('retains draft notes if the CAD source changes while another face loads', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    await addNote(t,'Nota da conservare',.5)
+    const pending=t.session.requestFaceSelection(1,()=>true), request=t.worker.sent.at(-1)!
+    t.invalidate()
+    t.worker.reply(request.id,plane())
+    await expect(pending).rejects.toThrow()
     expect(t.session.getPanelState().notes).toMatchObject([{text:'Nota da conservare'}])
     expect(t.session.getPanelState().face).toBe(0)
     await t.session.dispose('cancelled')

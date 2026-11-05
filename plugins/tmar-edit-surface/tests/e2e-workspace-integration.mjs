@@ -51,6 +51,8 @@ try {
   const launched = await launchApp({ url: url.href, width: 1440, height: 1000, agentDataOk: false,
     userDataDir: join(out, 'owned-browser-profile'), protocolTimeout: 120000 })
   browser = launched.browser; page = launched.page; report.consoleErrors = launched.consoleErrors
+  const supportClose = await page.$('[data-test="support-card"] button[aria-label="Close"]')
+  if (supportClose) await supportClose.click()
   const dialogChoices = []
   page.on('dialog', dialog => { void (dialogChoices.shift() === false ? dialog.dismiss() : dialog.accept()) })
   await page.evaluate(async step => {
@@ -133,6 +135,22 @@ try {
     const s = window.surfaceQa.useWorkspaceEditor.getState()
     return s.snapshot?.validation.kind === 'valid' && !s.controller?.getPanelState().calculating
   }, { timeout: 120000 })
+  if (process.env.TEST_REFINE === '1') {
+    const net = () => page.evaluate(() => structuredClone(window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().net))
+    const ready = () => page.waitForFunction(() => {
+      const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller.getPanelState()
+      return s.snapshot?.validation.kind==='valid' && !p.calculating && !p.busy
+    }, {timeout:120000})
+    const before=await net()
+    await page.waitForSelector('[data-test=surface-refine-both]:enabled',{timeout:60000})
+    await page.click('[data-test=surface-refine-both]'); await ready()
+    const refined=await net()
+    check(refined.nu>before.nu && refined.nv>before.nv,'UI refines both control-net directions')
+    await page.click('[data-test=surface-undo]'); await ready()
+    check(JSON.stringify(await net())===JSON.stringify(before),'Undo restores original net after refinement')
+    await page.click('[data-test=surface-redo]'); await ready()
+    check(JSON.stringify(await net())===JSON.stringify(refined),'Redo restores the refined net')
+  }
   if (process.env.TEST_FACE_SWITCH === '1') {
     const waitDialog = () => new Promise((resolve,reject) => {
       const handler = dialog => { clearTimeout(timer); resolve(dialog.message()) }
@@ -417,7 +435,7 @@ try {
         visible: vector.z >= -1 && vector.z <= 1 }
     })
     const candidates = locations.filter(p => p.visible && !state.locked.includes(p.id) && !state.hiddenPoles.includes(p.id) &&
-      p.x > rect.left+12 && p.x < rect.right-12 && p.y > rect.top+12 && p.y < rect.bottom-12)
+      p.x > rect.left+12 && p.x < rect.right-12 && p.y > rect.top+12 && p.y < rect.bottom-12 && document.elementFromPoint(p.x,p.y)===canvas)
     candidates.forEach(p => { p.distance = Math.min(...locations.filter(other => other.id !== p.id).map(other => Math.hypot(p.x-other.x,p.y-other.y))) })
     candidates.sort((a,b) => b.distance-a.distance)
     return candidates[0] ?? null
@@ -459,10 +477,25 @@ try {
     const note = await page.evaluate(() => {
       const s = window.surfaceQa.useWorkspaceEditor.getState(), v = s.controller.getViewState()
       return { count: s.snapshot.draftNoteCount, text: s.controller.getPanelState().notes[0]?.text,
-        pins: v.notePins.length, blocked: document.querySelector('[data-test=workspace-editor-apply]').disabled }
+        pins: v.notePins.length, annotated: s.controller.getPanelState().annotatedCopyAvailable,
+        blocked: document.querySelector('[data-test=workspace-editor-apply]').disabled }
     })
-    check(note.count === 1 && note.text === 'Nota durante Zebra' && note.pins === 1 && note.blocked,
-      'note text and resolved pin coexist with Zebra and prevent an unannotated Apply')
+    check(note.count === 1 && note.text === 'Nota durante Zebra' && note.pins === 1 && (note.annotated || note.blocked),
+      'note text and resolved pin coexist with Zebra; plain Apply is blocked where annotations are unavailable')
+    if (process.env.TEST_REFINE_NOTES === '1') {
+      const before=await page.evaluate(() => structuredClone(window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().notes[0]))
+      const waitResolved=() => page.waitForFunction(() => {
+        const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller.getPanelState(),v=s.controller.getViewState()
+        return s.snapshot?.validation.kind==='valid' && !p.busy && !p.calculating && p.notes[0]?.revision===v.preview?.previewRevision && v.notePins.length===1
+      },{timeout:120000})
+      await page.waitForSelector('[data-test=surface-refine-both]:enabled',{timeout:60000})
+      await page.click('[data-test=surface-refine-both]'); await waitResolved()
+      await page.click('[data-test=surface-undo]'); await waitResolved()
+      await page.click('[data-test=surface-redo]'); await waitResolved()
+      const after=await page.evaluate(() => window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().notes[0])
+      check(before.id===after.id && before.text===after.text && Math.hypot(...before.at.map((v,i)=>v-after.at[i]))<1e-6,
+        'note identity and position survive exact refinement and Undo/Redo')
+    }
     await page.screenshot({ path: join(out, 'zebra-note.png') })
     await page.select('[data-test=surface-drag-mode]', 'local')
     await page.click('[data-test=surface-axis-2]')

@@ -42,6 +42,24 @@ const cadPreview = (revision: number) => ({ valid: true, previewRevision: revisi
 afterEach(() => vi.useRealTimers())
 
 describe('SurfaceDraft', () => {
+  it('keeps periodicity metadata immutable across draft ownership and history', () => {
+    const { runtime, draft } = setup()
+    const input = { ...plane(), periodic: [0, 0] as [number, number] }
+    draft.install(input)
+    input.periodic[0] = 1
+    const initial = draft.getSnapshot()
+    expect(initial.net?.periodic).toEqual([0, 0])
+    expect(Object.isFrozen(initial.net?.periodic)).toBe(true)
+    expect(Object.isFrozen(initial.originalNet?.periodic)).toBe(true)
+    draft.commit(moved(initial.net!, 12, 0.2))
+    expect(Object.isFrozen(draft.getSnapshot().net?.periodic)).toBe(true)
+    expect(draft.undo()).toBe(true)
+    expect(Object.isFrozen(draft.getSnapshot().net?.periodic)).toBe(true)
+    expect(draft.redo()).toBe(true)
+    expect(Object.isFrozen(draft.getSnapshot().net?.periodic)).toBe(true)
+    draft.dispose(); runtime.dispose()
+  })
+
   it('keeps stable immutable snapshots through a panel unsubscribe and protects input ownership', async () => {
     const { worker, runtime, draft } = setup()
     const input = plane(), updates = vi.fn()

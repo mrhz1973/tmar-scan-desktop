@@ -132,6 +132,107 @@ host state. A host without this capability keeps the original behavior.
   The spike remains outside production and cylinder editing is not enabled.
   A separate supported planar-cap edit on a synthetic cylinder preserved the
   original edge and vertex tolerances at `1e-7 mm` in its STEP round trip.
+  A further isolated experiment rebuilt the converted cylinder face with
+  `fixWireOnFace` (requested tolerance `1e-7 mm`), then sewed it to the two
+  planar caps. Although the resulting single solid and face reported valid,
+  edge and vertex tolerances still reached `0.156576 mm` and its reported
+  volume remained `6296.4133 mm³` versus `6283.1853 mm³` on the source. This
+  wire-repair approach therefore does not qualify cylindrical editing; the
+  diagnostic used one synthetic cylinder and did not assert a global bound.
+  A different isolated experiment used the existing OCCT general transform
+  with an identity matrix. On that cylinder it yielded a valid periodic-U
+  B-spline solid with `1e-7 mm` edge/vertex tolerances and a sampled surface
+  gap below `4e-14 mm`. Its reported OCCT volume was `6337.3174 mm³` rather
+  than the source `6283.1853 mm³`; independently sampled signed triangle
+  volumes converged to `6283.1664` and `6283.1644 mm³` respectively at the
+  finest tested deflection, without proving the source of the discrepancy.
+  `periodic-conversion.test.ts` also compares the source, converted body and
+  reopened STEP on this fixture: matching subshape counts and face
+  orientations, and sampled edge locations, surface positions and normals.
+  Edge comparison uses nearest locations; it does not inspect either seam
+  pcurve or prove same-parameter correspondence.
+  The periodic record can now be read and round-tripped without enabling
+  editing. Exact V elevation/refinement exposed an interior row; on this
+  one synthetic solid an interior pole move preserved sampled caps/seam,
+  edge tolerances and a valid STEP round trip. A different pole changed the
+  seam tangent despite preserving its sampled position. This is not a UI
+  capability. On that cylinder in two positions/orientations,
+  `periodic-seam.test.ts` compares both serialized seam pcurves to their 3D
+  edge and tests the two seam normals at 65 samples before editing, after
+  one interior pole move, and after STEP reopening. This does not qualify
+  arbitrary seam/trim pcurves, controls,
+  recipes or other STEP topologies. Periodic editing is explicitly rejected.
+  Subsequent checks found that moving one interior pole alone can introduce a
+  tangent break at a different double knot even when the seam and caps pass.
+  A restricted experimental move couples neighbouring poles using their
+  weights; X/Y/Z tests on the synthetic cylinder check the existing knot
+  tangents and sampled one-sided derivative jumps. A cyclic local frame for
+  the same six-pole periodic convention is checked against OCCT on straight
+  and rotated fixtures, and refuses an ambiguous tangent at a crease. This
+  is not yet wired to the editor or a general G1 solver.
+  A synthetic nonseparable-weight counterexample changed the sampled
+  derivative jump by about `0.0115`; the restricted helper now refuses nets
+  whose weights vary along V within a U row. This is a guard for the tested
+  full-cylinder convention, not support for general rational periodic nets.
+  A separate gesture canonicalizer computes the coupled proposal from the
+  captured starting frame and a validator rejects unexpected pole, weight or
+  knot edits. These helpers are not yet connected to the worker or UI; the
+  source-face/topology qualification and history/recipe integration remain.
+  `cylinderSource.ts` adds a preliminary source-topology gate, tested on a
+  synthetic STEP cylinder in two positions, a cut cylinder, and a box. It
+  checks a single solid, caps, shared borders and a sampled UV interior; it
+  does not prove the absence of every possible trim or validate both seam
+  pcurves, conversion, volume, recipes or arbitrary imported STEP geometry.
+  This preliminary helper is not connected to the editor and enables no
+  additional surface editing.
+  `cylinderSeam.ts` separately compares both serialized quadratic seam
+  pcurves with a 3D edge at 65 samples. Synthetic straight and rotated STEP
+  fixtures pass after conversion, deformation and STEP reopening; deliberately
+  duplicated or shifted 2D representations are rejected. A candidate edge now
+  must itself contain the same serialized support and two pcurves as the face;
+  inconsistent records are rejected before geometric sampling. Matching still
+  does not prove topological identity, so coincident edges may remain ambiguous.
+  Equivalent but differently serialized curves can be rejected. Sampling is not
+  a global proof; other BREP encodings fail closed. It is a diagnostic only,
+  not a production gate.
+  `cylinderPreparation.ts` combines the source screen, native identity
+  conversion, sampled face/border comparisons in both directions, seam audit
+  and exact V refinement. Tests retain the source unchanged and reimport one
+  coupled-pole edit as a valid STEP for straight and rotated synthetic bodies;
+  a cut cylinder is refused. Face correspondence uses returned OCCT ordering,
+  and sampling does not prove equality everywhere. The function returns both
+  kernel volume readings without declaring either transformed reading accurate;
+  the known volume discrepancy, exact seam identity, recipe/history and real
+  STEP qualification remain unresolved. It is not wired to the editor or UI.
+  `cylinderEvaluation.ts` evaluates a coupled-pole proposal in isolation,
+  verifies its face/support association, sampled protected boundaries,
+  section intersections and matched boundary tolerances, and returns an
+  exported STEP and display mesh without reporting the disputed volume.
+  Straight and rotated synthetic cylinders reimported as valid and showed a
+  measurable interior change; wrong faces, changed protected points and a
+  large deformation were refused. This remains unconnected to the worker/UI;
+  sampled checks do not prove global self-intersection freedom or establish
+  arbitrary STEP support. The underlying volume discrepancy remains unresolved.
+  `cylinderDraft.ts` reuses the local surface history in an isolated experiment:
+  it validates a move before recording it, preserves locked points and supports
+  Undo/Redo. The synthetic STEP test also checks rejected edits, source and
+  snapshot isolation, and skips tessellation for a lock-only Undo. It is not
+  connected to the UI/worker, and per-move evaluation remains too slow for a
+  demonstrated real-time drag; no interactive performance claim is made.
+  Preparation also rejects any increase in the sorted edge/vertex tolerance
+  distributions between source, conversion and refinement. This is a coarse
+  guard, not per-edge TShape matching. The synthetic tests include increased
+  and missing tolerances; they do not qualify tolerances after arbitrary edits.
+  A second guard pairs individual edges by bidirectional geometric samples and
+  vertices by position, rejecting ambiguous matches and increased tolerances.
+  A synthetic test detects a per-edge increase even when sorted distributions
+  are unchanged. This sampled pairing is not exact topological naming and has
+  not been qualified for arbitrary STEP bodies or after arbitrary edits.
+  Net edge/cell picking and cage drawing now include cyclic connections for
+  periodic dimensions with more than two rows. Ambiguous two-row periodic
+  picking and unqualified periodic frame conventions fail closed; periodic
+  local drag is not yet available in the editor. `periodic-picking.test.ts` and existing
+  picking/cage/local-frame checks pass on synthetic fixtures.
 - A synthetic STEP box in the isolated shared view passed pointer selection of
   a second CAD face, preservation of a modified draft when the change was
   cancelled, and a confirmed change (`run-jx0E4G`). Failed face loading also
@@ -216,6 +317,28 @@ Save/Load scenario; it needs an annotated-capable host with the corrected
 oriented-normal handling, `SCANRULER_ISOLATED=1`, `APP_URL` fixed to
 `http://127.0.0.1:17723/` and an absolute output folder outside the checkout.
 
+## Face selection with draft notes
+
+Changing the active face now offers to discard draft notes and edits together.
+The notes remain if the confirmation is declined, the worker fails, or the CAD
+source changes while the other face loads; they are cleared after successful
+selection. `workspaceSession.test.ts` covers these paths through the session
+controller, including a simulated worker failure and source change. An isolated
+source-app browser run on a synthetic STEP box (`annotated-edit-kjCwsi`)
+confirmed the decline and accept paths through the face selector, and then
+created, saved and reopened an annotated CAD copy with Zebra active. The note
+placement in this test used the controller; it did not verify a viewport click.
+The opt-in scenario uses `TEST_NOTED_FACE_SWITCH=1` with the annotated QA script.
+A packaged desktop release and arbitrary real-world projects remain untested.
+
+The magnet reach field now accepts an intermediate value while typing and
+commits on Enter or blur; Escape restores the prior value. Invalid ranges are
+rejected and displayed. `TEST_SNAP_ENTRY=1` verified actual keyboard entry of
+0.05 mm, rejection of zero, and Escape without closing the editor in the
+isolated source app on a synthetic STEP (`annotated-edit-NBrigV`). The first
+attempt failed in the test harness on its keyboard shortcut, before testing the
+field; the corrected run passed. Packaged desktop behavior is not qualified.
+
 ## Not yet qualified
 
 The new adapter has not yet been qualified in a packaged desktop release or
@@ -231,3 +354,186 @@ tessellation, not exact B-rep targets. Large-scan performance, real-world
 snapping, real-project save/reopen and cancellation under delayed staging
 require their own integrated checks. No Zebra equivalence with QuickSurface is
 claimed.
+# Experimental cylindrical drag preview
+
+`previewPreparedCylinder` returns a display-only tessellation tagged `provisional`;
+it does not check shape validity, export STEP, or authorize Apply. The current
+revision must separately pass the full cylinder evaluation. The experimental
+worker prepares a cylinder from its currently opened STEP and retains the
+prepared BREP itself; preview and evaluation require its session identifier.
+Open, normal selection, recipe restore and replay invalidate that identifier.
+An isolated browser source-worker test on a synthetic cylinder verifies its provisional response, no STEP or validity flag,
+rejection of a protected-pole edit, and STEP from `evaluateCylinder` reopens as
+valid; reopening the STEP rejects the prior session. `CylinderPreviewSession` keeps delayed validation results and errors
+from applying to newer candidates or a disposed session. It is not connected
+to the normal nonperiodic Apply path. The shared workspace exposes an explicitly
+experimental preview for the narrowly qualified full cylinder: only its
+central pole is selectable and its coupled movement preserves the supported
+net's seam/boundary rules. In isolated source-host QA, selecting a generated
+STEP cylinder and dragging that pole with actual pointer events updated the
+preview; after an explicit sampled CAD check, Apply created a separate CAD
+copy. Undo invalidated that check and required another verification. The copy
+export reopened as valid; the source STEP data remained identical, excluding
+its timestamp-bearing header. The pole was initially outside the fitted view
+and required zooming out. This does not qualify real user STEP files, all
+cylinders, or freedom from self-intersections.
+The worker can now create and resolve UV note anchors against the exact
+evaluated cylinder face BREP and rejects an obsolete session/revision after
+a new preview. Isolated source-worker QA on a synthetic cylinder measured a
+round-trip point gap of approximately 1.8e-15 mm. This is only an anchoring
+check, not scan accuracy. Isolated source-host QA on a synthetic cylinder also
+exercised Zebra, a note, Undo/Redo and revalidation, annotated-copy Apply, and
+save/reopen with the note marked verified. The note was placed with an actual
+pointer click on the selected face; the Note button is enabled only after a
+current CAD validation. Seam changes, real STEP, packaged desktop
+and general persistence need further qualification.
+On one synthetic imported cylinder, a local Vitest run
+measured 44.6 ms for this preview and 1956.8 ms for full evaluation; this is
+not a frame-rate or real-project benchmark. Complete lifecycle qualification,
+control-net framing and real-project qualification remain open.
+
+Isolated source-host QA additionally exercised a planar face of a 51-face CAD
+solid derived from an earlier real-STEP test (`modified-test.step`, input
+SHA-256 `29eba285dc5ed8622c933fc6e2507a774f9342c2b542d538da3e8dd27f98fef4`).
+The viewport pointer gesture, numeric normal move, Undo/Redo and Apply-copy
+passed; input hash stayed unchanged and both exported shapes reimported as
+valid 51-face solids. The first attempt was obstructed by the support card;
+the QA now dismisses it and picks only points actually over the canvas.
+This is one planar face in a derived CAD file, not the cylindrical path,
+packaged desktop qualification, or general QuickSurface parity. Evidence:
+`scanruler-edit-surface-qa/run-sU9P0t/result.json` outside the checkout.
+
+### Two axial handles on a simple cylinder
+
+The experimental full-cylinder path uses exact cubic V refinement with two independently draggable axial controls. Coupled U poles protect the existing seam and the end rows. Isolated source-host QA exercised two pointer drags, sampled CAD validation, undo/redo, notes, Zebra, STEP and project reopen on a generated cylinder; this does not qualify other cylindrical faces or a packaged desktop build. Checks are finite and do not prove global absence of self-intersection. The previously observed periodic-cylinder volume discrepancy remains unresolved.
+
+### Full cylindrical boss on a solid
+
+The experimental gate also accepts a complete cylindrical face bounded by two full circles adjacent to distinct planar faces in a single solid. It rejects ambiguous or shared BREP support records before replacement. OCCT tests on generated STEP bosses cover one and two cylinders, STEP reimport and sampled preservation of other faces; the isolated source-host test covers pointer editing, verification, notes and project reopen on an eight-face boss. These results do not qualify arbitrary trims, shared or repeated TShapes, real customer STEP models, global self-intersections, or packaged desktop integration. The periodic volume discrepancy remains unresolved.
+
+### Real-derived STEP cylinder reconnaissance
+
+On the pre-existing 51-face `modified-test.step` (SHA-256 `29eba285dc5ed8622c933fc6e2507a774f9342c2b542d538da3e8dd27f98fef4`), eight cylinder faces passed the preliminary local gate, but each was refused by whole-solid conversion validation; no cylinder edit was completed. The first observed mismatch was an analytic-cylinder angular seam classified outside despite a sampled projected gap of approximately `1.7e-16 mm` and matching normals. A diagnostic-only trial of equivalent angular parameters exposed a further spherical pole, where normal/classification was unstable despite a small projected gap. Neither observation proves overall conversion equivalence. The trial did not clear all validations and was not adopted; the original checks remain. The artifact is a previously modified real-derived STEP, not a fresh scan or a customer production qualification.
+
+The later sphere-pole audit supports full spheres and a narrowly identified quarter-hemisphere trim. It compares sampled boundaries and regular nearby normals without evaluating an undefined normal at a pole, and fails closed on other shapes. With this audit, an isolated in-process OCCT run on the same 51-face artifact prepared and moved cylinder face 24 by 0.02 mm and reimported a valid 51-face STEP; the source remained unchanged. The sphere audit sampled 72 regular witnesses on that problematic partial spherical face. Seven separate synthetic OCCT tests include unsupported and altered trims. This is a sampled kernel-level result, not a shared-view or packaged-desktop test, nor proof of global equivalence or QuickSurface parity.
+
+A subsequent isolated source-host UI run on that same real-derived STEP selected the cylindrical face, performed two mouse drags, CAD verification, undo/redo, Zebra, a placed note, annotated-copy Apply and project save/reopen. The copied STEP reimported as valid and the original export data remained unchanged. The first attempt exposed a preview bug: it incorrectly required exactly one periodic surface in the entire body; preview now selects the unique prepared net. Later gestures required an appropriate camera scale and movement above the drag threshold. This run does not qualify packaged desktop, all STEP inputs, global equivalence, or complete QuickSurface parity.
+
+### Cylindrical pole snapping in shared view
+
+The isolated source-host UI test `e2e-cylinder-snap.mjs` passed separately for a synthetic STL scan and a synthetic STEP CAD plane. Automated mouse gestures snapped a control pole to each plane (measured pole-to-plane gap about `3.18e-7 mm`), preserved coupled and protected poles, and exercised Undo, Alt and snap off. The output is evidence about control-pole interaction with synthetic displayed references, not a skin-to-scan deviation measurement, a real scan, physical mouse input, packaged desktop, or full CAD qualification. Evidence: `scanruler-edit-surface-qa/cylinder-snap-NpnYUa/result.json` outside the checkout.
+# Cylinder refinement checkpoint — 2026-11-05
+
+Full periodic cylinders now use nine exact axial poles, with five editable
+interior rows instead of two. This improves locality along the cylinder axis;
+it does not add independent circumferential controls. The original support,
+protected ends, coupled motion and unchanged source were checked with OCCT on
+synthetic straight and rotated cylinders and boss fixtures. Knot-span samples
+were added to the existing finite deformation checks; these samples do not
+prove global validity or rule out every self-intersection.
+
+The isolated source-host UI passed a synthetic cylinder drag, application as a
+CAD copy and project reopen. A separate pointer-driven UI check passed scan and
+CAD plane snapping, Alt, magnet off and Undo for one editable row; the pole's
+distance to the reference plane was approximately 0.00000016 mm. This is not a
+measurement of surface-to-scan deviation. A full real-scan, physical input,
+packaged desktop and broad QuickSurface parity qualification remain open.
+Evidence: `scanruler-edit-surface-qa/cylinder-snap-0a47Pi/result.json`, outside
+the source checkout. An initial sandboxed browser launch failed before UI work;
+the isolated run subsequently passed using the authorized local execution.
+
+An isolated source-host run with the nine-row net on the previously modified
+51-face STEP exercised two pointer gestures, validation, Undo/Redo, Zebra,
+note placement, Apply-copy and project reopen. Its functional report was PASS
+and the input SHA-256 remained
+`29eba285dc5ed8622c933fc6e2507a774f9342c2b542d538da3e8dd27f98fef4`.
+The test process nevertheless exited with code 1 because removal of its
+temporary Puppeteer profile returned EPERM; overall test cleanup is therefore
+not a pass. This is one derived STEP fixture, not general STEP, physical mouse,
+real scan or packaged-desktop qualification. The resulting volume discrepancy
+and unsampled self-intersection risk remain unresolved.
+
+An independent `refineClampedNet` helper now supports exact rational knot
+insertion in U and V, with explicit nonperiodic and pole-count guards. Four
+isolated OCCT tests cover rational surfaces and a partially trimmed face with a
+hole, including sampled positions, normals, trim classification and STEP
+roundtrip. It is not connected to any editing control: selecting a refined
+net requires coordinated baseline, protected-pole, history and recipe changes.
+Do not advertise an interactive refinement feature on this evidence.
+
+The CAD kernel now accepts an explicit insertion plan when selecting a
+nonperiodic face, recomputes trim locks for the refined basis and records a v4
+recipe with the insertion plan and refined-baseline hash. A synthetic STEP-box
+test checks edit, recipe restoration, STEP replay and rejection of altered
+plans/hashes. Worker preparation exposes the refined net and new lock metadata.
+There is still no user command: undoable preparation, live draft state, UI,
+and end-to-end qualification are not implemented by this checkpoint.
+
+Follow-up: the shared workspace now exposes U, V and combined knot-span
+refinement for supported clamped, nonperiodic faces. Refinement retains the
+current deformed surface; Undo/Redo restore the corresponding baseline, trim
+locks and hidden controls, with worker selection tied to each preview. Manual
+locks must currently be cleared first. Experimental cylinders
+are excluded from this command. An isolated source-host UI run refined both
+directions, exercised Undo/Redo and edited a pole, then applied and reimported
+a CAD copy. It passed on a synthetic box and on a planar face of the 51-face
+real-derived STEP (`scanruler-edit-surface-qa/run-Nej6YC/result.json`), whose
+input hash remained unchanged. This does not qualify all trims, real scans,
+packaged desktop, physical input, QS parity or global self-intersection.
+
+Notes may remain on the same selected face while refining. Logical anchor
+identity survives exact re-preparation while operational and preview revisions
+still advance; explicit face selection or reopening a source invalidates old
+anchors. A synthetic-box source-host UI run with Zebra active verified note
+identity and position through refinement, Undo/Redo and a subsequent edit;
+see `scanruler-edit-surface-qa/run-rGy4Yn/result.json`. It removed the note
+before Apply, so this run does not independently qualify annotated-copy
+persistence after refinement. Physical input and packaged desktop remain open.
+
+Follow-up source-host UI QA used a synthetic STEP box with a reversed face:
+refinement U, V and both with Zebra and a note; Undo/Redo each; deformation;
+annotated-copy Apply; project Undo/Redo; save and reopen. The copied solid
+reimported as valid, original CAD geometry was unchanged, and reopened note
+UUID, text, verified face binding and normal were retained. Evidence:
+`scanruler-edit-surface-qa/annotated-edit-hR1mUf/result.json`. This qualifies
+only that synthetic fixture and source host, not a production STEP, physical
+input, desktop package or full QuickSurface equivalence.
+
+Experimental G1 building blocks: a topology helper enumerates certain natural
+straight edges with an adjacent planar face, using OCCT shape identity. A
+separate solver projects the interior pole row toward that plane while
+protecting the boundary and refusing conflicting locks or degenerate edges.
+The solver checks multiple along-edge spans with interval arithmetic; remaining
+surface checks are sampled and it explicitly does not certify global G1. The helpers
+are not connected to the worker, UI, history or recipe and do not provide a
+user-facing tangency operation. OCCT/STEP tests cover synthetic examples only;
+curved neighbors and general trims remain open.
+
+Follow-up: the worker can enumerate planar-neighbor candidates from the
+kernel's frozen source and revalidate their source/selection identity. Recipe
+restore starts a fresh candidate generation. The planar solver now checks
+multiple C1 edge spans and has a separate non-mutating final-net validator;
+protected poles and metadata remain exact in memory. These are still
+preparatory APIs: proposal, full CAD evaluation, history, recipe and UI for a
+new G1 constraint are not connected. Independent continuity against a target,
+interactive usage and packaged-desktop behavior remain unqualified.
+
+Follow-up internal kernel prototype: a candidate planar tangency can be
+proposed and checked against the frozen source with a separately allocated CAD
+shape, without publishing a draft or invalidating interactive note witnesses.
+The prototype retains legacy evaluation unchanged, verifies protected poles,
+other tangent rows, CAD readback and optional STEP reimport. Five synthetic
+OCCT kernel tests and 36 solver tests passed together; fault cases include CAD
+readback and STEP import cleanup. A separate non-mutating constraint check is
+available for future edits. Worker/UI/history/recipe for the new constraint are
+not integrated. Geometry is restricted to eligible natural edges with planar
+neighbors; interior checks are sampled, not a global G1 certification.
+
+The G1 prototype now has internal worker and draft/history paths, including a
+kernel-owned constraint baseline and published face witness. An OCCT-backed
+draft/worker integration test on a synthetic two-face shell exercised G1,
+an interior edit, Undo/Redo, STEP export and note UV resolution. These APIs
+are not yet wired to workspace controls or an annotated Apply transaction;
+they are not a user-available G1 feature. Refinement and changing border mode
+while a G1 constraint is active remain unsupported. A new persistent recipe,
+real-world STEP coverage, physical input and packaged desktop remain open.

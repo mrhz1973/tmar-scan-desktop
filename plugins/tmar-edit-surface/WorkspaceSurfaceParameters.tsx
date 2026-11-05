@@ -18,6 +18,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const editable = state.selected.filter(i => !state.locked.includes(i))
   const axisNames = state.dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']
   const strip = state.strip
+  const cylinder = !!state.faces[state.face]?.experimentalCylinder
   const attempt = (action: () => void | Promise<void>) => {
     try {
       const result = action()
@@ -63,12 +64,15 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <select data-test="surface-face" value={state.face < 0 ? '' : String(state.face)} disabled={disabled || !!strip}
         onChange={e => { if (e.target.value !== '') chooseFace(Number(e.target.value)) }}>
         <option value="">Scegli una faccia…</option>
-        {state.faces.map(face => <option key={face.index} value={face.index} disabled={!!face.reason}>
-          {face.index + 1} · {face.kind}{face.reason ? ` · ${face.reason}` : ''}
+        {state.faces.map(face => <option key={face.index} value={face.index} disabled={!!face.reason && !face.experimentalCylinder}>
+          {face.index + 1} · {face.kind}{face.experimentalCylinder ? ' · anteprima sperimentale' : face.reason ? ` · ${face.reason}` : ''}
         </option>)}
       </select>
     </label>
     {state.net && <>
+      {cylinder && <div><p>Cilindro sperimentale: i controlli CAD sono campionati; verifica il risultato prima dell’uso e prima di aggiungere note.</p>
+        <button type="button" data-test="surface-validate-cylinder" disabled={disabled || state.calculating}
+          onClick={() => attempt(() => controller.validateCylinder())}>Verifica CAD del cilindro</button></div>}
       <button type="button" data-test="surface-export-step" disabled={disabled || !state.canExportStep}
         title={state.notes.length || state.placingNote ? 'Le note non vengono incluse nello STEP: rimuovile prima di esportare.' : 'Scarica la geometria CAD convalidata come STEP.'}
         onClick={() => { void exportStep() }}>Esporta STEP</button>
@@ -138,6 +142,18 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           <option value="mixed">Punti e segmenti</option>
         </select>
       </label>
+      <fieldset data-test="surface-refine-net"><legend>Raffina reticolo</legend>
+        <p>Aggiungi punti di controllo nella direzione scelta per modificare il reticolo più finemente.</p>
+        <div className="row">{(['U', 'V', 'both'] as const).map(axis => {
+          const direction = axis === 'both' ? 'in entrambe le direzioni U e V' : `nella direzione ${axis}`
+          return <button type="button" key={axis} data-test={`surface-refine-${axis}`}
+            disabled={disabled || !state.canRefineNet}
+            title={`Aggiunge punti di controllo ${direction}.\nScegli U, V oppure entrambe per il reticolo attuale.\nRichiede una faccia modificabile e nessuna operazione in corso.\nIl risultato resta nella bozza fino ad Applica.`}
+            onClick={() => attempt(() => controller.refineNet(axis))}>
+            {axis === 'both' ? 'Raffina U e V' : `Raffina ${axis}`}
+          </button>
+        })}</div>
+      </fieldset>
       <label>Trascinamento
         <select data-test="surface-drag-mode" value={state.dragMode} disabled={disabled}
           onChange={e => attempt(() => controller.setDragMode(e.target.value as DragMode))}>
@@ -156,8 +172,15 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <fieldset><legend>Magnete</legend>
         <label className="inline"><input data-test="surface-snap" type="checkbox" checked={state.snap} disabled={disabled}
           onChange={e => attempt(() => controller.setSnap(e.target.checked))} /> Aggancia a scansione e CAD vicini</label>
-        {state.snap && <><label>Portata · mm<input data-test="surface-snap-distance" type="number" min="0.001" max="1000" step="0.1"
-          value={state.snapDistance} disabled={disabled} onChange={e => { if (Number.isFinite(e.target.valueAsNumber)) attempt(() => controller.setSnapDistance(e.target.valueAsNumber)) }} /></label>
+        {state.snap && <><label>Portata · mm<input key={state.snapDistance} data-test="surface-snap-distance" type="number" min="0.001" max="1000" step="any"
+          defaultValue={state.snapDistance} disabled={disabled} onBlur={e => {
+            const value = e.currentTarget.valueAsNumber
+            if (Number.isFinite(value) && value >= .001 && value <= 1000) attempt(() => controller.setSnapDistance(value))
+            else { e.currentTarget.value = String(state.snapDistance); setError('Portata magnete: inserisci un valore tra 0,001 e 1000 mm.') }
+          }} onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); e.currentTarget.value = String(state.snapDistance); e.currentTarget.blur() }
+          }} /></label>
           <p>Alt sospende il magnete durante il trascinamento. L’aggancio usa la geometria visualizzata.</p></>}
       </fieldset>
       <label className="inline"><input data-test="surface-control-net" type="checkbox" checked={state.showNet} disabled={disabled}
@@ -222,7 +245,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <button type="button" data-test="surface-redo" disabled={disabled || !state.canRedo} onClick={() => attempt(() => controller.redo())}>Ripeti</button>
         <button type="button" disabled={disabled} onClick={() => attempt(() => controller.restoreOriginal())}>Ripristina</button></div>
       <fieldset><legend>Note sulla superficie</legend>
-        <button type="button" data-test="surface-note-add" disabled={disabled || state.calculating} aria-pressed={state.placingNote}
+        <button type="button" data-test="surface-note-add" disabled={disabled || state.calculating || (!state.placingNote && !state.canPlaceNote)} aria-pressed={state.placingNote}
           onClick={() => attempt(() => controller.setPlacingNote(!state.placingNote))}>{state.placingNote ? 'Annulla scelta punto' : 'Aggiungi nota'}</button>
         {state.placingNote && <p>Clicca sulla faccia modificata per posizionare la nota.</p>}
         {state.notes.map((note, index) => <div key={note.id}><label>Nota {index + 1}<input data-test="surface-note-text" value={note.text} maxLength={2000} disabled={disabled}

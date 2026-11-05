@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import * as THREE from 'three'
 import type { Net } from './brep'
-import { netEdges, type NetSelectionMode } from './netSelection'
+import { netCells, netEdges, type NetSelectionMode } from './netSelection'
 
 export interface NetPickInput {
   net: Net
@@ -111,9 +111,7 @@ function nearestCell(input: NetPickInput, world: THREE.Vector3[]): number[] | nu
   raycaster.setFromCamera(ndc, input.camera)
   let best = Infinity, result: number[] | null = null
   const hit = new THREE.Vector3()
-  const { nu, nv } = input.net
-  for (let u = 0; u < nu - 1; u++) for (let v = 0; v < nv - 1; v++) {
-    const a = u * nv + v, b = a + nv, c = b + 1, d = a + 1
+  for (const [a,b,c,d] of netCells(input.net)) {
     const indices = [a, b, c, d]
     if (indices.some(i => input.hiddenPoles.includes(i))) continue
     for (const [j, k] of [[b, c], [c, d]] as const) {
@@ -134,6 +132,9 @@ export function pickNetAt(input: NetPickInput): number[] | null {
   const { net, partWorld, rect, clientX, clientY } = input
   if (!Number.isInteger(net.nu) || !Number.isInteger(net.nv) || net.nu < 2 || net.nv < 2 || net.poles.length !== net.nu * net.nv ||
       !finite([rect.left, rect.top, rect.width, rect.height, clientX, clientY]) || rect.width <= 0 || rect.height <= 0) return null
+  // Two cyclic rows can share the same control indices across distinct
+  // parametric cells; this picker cannot distinguish those cells yet.
+  if ((net.periodic?.[0] && net.nu === 2) || (net.periodic?.[1] && net.nv === 2)) return null
   if (!net.poles.every(p => p.length === 3 && finite(p)) || !partWorld.elements.every(Number.isFinite)) return null
   const pointRadius = clampRadius(input.pointRadiusPx, 8), edgeRadius = clampRadius(input.edgeRadiusPx, 7)
   if (!Number.isFinite(pointRadius) || pointRadius < 0 || !Number.isFinite(edgeRadius) || edgeRadius < 0) return null

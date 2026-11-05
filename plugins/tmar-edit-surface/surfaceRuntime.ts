@@ -4,12 +4,14 @@ import type { Preview } from './editorKernel'
 import { PreviewQueue } from './previewQueue'
 import { SurfaceHistory } from './surfaceHistory'
 import { SurfaceWorkerClient } from './workerClient'
+import type { KnotInsertion } from './refineClampedNet'
 
 export interface PreviewDraft {
   net: Net
   continuity: 'G0' | 'G1'
   freeBoundary: boolean
   epoch: number
+  selection?: { face:number; refinements: KnotInsertion[] }
 }
 
 /** Session-owned resources; a future host can retain these while remounting a panel.
@@ -23,7 +25,7 @@ export class SurfaceRuntime {
   constructor(factory?: () => Worker) {
     this.worker = new SurfaceWorkerClient(factory)
     this.previews = new PreviewQueue({ evaluate: draft => this.worker.ask<Preview>({
-      action: 'evaluate', net: draft.net, continuity: draft.continuity, freeBoundary: draft.freeBoundary,
+      action: 'evaluate', net: draft.net, continuity: draft.continuity, freeBoundary: draft.freeBoundary, selection: draft.selection,
     }) })
   }
 
