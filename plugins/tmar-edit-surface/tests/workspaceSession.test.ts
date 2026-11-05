@@ -377,6 +377,21 @@ describe('WorkspaceSurfaceSession',()=>{
         expect(restored.getPanelState().net?.poles).toEqual(session.getPanelState().net?.poles)
         expect(restored.getSnapshot().validation.kind).toBe('valid')
         expect(restored.isHistoryRecipeStampCurrent(recipe)).toBe(false)
+        const revision=restored.getViewState().preview?.previewRevision
+        if(revision===undefined)throw Error('restored preview missing revision')
+        const picked=restoredEditor.anchorFromPick(seed,revision)
+        const savedNote={id:'note-1',text:'Controlla la faccia',faceIndex:index,u:picked.anchor.u,v:picked.anchor.v}
+        await expect(restored.restoreHistoryNotes([savedNote,{...savedNote,id:'bad',u:1e9}])).rejects.toThrow()
+        expect(restored.getPanelState().notes).toHaveLength(0)
+        await restored.restoreHistoryNotes([savedNote])
+        expect(restored.getPanelState().notes).toHaveLength(1)
+        expect(restored.getPanelState().notes[0]).toMatchObject({id:'note-1',text:'Controlla la faccia'})
+        expect(restored.getPanelState().notes[0].at).toEqual(picked.at)
+        restored.selectAllFree();restored.moveSelected(.2)
+        await vi.advanceTimersByTimeAsync(90);await flush()
+        expect(restored.getSnapshot().validation.kind).toBe('valid')
+        expect(restored.getPanelState().notes[0].text).toBe('Controlla la faccia')
+        expect(restored.getPanelState().notes[0].at).not.toEqual(picked.at)
       } finally { if(restored)await restored.dispose('cancelled');restoredEditor.dispose() }
       const failedEditor=new SurfaceEditorKernel(k), failedWorker=new KernelWorker(failedEditor)
       const failedRuntime=new SurfaceRuntime(()=>failedWorker as unknown as Worker), fatal=vi.fn()

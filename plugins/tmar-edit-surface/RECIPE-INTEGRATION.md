@@ -28,7 +28,15 @@ recipe into a fresh, empty workspace session only. It rejects another body or
 changed STEP bytes; a failed worker restore reports a fatal error to the host
 and closes the session. A real OCCT
 test restores an edited reversed STEP face and validates the resulting solid.
-This API does not restore notes or implement host project persistence.
+This API does not by itself restore notes or implement host project persistence.
+
+After the restored draft has a fresh valid preview,
+`WorkspaceSurfaceSession.restoreHistoryNotes()` can rebind a host-provided
+array of `{id, text, faceIndex, u, v}` on that restored face. It resolves each
+UV through OCCT, including trimmed-face classification, and installs all notes
+only if every one resolves and the source/draft remains current. It does not
+produce or persist the host's note records: an atomic host recipe-and-note
+transaction and an authenticated association with the recipe are required.
 
 `replaySurfaceHistory()` in `historyReplay.ts` provides independent worker
 replay for a host transaction. It snapshots the recipe and STEP, verifies the

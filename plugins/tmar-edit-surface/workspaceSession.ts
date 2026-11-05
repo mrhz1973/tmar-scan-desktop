@@ -30,6 +30,14 @@ export interface PreparedHistoryRecipe {
   readonly selectionEpoch: number
   readonly draftEpoch: number
 }
+/** Host-owned persisted text/UV; selection revisions never leave a session. */
+export interface HistorySurfaceNote {
+  readonly id: string
+  readonly text: string
+  readonly faceIndex: number
+  readonly u: number
+  readonly v: number
+}
 interface Note extends WorkspaceSurfaceNote { readonly anchor: DraftAnchor }
 export type WorkspaceG1Candidate = (G1SupportCandidate & { readonly kind?: never }) | CompatibleCurvedSupportCandidate
 export interface WorkspaceSurfacePanelState {
@@ -173,6 +181,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private directFailedKey: string | null = null
   private directGestureOrigin = false
   private face = -1
+  private restoredHistory: { selectionEpoch:number; draftEpoch:number; net:Net } | null = null
   private faces: readonly FaceInfo[] = Object.freeze([])
   private sourcePreview: Preview | null = null
   private selectionEpoch = 0
@@ -933,6 +942,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         throw new Error('La faccia ripristinata non corrisponde alla sorgente CAD.')
       this.face = result.preparation.face
       this.selectionEpoch++; this.draftEpoch++; this.historyRevision++
+      const net = this.draft.getSnapshot().net
+      if (!net) throw new Error('Reticolo ripristinato non disponibile.')
+      this.restoredHistory = { selectionEpoch:this.selectionEpoch, draftEpoch:this.draftEpoch, net }
     } catch (error) {
       // A failed worker restore may have replaced its internal model. Do not
       // leave a partially adopted session available to the host.
@@ -946,6 +958,49 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.mutating = false
       if (!this.disposed) { this.busy = false; this.refresh(); this.resolveNotes() }
     }
+  }
+
+  /** Rebind notes only after this session restored and validated its recipe.
+   * UVs are checked by OCCT on the trimmed face; publish all or none. */
+  async restoreHistoryNotes(value: unknown): Promise<void> {
+    this.assertMutable()
+    const base=this.restoredHistory, draft=this.draft.getSnapshot(), revision=draft.preview?.previewRevision
+    if (!base || base.selectionEpoch!==this.selectionEpoch || base.draftEpoch!==this.draftEpoch ||
+        base.net!==draft.net || draft.validNet!==draft.net || draft.calculating || revision===undefined ||
+        this.snapshot.validation.kind!=='valid' || this.notes.length || this.placingNote || this.strip || this.gesture!=='idle')
+      throw new Error('Ripristina e verifica prima la modifica CAD senza note.')
+    if (!Array.isArray(value) || value.length>200) throw new Error('Elenco note non valido.')
+    const input=structuredClone(value) as HistorySurfaceNote[]
+    if (input.some(n=>!n || typeof n.id!=='string' || !n.id.trim() || n.id.length>200 ||
+        typeof n.text!=='string' || !n.text.trim() || n.text.length>2000 || n.faceIndex!==this.face ||
+        !Number.isFinite(n.u) || !Number.isFinite(n.v)) || new Set(input.map(n=>n.id)).size!==input.length)
+      throw new Error('Una nota salvata non è valida o appartiene a un’altra faccia.')
+    if (!input.length) return
+    const unchanged=()=>{
+      this.assertLive()
+      const now=this.draft.getSnapshot()
+      if (this.restoredHistory!==base || this.selectionEpoch!==base.selectionEpoch || this.draftEpoch!==base.draftEpoch ||
+          now.net!==base.net || now.validNet!==base.net || now.calculating || now.preview?.previewRevision!==revision || this.notes.length)
+        throw new Error('La superficie è cambiata durante il ripristino delle note.')
+    }
+    this.busy=true;this.refresh()
+    try {
+      const witness=await this.runtime.worker.ask<{face:number;selectionRevision:number;previewRevision:number}>(
+        {action:'finalFaceWitness',previewRevision:revision},this.context.signal)
+      unchanged()
+      if (!witness || witness.face!==this.face || witness.previewRevision!==revision || !Number.isSafeInteger(witness.selectionRevision))
+        throw new Error('Identità della faccia non valida.')
+      const restored:Note[]=[]
+      for (const item of input) {
+        const anchor={face:this.face,selectionRevision:witness.selectionRevision,u:item.u,v:item.v}
+        const point=await this.runtime.worker.ask<{at:Point;normal:Point}>({action:'noteResolve',anchor,previewRevision:revision},this.context.signal)
+        unchanged()
+        if (!finitePoint(point?.at) || !finitePoint(point?.normal) || Math.abs(Math.hypot(...point.normal)-1)>1e-6)
+          throw new Error('Posizione della nota non valida.')
+        restored.push(Object.freeze({id:item.id,text:item.text,anchor:Object.freeze(anchor),at:freezePoint(point.at),normal:freezePoint(point.normal),revision}))
+      }
+      this.advanceNotesRevision();this.notes=Object.freeze(restored);this.draftEpoch++;this.restoredHistory=null
+    } finally { if(!this.disposed){this.busy=false;this.refresh();this.resolveNotes()} }
   }
 
   /** Explicit, slower CAD check. A provisional rendering alone cannot Apply. */
@@ -1459,6 +1514,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private cleanup(): void {
     if (this.disposed) return
     this.disposed = true; this.exportGeneration++; this.frozen = null; this.stripGeneration++; this.stripAbort?.abort()
+    this.restoredHistory = null
     this.clearDirectCache(); this.directGestureOrigin = false
     this.strip = null; this.stripPending = false; this.stripAbort = null
     this.context.signal.removeEventListener('abort', this.onAbort)
