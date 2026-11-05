@@ -25,7 +25,7 @@ const net=():Net=>{
   poles[7][2]=.25
   return {nu:5,nv:5,du:3,dv:3,poles,weights:poles.map(()=>1),rational:[0,0],ku:[0,.5,1],kv:[0,.5,1],mu:[4,1,4],mv:[4,1,4]}
 }
-const candidate:G1SupportCandidate={id:'support-1',stamp:{sourceId:'frozen-source',sourceRevision:0,selectionRevision:1,faceIndex:0},
+const candidate:G1SupportCandidate={id:'support-1',stamp:{sourceId:'brep-sha256:'+'b'.repeat(64),sourceRevision:0,selectionRevision:1,faceIndex:0},
   supportFaceIndex:1,edgeIndex:0,side:'uMin',lengthMm:4,plane:{origin:[0,0,0],normal:[0,0,1]}}
 const preview=(revision?:number)=>({valid:true,mesh:{} as G1PlaneResult['preview']['mesh'],faceMeshes:[{}] as G1PlaneResult['preview']['faceMeshes'],volume:0,maxBoundaryError:0,minimumNormalDot:1,...(revision===undefined?{}:{previewRevision:revision})})
 const face={index:0,kind:'plane',reason:null,converted:true,enriched:false,openSheet:false,freeBoundary:false,trimLocks:[],hiddenPoles:[]}
@@ -50,7 +50,14 @@ async function setup(){
   return {session,worker,invalidate:()=>{current=false}}
 }
 type Context=Awaited<ReturnType<typeof setup>>
-async function load(t:Context){const pending=t.session.loadG1Supports();expect(t.worker.sent.at(-1)?.action).toBe('g1SupportCandidates');t.worker.reply({stamp:candidate.stamp,candidates:[candidate]});await pending;t.session.chooseG1Support(candidate.id)}
+function supportReplies(t:Context,plane:unknown){
+  const planar=[...t.worker.sent].reverse().find(message=>message.action==='g1SupportCandidates')!
+  const curved=[...t.worker.sent].reverse().find(message=>message.action==='g1CurvedSupportCandidates')!
+  expect(planar).toBeDefined();expect(curved).toBeDefined()
+  t.worker.reply(plane,planar.id)
+  t.worker.reply({stamp:candidate.stamp,candidates:[]},curved.id)
+}
+async function load(t:Context){const pending=t.session.loadG1Supports();expect(t.worker.sent.some(message=>message.action==='g1SupportCandidates')).toBe(true);supportReplies(t,{stamp:candidate.stamp,candidates:[candidate]});await pending;t.session.chooseG1Support(candidate.id)}
 function proposal(base:Net):G1PlaneResult{
   const request:PlaneTangencyRequest={net:base,edge:'U0',plane:{point:[0,0,0],normal:[0,0,1]},lockIndices:[],preserveTangentEdges:['U1','V0','V1'],distanceTolerance:1e-8}
   const out=proposePlaneTangency(request)
@@ -74,23 +81,25 @@ describe('workspace session local planar G1 orchestration (controlled worker)',(
     const t=await setup()
     expect(t.session.getPanelState()).toMatchObject({canLoadG1:true,canApplyG1:false,g1Choice:null,g1Candidates:[]})
     const pending=t.session.loadG1Supports();expect(t.session.getPanelState().busy).toBe(true)
-    t.worker.reply({stamp:candidate.stamp,candidates:[candidate]});await pending
+    supportReplies(t,{stamp:candidate.stamp,candidates:[candidate]});await pending
     const state=t.session.getPanelState()
     expect(state.g1Candidates).toEqual([candidate]);expect(state.g1Choice).toBeNull();expect(state.canApplyG1).toBe(false)
-    expect(Object.isFrozen(state.g1Candidates[0].plane.normal)).toBe(true)
+    const planar=state.g1Candidates[0]
+    if(planar.kind==='compatible-bspline')throw Error('Expected planar fixture support')
+    expect(Object.isFrozen(planar.plane.normal)).toBe(true)
     expect(()=>t.session.chooseG1Support('missing')).toThrow()
     t.session.chooseG1Support(candidate.id);expect(t.session.getPanelState().canApplyG1).toBe(true)
     expect(t.session.getPanelState().planeTangencyActive).toBe(false)
   })
   it('rejects a candidate stamp that does not match the selected face',async()=>{
-    const t=await setup(),pending=t.session.loadG1Supports(),rejected=expect(pending).rejects.toThrow(/scaduto/i)
-    t.worker.reply({stamp:candidate.stamp,candidates:[{...candidate,stamp:{...candidate.stamp,faceIndex:1}}]})
+    const t=await setup(),pending=t.session.loadG1Supports(),rejected=expect(pending).rejects.toThrow('Candidato G1 non verificabile.')
+    supportReplies(t,{stamp:candidate.stamp,candidates:[{...candidate,stamp:{...candidate.stamp,faceIndex:1}}]})
     await rejected
     expect(t.session.getPanelState()).toMatchObject({busy:false,g1Candidates:[],g1Choice:null,canApplyG1:false})
   })
   it('discards a pending support response when the source becomes stale',async()=>{
     const t=await setup(),pending=t.session.loadG1Supports(),rejected=expect(pending).rejects.toThrow()
-    t.invalidate();t.worker.reply({stamp:candidate.stamp,candidates:[candidate]});await rejected
+    t.invalidate();supportReplies(t,{stamp:candidate.stamp,candidates:[candidate]});await rejected
     expect(t.session.getPanelState().g1Candidates).toHaveLength(0)
     expect(t.session.getPanelState().canApplyG1).toBe(false)
   })
@@ -130,5 +139,3 @@ describe('workspace session local planar G1 orchestration (controlled worker)',(
     expect(t.worker.sent.some(m=>m.action==='publishG1PlaneTangency')).toBe(false)
   })
 })
-
-

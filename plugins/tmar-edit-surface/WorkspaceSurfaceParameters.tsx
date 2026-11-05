@@ -22,6 +22,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const strip = state.strip
   const cylinder = !!state.faces[state.face]?.experimentalCylinder
   const g1Candidates = state.g1Candidates ?? []
+  const tangencyActive = state.planeTangencyActive || state.curvedTangencyActive
+  const curvedSupportChosen = g1Candidates.some(candidate => candidate.id === state.g1Choice && candidate.kind === 'compatible-bspline')
   const g1Disabled = disabled || state.calculating || g1Pending !== null
   const runG1 = async (operation: 'load' | 'apply') => {
     setG1Pending(operation)
@@ -138,15 +140,15 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           onClick={() => attempt(() => controller.retryDirectStripEdges())}>Riprova</button>
       </div>}
       <label>Protezione dei bordi
-        <select data-test="surface-continuity" value={state.continuity} disabled={disabled || state.freeBoundary || state.planeTangencyActive}
+        <select data-test="surface-continuity" value={state.continuity} disabled={disabled || state.freeBoundary || tangencyActive}
           onChange={e => attempt(() => controller.setContinuity(e.target.value as 'G0' | 'G1'))}>
           <option value="G0">G0 · mantieni la posizione dei bordi</option>
           <option value="G1">G1 · mantieni anche le tangenti esistenti</option>
         </select>
       </label>
       <p>La protezione conserva le condizioni esistenti; non corregge automaticamente discontinuità già presenti.</p>
-      <fieldset data-test="surface-g1-panel"><legend>Tangente a una faccia piana</legend>
-        <p>Scegli un bordo condiviso e la faccia piana adiacente a cui rendere tangente la superficie. La modifica resta nella bozza fino ad Applica.</p>
+      <fieldset data-test="surface-g1-panel"><legend>Tangente a una faccia adiacente</legend>
+        <p>Scegli un bordo condiviso e un supporto piano o B-spline compatibile a cui rendere tangente la superficie. La modifica resta nella bozza fino ad Applica.</p>
         <button type="button" data-test="surface-g1-load" disabled={g1Disabled || !state.canLoadG1}
           onClick={() => { void runG1('load') }}>Carica supporti G1</button>
         <label>Bordo e faccia di supporto
@@ -159,7 +161,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
             }}>
             <option value="">Scegli bordo e faccia…</option>
             {g1Candidates.map(candidate => <option key={candidate.id} value={candidate.id}>
-              Bordo {candidate.edgeIndex + 1} · faccia piana {candidate.supportFaceIndex + 1} · {candidate.lengthMm.toLocaleString('it-IT', { maximumFractionDigits: 3 })} mm
+              Bordo {candidate.edgeIndex + 1} · faccia {candidate.kind === 'compatible-bspline' ? 'B-spline compatibile' : 'piana'} {candidate.supportFaceIndex + 1} · {candidate.lengthMm.toLocaleString('it-IT', { maximumFractionDigits: 3 })} mm
             </option>)}
           </select>
         </label>
@@ -168,11 +170,14 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <p role="status" data-test="surface-g1-status">{g1Pending === 'load' ? 'Ricerca dei supporti CAD in corso…'
           : g1Pending === 'apply' ? 'Calcolo e verifica della tangente in corso…'
           : state.planeTangencyActive ? 'Vincolo di tangente al supporto piano attivo nella bozza.'
-          : state.g1Choice ? 'Supporto scelto: applica la tangente alla bozza.'
-          : g1Candidates.length ? 'Scegli il bordo e la faccia piana di supporto.'
-          : 'Carica i supporti per cercare bordi condivisi con facce piane compatibili.'}</p>
+          : state.curvedTangencyActive ? 'Vincolo di tangente al supporto B-spline compatibile attivo nella bozza.'
+          : state.g1Choice ? `Supporto ${curvedSupportChosen ? 'B-spline compatibile' : 'piano'} scelto: applica la tangente alla bozza.`
+          : g1Candidates.length ? 'Scegli il bordo e la faccia piana o B-spline compatibile di supporto.'
+          : state.message === 'Nessun bordo naturale con un supporto adiacente compatibile disponibile.' ? state.message
+          : 'Carica i supporti per cercare bordi condivisi con facce piane o B-spline compatibili.'}</p>
         {g1Error && <p role="alert" data-test="surface-g1-error">{g1Error}</p>}
-        <p data-test="surface-g1-limits">Disponibile solo per bordi naturali rettilinei di una faccia a quattro bordi senza fori, con supporto piano adiacente. Il vincolo riguarda il bordo scelto; non certifica la continuità G1 dell’intero modello. La Zebra aiuta il controllo visivo.</p>
+        <p data-test="surface-g1-limits">Sono ammessi solo bordi condivisi rettilinei su facce naturali a quattro lati senza fori. Per i supporti B-spline servono superfici native non razionali con basi compatibili sul bordo; non viene eseguito un adattamento automatico. Il vincolo riguarda il bordo scelto; non certifica la continuità G1 dell’intero modello. La Zebra aiuta il controllo visivo.</p>
+        {(curvedSupportChosen || state.curvedTangencyActive) && <p data-test="surface-g1-curved-limits">Con il supporto B-spline compatibile puoi creare la copia CAD con Applica; il salvataggio del vincolo come ricetta modificabile non è ancora disponibile.</p>}
       </fieldset>
       {state.canFreeBoundary && <label className="inline"><input data-test="surface-free-boundary" type="checkbox"
         checked={state.freeBoundary} disabled={disabled} onChange={e => attempt(() => controller.setFreeBoundary(e.target.checked))} />
@@ -286,7 +291,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         onClick={() => attempt(() => controller.stretchSelected(factor))}>Stira lungo {['X', 'Y', 'Z'][state.axis]}</button>
       <div className="row"><button type="button" data-test="surface-undo" disabled={disabled || !state.canUndo} onClick={() => attempt(() => controller.undo())}>Annulla modifica</button>
         <button type="button" data-test="surface-redo" disabled={disabled || !state.canRedo} onClick={() => attempt(() => controller.redo())}>Ripeti</button>
-        <button type="button" disabled={disabled || state.planeTangencyActive} onClick={() => attempt(() => controller.restoreOriginal())}>Ripristina</button></div>
+        <button type="button" disabled={disabled || tangencyActive} onClick={() => attempt(() => controller.restoreOriginal())}>Ripristina</button></div>
       <fieldset><legend>Note sulla superficie</legend>
         <button type="button" data-test="surface-note-add" disabled={disabled || state.calculating || (!state.placingNote && !state.canPlaceNote)} aria-pressed={state.placingNote}
           onClick={() => attempt(() => controller.setPlacingNote(!state.placingNote))}>{state.placingNote ? 'Annulla scelta punto' : 'Aggiungi nota'}</button>

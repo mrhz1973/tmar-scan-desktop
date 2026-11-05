@@ -4,8 +4,9 @@ import type { ApplyTicket, DraftStamp, EditorSnapshot, ExitReason, PreparedCadCo
 // @ts-ignore -- this optional V1 contract is supplied by annotation-capable hosts.
 import type { AnnotatedTicketV1, PreparedAnnotatedCopyV1 } from '../../src/plugins/annotatedCopyTypes'
 import { boundaryLocked, type Net, type Point } from './brep'
-import type { DraftAnchor, FaceInfo, Preview, G1SupportCandidates } from './editorKernel'
+import type { DraftAnchor, FaceInfo, Preview, G1SupportCandidates, G1CurvedSupportCandidates } from './editorKernel'
 import type { G1SupportCandidate } from './g1SupportTopology'
+import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupportTopology'
 import { dragDirection, type DragMode } from './localFrame'
 import { selectNetPoints, type NetSelectionMode } from './netSelection'
 import { SurfaceDraft, type SurfaceDraftSnapshot } from './surfaceDraft'
@@ -22,6 +23,7 @@ export interface WorkspaceSurfaceNote {
   readonly revision: number
 }
 interface Note extends WorkspaceSurfaceNote { readonly anchor: DraftAnchor }
+export type WorkspaceG1Candidate = (G1SupportCandidate & { readonly kind?: never }) | CompatibleCurvedSupportCandidate
 export interface WorkspaceSurfacePanelState {
   readonly faces: readonly FaceInfo[]
   readonly face: number
@@ -33,11 +35,12 @@ export interface WorkspaceSurfacePanelState {
   readonly freeBoundary: boolean
   readonly canFreeBoundary: boolean
   readonly canRefineNet: boolean
-  readonly g1Candidates: readonly G1SupportCandidate[]
+  readonly g1Candidates: readonly WorkspaceG1Candidate[]
   readonly g1Choice: string | null
   readonly canLoadG1: boolean
   readonly canApplyG1: boolean
   readonly planeTangencyActive: boolean
+  readonly curvedTangencyActive: boolean
   readonly canUndo: boolean
   readonly canRedo: boolean
   readonly calculating: boolean
@@ -110,7 +113,7 @@ const sourceKey = (source: SourceBinding) => JSON.stringify([
   source.kernelGeneration, source.frameRevision, source.stepSha256, source.units, source.coordinateFrame,
 ])
 const ticketKey = (ticket: ApplyTicket | AnnotatedTicketV1) => JSON.stringify([ticket.operationId, ticket.mode, sourceKey(ticket.source), stampKey(ticket.stamp), ticket.mode === 'annotated-cad-copy' ? ticket.notesRevision : null])
-const finitePoint = (point: readonly number[] | null | undefined) => !!point && point.length === 3 && point.every(Number.isFinite)
+const finitePoint = (point: readonly number[] | null | undefined) => !!point && point.length === 3 && Array.from(point).every(Number.isFinite)
 const pointCopy = (point: readonly number[]): Point => [point[0], point[1], point[2]]
 const freezePoint = (point: readonly number[]): Point => Object.freeze(pointCopy(point)) as Point
 const sameArray = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((v, i) => v === b[i])
@@ -166,11 +169,11 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private selectionEpoch = 0
   private draftEpoch = 0
   private historyRevision = 0
-  private g1Candidates: readonly G1SupportCandidate[] = Object.freeze([])
+  private g1Candidates: readonly WorkspaceG1Candidate[] = Object.freeze([])
   private g1Choice: string | null = null
   private g1Basis: { selectionEpoch: number; refinements: SurfaceDraftSnapshot['refinements'] } | null = null
   private g1ValidationSerial = 0
-  private g1DraftIdentity: { net: Net; constraint: NonNullable<SurfaceDraftSnapshot['planeTangency']>; requestId: number } | null = null
+  private g1DraftIdentity: { net: Net; constraint: NonNullable<SurfaceDraftSnapshot['planeTangency'] | SurfaceDraftSnapshot['curvedTangency']>; requestId: number } | null = null
   private revision = 0
   private message: string | null = null
   private snap = true
@@ -192,7 +195,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private failedNoteRevision: number | null = null
   private failedNoteSet: readonly Note[] | null = null
   private symmetryCache: { net: Net; axis: number; offset: number; partners: number[] } | null = null
-  private lockCache: { net: Net | null; locks: readonly number[]; trim: readonly number[]; continuity: 'G0' | 'G1'; free: boolean; plane: SurfaceDraftSnapshot['planeTangency']; value: readonly number[] } | null = null
+  private lockCache: { net: Net | null; locks: readonly number[]; trim: readonly number[]; continuity: 'G0' | 'G1'; free: boolean;
+    tangency: SurfaceDraftSnapshot['planeTangency'] | SurfaceDraftSnapshot['curvedTangency']; value: readonly number[] } | null = null
   private pinCache: { notes: readonly Note[]; revision: number | undefined; value: readonly Point[] } | null = null
   private snapshot!: EditorSnapshot
   private panel!: WorkspaceSurfacePanelState
@@ -605,24 +609,57 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.assertMutable()
     if (!this.panel.canLoadG1) throw new Error('Attendi una bozza CAD valida con bordi protetti prima di caricare i supporti.')
     const before = this.draft.getSnapshot(), epoch = this.selectionEpoch
+    this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null
     this.busy = true; this.message = null; this.refresh()
     try {
-      const result = await this.runtime.worker.ask<G1SupportCandidates>({ action: 'g1SupportCandidates' }, this.context.signal)
+      const lists = await Promise.allSettled([
+        this.runtime.worker.ask<G1SupportCandidates>({ action: 'g1SupportCandidates' }, this.context.signal),
+        this.runtime.worker.ask<G1CurvedSupportCandidates>({ action: 'g1CurvedSupportCandidates' }, this.context.signal),
+      ])
       this.assertLive()
-      if (epoch !== this.selectionEpoch || before.refinements !== this.draft.getSnapshot().refinements ||
-          result?.stamp?.faceIndex !== this.face || !Array.isArray(result.candidates) ||
-          result.candidates.some(candidate => candidate.stamp.faceIndex !== this.face ||
-            JSON.stringify(candidate.stamp) !== JSON.stringify(result.stamp)))
+      if (epoch !== this.selectionEpoch || before.refinements !== this.draft.getSnapshot().refinements)
         throw new Error('Elenco dei supporti G1 scaduto.')
-      const candidates = structuredClone(result.candidates)
+      const candidates: WorkspaceG1Candidate[] = []
+      let stamp: string | undefined, available = 0
+      const sides = ['uMin', 'uMax', 'vMin', 'vMax']
+      for (const [family, outcome] of lists.entries()) {
+        // Each topology classifier may explicitly refuse an unsupported selected
+        // surface. Keep the other independently certified family available.
+        if (outcome.status === 'rejected') continue
+        available++
+        const result = outcome.value
+        if (!result?.stamp || result.stamp.faceIndex !== this.face || !/^brep-sha256:[a-f0-9]{64}$/i.test(result.stamp.sourceId) ||
+            ![result.stamp.sourceRevision, result.stamp.selectionRevision].every(n => Number.isSafeInteger(n) && n >= 0) ||
+            !Array.isArray(result.candidates) || result.candidates.length > 4 || (stamp !== undefined && stamp !== JSON.stringify(result.stamp)))
+          throw new Error('Elenco dei supporti G1 scaduto o non verificabile.')
+        stamp = JSON.stringify(result.stamp)
+        for (const value of result.candidates) {
+          const candidate = value as WorkspaceG1Candidate
+          if (!candidate || typeof candidate.id !== 'string' || !candidate.id || JSON.stringify(candidate.stamp) !== stamp ||
+              !Number.isSafeInteger(candidate.supportFaceIndex) || candidate.supportFaceIndex < 0 || candidate.supportFaceIndex >= this.faces.length || candidate.supportFaceIndex === this.face ||
+              !Number.isSafeInteger(candidate.edgeIndex) || candidate.edgeIndex < 0 || candidate.edgeIndex > 3 || !sides.includes(candidate.side) ||
+              !Number.isFinite(candidate.lengthMm) || candidate.lengthMm <= 0 ||
+              (family === 0 ? candidate.kind !== undefined || !('plane' in candidate) ||
+                !finitePoint(candidate.plane?.origin) || !finitePoint(candidate.plane?.normal) || Math.abs(Math.hypot(...candidate.plane.normal) - 1) > 1e-6
+                : candidate.kind !== 'compatible-bspline' || !sides.includes(candidate.supportSide) || typeof candidate.reverseSupport !== 'boolean'))
+            throw new Error('Candidato G1 non verificabile.')
+          candidates.push(structuredClone(candidate))
+        }
+      }
+      if (!available) throw new Error('Nessun supporto G1 certificabile per questa faccia.')
+      if (new Set(candidates.map(candidate => candidate.id)).size !== candidates.length) throw new Error('Scelte dei supporti G1 ambigue.')
       for (const candidate of candidates) {
-        Object.freeze(candidate.stamp); Object.freeze(candidate.plane.origin); Object.freeze(candidate.plane.normal)
-        Object.freeze(candidate.plane); Object.freeze(candidate)
+        Object.freeze(candidate.stamp)
+        if (candidate.kind !== 'compatible-bspline') {
+          Object.freeze(candidate.plane.origin); Object.freeze(candidate.plane.normal); Object.freeze(candidate.plane)
+        }
+        Object.freeze(candidate)
       }
       this.g1Candidates = Object.freeze(candidates)
       this.g1Choice = null
       this.g1Basis = { selectionEpoch: epoch, refinements: before.refinements }
-      this.message = candidates.length ? null : 'Nessun bordo naturale con una faccia piana adiacente disponibile.'
+      this.message = candidates.length ? (available === 2 ? null : 'Disponibili solo i supporti della famiglia certificabile per questa faccia.')
+        : 'Nessun bordo naturale con un supporto adiacente compatibile disponibile.'
     } catch (error) {
       if (!this.disposed) this.message = String((error as Error)?.message ?? error)
       throw error
@@ -643,7 +680,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const before = this.draft.getSnapshot()
     this.busy = true; this.message = null; this.refresh()
     try {
-      await this.draft.applyPlaneTangency(choice)
+      if (choice.kind === 'compatible-bspline') await this.draft.applyCurvedTangency(choice)
+      else await this.draft.applyPlaneTangency(choice)
       this.assertLive()
     } catch (error) {
       if (!this.disposed) this.message = String((error as Error)?.message ?? error)
@@ -651,7 +689,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     } finally {
       if (!this.disposed) {
         const after = this.draft.getSnapshot()
-        if (before.committedNet !== after.committedNet || before.planeTangency !== after.planeTangency) {
+        if (before.committedNet !== after.committedNet || before.planeTangency !== after.planeTangency || before.curvedTangency !== after.curvedTangency) {
           this.draftEpoch++; this.historyRevision++
         }
         this.busy = false; this.refresh(); this.resolveNotes()
@@ -968,11 +1006,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const stamp = initial.stamp
     const net = this.requireNet()
     const draft = this.draft.getSnapshot()
+    const tangency = draft.planeTangency ?? draft.curvedTangency
     const strip = this.strip
     const stripResult = strip?.frames[strip.at] ?? null
     const queue = this.runtime.previews.getSnapshot()
     if (draft.validNet !== net || draft.calculating || draft.previewStale ||
-        (!strip && (!draft.preview?.valid || (draft.planeTangency
+        (!strip && (!draft.preview?.valid || (tangency
           ? this.g1DraftIdentity?.requestId !== stamp.requestId
           : queue.current?.revision !== stamp.requestId || queue.validRevision !== stamp.requestId))) ||
         (strip && (!stripResult || strip.error)))
@@ -989,9 +1028,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const after = this.draft.getSnapshot(), currentQueue = this.runtime.previews.getSnapshot()
       if (generation !== this.exportGeneration || this.selectionEpoch !== selectionEpoch || this.draftEpoch !== draftEpoch ||
           this.requireNet() !== net || after.validNet !== net || after.calculating || after.previewStale ||
-          after.continuity !== continuity || after.freeBoundary !== freeBoundary || after.planeTangency !== draft.planeTangency || this.strip !== strip ||
+          after.continuity !== continuity || after.freeBoundary !== freeBoundary || after.planeTangency !== draft.planeTangency ||
+          after.curvedTangency !== draft.curvedTangency || this.strip !== strip ||
           (strip ? (strip.frames[strip.at] !== stripResult || !stripResult) :
-            (draft.planeTangency ? this.g1DraftIdentity?.requestId !== stamp.requestId :
+            (tangency ? this.g1DraftIdentity?.requestId !== stamp.requestId :
               currentQueue.current?.revision !== stamp.requestId || currentQueue.validRevision !== stamp.requestId)) ||
           this.notes.length || this.placingNote || this.gesture !== 'idle')
         throw new Error('La bozza è cambiata durante l’esportazione STEP.')
@@ -1053,7 +1093,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   /** The CAD source must be an open face/shell, and the whole base must be present. */
   private initialSheetFaceCount(d: SurfaceDraftSnapshot): number | null {
-    if (d.planeTangency || d.cylinderSession !== null || !this.faces.length || !this.faces[this.face]?.openSheet ||
+    if (d.planeTangency || d.curvedTangency || d.cylinderSession !== null || !this.faces.length || !this.faces[this.face]?.openSheet ||
         this.faces.some(face => !face.openSheet) || !Array.isArray(d.preview?.faceMeshes) ||
         d.preview.faceMeshes.length !== this.faces.length) return null
     return this.faces.length
@@ -1168,7 +1208,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const after = this.draft.getSnapshot()
       if (applied || before !== after) this.draftEpoch++
       if (before.committedNet !== after.committedNet || before.continuity !== after.continuity ||
-          before.freeBoundary !== after.freeBoundary || before.planeTangency !== after.planeTangency ||
+          before.freeBoundary !== after.freeBoundary || before.planeTangency !== after.planeTangency || before.curvedTangency !== after.curvedTangency ||
           !sameArray(before.locks, after.locks)) this.historyRevision++
       this.mutating = false
       if (!this.disposed) { this.refresh(); this.resolveNotes() }
@@ -1176,28 +1216,29 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   private refresh(): void {
     const d: SurfaceDraftSnapshot = this.draft.getSnapshot()
+    const tangency = d.planeTangency ?? d.curvedTangency
     if (this.g1Basis && (this.g1Basis.selectionEpoch !== this.selectionEpoch || this.g1Basis.refinements !== d.refinements)) {
       this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null
     }
     // The logical G1 draft token stays stable when export republishes the same
     // geometry with a new CAD note witness. A frozen Apply ticket uses this token.
-    if (d.planeTangency && d.net) {
-      if (this.g1DraftIdentity?.net !== d.net || this.g1DraftIdentity.constraint !== d.planeTangency)
-        this.g1DraftIdentity = { net: d.net, constraint: d.planeTangency, requestId: ++this.g1ValidationSerial }
+    if (tangency && d.net) {
+      if (this.g1DraftIdentity?.net !== d.net || this.g1DraftIdentity.constraint !== tangency)
+        this.g1DraftIdentity = { net: d.net, constraint: tangency, requestId: ++this.g1ValidationSerial }
     } else this.g1DraftIdentity = null
     const current: DraftStamp = Object.freeze({ sessionId: this.context.sessionId, sourceEpoch: this.source.sourceEpoch,
       selectionEpoch: this.selectionEpoch, draftEpoch: this.draftEpoch })
     const queue = this.runtime.previews.getSnapshot()
     const strip = this.strip, stripResult = strip?.frames[strip.at] ?? null
     const cylinder=this.currentValidatedCylinder()
-    const stamp: PreviewStamp = Object.freeze({ ...current, requestId: strip ? (stripResult?.requestId ?? 0) : (d.cylinderSession!==null ? (cylinder?.requestId ?? 0) : d.planeTangency ? (this.g1DraftIdentity?.requestId ?? 0) : (queue.current?.revision ?? 0)) })
+    const stamp: PreviewStamp = Object.freeze({ ...current, requestId: strip ? (stripResult?.requestId ?? 0) : (d.cylinderSession!==null ? (cylinder?.requestId ?? 0) : tangency ? (this.g1DraftIdentity?.requestId ?? 0) : (queue.current?.revision ?? 0)) })
     const geometryValidation = !d.net ? { kind: 'none' as const } :
       (d.calculating || this.busy || this.placingNote || this.gesture === 'strip') ? { kind: 'pending' as const, wanted: stamp } :
       strip?.error ? { kind: 'invalid' as const, stamp, message: strip.error } :
       strip ? (stripResult ? { kind: 'valid' as const, stamp } : { kind: 'pending' as const, wanted: stamp }) :
       d.cylinderSession!==null ? (cylinder ? {kind:'valid' as const,stamp} : {kind:'pending' as const,wanted:stamp}) :
       d.validNet === d.net && !d.previewStale && d.preview?.valid &&
-        (d.planeTangency ? Number.isSafeInteger(d.preview.previewRevision) :
+        (tangency ? Number.isSafeInteger(d.preview.previewRevision) && d.preview.previewRevision! > 0 :
           !!queue.current && queue.validRevision === queue.current.revision)
         ? { kind: 'valid' as const, stamp } :
         d.error ? { kind: 'invalid' as const, stamp, message: d.error } : { kind: 'pending' as const, wanted: stamp }
@@ -1216,12 +1257,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       !!(d.net && original && !d.canUndo && JSON.stringify(d.net.poles) !== JSON.stringify(original.poles))
     let cached = this.lockCache
     if (!cached || cached.net !== d.net || cached.locks !== d.locks || cached.trim !== d.trimLocks ||
-        cached.continuity !== d.continuity || cached.free !== d.freeBoundary || cached.plane !== d.planeTangency) {
-      const locks = new Set([...d.locks, ...d.trimLocks, ...(d.planeTangency?.lockedPoles ?? [])])
+        cached.continuity !== d.continuity || cached.free !== d.freeBoundary || cached.tangency !== tangency) {
+      const locks = new Set([...d.locks, ...d.trimLocks, ...(tangency?.lockedPoles ?? [])])
       cached = { net: d.net, locks: d.locks, trim: d.trimLocks, continuity: d.continuity, free: d.freeBoundary,
-        plane: d.planeTangency,
+        tangency,
         value: Object.freeze(d.net ? d.net.poles.flatMap((_,i) =>
-          locks.has(i) || (d.cylinderSession !== null ? !(Math.floor(i/d.net!.nv) === 3 && i%d.net!.nv >= 2 && i%d.net!.nv <= d.net!.nv-3) : (!d.freeBoundary && boundaryLocked(d.net!,i,d.planeTangency ? 'G1' : d.continuity))) ? [i] : []) : []) }
+          locks.has(i) || (d.cylinderSession !== null ? !(Math.floor(i/d.net!.nv) === 3 && i%d.net!.nv >= 2 && i%d.net!.nv <= d.net!.nv-3) : (!d.freeBoundary && boundaryLocked(d.net!,i,tangency ? 'G1' : d.continuity))) ? [i] : []) : []) }
       this.lockCache = cached
     }
     const locked = cached.value, face = this.faces[this.face]
@@ -1245,7 +1286,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       pending:this.stripPending || this.gesture === 'strip', canUndo, canRedo,
       addedArea:stripResult?.addedArea ?? null, totalArea:stripResult?.totalArea ?? null, hasResult:!!stripResult,
     }) : null
-    const canBeginStrip = !d.planeTangency && !strip && !this.stripPending && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
+    const canBeginStrip = !tangency && !strip && !this.stripPending && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
       this.gesture === 'idle' && this.initialSheetFaceCount(d) !== null &&
       validation.kind === 'valid'
     const canExportStep = !this.disposed && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
@@ -1263,13 +1304,14 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       draftNoteCount: this.notes.length, notesRevision:this.notesRevision, message })
     const canLoadG1 = !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
       this.gesture === 'idle' && !!d.net && d.net === d.committedNet && d.validNet === d.net &&
-      !d.calculating && !d.previewStale && !d.freeBoundary && !d.planeTangency && d.cylinderSession === null
+      !d.calculating && !d.previewStale && !d.freeBoundary && !tangency && d.cylinderSession === null
     this.panel = Object.freeze({ faces: this.faces, face: this.face, net: d.net, selected: d.selected,
       locked, manualLocks: d.locks, continuity: d.continuity, freeBoundary: d.freeBoundary,
       g1Candidates: this.g1Candidates, g1Choice: this.g1Choice, canLoadG1,
       canApplyG1: canLoadG1 && !!this.g1Choice && this.g1Candidates.some(candidate => candidate.id === this.g1Choice),
       planeTangencyActive: !!d.planeTangency,
-      canFreeBoundary: !!face?.freeBoundary && !d.planeTangency, canRefineNet: !!d.net && !d.planeTangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
+      curvedTangencyActive: !!d.curvedTangency,
+      canFreeBoundary: !!face?.freeBoundary && !tangency, canRefineNet: !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
         !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,
