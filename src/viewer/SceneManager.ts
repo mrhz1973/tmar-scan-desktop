@@ -3077,13 +3077,14 @@ export class SceneManager {
     if (this.editorInput || this.marking.pointerGesture() !== null) throw new Error('The viewport already has an active interaction.')
     this.hoverUnder(null)
     this.editorInput = layer
-    this.claimDrag('editor', true)
+    // A captured editor handle is intercepted before the navigator sees its pointerdown.
+    // Do not reserve *all* plain mouse drags for the entire session: empty-space
+    // orbit and pan must keep the operator's configured navigation bindings.
     let held = true
     return () => {
       if (!held) return
       held = false
       if (this.editorInput === layer) this.editorInput = null
-      this.claimDrag('editor', false)
       this.hoverDirty = true
       this.invalidate()
     }
