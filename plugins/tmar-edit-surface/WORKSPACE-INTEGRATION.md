@@ -489,3 +489,12 @@ identity and position through refinement, Undo/Redo and a subsequent edit;
 see `scanruler-edit-surface-qa/run-rGy4Yn/result.json`. It removed the note
 before Apply, so this run does not independently qualify annotated-copy
 persistence after refinement. Physical input and packaged desktop remain open.
+
+Follow-up source-host UI QA used a synthetic STEP box with a reversed face:
+refinement U, V and both with Zebra and a note; Undo/Redo each; deformation;
+annotated-copy Apply; project Undo/Redo; save and reopen. The copied solid
+reimported as valid, original CAD geometry was unchanged, and reopened note
+UUID, text, verified face binding and normal were retained. Evidence:
+`scanruler-edit-surface-qa/annotated-edit-hR1mUf/result.json`. This qualifies
+only that synthetic fixture and source host, not a production STEP, physical
+input, desktop package or full QuickSurface equivalence.

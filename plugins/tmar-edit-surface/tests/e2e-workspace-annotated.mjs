@@ -20,6 +20,22 @@ const downloads=join(out,'downloads');mkdirSync(downloads)
 process.env.SHOT_DIR=out
 const {launchApp}=await import('../../../scripts/e2e-lib.mjs')
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex')
+// STEP headers may change on export; compare actual CAD geometry independently.
+const geometrySignature=step=>{
+  const shape=k.importStep(step),faces=k.getSubShapes(shape,'face'),solids=k.getSubShapes(shape,'solid')
+  const rounded=n=>Number(n.toFixed(8))
+  try {
+    const samples=faces.map(face=>{
+      const b=k.uvBounds(face),points=[]
+      for(const u of [0,.5,1])for(const v of [0,.5,1]){
+        const p=k.pointOnSurface(face,b.uMin+(b.uMax-b.uMin)*u,b.vMin+(b.vMax-b.vMin)*v)
+        points.push([p.x,p.y,p.z].map(rounded))
+      }
+      return {kind:k.surfaceType(face),area:rounded(k.getSurfaceArea(face)),points}
+    }).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))
+    return {valid:k.isValid(shape),solids:solids.length,volume:rounded(k.getVolume(shape)),samples}
+  } finally {faces.forEach(f=>k.release(f));solids.forEach(s=>k.release(s));k.release(shape)}
+}
 const k=await OcctKernel.init(),box=k.makeBox(20,30,10)
 let input
 try{input=k.exportStep(box)}finally{k.release(box)}
@@ -111,6 +127,62 @@ try {
     await page.waitForSelector('[data-test=surface-note-text]')
     await page.type('[data-test=surface-note-text]',noteText)
   }
+  if(process.env.TEST_REFINE_NOTES==='1') {
+  const noteSnapshot=()=>page.evaluate(()=>{
+    const c=window.annotatedQa.useWorkspaceEditor.getState().controller,p=c.getPanelState(),v=c.getViewState()
+    return {note:p.notes[0],nu:p.net.nu,nv:p.net.nv,pins:v.notePins,zebra:!!v.stripes}
+  })
+  const waitReady=()=>page.waitForFunction(()=>{
+    const s=window.annotatedQa.useWorkspaceEditor.getState(),c=s.controller,p=c?.getPanelState(),v=c?.getViewState()
+    return s.snapshot?.validation.kind==='valid'&&!p?.calculating&&p.notes.length===1&&
+      p.notes[0].revision===v.preview?.previewRevision&&v.notePins.length===1&&!!v.stripes
+  },{timeout:120000})
+  await waitReady()
+  const originalNote=await noteSnapshot()
+  for(const axis of ['U','V','both']) {
+    check(await page.$eval(`[data-test=surface-refine-${axis}]`,e=>!e.disabled),`refinement ${axis} control is enabled`)
+  }
+  const assertAnchor=(state,label)=>{
+    assert.equal(state.note.text,noteText,label+' text')
+    assert.deepEqual(state.note.anchor,originalNote.note.anchor,label+' UV identity')
+    assert.equal(state.pins.length,1,label+' visible pin')
+    assert(state.zebra,label+' Zebra')
+    for(let i=0;i<3;i++)assert(Math.abs(state.pins[0][i]-originalNote.pins[0][i])<1e-8,label+' pin geometry')
+    check(true,label)
+  }
+  // Exercise every visible refinement direction, including local Undo/Redo.
+  for(const axis of ['U','V','both']) {
+    const beforeRefine=await noteSnapshot()
+    await page.click(`[data-test=surface-refine-${axis}]`)
+    await page.waitForFunction(({axis,nu,nv})=>{
+      const p=window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState()
+      return p.net.nu>=(nu+(axis==='V'?0:1))&&p.net.nv>=(nv+(axis==='U'?0:1))
+    },{timeout:120000},{axis,nu:beforeRefine.nu,nv:beforeRefine.nv})
+    await waitReady()
+    const refined=await noteSnapshot()
+    if(axis==='V')assert.equal(refined.nu,beforeRefine.nu,'V leaves U dimension unchanged')
+    if(axis==='U')assert.equal(refined.nv,beforeRefine.nv,'U leaves V dimension unchanged')
+    assertAnchor(refined,`refinement ${axis} preserves the note and its geometric anchor`)
+    await page.click('[data-test=surface-undo]')
+    await page.waitForFunction(({nu,nv})=>{
+      const p=window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState()
+      return p.net.nu===nu&&p.net.nv===nv
+    },{timeout:120000},beforeRefine)
+    await waitReady();assertAnchor(await noteSnapshot(),`Undo refinement ${axis} restores net and note`)
+    await page.click('[data-test=surface-redo]')
+    await page.waitForFunction(({nu,nv})=>{
+      const p=window.annotatedQa.useWorkspaceEditor.getState().controller.getPanelState()
+      return p.net.nu===nu&&p.net.nv===nv
+    },{timeout:120000},refined)
+    await waitReady();assertAnchor(await noteSnapshot(),`Redo refinement ${axis} restores refined net and note`)
+  }
+  report.refined=await noteSnapshot()
+  const sourceBefore=await page.evaluate(async()=>{
+    const q=window.annotatedQa
+    return (await q.reverseSession().client().bodyEditSource(q.id)).text
+  })
+  report.sourceBefore=geometrySignature(sourceBefore)
+  }
   await page.select('[data-test=surface-drag-mode]','local')
   await page.click('[data-test=surface-axis-2]')
   const selectFree=await page.evaluateHandle(()=>[...document.querySelectorAll('[data-test=workspace-surface-parameters] button')].find(e=>e.textContent==='Seleziona liberi'))
@@ -145,6 +217,14 @@ try {
       history:q.useHistory.getState().past.length-q.history,errors:q.takeAtomicNotificationErrors().map(String)}
   })
   if(applied.error)throw Error('Host refused annotated Apply: '+applied.error)
+  if(process.env.TEST_REFINE_NOTES==='1') {
+  const sourceAfter=await page.evaluate(async()=>{
+    const q=window.annotatedQa
+    return (await q.reverseSession().client().bodyEditSource(q.id)).text
+  })
+  assert.deepEqual(geometrySignature(sourceAfter),report.sourceBefore)
+  check(true,'Apply preserves original source CAD geometry')
+  }
   report.applied=applied
   const note=applied.notes.find(n=>n.attachment),copyId=applied.receipt?.createdBodyIds?.[0]
   check(applied.phase==='closed'&&applied.receipt?.mode==='annotated-cad-copy'&&applied.bodies.length===2&&applied.history===1,'Apply creates one annotated copy in a single history action')
@@ -176,6 +256,14 @@ try {
     const q=window.annotatedReopen,n=q.useNotes.getState().notes.find(n=>n.attachment)
     return {note:n,bodies:q.useReverse.getState().bodies,step:(await q.reverseSession().client().bodyEditSource(n.on[0].body)).text}
   })
+  if(process.env.TEST_REFINE_NOTES==='1') {
+  const reopenedSource=await page.evaluate(async id=>
+    (await window.annotatedReopen.reverseSession().client().bodyEditSource(id)).text,applied.bodies.find(b=>b.id!==copyId).id)
+  assert.deepEqual(geometrySignature(reopenedSource),report.sourceBefore)
+  check(true,'saved and reopened original retains source CAD geometry')
+  assert.deepEqual(reopened.note.at,note.at,'reopen retains annotated-copy note position')
+  assert.deepEqual(reopened.note.on,note.on,'reopen retains annotated-copy face reference')
+  }
   const final=k.importStep(reopened.step),solids=k.getSubShapes(final,'solid')
   try{check(k.isValid(final)&&solids.length===1,'reopened copy reimports as a valid solid')}finally{solids.forEach(s=>k.release(s));k.release(final)}
   check(reopened.note.text===noteText&&reopened.note.attachment.noteUuid===note.attachment.noteUuid&&reopened.note.attachment.featureUuid===note.attachment.featureUuid&&reopened.note.attachment.status==='verified','reopening preserves note UUID, text and verified face binding')
