@@ -10,8 +10,17 @@ Version 6 uses the separate `createCurvedRecipe`, `restoreCurvedRecipe` and
 `replayCurvedRecipe` worker actions; legacy recipe readers do not accept it.
 See `G1-WORKSPACE-CHECKPOINT.md` for the qualified topology and test limits.
 
-The main-viewport `WorkspaceSurfaceSession` does **not** expose a host-facing
-recipe freeze/restore transaction. Worker and draft APIs alone therefore do not
+The main-viewport `WorkspaceSurfaceSession.prepareHistoryRecipe()` exposes a
+preliminary, plugin-owned preparation API. It selects the v2–v5 or v6 path,
+uses the session's stable body key, checks the source and epochs before return,
+and rejects active gestures, notes, strips, provisional cylinders and unverified
+drafts. It is not a freeze/restore transaction and does not publish a feature.
+Preparing a legacy recipe may invalidate its CAD preview temporarily; the host
+must wait for a new validated preview and check the current source and epochs at
+its commit boundary. The method explicitly refuses drafts with notes until an
+atomic host contract can preserve and revalidate them.
+
+Worker and draft APIs alone therefore do not
 make a saved project feature editable. An integration needs a versioned host
 contract that binds the recipe to the upstream body and validated draft stamp,
 commits it atomically with the CAD result and notes, and refuses stale sources.

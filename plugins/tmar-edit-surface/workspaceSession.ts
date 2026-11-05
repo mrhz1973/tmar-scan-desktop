@@ -13,6 +13,7 @@ import { SurfaceDraft, type SurfaceDraftSnapshot } from './surfaceDraft'
 import { SurfaceRuntime } from './surfaceRuntime'
 import { mirrorEdit, mirrorPartners } from './symmetry'
 import type { StripMove } from './sheetExtension'
+import type { SurfaceEditRecipe, SurfaceEditRecipeV6 } from './recipe'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
 
 export interface WorkspaceSurfaceNote {
@@ -857,6 +858,33 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   reportViewError(message: string): void {
     if (this.message === message) return
     this.change(() => { this.message = message }, false, true, true)
+  }
+
+  /** Prepare the current unannotated net for a future host history feature.
+   * This does not publish a feature or change the host project. The caller
+   * must still check the source and draft epochs at its own commit boundary. */
+  async prepareHistoryRecipe(): Promise<{ recipe: SurfaceEditRecipe | SurfaceEditRecipeV6; sourceKey: string; selectionEpoch: number; draftEpoch: number }> {
+    this.assertMutable()
+    const before = this.draft.getSnapshot()
+    if (this.gesture !== 'idle' || this.placingNote || this.notes.length || this.strip || this.stripPending ||
+        this.snapshot.validation.kind !== 'valid' || !before.net || before.net !== before.committedNet ||
+        before.validNet !== before.net || before.calculating || before.cylinderSession !== null)
+      throw new Error('Termina le operazioni e verifica la bozza senza note prima di preparare la ricetta.')
+    const selectionEpoch = this.selectionEpoch, draftEpoch = this.draftEpoch, net = before.net
+    this.busy = true
+    this.refresh()
+    try {
+      const recipe = before.curvedTangency
+        ? await this.draft.createCurvedRecipe(this.source.bodyKey)
+        : await this.draft.createRecipe(this.source.bodyKey)
+      this.assertLive()
+      if (this.selectionEpoch !== selectionEpoch || this.draftEpoch !== draftEpoch || this.draft.getSnapshot().net !== net ||
+          this.notes.length || this.strip || this.gesture !== 'idle')
+        throw new Error('La bozza è cambiata durante la preparazione della ricetta.')
+      return { recipe, sourceKey: this.sourceId, selectionEpoch, draftEpoch }
+    } finally {
+      if (!this.disposed) { this.busy = false; this.refresh(); this.resolveNotes() }
+    }
   }
 
   /** Explicit, slower CAD check. A provisional rendering alone cannot Apply. */

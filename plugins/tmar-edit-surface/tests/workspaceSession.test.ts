@@ -5,6 +5,7 @@ import type { Net, Point } from '../brep'
 import { SurfaceEditorKernel } from '../editorKernel'
 import type { StripMove } from '../sheetExtension'
 import { SurfaceRuntime } from '../surfaceRuntime'
+import { SurfaceDraft } from '../surfaceDraft'
 import { createWorkspaceSurfaceSession, type WorkspaceSurfaceSession } from '../workspaceSession'
 
 type Msg = { id: number; action: string; exportStep?: boolean; net?: Net; edge?:number; delta?:number[]; path?:number[][]; previous?:Array<{edge:number;delta:number[];path:number[][]}> }
@@ -111,6 +112,37 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 afterEach(()=>vi.useRealTimers())
 
 describe('WorkspaceSurfaceSession',()=>{
+  it('prepares a history recipe only for the same live source and validated draft', async()=>{
+    const t=await setup(); await selectFace(t)
+    const marker={version:2,source:{bodyId:t.binding.bodyKey}} as never
+    let release!: (value: never) => void
+    const pendingRecipe = new Promise<never>(resolve => { release=resolve })
+    const create=vi.spyOn(SurfaceDraft.prototype,'createRecipe').mockReturnValueOnce(pendingRecipe)
+    const pending=t.session.prepareHistoryRecipe()
+    expect(create).toHaveBeenCalledWith(t.binding.bodyKey)
+    expect(t.session.getPanelState().busy).toBe(true)
+    expect(()=>t.session.selectPoints([12],false)).toThrow()
+    release(marker)
+    const result=await pending
+    expect(result.recipe).toBe(marker)
+    expect(result.sourceKey).toContain(t.binding.bodyKey)
+    expect(t.session.getPanelState().busy).toBe(false)
+    create.mockRestore()
+    await t.session.dispose('cancelled')
+  })
+
+  it('rejects a history recipe if its source is revoked while preparation is pending', async()=>{
+    const t=await setup(); await selectFace(t)
+    let release!: (value: never) => void
+    const pendingRecipe = new Promise<never>(resolve => { release=resolve })
+    const create=vi.spyOn(SurfaceDraft.prototype,'createRecipe').mockReturnValueOnce(pendingRecipe)
+    const pending=t.session.prepareHistoryRecipe()
+    t.invalidate(); release({version:2} as never)
+    await expect(pending).rejects.toThrow('source changed')
+    expect(t.session.getPanelState().busy).toBe(false)
+    create.mockRestore()
+    await t.session.dispose('cancelled')
+  })
   it('starts by moving a point along the normal of a rotated surface', async()=>{
     const t=await setup(), net=plane()
     net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
@@ -264,11 +296,12 @@ describe('WorkspaceSurfaceSession',()=>{
       class KernelWorker extends FakeWorker {
         postMessage(message: Msg) {
           this.sent.push(message)
-          void Promise.resolve().then(()=>{
+          void Promise.resolve().then(async()=>{
             try {
-              const m=message as Msg & {step:string;face:number;continuity:'G0'|'G1';freeBoundary:boolean;previewRevision:number;point:Point;anchor:Parameters<SurfaceEditorKernel['resolveAnchor']>[0]}
+              const m=message as Msg & {step:string;face:number;continuity:'G0'|'G1';freeBoundary:boolean;previewRevision:number;point:Point;bodyId:string;lockedPoles:number[];anchor:Parameters<SurfaceEditorKernel['resolveAnchor']>[0]}
               const value=m.action==='open' ? editor.open(m.step) : m.action==='select' ? editor.select(m.face) :
                 m.action==='evaluate' ? editor.evaluate(m.net!,m.continuity,!!m.exportStep,m.freeBoundary) :
+                m.action==='createRecipe' ? await editor.createRecipe(m.net!,m.continuity,m.lockedPoles,m.bodyId,m.freeBoundary) :
                 m.action==='notePick' ? editor.anchorFromPick(m.point,m.previewRevision) :
                 m.action==='noteResolve' ? editor.resolveAnchor(m.anchor,m.previewRevision) :
                 m.action==='finalFaceWitness' ? editor.finalFaceWitness(m.previewRevision) : (()=>{throw Error(`unexpected worker action: ${m.action}`)})()
@@ -287,10 +320,22 @@ describe('WorkspaceSurfaceSession',()=>{
       await session.chooseFace(index)
       await vi.advanceTimersByTimeAsync(90);await flush()
       expect(session.getSnapshot().validation.kind).toBe('valid')
+      session.selectAllFree(); session.moveSelected(.1)
+      await vi.advanceTimersByTimeAsync(90);await flush()
+      expect(session.getSnapshot().validation.kind).toBe('valid')
+      const recipe=await session.prepareHistoryRecipe()
+      expect(recipe.recipe.source.bodyId).toBe('box')
+      expect(recipe.recipe.faceIndex).toBe(index)
+      const replay=await editor.replayRecipe(source,recipe.recipe,'box')
+      expect(replay.valid).toBe(true)
+      expect(Math.abs(replay.volume - k.getVolume(box))).toBeGreaterThan(.001)
+      await vi.advanceTimersByTimeAsync(90);await flush()
+      expect(session.getSnapshot().validation.kind).toBe('valid')
       session.setStripes({orientation:'horizontal',width:3,color:'#5288b2'})
       session.setPlacingNote(true);await session.placeNote(seed)
       const note=session.getPanelState().notes[0]
       session.setNoteText(note.id,'Controlla la faccia inversa')
+      await expect(session.prepareHistoryRecipe()).rejects.toThrow('senza note')
       session.selectAllFree();expect(session.getPanelState().selected.length).toBeGreaterThan(0)
       session.moveSelected(.2)
       await vi.advanceTimersByTimeAsync(90);await flush()
