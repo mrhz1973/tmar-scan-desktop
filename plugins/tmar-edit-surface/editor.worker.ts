@@ -15,14 +15,14 @@ export type Request = { id: number } & (
   | { action: 'finalFaceWitness'; previewRevision: number }
   | { action: 'notePick'; point: Point; previewRevision: number }
   | { action: 'noteResolve'; anchor: DraftAnchor; previewRevision: number }
-  | { action: 'evaluate'; net: Net; continuity: 'G0' | 'G1'; exportStep?: boolean; freeBoundary?: boolean }
+  | { action: 'evaluate'; net: Net; continuity: 'G0' | 'G1'; exportStep?: boolean; freeBoundary?: boolean; selection?: {face:number;refinements:KnotInsertion[]} }
   // Experimental display only; this is not an evaluate/Apply result.
   | { action: 'prepareCylinder'; face:number }
   | { action: 'previewCylinder' | 'evaluateCylinder'; session:number; net:Net }
   | { action: 'cylinderNotePick'; session:number; previewRevision:number; point:Point }
   | { action: 'cylinderNoteResolve'; session:number; previewRevision:number; anchor:DraftAnchor }
   | { action: 'cylinderFaceWitness'; session:number; previewRevision:number }
-  | { action: 'createRecipe'; net: Net; continuity: 'G0' | 'G1'; lockedPoles: number[]; bodyId: string; freeBoundary?: boolean }
+  | { action: 'createRecipe'; net: Net; continuity: 'G0' | 'G1'; lockedPoles: number[]; bodyId: string; freeBoundary?: boolean; selection?: {face:number;refinements:KnotInsertion[]} }
   | { action: 'restoreRecipe' | 'replayRecipe'; step: string; recipe: unknown; bodyId: string }
 )
 let editor: SurfaceEditorKernel | undefined
@@ -30,6 +30,7 @@ let chain = Promise.resolve()
 let cylinderSerial=0
 let cylinder:{session:number;prepared:{brep:string;net:Net};face:number;noteFace?:string;noteRevision?:number}|null=null
 let cylinderNoteSerial=0
+let selectionKey:string|null=null
 const resetCylinder=()=>{cylinder=null;cylinderSerial++}
 self.onmessage = (event: MessageEvent<Request>) => {
   const req = event.data
@@ -38,11 +39,12 @@ self.onmessage = (event: MessageEvent<Request>) => {
       editor ??= await SurfaceEditorKernel.load(wasmUrl)
       let result: unknown
       switch (req.action) {
-        case 'open': resetCylinder(); result = editor.open(req.step); break
-        case 'select': resetCylinder(); result = editor.select(req.face); break
+        case 'open': resetCylinder(); selectionKey=null; result = editor.open(req.step); break
+        case 'select': resetCylinder(); selectionKey=null; result = editor.select(req.face); selectionKey=JSON.stringify({face:req.face,refinements:[]}); break
         case 'selectRefined': {
-          resetCylinder()
+          resetCylinder(); selectionKey=null
           const net=editor.select(req.face,req.refinements), info=editor.infos[req.face]
+          selectionKey=JSON.stringify({face:req.face,refinements:req.refinements})
           result={net,trimLocks:info.trimLocks,hiddenPoles:info.hiddenPoles}
           break
         }
@@ -51,9 +53,14 @@ self.onmessage = (event: MessageEvent<Request>) => {
         case 'finalFaceWitness': result = editor.finalFaceWitness(req.previewRevision); break
         case 'notePick': result = editor.anchorFromPick(req.point,req.previewRevision); break
         case 'noteResolve': result = editor.resolveAnchor(req.anchor,req.previewRevision); break
-        case 'evaluate': result = editor.evaluate(req.net, req.continuity, req.exportStep, req.freeBoundary); break
+        case 'evaluate': {
+          if(req.selection && selectionKey!==JSON.stringify(req.selection)) {
+            selectionKey=null; editor.select(req.selection.face,req.selection.refinements); selectionKey=JSON.stringify(req.selection)
+          }
+          result = editor.evaluate(req.net, req.continuity, req.exportStep, req.freeBoundary); break
+        }
         case 'prepareCylinder': {
-          resetCylinder()
+          resetCylinder(); selectionKey=null
           const prepared=editor.prepareCylinderForPreview(req.face)
           cylinder={session:cylinderSerial,prepared,face:req.face}
           result={session:cylinder.session,net:structuredClone(prepared.net)}
@@ -78,9 +85,14 @@ self.onmessage = (event: MessageEvent<Request>) => {
           else result={face:cylinder.face,selectionRevision:cylinder.session,previewRevision:cylinder.noteRevision,faceBrep:cylinder.noteFace}
           break
         }
-        case 'createRecipe': result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.freeBoundary); break
-        case 'restoreRecipe': resetCylinder(); result = await editor.restoreRecipe(req.step, req.recipe, req.bodyId); break
-        case 'replayRecipe': resetCylinder(); result = await editor.replayRecipe(req.step, req.recipe, req.bodyId); break
+        case 'createRecipe': {
+          if(req.selection && selectionKey!==JSON.stringify(req.selection)) {
+            selectionKey=null; editor.select(req.selection.face,req.selection.refinements); selectionKey=JSON.stringify(req.selection)
+          }
+          result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.freeBoundary); break
+        }
+        case 'restoreRecipe': resetCylinder(); selectionKey=null; result = await editor.restoreRecipe(req.step, req.recipe, req.bodyId); break
+        case 'replayRecipe': resetCylinder(); selectionKey=null; result = await editor.replayRecipe(req.step, req.recipe, req.bodyId); break
         default: throw new Error('Comando Edit Surface non supportato.')
       }
       self.postMessage({ id: req.id, result })

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { assertNet, type Net } from './brep'
 import type { Preview } from './editorKernel'
-import type { EditFrame } from './surfaceHistory'
+import type { EditFrame, SurfacePreparation } from './surfaceHistory'
 import type { PreviewDraft, SurfaceRuntime } from './surfaceRuntime'
 import { PreviewQueue } from './previewQueue'
 import { assertSmoothCylinderMove, canonicalizeCylinderGesture } from './periodic'
 import type { Mesh } from 'occt-wasm'
+import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
 
 export interface CylinderProvisionalPreview { kind: 'provisional'; mesh: Mesh; faceMeshes?: Mesh[] }
 
@@ -20,6 +21,8 @@ export interface SurfaceDraftSnapshot {
   readonly selected: readonly number[]
   readonly locks: readonly number[]
   readonly trimLocks: readonly number[]
+  readonly hiddenPoles: readonly number[]
+  readonly refinements: readonly KnotInsertion[]
   readonly continuity: 'G0' | 'G1'
   readonly freeBoundary: boolean
   /** The latest visible preview can be older than net. It is borrowed, not copied. */
@@ -35,6 +38,7 @@ export interface SurfaceDraftSnapshot {
 
 const owners = new WeakMap<SurfaceRuntime, SurfaceDraft>()
 const EMPTY: readonly number[] = Object.freeze([])
+const NO_REFINEMENTS: readonly KnotInsertion[] = Object.freeze([])
 
 /** Freeze once at ownership boundaries so a stable snapshot cannot be mutated. */
 function freezeNet(net: Net): Net {
@@ -65,7 +69,7 @@ export class SurfaceDraft {
   private readonly unsubscribe: () => void
   private snapshot: SurfaceDraftSnapshot = Object.freeze({
     cylinderSession: null, cylinderPreview: null, net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY, continuity: 'G1',
-    freeBoundary: false, preview: null, previewStale: false, validNet: null,
+    hiddenPoles: EMPTY, refinements: NO_REFINEMENTS, freeBoundary: false, preview: null, previewStale: false, validNet: null,
     calculating: false, error: '', canUndo: false, canRedo: false,
   })
   private base: Net | null = null
@@ -74,6 +78,7 @@ export class SurfaceDraft {
   private epoch = 0
   private exported: { epoch: number; queueRevision: number; value: Preview } | null = null
   private disposed = false
+  private refining = false
   private readonly cylinderPreviews = new PreviewQueue<PreviewDraft & { session: number }, CylinderProvisionalPreview>({
     evaluate: async draft => {
       const value = await this.runtime.worker.ask<CylinderProvisionalPreview>({
@@ -105,7 +110,8 @@ export class SurfaceDraft {
   }
 
   /** Install a worker-selected CAD net. No project or worker selection is performed. */
-  install(net: Net, options: { continuity?: 'G0' | 'G1'; trimLocks?: readonly number[]; cylinderSession?: number } = {}): void {
+  install(net: Net, options: { continuity?: 'G0' | 'G1'; trimLocks?: readonly number[]; hiddenPoles?: readonly number[];
+    cylinderSession?: number; face?: number; refinements?: readonly KnotInsertion[]; originalNet?: Net } = {}): void {
     this.ensureActive()
     const continuity = options.continuity ?? this.snapshot.continuity
     if (continuity !== 'G0' && continuity !== 'G1') throw new Error('Continuità non valida.')
@@ -116,14 +122,27 @@ export class SurfaceDraft {
       assertSmoothCylinderMove(net, net)
     } else assertNet(net, net, continuity, true)
     const trimLocks = frozenIds(options.trimLocks ?? [], net.poles.length)
-    const base = freezeNet(structuredClone(net))
+    const hiddenPoles = frozenIds(options.hiddenPoles ?? [], net.poles.length)
+    if (options.face !== undefined && (!Number.isSafeInteger(options.face) || options.face < 0 || cylinderSession !== null))
+      throw new Error('Preparazione della faccia non valida.')
+    if (options.refinements?.length && options.face === undefined) throw new Error('Faccia del raffinamento non disponibile.')
+    const base = freezeNet(structuredClone(options.originalNet ?? net))
+    if (cylinderSession !== null) assertSmoothCylinderMove(base, net)
+    else assertNet(base, net, continuity, true)
+    const preparation: SurfacePreparation | undefined = options.face === undefined ? undefined : {
+      face: options.face, refinements: structuredClone(options.refinements ?? []) as KnotInsertion[],
+      originalNet: base, trimLocks: [...trimLocks], hiddenPoles: [...hiddenPoles],
+    }
     this.invalidate()
     this.runtime.history.reset()
     this.base = base
     this.queueNet = null
-    const frame = this.runtime.history.commit({ net, locks: [], continuity, freeBoundary: false })
+    const frame = this.runtime.history.commit({ net, locks: [], continuity, freeBoundary: false, preparation })
     freezeNet(frame.net)
-    this.update({ cylinderSession, cylinderPreview: null, net: frame.net, committedNet: frame.net, originalNet: base, selected: EMPTY, locks: EMPTY, trimLocks,
+    this.freezePreparation(frame.preparation)
+    this.base = frame.preparation?.originalNet ?? base
+    this.update({ cylinderSession, cylinderPreview: null, net: frame.net, committedNet: frame.net, originalNet: this.base, selected: EMPTY, locks: EMPTY, trimLocks,
+      hiddenPoles, refinements: frame.preparation?.refinements ?? NO_REFINEMENTS,
       continuity, freeBoundary: false, preview: null, previewStale: false,
       validNet: null, calculating: false, error: '', canUndo: false, canRedo: false })
     this.schedule(frame.net)
@@ -132,6 +151,62 @@ export class SurfaceDraft {
   /** Install only the net returned by prepareCylinder in this runtime's worker. */
   installCylinder(net: Net, session: number): void {
     this.install(net, { continuity: 'G1', cylinderSession: session })
+  }
+
+  /** Exact knot insertion preserves the deformed surface and creates one undo step. */
+  async refine(insertions: readonly KnotInsertion[]): Promise<void> {
+    this.ensureActive()
+    const before = this.snapshot, previous = this.runtime.history.current, preparation = previous?.preparation
+    if (!preparation || before.cylinderSession !== null) throw new Error('Preparazione della faccia non disponibile.')
+    if (!insertions.length) return
+    if (before.locks.length) throw new Error('Rimuovi i blocchi manuali prima di raffinare il reticolo.')
+    if (before.net !== before.committedNet || before.validNet !== before.net || before.calculating)
+      throw new Error('Attendi la verifica CAD e termina il trascinamento prima di raffinare.')
+    // Validate and allocate everything possible before changing worker selection.
+    const additions = structuredClone(insertions) as KnotInsertion[]
+    const net = refineClampedNet(before.net!, additions)
+    const base = refineClampedNet(preparation.originalNet, additions)
+    assertNet(base, net, before.continuity, before.freeBoundary)
+    const refinements = [...preparation.refinements, ...additions]
+    const epoch = this.epoch
+    this.refining = true
+    this.update({ calculating: true, validNet: null, error: '' })
+    try {
+      const selected = await this.runtime.worker.ask<{ net: Net; trimLocks: number[]; hiddenPoles: number[] }>({
+        action: 'selectRefined', face: preparation.face, refinements,
+      })
+      if (this.disposed || !this.runtime.active || this.epoch !== epoch) throw new Error('Raffinamento superato.')
+      if (JSON.stringify(selected.net) !== JSON.stringify(base)) throw new Error('La base raffinata non corrisponde alla preparazione richiesta.')
+      const trimLocks = frozenIds(selected.trimLocks, net.poles.length)
+      const hiddenPoles = frozenIds(selected.hiddenPoles, net.poles.length)
+      if (trimLocks.some(i => net.poles[i].some((x, axis) => x !== base.poles[i][axis])))
+        throw new Error('Il raffinamento modificherebbe un punto protetto dal trim.')
+      // The worker's locks are rebuilt against the new pole indices. Never carry old ids.
+      const frame = this.runtime.history.commit({ net, locks: [], continuity: before.continuity,
+        freeBoundary: before.freeBoundary, preparation: {
+          face: preparation.face, refinements, originalNet: base, trimLocks: [...trimLocks], hiddenPoles: [...hiddenPoles],
+        } })
+      this.refining = false
+      this.applyFrame(frame, false)
+    } catch (error) {
+      // selectRefined changes mutable kernel selection. Restore it before allowing
+      // another export/recipe, even when the reply itself failed validation.
+      if (!this.disposed && this.runtime.active && this.epoch === epoch) {
+        try {
+          await this.runtime.worker.ask({ action: 'selectRefined', face: preparation.face, refinements: preparation.refinements })
+        } catch {
+          this.refining = false
+          this.update({ calculating: false, validNet: null, error: 'Ripristino CAD fallito. Chiudi e riapri Edit Surface.' })
+          throw new Error('Ripristino CAD fallito. Chiudi e riapri Edit Surface.')
+        }
+        if (!this.disposed && this.runtime.active && this.epoch === epoch) {
+          this.refining = false
+          this.update({ calculating: false, validNet: null, error: String((error as Error)?.message ?? error) })
+          this.schedule(before.net!)
+        }
+      }
+      throw error
+    } finally { this.refining = false }
   }
 
   /** Drop the selected face and invalidate in-flight worker replies. */
@@ -143,7 +218,7 @@ export class SurfaceDraft {
     this.base = null
     this.queueNet = null
     this.update({ cylinderSession: null, cylinderPreview: null, net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY,
-      continuity, freeBoundary: false, preview: null, previewStale: false,
+      hiddenPoles: EMPTY, refinements: NO_REFINEMENTS, continuity, freeBoundary: false, preview: null, previewStale: false,
       validNet: null, calculating: false, error: '', canUndo: false, canRedo: false })
   }
 
@@ -170,7 +245,7 @@ export class SurfaceDraft {
     net = this.checkEdit(net)
     const equivalentToShown = supplied === this.snapshot.net
     const frame = this.runtime.history.commit({ net, locks: [...this.snapshot.locks],
-      continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary })
+      continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, preparation: this.runtime.history.current?.preparation })
     this.applyFrame(frame, equivalentToShown)
   }
 
@@ -179,7 +254,7 @@ export class SurfaceDraft {
     this.ensureActive()
     if (!this.base) throw new Error('Scegli prima una faccia CAD.')
     const frame = this.runtime.history.commit({ net: this.base, locks: [...this.snapshot.locks],
-      continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary })
+      continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, preparation: this.runtime.history.current?.preparation })
     this.applyFrame(frame, this.base === this.snapshot.net)
   }
 
@@ -197,6 +272,7 @@ export class SurfaceDraft {
     const epoch = this.epoch
     const result = await this.runtime.worker.ask<Preview & { step: string; previewRevision: number }>({
       action: 'evaluate', net, continuity: snapshot.continuity, freeBoundary: snapshot.freeBoundary, exportStep: true,
+      ...this.selectionPayload(),
     })
     this.ensureActive()
     const next = this.snapshot, queue = this.runtime.previews.getSnapshot()
@@ -238,7 +314,7 @@ export class SurfaceDraft {
     const net = this.requireNet()
     const locks = frozenIds(ids, net.poles.length)
     const frame = this.runtime.history.commit({ net, locks: [...locks],
-      continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary })
+      continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, preparation: this.runtime.history.current?.preparation })
     this.applyFrame(frame, true)
   }
 
@@ -253,7 +329,7 @@ export class SurfaceDraft {
     if (this.snapshot.freeBoundary) throw new Error('Proteggi prima i bordi liberi.')
     assertNet(this.base!, net, continuity)
     const frame = this.runtime.history.commit({ net, locks: [...this.snapshot.locks],
-      continuity, freeBoundary: false })
+      continuity, freeBoundary: false, preparation: this.runtime.history.current?.preparation })
     this.applyFrame(frame, true)
   }
 
@@ -267,7 +343,7 @@ export class SurfaceDraft {
     }
     if (!freeBoundary) assertNet(this.base!, net, this.snapshot.continuity)
     const frame = this.runtime.history.commit({ net, locks: [...this.snapshot.locks],
-      continuity: this.snapshot.continuity, freeBoundary })
+      continuity: this.snapshot.continuity, freeBoundary, preparation: this.runtime.history.current?.preparation })
     this.applyFrame(frame, true)
   }
 
@@ -290,12 +366,13 @@ export class SurfaceDraft {
     owners.delete(this.runtime)
     this.update({ cylinderSession: null, cylinderPreview: null, net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY,
       preview: null, previewStale: false, validNet: null, calculating: false,
-      error: '', canUndo: false, canRedo: false })
+      hiddenPoles: EMPTY, refinements: NO_REFINEMENTS, error: '', canUndo: false, canRedo: false })
     this.listeners.clear()
   }
 
   private ensureActive(): void {
     if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+    if (this.refining) throw new Error('Attendi il raffinamento del reticolo.')
   }
   private requireNet(): Net {
     if (!this.snapshot.net) throw new Error('Scegli prima una faccia CAD.')
@@ -330,11 +407,19 @@ export class SurfaceDraft {
   private applyFrame(frame: EditFrame, equivalentToShown: boolean): void {
     const previous = this.snapshot
     freezeNet(frame.net)
+    this.freezePreparation(frame.preparation)
+    const changedPreparation = this.runtime.history.current?.preparation !== undefined &&
+      this.base !== frame.preparation?.originalNet
+    if (frame.preparation) this.base = frame.preparation.originalNet
     const sameGeometry = previous.net === frame.net || equivalentToShown
     const sameMode = previous.continuity === frame.continuity && previous.freeBoundary === frame.freeBoundary
-    const requiresPreview = !sameGeometry || !sameMode
+    const requiresPreview = !sameGeometry || !sameMode || changedPreparation
     const locks = Object.freeze([...frame.locks])
     this.update({ net: frame.net, committedNet: frame.net, locks, continuity: frame.continuity, freeBoundary: frame.freeBoundary,
+      ...(frame.preparation ? { originalNet: frame.preparation.originalNet,
+        trimLocks: frame.preparation.trimLocks, hiddenPoles: frame.preparation.hiddenPoles,
+        refinements: frame.preparation.refinements } : {}),
+      ...(changedPreparation ? { selected: EMPTY } : {}),
       validNet: requiresPreview ? null : previous.validNet ? frame.net : null,
       calculating: requiresPreview ? true : previous.calculating,
       error: requiresPreview ? '' : previous.error,
@@ -351,11 +436,13 @@ export class SurfaceDraft {
       ? this.cylinderPreviews.schedule({ ...payload, session: cylinderSession })
       : this.runtime.previews.schedule({
       net, continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, epoch: this.epoch,
+      ...this.selectionPayload(),
     })
     if (revision === null) this.update({ validNet: null, calculating: false, error: 'Anteprima CAD non disponibile.' })
   }
   private syncPreview = (): void => {
     if (this.disposed) return
+    if (this.refining) return
     if (this.snapshot.cylinderSession !== null) {
       const queue = this.cylinderPreviews.getSnapshot(), current = queue.current
       const matches = !!current && current.draft.epoch === this.epoch && current.draft.net === this.queueNet &&
@@ -384,6 +471,19 @@ export class SurfaceDraft {
       previewStale: !!visible && (!valid || visible.stale),
       validNet: valid ? this.snapshot.net : null, calculating: this.runtime.active && queue.calculating,
       error: this.runtime.active ? error : 'Editor chiuso.' })
+  }
+  private selectionPayload(): { selection?: { face: number; refinements: KnotInsertion[] } } {
+    const preparation = this.runtime.history.current?.preparation
+    return preparation ? { selection: { face: preparation.face, refinements: preparation.refinements } } : {}
+  }
+  private freezePreparation(preparation?: SurfacePreparation): void {
+    if (!preparation) return
+    freezeNet(preparation.originalNet)
+    for (const insertion of preparation.refinements) Object.freeze(insertion)
+    Object.freeze(preparation.refinements)
+    Object.freeze(preparation.trimLocks)
+    Object.freeze(preparation.hiddenPoles)
+    Object.freeze(preparation)
   }
   private update(change: Partial<SurfaceDraftSnapshot>): void {
     if (Object.keys(change).every(key =>

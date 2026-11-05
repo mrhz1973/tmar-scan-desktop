@@ -142,6 +142,18 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           <option value="mixed">Punti e segmenti</option>
         </select>
       </label>
+      <fieldset data-test="surface-refine-net"><legend>Raffina reticolo</legend>
+        <p>Aggiungi punti di controllo nella direzione scelta per modificare il reticolo più finemente.</p>
+        <div className="row">{(['U', 'V', 'both'] as const).map(axis => {
+          const direction = axis === 'both' ? 'in entrambe le direzioni U e V' : `nella direzione ${axis}`
+          return <button type="button" key={axis} data-test={`surface-refine-${axis}`}
+            disabled={disabled || !state.canRefineNet}
+            title={`Aggiunge punti di controllo ${direction}.\nScegli U, V oppure entrambe per il reticolo attuale.\nRichiede una faccia modificabile e nessuna operazione in corso.\nIl risultato resta nella bozza fino ad Applica.`}
+            onClick={() => attempt(() => controller.refineNet(axis))}>
+            {axis === 'both' ? 'Raffina U e V' : `Raffina ${axis}`}
+          </button>
+        })}</div>
+      </fieldset>
       <label>Trascinamento
         <select data-test="surface-drag-mode" value={state.dragMode} disabled={disabled}
           onChange={e => attempt(() => controller.setDragMode(e.target.value as DragMode))}>

@@ -468,3 +468,15 @@ test checks edit, recipe restoration, STEP replay and rejection of altered
 plans/hashes. Worker preparation exposes the refined net and new lock metadata.
 There is still no user command: undoable preparation, live draft state, UI,
 and end-to-end qualification are not implemented by this checkpoint.
+
+Follow-up: the shared workspace now exposes U, V and combined knot-span
+refinement for supported clamped, nonperiodic faces. Refinement retains the
+current deformed surface; Undo/Redo restore the corresponding baseline, trim
+locks and hidden controls, with worker selection tied to each preview. Manual
+locks and draft notes must currently be cleared first. Experimental cylinders
+are excluded from this command. An isolated source-host UI run refined both
+directions, exercised Undo/Redo and edited a pole, then applied and reimported
+a CAD copy. It passed on a synthetic box and on a planar face of the 51-face
+real-derived STEP (`scanruler-edit-surface-qa/run-Nej6YC/result.json`), whose
+input hash remained unchanged. This does not qualify all trims, real scans,
+packaged desktop, physical input, QS parity or global self-intersection.

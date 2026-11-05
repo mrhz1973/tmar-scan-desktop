@@ -135,6 +135,22 @@ try {
     const s = window.surfaceQa.useWorkspaceEditor.getState()
     return s.snapshot?.validation.kind === 'valid' && !s.controller?.getPanelState().calculating
   }, { timeout: 120000 })
+  if (process.env.TEST_REFINE === '1') {
+    const net = () => page.evaluate(() => structuredClone(window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().net))
+    const ready = () => page.waitForFunction(() => {
+      const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller.getPanelState()
+      return s.snapshot?.validation.kind==='valid' && !p.calculating && !p.busy
+    }, {timeout:120000})
+    const before=await net()
+    await page.waitForSelector('[data-test=surface-refine-both]:enabled',{timeout:60000})
+    await page.click('[data-test=surface-refine-both]'); await ready()
+    const refined=await net()
+    check(refined.nu>before.nu && refined.nv>before.nv,'UI refines both control-net directions')
+    await page.click('[data-test=surface-undo]'); await ready()
+    check(JSON.stringify(await net())===JSON.stringify(before),'Undo restores original net after refinement')
+    await page.click('[data-test=surface-redo]'); await ready()
+    check(JSON.stringify(await net())===JSON.stringify(refined),'Redo restores the refined net')
+  }
   if (process.env.TEST_FACE_SWITCH === '1') {
     const waitDialog = () => new Promise((resolve,reject) => {
       const handler = dialog => { clearTimeout(timer); resolve(dialog.message()) }

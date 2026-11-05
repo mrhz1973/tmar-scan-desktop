@@ -31,6 +31,7 @@ export interface WorkspaceSurfacePanelState {
   readonly continuity: 'G0' | 'G1'
   readonly freeBoundary: boolean
   readonly canFreeBoundary: boolean
+  readonly canRefineNet: boolean
   readonly canUndo: boolean
   readonly canRedo: boolean
   readonly calculating: boolean
@@ -319,7 +320,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (epoch !== this.selectionEpoch) throw new Error('Selezione faccia superata.')
       this.change(() => {
         if (picked.session !== null) this.draft.installCylinder(picked.net,picked.session)
-        else this.draft.install(picked.net, { continuity: previousContinuity, trimLocks: face.trimLocks })
+        else this.draft.install(picked.net, { continuity: previousContinuity, trimLocks: face.trimLocks, hiddenPoles: face.hiddenPoles, face:index })
         if (this.notes.length) { this.advanceNotesRevision(); this.notes = Object.freeze([]) }
         this.selectionEpoch++; this.face = index; this.busy = false
         this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
@@ -335,6 +336,25 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
 
   selectPoints(ids: readonly number[], additive: boolean): void {
     this.change(() => this.draft.setSelection(selectNetPoints([...this.draft.getSnapshot().selected], [...ids], additive)))
+  }
+  async refineNet(axis:'U'|'V'|'both'): Promise<void> {
+    this.assertMutable()
+    if (!['U','V','both'].includes(axis) || !this.panel.canRefineNet) throw new Error('Raffinamento non disponibile: termina le altre operazioni e sblocca i punti manuali.')
+    const d=this.draft.getSnapshot(), net=this.requireNet()
+    const plan: {axis:'U'|'V';value:number;count:number}[]=[]
+    for(const direction of (axis==='both'?['U','V']:[axis]) as ('U'|'V')[]) {
+      const knots=direction==='U'?net.ku:net.kv
+      for(let i=1;i<knots.length;i++) {
+        const value=knots[i-1]+(knots[i]-knots[i-1])/2
+        if(!(value>knots[i-1] && value<knots[i])) throw new Error('Intervallo nodale troppo piccolo da raffinare.')
+        plan.push({axis:direction,value,count:1})
+      }
+    }
+    if(!plan.length || d.refinements.length+plan.length>128) throw new Error('Troppi nodi per il raffinamento.')
+    this.busy=true; this.message=null; this.refresh()
+    try { await this.draft.refine(plan); this.assertLive() }
+    catch(error) { if(!this.disposed) this.message=String((error as Error)?.message ?? error); throw error }
+    finally { if(!this.disposed) { this.busy=false; this.refresh() } }
   }
   selectAllFree(): void { this.change(() => { const net = this.requireNet(), locked = new Set(this.viewState.locked); this.draft.setSelection(net.poles.flatMap((_, i) => locked.has(i) ? [] : [i])) }) }
   clearSelection(): void { this.change(() => this.draft.setSelection([])) }
@@ -1148,7 +1168,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       draftNoteCount: this.notes.length, notesRevision:this.notesRevision, message })
     this.panel = Object.freeze({ faces: this.faces, face: this.face, net: d.net, selected: d.selected,
       locked, manualLocks: d.locks, continuity: d.continuity, freeBoundary: d.freeBoundary,
-      canFreeBoundary: !!face?.freeBoundary, canUndo, canRedo, calculating: d.calculating || this.stripPending,
+      canFreeBoundary: !!face?.freeBoundary, canRefineNet: !!d.net && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
+        !d.locks.length && !this.busy && !this.frozen && !this.notes.length && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
+      canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,
       dragMode: this.dragMode, axis: this.axis, dragStrength: this.dragStrength, selectionMode: this.selectionMode,
       showNet: this.showNet, stripes: this.stripes, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
@@ -1157,7 +1179,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       directStripError,
       canExportStep, strip:stripView })
     this.viewState = Object.freeze({ net: strip ? null : d.net, preview, provisionalPreview:d.cylinderPreview?.faceMeshes ? {kind:'provisional' as const,faceMeshes:d.cylinderPreview.faceMeshes} : null, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
-      hiddenPoles: face?.hiddenPoles ?? [], selectionMode: this.selectionMode, dragMode: this.dragMode,
+      hiddenPoles: d.hiddenPoles, selectionMode: this.selectionMode, dragMode: this.dragMode,
       axis: this.axis, dragStrength: this.dragStrength, showNet: this.showNet, snap: this.snap,
       snapDistance: this.snapDistance, busy: this.busy || !!this.frozen, placingNote: this.placingNote,
       stripes: this.stripes, notePins, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
