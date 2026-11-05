@@ -38,6 +38,23 @@ export interface G1CurvedResult {
   preview: Preview
   step?: string
 }
+export interface G1PublishedCurvedResult extends Omit<G1CurvedResult, 'preview'> {
+  constraintId: number
+  constraintKind: 'compatible-bspline'
+  preview: Preview & { previewRevision: number }
+}
+export interface G1CurvedEvaluationRequest {
+  constraintId: number
+  net: Net
+  lockedPoles?: readonly number[]
+  exportStep?: boolean
+}
+interface RegisteredCurvedTangency {
+  kind: 'compatible-bspline'
+  request: G1CurvedValidationRequest
+  referenceNet: Net
+  supportNet: Net
+}
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 export interface G1PlaneProposalRequest {
@@ -158,6 +175,7 @@ export class SurfaceEditorKernel {
   private g1SourceReady = false
   private g1ConstraintSerial = 0
   private readonly g1Constraints = new Map<number, RegisteredPlaneTangency>()
+  private readonly g1CurvedConstraints = new Map<number, RegisteredCurvedTangency>()
   private faces: ShapeHandle[] = []
   private brep = ''
   private records: RecordSpan[] = []
@@ -413,7 +431,7 @@ export class SurfaceEditorKernel {
     this.infos[index] = { ...this.infos[index], trimLocks: info.trimLocks, hiddenPoles: info.hiddenPoles }
     return net
   }
-  private invalidateG1Selection() { this.g1Selected = -1; this.g1SelectionRevision++; this.g1Constraints.clear() }
+  private invalidateG1Selection() { this.g1Selected = -1; this.g1SelectionRevision++; this.g1Constraints.clear(); this.g1CurvedConstraints.clear() }
   /** Read-only original-source topology. Identity and revisions never come from a client.
    * Fingerprint is captured before tessellation; an async digest cannot cross a
    * source/selection boundary. No OCCT handle escapes into the worker response. */
@@ -466,6 +484,36 @@ export class SurfaceEditorKernel {
   async validateG1CurvedTangency(request: G1CurvedValidationRequest): Promise<G1CurvedResult> {
     return this.curvedTangency(request, false)
   }
+  /** Publish only a fully verified curved pair; keep logical UV/anchor identity. */
+  async publishG1CurvedTangency(request: G1CurvedValidationRequest): Promise<G1PublishedCurvedResult> {
+    return this.curvedTangency(request, false, true) as Promise<G1PublishedCurvedResult>
+  }
+  /** Evaluate the actual net against an immutable, kernel-owned accepted ring.
+   * No projection or latest-preview baseline is used for subsequent edits. */
+  async evaluateG1CurvedTangency(input: G1CurvedEvaluationRequest): Promise<G1PublishedCurvedResult> {
+    const request = structuredClone(input), registered = this.g1CurvedConstraints.get(request.constraintId)
+    if (!Number.isSafeInteger(request.constraintId) || !registered || registered.kind !== 'compatible-bspline')
+      throw new Error('Vincolo G1 curvo scaduto: verifica di nuovo la tangenza.')
+    const locks = request.lockedPoles ?? [], initial = registered.request.lockedPoles ?? []
+    if (!Array.isArray(locks) || Array.from(locks).some(i => !Number.isSafeInteger(i) || i < 0 || i >= registered.referenceNet.poles.length))
+      throw new Error('Blocco di un polo inesistente.')
+    if (locks.some(i => !initial.includes(i) && !boundaryLocked(registered.referenceNet, i, 'G1')))
+      throw new Error('Nuovi blocchi interni richiedono una nuova verifica del vincolo G1 curvo.')
+    return this.curvedTangency({ ...registered.request, net: request.net, exportStep: request.exportStep }, false, true,
+      { id: request.constraintId, registered }) as Promise<G1PublishedCurvedResult>
+  }
+  private checkCurvedProtectedNet(net: Net, registered: RegisteredCurvedTangency): number[] {
+    const reference = registered.referenceNet
+    assertNet(reference, net, 'G1')
+    // assertNet's legacy metadata comparison uses JSON. Retain signed-zero and
+    // exact numeric metadata protection for this new constraint family too.
+    if (!this.sameCurvedNet({ ...reference, poles: net.poles }, net)) throw new Error('Struttura del reticolo G1 curvo modificata.')
+    const locks = registered.request.lockedPoles ?? []
+    const protectedIds = reference.poles.flatMap((_, i) => boundaryLocked(reference, i, 'G1') || locks.includes(i) ? [i] : [])
+    for (const i of protectedIds) if (net.poles[i].some((x, d) => !Object.is(x, reference.poles[i][d])))
+      throw new Error('Un punto protetto dal vincolo G1 curvo è stato modificato.')
+    return protectedIds
+  }
   private sameCurvedNet(a: Net, b: Net, readback = false): boolean {
     const same = (x: readonly number[], y: readonly number[]) => x.length === y.length && x.every((v, i) => Object.is(v, y[i]))
     return a.nu === b.nu && a.nv === b.nv && a.du === b.du && a.dv === b.dv && a.poles.length === b.poles.length &&
@@ -516,13 +564,16 @@ export class SurfaceEditorKernel {
       }
     } finally { faces.forEach(f => k.release(f)) }
   }
-  private async curvedTangency(input: G1CurvedProposalRequest | G1CurvedValidationRequest, propose: boolean): Promise<G1CurvedResult> {
+  private async curvedTangency(input: G1CurvedProposalRequest | G1CurvedValidationRequest, propose: boolean, publish = false,
+    persistent?: { id: number; registered: RegisteredCurvedTangency }): Promise<G1CurvedResult | G1PublishedCurvedResult> {
     const request = structuredClone(input), edit = this.revision, preview = this.previewRevision, anchor = this.anchorSelectionRevision
     const source = this.g1SourceRevision, selection = this.g1SelectionRevision, brep = this.brep
     const fence = () => {
       if (!this.g1SourceReady || this.source === null || this.revision !== edit || this.previewRevision !== preview ||
           this.anchorSelectionRevision !== anchor || this.g1SourceRevision !== source || this.g1SelectionRevision !== selection || this.brep !== brep)
         throw new Error('Scelta del supporto curvo G1 scaduta durante la verifica.')
+      if (persistent && this.g1CurvedConstraints.get(persistent.id) !== persistent.registered)
+        throw new Error('Vincolo G1 curvo scaduto durante la verifica.')
     }
     const resolved = await this.resolveG1CurvedSupportCandidate(request.choice)
     fence()
@@ -530,7 +581,14 @@ export class SurfaceEditorKernel {
         !this.sameCurvedNet(this.originalNet, resolved.selectedNet))
       throw new Error('La preparazione selezionata non coincide con il reticolo nativo certificato; nessun raffinamento implicito.')
     if (request.exportStep !== undefined && typeof request.exportStep !== 'boolean') throw new Error('Opzione STEP non valida.')
-    const base = propose ? request.net : (request as G1CurvedValidationRequest).baseNet
+    const protectedIds = persistent ? this.checkCurvedProtectedNet(request.net, persistent.registered) : null
+    if (persistent && !this.sameCurvedNet(resolved.supportNet, persistent.registered.supportNet))
+      throw new Error('Supporto sorgente diverso dal vincolo G1 curvo accettato.')
+    // The coefficient helper's transaction validator normally protects EVERY
+    // pole outside the proposed first row. For persistent edits, protections are
+    // enforced above against the accepted reference; assess the current net as
+    // its own mathematical baseline so genuinely free deep poles may move.
+    const base = persistent ? request.net : propose ? request.net : (request as G1CurvedValidationRequest).baseNet
     const info = this.netFor(this.chosen, this.refinements)
     if (!info.natural) throw new Error('La tangenza curva richiede una faccia naturale senza ritagli.')
     const locked = request.lockedPoles ?? []
@@ -548,9 +606,10 @@ export class SurfaceEditorKernel {
       isolated.source = k.fromBREP(brep); isolated.faces = k.getSubShapes(isolated.source, 'face')
       isolated.solids = this.solids; isolated.infos = structuredClone(this.infos); isolated.chosen = this.chosen
       isolated.originalNet = structuredClone(this.originalNet); isolated.editBrep = this.editBrep; isolated.editRecord = structuredClone(this.editRecord)
-      isolated.evaluate(base, 'G0')
+      if (!persistent) isolated.evaluate(base, 'G0')
       const net = propose ? proposeCompatibleCurvedTangency(pure).net : request.net
-      const validation = validateCompatibleCurvedTangencyResult(pure, net)
+      const assessed = validateCompatibleCurvedTangencyResult(pure, net)
+      const validation = protectedIds ? { ...assessed, protectedPoleCount: protectedIds.length } : assessed
       // The curved prototype always qualifies the STEP roundtrip, even when
       // the caller only asks for an isolated preview and no STEP payload.
       const evaluated = isolated.evaluate(net, 'G0', true)
@@ -567,9 +626,30 @@ export class SurfaceEditorKernel {
       try { await this.checkCurvedTangencyReadback(imported, net, resolved, pure) } finally { k.release(imported) }
       fence()
       const { step, previewRevision: _isolatedRevision, ...resultPreview } = evaluated
-      return { net: structuredClone(net), changedIndices: net.poles.flatMap((p, i) => p.some((x, d) => !Object.is(x, base.poles[i][d])) ? [i] : []),
+      const changeBase = persistent?.registered.referenceNet ?? base
+      const result: G1CurvedResult = { net: structuredClone(net), changedIndices: net.poles.flatMap((p, i) => p.some((x, d) => !Object.is(x, changeBase.poles[i][d])) ? [i] : []),
         choice: structuredClone(resolved.candidate), stamp: { ...resolved.candidate.stamp }, revisions: { edit, preview, anchorSelection: anchor },
         validation, preview: resultPreview, step: request.exportStep ? step : undefined }
+      if (!publish) return result
+      const id = persistent?.id ?? this.g1ConstraintSerial + 1, nextPreview = preview + 1
+      if (!Number.isSafeInteger(id) || id < 1 || !Number.isSafeInteger(nextPreview) || nextPreview <= preview)
+        throw new Error('Limite degli identificativi o delle revisioni G1 curvi raggiunto.')
+      // Allocate all immutable registration/response data before replacing any
+      // live handle. No asynchronous work follows this final publication fence.
+      const registered: RegisteredCurvedTangency = persistent?.registered ?? {
+        kind: 'compatible-bspline', request: structuredClone({ ...request, choice: resolved.candidate,
+          baseNet: base, net, lockedPoles: [...(pure.lockIndices ?? [])] } as G1CurvedValidationRequest),
+        referenceNet: structuredClone(net), supportNet: structuredClone(resolved.supportNet) }
+      const published: G1PublishedCurvedResult = { ...result, constraintId: id, constraintKind: 'compatible-bspline',
+        preview: { ...resultPreview, previewRevision: nextPreview } }
+      fence()
+      this.releasePreviewFace()
+      this.validatedFace = isolated.validatedFace; isolated.validatedFace = null
+      this.validatedSheetBrep = isolated.validatedSheetBrep; isolated.validatedSheetBrep = null
+      this.previewRevision = nextPreview
+      this.g1ConstraintSerial = Math.max(this.g1ConstraintSerial, id)
+      this.g1CurvedConstraints.set(id, registered)
+      return published
     } finally { isolated.clear() }
   }
   /** Internal CAD prototype: never changes the interactive draft, preview, anchors
