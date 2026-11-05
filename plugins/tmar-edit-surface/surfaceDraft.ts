@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { assertNet, boundaryLocked, type Net, type Point } from './brep'
-import type { Preview, G1PlaneResult, G1PublishedPlaneResult, G1CurvedResult, G1PublishedCurvedResult, RecipeRestoreResult } from './editorKernel'
-import { readRecipe, sha256, decodeRecipePoint, type SurfaceEditRecipe } from './recipe'
+import type { Preview, G1PlaneResult, G1PublishedPlaneResult, G1CurvedResult, G1PublishedCurvedResult, RecipeRestoreResult, CurvedRecipeRestoreResult } from './editorKernel'
+import { readRecipe, readCurvedRecipe, sha256, decodeRecipePoint, type SurfaceEditRecipe, type SurfaceEditRecipeV6 } from './recipe'
 import type { EditFrame, SurfacePreparation, SurfacePlaneTangency, SurfaceCurvedTangency } from './surfaceHistory'
 import type { PreviewDraft, SurfaceRuntime } from './surfaceRuntime'
 import { PreviewQueue } from './previewQueue'
@@ -245,38 +245,92 @@ export class SurfaceDraft {
     }
   }
 
+  /** Explicit v6 serialization, leaving the current preview/note witness intact. */
+  async createCurvedRecipe(bodyId: string): Promise<SurfaceEditRecipeV6> {
+    this.ensureActive()
+    const before = this.snapshot, preparation = this.runtime.history.current?.preparation, constraint = before.curvedTangency
+    if (!constraint || before.planeTangency || !preparation || preparation.refinements.length || !before.net || before.freeBoundary ||
+        before.cylinderSession !== null || before.net !== before.committedNet || before.validNet !== before.net || before.calculating ||
+        this.proposingPlaneTangency || this.proposingCurvedTangency || this.exportRequests)
+      throw new Error('Attendi una bozza G1 B-spline nativa verificata prima di salvare la ricetta.')
+    this.recipeBusy = true
+    try {
+      const recipe = readCurvedRecipe(await this.runtime.worker.ask<SurfaceEditRecipeV6>({ action: 'createCurvedRecipe', bodyId,
+        net: before.net, continuity: before.continuity, lockedPoles: [...before.locks], constraintId: constraint.constraintId,
+        selection: { face: preparation.face, refinements: preparation.refinements } }))
+      if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+      if (recipe.source.bodyId !== bodyId || recipe.source.faceCount !== constraint.faceCount ||
+          constraint.choice.stamp.sourceId !== 'brep-sha256:' + recipe.source.brepSha256 || recipe.faceIndex !== preparation.face ||
+          recipe.continuity !== before.continuity || !sameExact(recipe.lockedPoles, [...before.locks]) ||
+          !sameExact(recipe.refinements, preparation.refinements) || await sha256(JSON.stringify(preparation.originalNet)) !== recipe.baseNetSha256 ||
+          !sameExact(this.netFromRecipe(preparation.originalNet, recipe.edits, true), before.net))
+        throw new Error('Ricetta G1 B-spline diversa dalla bozza richiesta.')
+      this.checkCurvedRecipeConstraint(constraint, recipe, preparation.originalNet)
+      if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+      return recipe
+    } finally { this.recipeBusy = false }
+  }
+
   /** Replace this draft only after an isolated kernel restore and local checks. */
   async restoreRecipe(step: string, value: unknown, bodyId: string): Promise<RecipeRestoreResult> {
+    return this.restoreRecipeCurrent(step, value, bodyId, false)
+  }
+  /** Opt-in adoption of v6; the legacy restoreRecipe still rejects this format. */
+  async restoreCurvedRecipe(step: string, value: unknown, bodyId: string): Promise<CurvedRecipeRestoreResult> {
+    return this.restoreRecipeCurrent(step, value, bodyId, true) as Promise<CurvedRecipeRestoreResult>
+  }
+  private async restoreRecipeCurrent(step: string, value: unknown, bodyId: string, curved: boolean): Promise<RecipeRestoreResult> {
     this.ensureActive(true)
-    const recipe = readRecipe(value), before = this.snapshot
+    const recipe = curved ? readCurvedRecipe(value) : readRecipe(value), before = this.snapshot
     if (before.calculating || before.net !== before.committedNet || this.proposingPlaneTangency || this.proposingCurvedTangency || this.exportRequests)
       throw new Error('Termina le operazioni prima di ripristinare la ricetta CAD.')
     this.recipeBusy = true
     this.update({ validNet: null, calculating: true, error: '' })
     let replied = false
     try {
-      const reply = await this.runtime.worker.ask<RecipeRestoreResult>({ action: 'restoreRecipe', step, recipe, bodyId })
+      const reply = await this.runtime.worker.ask<RecipeRestoreResult>({ action: curved ? 'restoreCurvedRecipe' : 'restoreRecipe', step, recipe, bodyId })
       replied = true
       const result = structuredClone(reply)
       if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
       await this.checkRestoredRecipe(result, recipe, bodyId)
       if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+      if (recipe.version === 6) {
+        const constraint = result.curvedTangency!, previous = before.curvedTangency ?? before.planeTangency
+        if (previous && (constraint.constraintId <= previous.constraintId ||
+            constraint.choice.stamp.sourceRevision <= previous.choice.stamp.sourceRevision ||
+            constraint.choice.stamp.selectionRevision <= previous.choice.stamp.selectionRevision))
+          throw new Error('Identità del vincolo G1 B-spline non rinnovata.')
+        // The kernel's v6 result carries the accepted constraint but no proof
+        // object. Confirm the new token through its actual persistent evaluator
+        // before adopting any preview, geometry or history in this controller.
+        const confirmed = structuredClone(await this.runtime.worker.ask<G1PublishedCurvedResult>({ action: 'evaluateG1CurvedTangency',
+          net: result.net, constraintId: constraint.constraintId, lockedPoles: result.lockedPoles,
+          selection: { face: result.preparation.face, refinements: result.preparation.refinements } }))
+        if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+        this.checkPublishedCurvedResult(confirmed, constraint, result.net)
+        if (confirmed.preview.previewRevision !== result.preview.previewRevision + 1)
+          throw new Error('Witness del ripristino G1 B-spline non rinnovato.')
+        result.preview = structuredClone(confirmed.preview)
+      }
       const callerResult = structuredClone(result)
       this.invalidate()
       this.runtime.history.reset()
       const frame = this.runtime.history.commit({ net: result.net, locks: result.lockedPoles, continuity: result.continuity,
-        freeBoundary: result.freeBoundary, preparation: result.preparation, planeTangency: result.planeTangency })
-      freezeNet(frame.net); this.freezePreparation(frame.preparation); this.freezePlaneTangency(frame.planeTangency)
+        freeBoundary: result.freeBoundary, preparation: result.preparation, planeTangency: result.planeTangency, curvedTangency: result.curvedTangency })
+      freezeNet(frame.net); this.freezePreparation(frame.preparation); this.freezePlaneTangency(frame.planeTangency); this.freezeCurvedTangency(frame.curvedTangency)
       this.base = frame.preparation!.originalNet; this.queueNet = frame.net; this.restoreUnverified = false
       if (frame.planeTangency) this.planePublished = { epoch: this.epoch, net: frame.net, constraint: frame.planeTangency,
         value: { preview: result.preview } }
+      if (frame.curvedTangency) this.curvedPublished = { epoch: this.epoch, net: frame.net, constraint: frame.curvedTangency,
+        value: { preview: result.preview } }
+      const constrained = !!(frame.planeTangency || frame.curvedTangency)
       this.update({ cylinderSession: null, cylinderPreview: null, net: frame.net, committedNet: frame.net, originalNet: this.base,
         selected: EMPTY, locks: Object.freeze([...frame.locks]), trimLocks: frame.preparation!.trimLocks,
         hiddenPoles: frame.preparation!.hiddenPoles, refinements: frame.preparation!.refinements,
-        planeTangency: frame.planeTangency ?? null, curvedTangency: null, continuity: frame.continuity, freeBoundary: frame.freeBoundary,
-        preview: frame.planeTangency ? result.preview : null, previewStale: false,
-        validNet: frame.planeTangency ? frame.net : null, calculating: !frame.planeTangency, error: '', canUndo: false, canRedo: false })
-      if (!frame.planeTangency) this.schedule(frame.net)
+        planeTangency: frame.planeTangency ?? null, curvedTangency: frame.curvedTangency ?? null, continuity: frame.continuity, freeBoundary: frame.freeBoundary,
+        preview: constrained ? result.preview : null, previewStale: false,
+        validNet: constrained ? frame.net : null, calculating: !constrained, error: '', canUndo: false, canRedo: false })
+      if (!constrained) this.schedule(frame.net)
       return callerResult
     } catch (error) {
       if (!this.disposed && this.runtime.active) {
@@ -300,23 +354,51 @@ export class SurfaceDraft {
     }
     return net
   }
-  private async checkRestoredRecipe(result: RecipeRestoreResult, recipe: SurfaceEditRecipe, bodyId: string): Promise<void> {
+  private checkCurvedRecipeConstraint(constraint: SurfaceCurvedTangency, recipe: SurfaceEditRecipeV6, source: Net): void {
+    const c = recipe.curvedTangency, choice = constraint?.choice, stamp = choice?.stamp
+    if (!constraint || constraint.kind !== 'compatible-bspline' || !Number.isSafeInteger(constraint.constraintId) || constraint.constraintId < 1 ||
+        !choice || choice.kind !== 'compatible-bspline' || !stamp || stamp.faceIndex !== recipe.faceIndex ||
+        stamp.sourceId !== 'brep-sha256:' + recipe.source.brepSha256 ||
+        ![stamp.sourceRevision, stamp.selectionRevision].every(n => Number.isSafeInteger(n) && n > 0) ||
+        constraint.faceCount !== recipe.source.faceCount || choice.supportFaceIndex !== c.supportFaceIndex ||
+        choice.edgeIndex !== c.edgeIndex || choice.side !== c.side || choice.supportSide !== c.supportSide || choice.reverseSupport !== c.reverseSupport ||
+        !Number.isFinite(choice.lengthMm) || choice.lengthMm <= 0 || choice.id !== JSON.stringify([stamp.sourceId, stamp.sourceRevision,
+          stamp.selectionRevision, stamp.faceIndex, choice.kind, choice.supportFaceIndex, choice.edgeIndex, choice.side, choice.supportSide, choice.reverseSupport]) ||
+        constraint.scale !== c.scale || constraint.distanceTolerance !== c.distanceTolerance || constraint.derivativeTolerance !== c.derivativeTolerance ||
+        !sameExact(constraint.lockedPoles, c.initialLockedPoles) ||
+        !sameExact(constraint.baseNet, this.netFromRecipe(source, c.proposalBaseEdits, true)) ||
+        !sameExact(constraint.referenceNet, this.netFromRecipe(source, c.acceptedReferenceEdits, true)))
+      throw new Error('Vincolo G1 B-spline della ricetta non verificabile.')
+    this.checkCurvedStructure(source, constraint.baseNet)
+    this.checkCurvedStructure(source, constraint.referenceNet)
+  }
+  private async checkRestoredRecipe(result: RecipeRestoreResult, recipe: SurfaceEditRecipe | SurfaceEditRecipeV6, bodyId: string): Promise<void> {
     const p = result?.preparation
-    const refinements = recipe.version === 4 || recipe.version === 5 ? recipe.refinements : []
+    const refinements = recipe.version === 4 || recipe.version === 5 || recipe.version === 6 ? recipe.refinements : []
     const free = recipe.version === 3 || (recipe.version === 4 && recipe.boundaryMode === 'free-natural')
     if (recipe.source.bodyId !== bodyId || !p || p.face !== recipe.faceIndex || !sameExact(p.refinements, refinements) ||
         !Array.isArray(result.faces) || result.faces.length !== recipe.source.faceCount ||
-        result.faces.some((face, i) => face.index !== i) || result.preview?.valid !== true || !result.preview.mesh ||
+        Array.from(result.faces).some((face, i) => !face || face.index !== i) || result.preview?.valid !== true || !result.preview.mesh ||
         !Array.isArray(result.preview.faceMeshes) || result.preview.faceMeshes.length !== result.faces.length ||
         !Number.isSafeInteger(result.preview.previewRevision) || result.preview.previewRevision < 1 ||
         result.continuity !== recipe.continuity || result.freeBoundary !== free || !sameExact(result.lockedPoles, recipe.lockedPoles) ||
-        !sameExact(this.netFromRecipe(p.originalNet, recipe.edits, recipe.version === 5), result.net) ||
+        !sameExact(this.netFromRecipe(p.originalNet, recipe.edits, recipe.version === 5 || recipe.version === 6), result.net) ||
         await sha256(JSON.stringify(p.originalNet)) !== recipe.baseNetSha256)
       throw new Error('Risposta di ripristino CAD non valida.')
     frozenIds(p.trimLocks, result.net.poles.length); frozenIds(p.hiddenPoles, result.net.poles.length)
     frozenIds(result.lockedPoles, result.net.poles.length)
     const constraint = result.planeTangency
-    if (recipe.version === 5) {
+    if (recipe.version === 6) {
+      if (constraint || !result.curvedTangency) throw new Error('Vincolo G1 B-spline ripristinato mancante o ambiguo.')
+      this.checkCurvedRecipeConstraint(result.curvedTangency, recipe, p.originalNet)
+      assertNet(p.originalNet, result.curvedTangency.baseNet, 'G0')
+      this.checkCurvedStructure(result.curvedTangency.baseNet, result.curvedTangency.referenceNet)
+      for (let i = 0; i < result.net.poles.length; i++) if (!this.curvedProposalEditable(result.net, result.curvedTangency.choice, result.curvedTangency.lockedPoles, i) &&
+          !sameExact(result.curvedTangency.referenceNet.poles[i], result.curvedTangency.baseNet.poles[i]))
+        throw new Error('Polo protetto della ricetta G1 B-spline modificato.')
+      this.checkCurvedEdit(result.net, result.curvedTangency)
+    } else if (result.curvedTangency) throw new Error('Vincolo G1 B-spline inatteso nel ripristino legacy.')
+    else if (recipe.version === 5) {
       const c = recipe.planeTangency
       if (!constraint || !Number.isSafeInteger(constraint.constraintId) || constraint.constraintId < 1 ||
           constraint.choice.stamp.faceIndex !== p.face || constraint.choice.stamp.sourceId !== 'brep-sha256:' + recipe.source.brepSha256 ||

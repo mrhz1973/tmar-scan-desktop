@@ -8,7 +8,7 @@ import type { StripMove } from './sheetExtension'
 import { previewPreparedCylinder } from './cylinderPreview'
 import { evaluatePreparedCylinder } from './cylinderEvaluation'
 import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
-import { readRecipe } from './recipe'
+import { readRecipe, readCurvedRecipe } from './recipe'
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectRefined'; face: number; refinements: KnotInsertion[] }
@@ -36,6 +36,8 @@ export type Request = { id: number } & (
   | { action: 'cylinderFaceWitness'; session:number; previewRevision:number }
   | { action: 'createRecipe'; net: Net; continuity: 'G0' | 'G1'; lockedPoles: number[]; bodyId: string; freeBoundary?: boolean; constraintId?: number; selection?: {face:number;refinements:KnotInsertion[]} }
   | { action: 'restoreRecipe' | 'replayRecipe'; step: string; recipe: unknown; bodyId: string }
+  | { action: 'createCurvedRecipe'; net: Net; continuity: 'G0' | 'G1'; lockedPoles: number[]; bodyId: string; constraintId: number; selection: {face:number;refinements:KnotInsertion[]} }
+  | { action: 'restoreCurvedRecipe' | 'replayCurvedRecipe'; step: string; recipe: unknown; bodyId: string }
 )
 let editor: SurfaceEditorKernel | undefined
 let chain = Promise.resolve()
@@ -141,6 +143,22 @@ self.onmessage = (event: MessageEvent<Request>) => {
           }
           result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.freeBoundary, req.constraintId); break
         }
+        case 'createCurvedRecipe': {
+          if (cylinder || !req.selection || selectionKey === null || selectionKey !== JSON.stringify(req.selection))
+            throw new Error('Selezione della ricetta G1 B-spline scaduta.')
+          // No re-selection: the registered curved token owns this native basis.
+          result = await editor.createCurvedRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.constraintId)
+          break
+        }
+        case 'restoreCurvedRecipe': {
+          const recipe = readCurvedRecipe(req.recipe)
+          const restored = await editor.restoreCurvedRecipe(req.step, recipe, req.bodyId)
+          // Commit worker metadata only after the isolated kernel restore wins.
+          resetCylinder()
+          selectionKey = JSON.stringify({ face: recipe.faceIndex, refinements: recipe.refinements })
+          result = restored
+          break
+        }
         case 'restoreRecipe': {
           // The kernel validates in isolation. A refusal must retain the active
           // cylinder, selection key, G1 registration and note witness together.
@@ -154,6 +172,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
         // Replay owns a temporary kernel editor and never replaces the active
         // session, on success or failure. Keep its worker metadata unchanged.
         case 'replayRecipe': result = await editor.replayRecipe(req.step, req.recipe, req.bodyId); break
+        case 'replayCurvedRecipe': result = await editor.replayCurvedRecipe(req.step, readCurvedRecipe(req.recipe), req.bodyId); break
         default: throw new Error('Comando Edit Surface non supportato.')
       }
       self.postMessage({ id: req.id, result })
