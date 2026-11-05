@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { OcctKernel, type Mesh, type BoundingBox, type ShapeHandle } from 'occt-wasm'
 import { assertNet, boundaryLocked, enrichBicubic, perforatedPlaneNet, planeNet, replaceSurface, signature, surfaceTable, type Net, type Point, type RecordSpan } from './brep'
-import { readRecipe, sha256, type SurfaceEditRecipe } from './recipe'
+import { readRecipe, sha256, encodeRecipePoint, decodeRecipePoint, type SurfaceEditRecipe, type SurfaceEditRecipeV5, type SerializedPoleEdit } from './recipe'
+import type { SurfacePlaneTangency, SurfacePreparation } from './surfaceHistory'
 import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
@@ -47,6 +48,16 @@ export interface G1PlaneEvaluationRequest {
 interface RegisteredPlaneTangency {
   request: G1PlaneValidationRequest
   referenceNet: Net
+}
+export interface RecipeRestoreResult {
+  faces: FaceInfo[]
+  net: Net
+  preview: Preview & { previewRevision: number; step?: string }
+  continuity: 'G0' | 'G1'
+  freeBoundary: boolean
+  lockedPoles: number[]
+  preparation: SurfacePreparation
+  planeTangency?: SurfacePlaneTangency
 }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
@@ -592,9 +603,13 @@ export class SurfaceEditorKernel {
     return info.converted ? 'plane-to-bicubic' : info.enriched ? 'bicubic-midpoint-refinement' : 'native-nurbs'
   }
   /** Persist only after exact CAD validation. The host supplies its stable body ID. */
-  async createRecipe(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string, freeBoundary = false): Promise<SurfaceEditRecipe> {
+  async createRecipe(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string, freeBoundary = false, constraintId?: number): Promise<SurfaceEditRecipe> {
     if (!this.originalNet || !this.source) throw new Error('Seleziona prima una faccia.')
     if (typeof freeBoundary !== 'boolean' || !['G0', 'G1'].includes(continuity)) throw new Error('Modalità bordo non valida.')
+    if (constraintId !== undefined) {
+      if (freeBoundary) throw new Error('La ricetta G1 richiede bordi protetti.')
+      return this.createPlaneRecipe(net, continuity, lockedPoles, bodyId, constraintId)
+    }
     const base = structuredClone(this.originalNet), next = structuredClone(net), rev = this.revision
     if (freeBoundary && !this.infos[this.chosen].freeBoundary)
       throw new Error('Il bordo libero richiede una sola faccia aperta con contorno naturale rettangolare.')
@@ -616,29 +631,117 @@ export class SurfaceEditorKernel {
     this.evaluate(next, continuity, false, freeBoundary)
     return checked
   }
-  private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false) {
+  private planeSnapshot(id: number, registered = this.g1Constraints.get(id)): SurfacePlaneTangency {
+    if (!registered) throw new Error('Vincolo G1 scaduto: verifica di nuovo la tangenza.')
+    return structuredClone({ constraintId: id, baseNet: registered.request.baseNet, referenceNet: registered.referenceNet,
+      choice: registered.request.choice, lockedPoles: [...(registered.request.lockedPoles ?? [])],
+      distanceTolerance: registered.request.distanceTolerance ?? 1e-8 })
+  }
+  private checkRecipePlaneLocks(registered: RegisteredPlaneTangency, locks: readonly number[]): void {
+    const n = registered.referenceNet, info = this.infos[this.chosen]
+    if (!Array.isArray(locks) || locks.length > 1600 || new Set(locks).size !== locks.length ||
+        Array.from(locks).some(i => !Number.isSafeInteger(i) || Object.is(i, -0) || i < 0 || i >= n.poles.length))
+      throw new Error('Blocchi della ricetta G1 non validi.')
+    const initial = registered.request.lockedPoles ?? []
+    if (locks.some(i => !initial.includes(i) && !boundaryLocked(n, i, 'G1')))
+      throw new Error('Nuovi blocchi interni richiedono una nuova verifica del vincolo G1.')
+    if (initial.some(i => !info.trimLocks.includes(i) && !info.hiddenPoles.includes(i) && !locks.includes(i)))
+      throw new Error('I blocchi iniziali della ricetta G1 devono restare protetti.')
+  }
+  private async createPlaneRecipe(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string, constraintId: number): Promise<SurfaceEditRecipeV5> {
+    const registered = this.g1Constraints.get(constraintId)
+    if (!Number.isSafeInteger(constraintId) || !registered) throw new Error('Vincolo G1 scaduto: verifica di nuovo la tangenza.')
+    const sourceNet = structuredClone(this.originalNet!), next = structuredClone(net), locks = structuredClone(lockedPoles)
+    const rev = this.revision, preview = this.previewRevision, anchor = this.anchorSelectionRevision
+    this.checkRecipePlaneLocks(registered, locks)
+    // Full CAD verification stays isolated: serializing a recipe must not replace
+    // the current interactive face or its note witness.
+    await this.planeTangency({ ...registered.request, net: next, exportStep: false }, false, false, { id: constraintId, registered })
+    const sparse = (n: Net): SerializedPoleEdit[] => n.poles.flatMap((point, index) =>
+      point.some((x, d) => !Object.is(x, sourceNet.poles[index][d])) ? [{ index, point: encodeRecipePoint(point) }] : [])
+    const choice = registered.request.choice
+    const recipe: SurfaceEditRecipeV5 = {
+      schema: 'tmar.surface-edit', version: 5, engine: 'occt-wasm-5.7.1/brep-v3', units: 'mm', coordinateFrame: 'imported-step',
+      source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids }, faceIndex: this.chosen,
+      preparation: this.preparation(), baseNetSha256: '', continuity, boundaryMode: 'locked', refinements: structuredClone(this.refinements),
+      edits: sparse(next), lockedPoles: locks,
+      planeTangency: { kind: 'plane', supportFaceIndex: choice.supportFaceIndex, edgeIndex: choice.edgeIndex, side: choice.side,
+        distanceTolerance: registered.request.distanceTolerance ?? 1e-8, initialLockedPoles: [...(registered.request.lockedPoles ?? [])],
+        proposalBaseEdits: sparse(registered.request.baseNet), acceptedReferenceEdits: sparse(registered.referenceNet) },
+    }
+    ;[recipe.source.brepSha256, recipe.baseNetSha256] = await Promise.all([sha256(this.brep), sha256(JSON.stringify(sourceNet))])
+    if (this.revision !== rev || this.previewRevision !== preview || this.anchorSelectionRevision !== anchor ||
+        this.g1Constraints.get(constraintId) !== registered) throw new Error('Sessione cambiata durante il salvataggio della ricetta G1.')
+    return readRecipe(recipe) as SurfaceEditRecipeV5
+  }
+  private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false): Promise<RecipeRestoreResult> {
     const recipe = readRecipe(value)
     if (recipe.source.bodyId !== bodyId) throw new Error('Corpo sorgente diverso dalla ricetta.')
     const opened = this.open(step), rev = this.revision
     const fingerprint = await sha256(this.brep)
     if (this.revision !== rev) throw new Error('Sorgente cambiata durante il ripristino.')
     if (fingerprint !== recipe.source.brepSha256 || this.faces.length !== recipe.source.faceCount || this.solids !== recipe.source.solidCount) throw new Error('Geometria sorgente cambiata: ricollegare esplicitamente la modifica della superficie.')
-    const net = this.select(recipe.faceIndex, recipe.version === 4 ? recipe.refinements : []), selectedRevision = this.revision
+    const net = this.select(recipe.faceIndex, recipe.version === 4 || recipe.version === 5 ? recipe.refinements : []), selectedRevision = this.revision
     const baseFingerprint = await sha256(JSON.stringify(net))
     if (this.revision !== selectedRevision) throw new Error('Faccia cambiata durante il ripristino.')
     if (baseFingerprint !== recipe.baseNetSha256 || this.preparation() !== recipe.preparation) throw new Error('Base NURBS o raffinamento diverso dalla ricetta.')
+    const info = this.infos[this.chosen]
+    const preparation: SurfacePreparation = { face: this.chosen, refinements: structuredClone(this.refinements), originalNet: structuredClone(net),
+      trimLocks: [...info.trimLocks], hiddenPoles: [...info.hiddenPoles] }
+    if (recipe.version === 5) {
+      const constraint = recipe.planeTangency
+      const apply = (edits: SerializedPoleEdit[]): Net => {
+        const result = structuredClone(net)
+        for (const edit of edits) {
+          if (edit.index >= result.poles.length) throw new Error('La ricetta contiene un polo inesistente.')
+          result.poles[edit.index] = decodeRecipePoint(edit.point)
+        }
+        return result
+      }
+      const baseNet = apply(constraint.proposalBaseEdits), reference = apply(constraint.acceptedReferenceEdits), final = apply(recipe.edits)
+      if (constraint.initialLockedPoles.some(i => i >= net.poles.length)) throw new Error('Blocco iniziale G1 inesistente.')
+      const choices = (await this.g1SupportCandidates()).candidates.filter(c => c.supportFaceIndex === constraint.supportFaceIndex &&
+        c.edgeIndex === constraint.edgeIndex && c.side === constraint.side)
+      if (choices.length !== 1) throw new Error('Supporto della ricetta G1 non disponibile o ambiguo.')
+      // Publish the saved accepted coefficients, never regenerate a projection.
+      const accepted = await this.publishG1PlaneTangency({ baseNet, net: reference, choice: choices[0],
+        lockedPoles: constraint.initialLockedPoles, distanceTolerance: constraint.distanceTolerance })
+      const registered = this.g1Constraints.get(accepted.constraintId)!
+      this.checkRecipePlaneLocks(registered, recipe.lockedPoles)
+      const evaluated = await this.evaluateG1PlaneTangency({ constraintId: accepted.constraintId, net: final,
+        lockedPoles: recipe.lockedPoles, exportStep })
+      return { faces: opened.faces, net: evaluated.net, preview: { ...evaluated.preview, ...(evaluated.step !== undefined ? { step: evaluated.step } : {}) },
+        continuity: recipe.continuity, freeBoundary: false, lockedPoles: [...recipe.lockedPoles], preparation,
+        planeTangency: this.planeSnapshot(accepted.constraintId) }
+    }
     if ([...recipe.edits.map(e => e.index), ...recipe.lockedPoles].some(i => i >= net.poles.length)) throw new Error('La ricetta contiene un polo inesistente.')
     for (const edit of recipe.edits) net.poles[edit.index] = [...edit.point]
     const freeBoundary = recipe.version === 3 || (recipe.version === 4 && recipe.boundaryMode === 'free-natural')
     const preview = this.evaluate(net, recipe.continuity, exportStep, freeBoundary)
-    return { faces: opened.faces, net, preview, continuity: recipe.continuity, freeBoundary, lockedPoles: recipe.lockedPoles }
+    return { faces: opened.faces, net, preview, continuity: recipe.continuity, freeBoundary, lockedPoles: recipe.lockedPoles, preparation }
   }
   /** Validate in isolation; failed restores leave the current edit untouched. */
   async restoreRecipe(step: string, recipe: unknown, bodyId: string) {
-    const temporary = new SurfaceEditorKernel(this.kernel), rev = this.revision
+    const temporary = new SurfaceEditorKernel(this.kernel), rev = this.revision, preview = this.previewRevision, anchor = this.anchorSelectionRevision
     try {
       const result = await temporary.prepareRecipe(step, recipe, bodyId)
-      if (this.revision !== rev) throw new Error('Sessione cambiata durante il ripristino.')
+      // Prepare all response/registration allocations before replacing the
+      // live session. Temporary stamps and IDs must never escape restoration.
+      let restoredConstraint: { id: number; registered: RegisteredPlaneTangency } | undefined
+      if (result.planeTangency) {
+        const registered = structuredClone(temporary.g1Constraints.get(result.planeTangency.constraintId)!)
+        if (!registered) throw new Error('Registrazione G1 ripristinata non disponibile.')
+        const choice = registered.request.choice
+        choice.stamp = { ...choice.stamp, sourceRevision: this.g1SourceRevision + 1,
+          selectionRevision: this.g1SelectionRevision + 1, faceIndex: temporary.chosen }
+        choice.id = JSON.stringify([choice.stamp.sourceId, choice.stamp.sourceRevision, choice.stamp.selectionRevision,
+          choice.stamp.faceIndex, choice.supportFaceIndex, choice.edgeIndex])
+        restoredConstraint = { id: this.g1ConstraintSerial + 1, registered }
+        result.planeTangency = this.planeSnapshot(restoredConstraint.id, registered)
+      }
+      result.preview.previewRevision = this.previewRevision + 1
+      if (this.revision !== rev || this.previewRevision !== preview || this.anchorSelectionRevision !== anchor)
+        throw new Error('Sessione cambiata durante il ripristino.')
       this.clear()
       this.source = temporary.source; this.faces = temporary.faces
       this.brep = temporary.brep; this.records = temporary.records; this.recordsByFace = temporary.recordsByFace
@@ -650,10 +753,15 @@ export class SurfaceEditorKernel {
       this.g1SourceReady = temporary.g1SourceReady
       this.g1Selected = temporary.g1Selected
       this.g1Fingerprint = temporary.g1Fingerprint
+      if (restoredConstraint) {
+        this.g1ConstraintSerial = restoredConstraint.id
+        this.g1Constraints.set(restoredConstraint.id, restoredConstraint.registered)
+      }
       // Transfer handle ownership without disposing the shared OCCT runtime.
       this.validatedSheetBrep=temporary.validatedSheetBrep
+      temporary.validatedSheetBrep=null
       this.validatedFace = temporary.validatedFace; temporary.validatedFace = null
-      result.preview.previewRevision = ++this.previewRevision
+      this.previewRevision++
       temporary.source = null; temporary.faces = []
       return result
     } finally { temporary.clear() }

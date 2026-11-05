@@ -23,11 +23,91 @@ interface SurfaceEditRecipeBase {
  * insertions before checking baseNetSha256 and applying edits/locks, whose
  * indices refer to that refined base. UV values use the original CAD domain.
  */
-export type SurfaceEditRecipe = SurfaceEditRecipeBase & (
+export type LegacySurfaceEditRecipe = SurfaceEditRecipeBase & (
   | { version: 2; boundaryMode?: never; refinements?: never }
   | { version: 3; boundaryMode: 'free-natural'; refinements?: never }
   | { version: 4; boundaryMode: 'locked' | 'free-natural'; refinements: KnotInsertion[] }
 )
+
+/** JSON numbers lose negative zero; v5 coefficients encode it explicitly. */
+export type SerializedCoordinate = number | '-0'
+export type SerializedPoint = [SerializedCoordinate, SerializedCoordinate, SerializedCoordinate]
+export interface SerializedPoleEdit { index: number; point: SerializedPoint }
+export interface RecipePlaneTangency {
+  kind: 'plane'
+  supportFaceIndex: number
+  edgeIndex: number
+  side: 'uMin' | 'uMax' | 'vMin' | 'vMax'
+  distanceTolerance: number
+  initialLockedPoles: number[]
+  /** Both sparse nets are relative to the fingerprinted, prepared source net. */
+  proposalBaseEdits: SerializedPoleEdit[]
+  acceptedReferenceEdits: SerializedPoleEdit[]
+}
+export type SurfaceEditRecipeV5 = Omit<SurfaceEditRecipeBase, 'edits'> & {
+  version: 5
+  boundaryMode: 'locked'
+  refinements: KnotInsertion[]
+  edits: SerializedPoleEdit[]
+  planeTangency: RecipePlaneTangency
+}
+export type SurfaceEditRecipe = LegacySurfaceEditRecipe | SurfaceEditRecipeV5
+
+const serializedCoordinate = (x: unknown): x is SerializedCoordinate => x === '-0' ||
+  (typeof x === 'number' && Number.isFinite(x) && !Object.is(x, -0))
+const serializedPoint = (p: unknown): p is SerializedPoint => Array.isArray(p) && p.length === 3 &&
+  Array.from(p).every(serializedCoordinate)
+
+export function encodeRecipePoint(point: Point): SerializedPoint {
+  if (!Array.isArray(point) || point.length !== 3 || Array.from(point).some(x => typeof x !== 'number' || !Number.isFinite(x)))
+    throw new Error('Coordinate della ricetta Edit Surface non valide.')
+  return point.map(x => Object.is(x, -0) ? '-0' : x) as SerializedPoint
+}
+export function decodeRecipePoint(point: SerializedPoint): Point {
+  if (!serializedPoint(point)) throw new Error('Coordinate della ricetta Edit Surface non valide.')
+  return point.map(x => x === '-0' ? -0 : x) as Point
+}
+
+/** v5 is deliberately closed: transient tokens, aliases and unknown policy are refused. */
+function readG1Recipe(value: unknown): SurfaceEditRecipeV5 {
+  const object = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
+  const keys = (x: Record<string, unknown>, expected: readonly string[]) =>
+    Object.keys(x).length === expected.length && expected.every(key => Object.prototype.hasOwnProperty.call(x, key))
+  const integer = (x: unknown, min: number, max: number): x is number =>
+    typeof x === 'number' && Number.isInteger(x) && !Object.is(x, -0) && x >= min && x <= max
+  const digest = (x: unknown) => typeof x === 'string' && /^[a-f0-9]{64}$/.test(x)
+  const ids = (x: unknown): x is number[] => Array.isArray(x) && x.length <= 1600 &&
+    Array.from(x).every(i => integer(i, 0, 1599)) && new Set(x).size === x.length
+  const edits = (x: unknown): x is SerializedPoleEdit[] => Array.isArray(x) && x.length <= 1600 &&
+    Array.from(x).every(e => object(e) && keys(e, ['index', 'point']) && integer(e.index, 0, 1599) && serializedPoint(e.point)) &&
+    new Set(x.map(e => e.index)).size === x.length
+  const invalid = () => { throw new Error('Ricetta Edit Surface G1 v5 non supportata o incompleta.') }
+  if (!object(value) || !keys(value, ['schema', 'version', 'engine', 'units', 'coordinateFrame', 'source', 'faceIndex',
+    'preparation', 'baseNetSha256', 'continuity', 'edits', 'lockedPoles', 'boundaryMode', 'refinements', 'planeTangency'])) return invalid()
+  const r = value, source = r.source, constraint = r.planeTangency
+  if (r.schema !== 'tmar.surface-edit' || r.version !== 5 || r.engine !== 'occt-wasm-5.7.1/brep-v3' ||
+      r.units !== 'mm' || r.coordinateFrame !== 'imported-step' || r.boundaryMode !== 'locked' ||
+      !object(source) || !keys(source, ['bodyId', 'brepSha256', 'faceCount', 'solidCount']) ||
+      typeof source.bodyId !== 'string' || !source.bodyId.trim() || source.bodyId.length > 1024 ||
+      !digest(source.brepSha256) || !integer(source.faceCount, 2, 1000000) || !integer(source.solidCount, 0, 1) ||
+      !integer(r.faceIndex, 0, source.faceCount - 1) || !digest(r.baseNetSha256) ||
+      !['plane-to-bicubic', 'bicubic-midpoint-refinement', 'native-nurbs'].includes(r.preparation as string) ||
+      !['G0', 'G1'].includes(r.continuity as string) || !ids(r.lockedPoles) || !edits(r.edits) ||
+      !Array.isArray(r.refinements) || r.refinements.length > 128 ||
+      Array.from(r.refinements).some(op => !object(op) || !keys(op, ['axis', 'value', 'count']) ||
+        (op.axis !== 'U' && op.axis !== 'V') || typeof op.value !== 'number' || !Number.isFinite(op.value) ||
+        Object.is(op.value, -0) || !integer(op.count, 1, 25)) ||
+      !object(constraint) || !keys(constraint, ['kind', 'supportFaceIndex', 'edgeIndex', 'side', 'distanceTolerance',
+        'initialLockedPoles', 'proposalBaseEdits', 'acceptedReferenceEdits']) || constraint.kind !== 'plane' ||
+      !integer(constraint.supportFaceIndex, 0, source.faceCount - 1) || constraint.supportFaceIndex === r.faceIndex ||
+      !integer(constraint.edgeIndex, 0, 3) || !['uMin', 'uMax', 'vMin', 'vMax'].includes(constraint.side as string) ||
+      typeof constraint.distanceTolerance !== 'number' || !Number.isFinite(constraint.distanceTolerance) ||
+      constraint.distanceTolerance <= 0 || constraint.distanceTolerance > 1e-6 ||
+      !ids(constraint.initialLockedPoles) || !edits(constraint.proposalBaseEdits) || !edits(constraint.acceptedReferenceEdits)) return invalid()
+  // Actual domains, pole counts, natural topology and coefficient protections
+  // belong to kernel replay; schema metadata cannot establish CAD eligibility.
+  return structuredClone(value) as SurfaceEditRecipeV5
+}
 
 export async function sha256(text: string): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
@@ -35,7 +115,8 @@ export async function sha256(text: string): Promise<string> {
 }
 
 export function readRecipe(value: unknown): SurfaceEditRecipe {
-  const r = value as SurfaceEditRecipe | null
+  if ((value as { version?: unknown } | null)?.version === 5) return readG1Recipe(value)
+  const r = value as LegacySurfaceEditRecipe | null
   const integer = (n: unknown, min: number, max: number) => typeof n === 'number' && Number.isInteger(n) && n >= min && n <= max
   const digest = (s: unknown) => typeof s === 'string' && /^[a-f0-9]{64}$/.test(s)
   const hasOwn = (key: string) => Object.prototype.hasOwnProperty.call(r, key)

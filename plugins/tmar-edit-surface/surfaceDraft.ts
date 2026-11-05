@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { assertNet, boundaryLocked, type Net } from './brep'
-import type { Preview, G1PlaneResult, G1PublishedPlaneResult } from './editorKernel'
+import { assertNet, boundaryLocked, type Net, type Point } from './brep'
+import type { Preview, G1PlaneResult, G1PublishedPlaneResult, RecipeRestoreResult } from './editorKernel'
+import { readRecipe, sha256, decodeRecipePoint, type SurfaceEditRecipe } from './recipe'
 import type { EditFrame, SurfacePreparation, SurfacePlaneTangency } from './surfaceHistory'
 import type { PreviewDraft, SurfaceRuntime } from './surfaceRuntime'
 import { PreviewQueue } from './previewQueue'
@@ -53,12 +54,21 @@ function freezeNet(net: Net): Net {
   return Object.freeze(net)
 }
 function frozenIds(ids: readonly number[], count: number): readonly number[] {
-  if (ids.some(i => !Number.isInteger(i) || i < 0 || i >= count))
+  if (Array.from(ids).some(i => !Number.isInteger(i) || i < 0 || i >= count))
     throw new Error('Indice del punto non valido.')
   return Object.freeze([...new Set(ids)])
 }
 function sameIds(a: readonly number[], b: readonly number[]): boolean {
   return a.length === b.length && a.every((id, i) => id === b[i])
+}
+/** Compare serialized coefficient state without erasing negative zero. */
+function sameExact(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false
+  if (Array.isArray(a) && Array.isArray(b) && a.length !== b.length) return false
+  const keys = Object.keys(a), other = Object.keys(b)
+  return keys.length === other.length && keys.every(key => Object.prototype.hasOwnProperty.call(b, key) &&
+    sameExact((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
 }
 
 /**
@@ -82,9 +92,12 @@ export class SurfaceDraft {
   private exported: { epoch: number; queueRevision: number; value: Preview } | null = null
   private disposed = false
   private refining = false
+  private recipeBusy = false
+  private restoreUnverified = false
+  private exportRequests = 0
   private proposingPlaneTangency = false
   private publishingPlaneTangency = false
-  private planePublished: { epoch: number; net: Net; constraint: SurfacePlaneTangency; value: G1PublishedPlaneResult } | null = null
+  private planePublished: { epoch: number; net: Net; constraint: SurfacePlaneTangency; value: Pick<G1PublishedPlaneResult, 'preview'> } | null = null
   private readonly planePreviews = new PreviewQueue<{ net: Net; constraint: SurfacePlaneTangency; epoch: number; selection: { face: number; refinements: KnotInsertion[] } }, G1PublishedPlaneResult>({
     evaluate: async draft => {
       const result = await this.runtime.worker.ask<G1PublishedPlaneResult>({
@@ -130,7 +143,7 @@ export class SurfaceDraft {
   /** Install a worker-selected CAD net. No project or worker selection is performed. */
   install(net: Net, options: { continuity?: 'G0' | 'G1'; trimLocks?: readonly number[]; hiddenPoles?: readonly number[];
     cylinderSession?: number; face?: number; refinements?: readonly KnotInsertion[]; originalNet?: Net } = {}): void {
-    this.ensureActive()
+    this.ensureActive(true)
     const continuity = options.continuity ?? this.snapshot.continuity
     if (continuity !== 'G0' && continuity !== 'G1') throw new Error('Continuità non valida.')
     const cylinderSession = options.cylinderSession ?? null
@@ -152,6 +165,7 @@ export class SurfaceDraft {
       originalNet: base, trimLocks: [...trimLocks], hiddenPoles: [...hiddenPoles],
     }
     this.invalidate()
+    this.restoreUnverified = false
     this.runtime.history.reset()
     this.base = base
     this.queueNet = null
@@ -169,6 +183,139 @@ export class SurfaceDraft {
   /** Install only the net returned by prepareCylinder in this runtime's worker. */
   installCylinder(net: Net, session: number): void {
     this.install(net, { continuity: 'G1', cylinderSession: session })
+  }
+
+  /** Serialize the actual committed draft; a plane constraint always uses v5. */
+  async createRecipe(bodyId: string): Promise<SurfaceEditRecipe> {
+    this.ensureActive()
+    const before = this.snapshot, preparation = this.runtime.history.current?.preparation
+    if (!preparation || !before.net || before.cylinderSession !== null || before.net !== before.committedNet ||
+        before.validNet !== before.net || before.calculating || this.proposingPlaneTangency || this.exportRequests)
+      throw new Error('Termina le operazioni e attendi la verifica CAD prima di salvare la ricetta.')
+    this.recipeBusy = true
+    try {
+      const recipe = readRecipe(await this.runtime.worker.ask<SurfaceEditRecipe>({ action: 'createRecipe', bodyId,
+        net: before.net, continuity: before.continuity, lockedPoles: [...before.locks], freeBoundary: before.freeBoundary,
+        ...(before.planeTangency ? { constraintId: before.planeTangency.constraintId } : {}),
+        selection: { face: preparation.face, refinements: preparation.refinements } }))
+      if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+      if (recipe.source.bodyId !== bodyId || recipe.faceIndex !== preparation.face || recipe.continuity !== before.continuity ||
+          !sameExact(recipe.lockedPoles, [...before.locks]) || (recipe.version === 5) !== !!before.planeTangency ||
+          !sameExact(recipe.version === 4 || recipe.version === 5 ? recipe.refinements : [], preparation.refinements) ||
+          (recipe.version === 3 || (recipe.version === 4 && recipe.boundaryMode === 'free-natural')) !== before.freeBoundary ||
+          await sha256(JSON.stringify(preparation.originalNet)) !== recipe.baseNetSha256 ||
+          !sameExact(this.netFromRecipe(preparation.originalNet, recipe.edits, recipe.version === 5), before.net))
+        throw new Error('Ricetta CAD diversa dalla bozza richiesta.')
+      if (recipe.version === 5 && before.planeTangency) {
+        const c = recipe.planeTangency, expected = before.planeTangency
+        if (c.supportFaceIndex !== expected.choice.supportFaceIndex || c.edgeIndex !== expected.choice.edgeIndex || c.side !== expected.choice.side ||
+            c.distanceTolerance !== expected.distanceTolerance || !sameExact(c.initialLockedPoles, expected.lockedPoles) ||
+            !sameExact(this.netFromRecipe(preparation.originalNet, c.proposalBaseEdits, true), expected.baseNet) ||
+            !sameExact(this.netFromRecipe(preparation.originalNet, c.acceptedReferenceEdits, true), expected.referenceNet))
+          throw new Error('Ricetta del vincolo G1 diversa dalla bozza richiesta.')
+      }
+      if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+      return recipe
+    } finally {
+      // Legacy createRecipe evaluates in the live editor. Refresh its witness
+      // even after refusal; the G1 serializer itself is strictly read-only.
+      try {
+        if (!before.planeTangency && !this.disposed && this.runtime.active) {
+          this.invalidate()
+          this.update({ preview: null, validNet: null, previewStale: false, calculating: true })
+          this.schedule(before.net!)
+        }
+      } finally { this.recipeBusy = false }
+    }
+  }
+
+  /** Replace this draft only after an isolated kernel restore and local checks. */
+  async restoreRecipe(step: string, value: unknown, bodyId: string): Promise<RecipeRestoreResult> {
+    this.ensureActive(true)
+    const recipe = readRecipe(value), before = this.snapshot
+    if (before.calculating || before.net !== before.committedNet || this.proposingPlaneTangency || this.exportRequests)
+      throw new Error('Termina le operazioni prima di ripristinare la ricetta CAD.')
+    this.recipeBusy = true
+    this.update({ validNet: null, calculating: true, error: '' })
+    let replied = false
+    try {
+      const reply = await this.runtime.worker.ask<RecipeRestoreResult>({ action: 'restoreRecipe', step, recipe, bodyId })
+      replied = true
+      const result = structuredClone(reply)
+      if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+      await this.checkRestoredRecipe(result, recipe, bodyId)
+      if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+      const callerResult = structuredClone(result)
+      this.invalidate()
+      this.runtime.history.reset()
+      const frame = this.runtime.history.commit({ net: result.net, locks: result.lockedPoles, continuity: result.continuity,
+        freeBoundary: result.freeBoundary, preparation: result.preparation, planeTangency: result.planeTangency })
+      freezeNet(frame.net); this.freezePreparation(frame.preparation); this.freezePlaneTangency(frame.planeTangency)
+      this.base = frame.preparation!.originalNet; this.queueNet = frame.net; this.restoreUnverified = false
+      if (frame.planeTangency) this.planePublished = { epoch: this.epoch, net: frame.net, constraint: frame.planeTangency,
+        value: { preview: result.preview } }
+      this.update({ cylinderSession: null, cylinderPreview: null, net: frame.net, committedNet: frame.net, originalNet: this.base,
+        selected: EMPTY, locks: Object.freeze([...frame.locks]), trimLocks: frame.preparation!.trimLocks,
+        hiddenPoles: frame.preparation!.hiddenPoles, refinements: frame.preparation!.refinements,
+        planeTangency: frame.planeTangency ?? null, continuity: frame.continuity, freeBoundary: frame.freeBoundary,
+        preview: frame.planeTangency ? result.preview : null, previewStale: false,
+        validNet: frame.planeTangency ? frame.net : null, calculating: !frame.planeTangency, error: '', canUndo: false, canRedo: false })
+      if (!frame.planeTangency) this.schedule(frame.net)
+      return callerResult
+    } catch (error) {
+      if (!this.disposed && this.runtime.active) {
+        if (replied) {
+          this.restoreUnverified = true
+          this.invalidate()
+          this.update({ preview: null, validNet: null, previewStale: false, calculating: false,
+            error: 'Ripristino CAD non verificabile: ripristina una ricetta valida o seleziona di nuovo la faccia.' })
+        } else this.update({ preview: before.preview, validNet: before.validNet, calculating: before.calculating,
+          previewStale: before.previewStale, error: before.error })
+      }
+      throw error
+    } finally { this.recipeBusy = false }
+  }
+
+  private netFromRecipe(base: Net, edits: SurfaceEditRecipe['edits'], encoded: boolean): Net {
+    const net = structuredClone(base)
+    for (const edit of edits) {
+      if (edit.index >= net.poles.length) throw new Error('Polo della ricetta inesistente.')
+      net.poles[edit.index] = encoded ? decodeRecipePoint(edit.point) : [...edit.point] as Point
+    }
+    return net
+  }
+  private async checkRestoredRecipe(result: RecipeRestoreResult, recipe: SurfaceEditRecipe, bodyId: string): Promise<void> {
+    const p = result?.preparation
+    const refinements = recipe.version === 4 || recipe.version === 5 ? recipe.refinements : []
+    const free = recipe.version === 3 || (recipe.version === 4 && recipe.boundaryMode === 'free-natural')
+    if (recipe.source.bodyId !== bodyId || !p || p.face !== recipe.faceIndex || !sameExact(p.refinements, refinements) ||
+        !Array.isArray(result.faces) || result.faces.length !== recipe.source.faceCount ||
+        result.faces.some((face, i) => face.index !== i) || result.preview?.valid !== true || !result.preview.mesh ||
+        !Array.isArray(result.preview.faceMeshes) || result.preview.faceMeshes.length !== result.faces.length ||
+        !Number.isSafeInteger(result.preview.previewRevision) || result.preview.previewRevision < 1 ||
+        result.continuity !== recipe.continuity || result.freeBoundary !== free || !sameExact(result.lockedPoles, recipe.lockedPoles) ||
+        !sameExact(this.netFromRecipe(p.originalNet, recipe.edits, recipe.version === 5), result.net) ||
+        await sha256(JSON.stringify(p.originalNet)) !== recipe.baseNetSha256)
+      throw new Error('Risposta di ripristino CAD non valida.')
+    frozenIds(p.trimLocks, result.net.poles.length); frozenIds(p.hiddenPoles, result.net.poles.length)
+    frozenIds(result.lockedPoles, result.net.poles.length)
+    const constraint = result.planeTangency
+    if (recipe.version === 5) {
+      const c = recipe.planeTangency
+      if (!constraint || !Number.isSafeInteger(constraint.constraintId) || constraint.constraintId < 1 ||
+          constraint.choice.stamp.faceIndex !== p.face || constraint.choice.stamp.sourceId !== 'brep-sha256:' + recipe.source.brepSha256 ||
+          constraint.choice.supportFaceIndex !== c.supportFaceIndex || constraint.choice.edgeIndex !== c.edgeIndex || constraint.choice.side !== c.side ||
+          constraint.distanceTolerance !== c.distanceTolerance || !sameExact(constraint.lockedPoles, c.initialLockedPoles) ||
+          !sameExact(constraint.baseNet, this.netFromRecipe(p.originalNet, c.proposalBaseEdits, true)) ||
+          !sameExact(constraint.referenceNet, this.netFromRecipe(p.originalNet, c.acceptedReferenceEdits, true)))
+        throw new Error('Vincolo G1 ripristinato non valido.')
+      assertNet(p.originalNet, constraint.baseNet, 'G0')
+      validatePlaneTangencyResult(this.planeRequest(constraint), constraint.referenceNet)
+      this.checkPlaneEdit(result.net, constraint)
+    } else {
+      if (constraint) throw new Error('Vincolo G1 inatteso nel ripristino legacy.')
+      assertNet(p.originalNet, result.net, recipe.continuity, free)
+    }
   }
 
   /** Exact knot insertion preserves the deformed surface and creates one undo step. */
@@ -287,6 +434,12 @@ export class SurfaceDraft {
   /** Reevaluate the actual G1 net and STEP, then adopt the returned real note witness. */
   async evaluatePlaneTangencyForExport(): Promise<G1PublishedPlaneResult & { step: string }> {
     this.ensureActive()
+    this.exportRequests++
+    try { return await this.evaluatePlaneTangencyForExportCurrent() }
+    finally { this.exportRequests-- }
+  }
+  private async evaluatePlaneTangencyForExportCurrent(): Promise<G1PublishedPlaneResult & { step: string }> {
+    this.ensureActive()
     const before = this.snapshot, constraint = before.planeTangency
     const selection = this.selectionPayload().selection
     if (!constraint || !selection || !before.net) throw new Error('Tangenza piano non disponibile.')
@@ -314,7 +467,8 @@ export class SurfaceDraft {
 
   /** Drop the selected face and invalidate in-flight worker replies. */
   reset(options: { preserveContinuity?: boolean } = {}): void {
-    this.ensureActive()
+    this.ensureActive(true)
+    this.restoreUnverified = false
     const continuity = options.preserveContinuity ? this.snapshot.continuity : 'G1'
     this.invalidate()
     this.runtime.history.reset()
@@ -370,6 +524,12 @@ export class SurfaceDraft {
    */
   async evaluateForExport(): Promise<Preview & { step: string; previewRevision: number }> {
     this.ensureActive()
+    this.exportRequests++
+    try { return await this.evaluateForExportCurrent() }
+    finally { this.exportRequests-- }
+  }
+  private async evaluateForExportCurrent(): Promise<Preview & { step: string; previewRevision: number }> {
+    this.ensureActive()
     if (this.snapshot.planeTangency) {
       const result = await this.evaluatePlaneTangencyForExport()
       return { ...result.preview, step: result.step }
@@ -398,6 +558,12 @@ export class SurfaceDraft {
 
   /** Full experimental cylinder evaluation, kept separate from normal Apply. */
   async evaluateCylinderForExport(): Promise<{ mesh: Mesh; step: string; previewRevision:number }> {
+    this.ensureActive()
+    this.exportRequests++
+    try { return await this.evaluateCylinderForExportCurrent() }
+    finally { this.exportRequests-- }
+  }
+  private async evaluateCylinderForExportCurrent(): Promise<{ mesh: Mesh; step: string; previewRevision:number }> {
     this.ensureActive()
     const snapshot = this.snapshot, net = this.requireNet(), session = snapshot.cylinderSession
     if (session === null) throw new Error('Scegli prima una faccia cilindrica.')
@@ -492,8 +658,10 @@ export class SurfaceDraft {
     this.listeners.clear()
   }
 
-  private ensureActive(): void {
+  private ensureActive(allowUnverifiedRestore = false): void {
     if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+    if (this.recipeBusy) throw new Error('Attendi il completamento della ricetta CAD.')
+    if (this.restoreUnverified && !allowUnverifiedRestore) throw new Error('Ripristino CAD non verificabile: seleziona di nuovo la faccia o ripristina una ricetta valida.')
     if (this.refining) throw new Error('Attendi il raffinamento del reticolo.')
     if (this.publishingPlaneTangency) throw new Error('Attendi la pubblicazione della tangenza.')
   }
@@ -597,6 +765,7 @@ export class SurfaceDraft {
   }
   private syncPreview = (): void => {
     if (this.disposed) return
+    if (this.recipeBusy || this.restoreUnverified) return
     if (this.refining) return
     if (this.snapshot.planeTangency) {
       const published = this.planePublished

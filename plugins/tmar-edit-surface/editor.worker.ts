@@ -28,7 +28,7 @@ export type Request = { id: number } & (
   | { action: 'cylinderNotePick'; session:number; previewRevision:number; point:Point }
   | { action: 'cylinderNoteResolve'; session:number; previewRevision:number; anchor:DraftAnchor }
   | { action: 'cylinderFaceWitness'; session:number; previewRevision:number }
-  | { action: 'createRecipe'; net: Net; continuity: 'G0' | 'G1'; lockedPoles: number[]; bodyId: string; freeBoundary?: boolean; selection?: {face:number;refinements:KnotInsertion[]} }
+  | { action: 'createRecipe'; net: Net; continuity: 'G0' | 'G1'; lockedPoles: number[]; bodyId: string; freeBoundary?: boolean; constraintId?: number; selection?: {face:number;refinements:KnotInsertion[]} }
   | { action: 'restoreRecipe' | 'replayRecipe'; step: string; recipe: unknown; bodyId: string }
 )
 let editor: SurfaceEditorKernel | undefined
@@ -110,10 +110,12 @@ self.onmessage = (event: MessageEvent<Request>) => {
           break
         }
         case 'createRecipe': {
-          if(req.selection && selectionKey!==JSON.stringify(req.selection)) {
+          if (req.constraintId !== undefined && (cylinder || !req.selection || selectionKey === null || selectionKey !== JSON.stringify(req.selection)))
+            throw new Error('Selezione della ricetta G1 scaduta.')
+          if(req.constraintId === undefined && req.selection && selectionKey!==JSON.stringify(req.selection)) {
             selectionKey=null; editor.selectRefined(req.selection.face,req.selection.refinements); selectionKey=JSON.stringify(req.selection)
           }
-          result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.freeBoundary); break
+          result = await editor.createRecipe(req.net, req.continuity, req.lockedPoles, req.bodyId, req.freeBoundary, req.constraintId); break
         }
         case 'restoreRecipe': {
           // The kernel validates in isolation. A refusal must retain the active
@@ -121,7 +123,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
           const recipe = readRecipe(req.recipe)
           const restored = await editor.restoreRecipe(req.step, recipe, req.bodyId)
           resetCylinder()
-          selectionKey=JSON.stringify({face:recipe.faceIndex,refinements:recipe.version===4?recipe.refinements:[]})
+          selectionKey=JSON.stringify({face:recipe.faceIndex,refinements:recipe.version===4||recipe.version===5?recipe.refinements:[]})
           result = restored
           break
         }
