@@ -19,17 +19,19 @@ Preparing a legacy recipe may invalidate its CAD preview temporarily; the host
 must wait for a new validated preview and check the current source and epochs at
 its commit boundary. The method explicitly refuses drafts with notes until an
 atomic host contract can preserve and revalidate them.
-`isHistoryRecipeStampCurrent()` checks session and source/epoch freshness, active editor
-state and a revalidated preview; it does not authenticate recipe contents or
-replace replay/validation within the host's atomic commit.
+`isHistoryRecipeStampCurrent()` checks the original prepared object, unchanged
+recipe contents, session and source/epoch freshness, active editor state and a
+revalidated preview. This local guard does not replace replay/validation within
+the host's atomic commit; the host must snapshot and recheck at its boundary.
 
 For a draft with nonempty, currently resolved notes, the separate
 `prepareAnnotatedHistory()` returns the CAD recipe and `{id,text,faceIndex,u,v}`
 records as one bundle. `isAnnotatedHistoryStampCurrent()` requires the same
 session, source, face, net and note contents and a current valid preview; it
 permits an unchanged note to be re-resolved after the serializer refreshes the
-preview. Its local guard is not recipe authentication or a transaction. The
-host must independently replay, validate, bind and atomically commit the bundle.
+preview. Its local guard also detects changes to the prepared recipe, but it is
+not a transaction. The host must independently replay, validate, bind and
+atomically commit the bundle.
 
 `WorkspaceSurfaceSession.restoreHistoryRecipe(value)` restores a validated
 recipe into a fresh, empty workspace session only. It rejects another body or

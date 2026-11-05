@@ -186,7 +186,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private directGestureOrigin = false
   private face = -1
   private restoredHistory: { selectionEpoch:number; draftEpoch:number; net:Net } | null = null
-  private readonly annotatedHistoryGuards = new WeakMap<PreparedAnnotatedHistory,{net:Net;notes:string}>()
+  private readonly historyGuards = new WeakMap<PreparedHistoryRecipe,string>()
+  private readonly annotatedHistoryGuards = new WeakMap<PreparedAnnotatedHistory,{net:Net;notes:string;recipe:string}>()
   private faces: readonly FaceInfo[] = Object.freeze([])
   private sourcePreview: Preview | null = null
   private selectionEpoch = 0
@@ -902,17 +903,20 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (this.selectionEpoch !== selectionEpoch || this.draftEpoch !== draftEpoch || this.draft.getSnapshot().net !== net ||
           this.notes.length || this.strip || this.gesture !== 'idle')
         throw new Error('La bozza è cambiata durante la preparazione della ricetta.')
-      return { recipe, sessionId: this.context.sessionId, sourceKey: this.sourceId, selectionEpoch, draftEpoch }
+      const prepared={ recipe, sessionId: this.context.sessionId, sourceKey: this.sourceId, selectionEpoch, draftEpoch }
+      this.historyGuards.set(prepared,JSON.stringify(recipe))
+      return prepared
     } finally {
       if (!this.disposed) { this.busy = false; this.refresh(); this.resolveNotes() }
     }
   }
 
-  /** Freshness only, not recipe-integrity validation; the host must replay it. */
+  /** Session-bound freshness and unchanged recipe; host must still replay it. */
   isHistoryRecipeStampCurrent(prepared: PreparedHistoryRecipe): boolean {
     try {
       this.assertLive()
-      return !!prepared && prepared.sessionId === this.context.sessionId && prepared.sourceKey === this.sourceId &&
+      return !!prepared && this.historyGuards.has(prepared) && this.historyGuards.get(prepared)===JSON.stringify(prepared.recipe) &&
+        prepared.sessionId === this.context.sessionId && prepared.sourceKey === this.sourceId &&
         prepared.selectionEpoch === this.selectionEpoch && prepared.draftEpoch === this.draftEpoch &&
         !this.busy && !this.frozen && this.gesture === 'idle' && !this.placingNote && !this.notes.length &&
         !this.strip && !this.stripPending && this.snapshot.validation.kind === 'valid'
@@ -939,7 +943,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
           this.notes!==notes || this.draft.getSnapshot().net!==net || this.strip || this.gesture!=='idle')
         throw new Error('Superficie o note cambiate durante la preparazione.')
       const prepared=Object.freeze({recipe,notes:savedNotes,notesRevision,sessionId:this.context.sessionId,sourceKey:this.sourceId,selectionEpoch,draftEpoch})
-      this.annotatedHistoryGuards.set(prepared,{net,notes:JSON.stringify(savedNotes)})
+      this.annotatedHistoryGuards.set(prepared,{net,notes:JSON.stringify(savedNotes),recipe:JSON.stringify(recipe)})
       return prepared
     } finally { if(!this.disposed){this.busy=false;this.refresh();this.resolveNotes()} }
   }
@@ -952,7 +956,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const guard=this.annotatedHistoryGuards.get(prepared)
       const content=this.notes.map(note=>({id:note.id,text:note.text,faceIndex:note.anchor.face,u:note.anchor.u,v:note.anchor.v}))
       return !!prepared && prepared.sessionId===this.context.sessionId && prepared.sourceKey===this.sourceId &&
-        !!guard && prepared.selectionEpoch===this.selectionEpoch && d.net===guard.net &&
+        !!guard && JSON.stringify(prepared.recipe)===guard.recipe && prepared.selectionEpoch===this.selectionEpoch && d.net===guard.net &&
         JSON.stringify(content)===guard.notes && !!this.notes.length &&
         revision!==undefined && this.notes.every(note=>note.revision===revision) && !this.busy && !this.frozen &&
         this.gesture==='idle' && !this.placingNote && !this.strip && !this.stripPending && this.snapshot.validation.kind==='valid'

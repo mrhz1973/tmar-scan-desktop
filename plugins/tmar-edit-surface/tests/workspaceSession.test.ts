@@ -367,6 +367,12 @@ describe('WorkspaceSurfaceSession',()=>{
       await vi.advanceTimersByTimeAsync(90);await flush()
       expect(session.getSnapshot().validation.kind).toBe('valid')
       expect(session.isHistoryRecipeStampCurrent(recipe)).toBe(true)
+      expect(session.isHistoryRecipeStampCurrent({...recipe})).toBe(false)
+      const originalFace=recipe.recipe.faceIndex
+      recipe.recipe.faceIndex=(originalFace+1)%faces.length
+      expect(session.isHistoryRecipeStampCurrent(recipe)).toBe(false)
+      recipe.recipe.faceIndex=originalFace
+      expect(session.isHistoryRecipeStampCurrent(recipe)).toBe(true)
       await expect(session.restoreHistoryRecipe(recipe.recipe)).rejects.toThrow('nuova sessione vuota')
       const restoredEditor=new SurfaceEditorKernel(k), restoredWorker=new KernelWorker(restoredEditor)
       const restoredRuntime=new SurfaceRuntime(()=>restoredWorker as unknown as Worker)
@@ -423,6 +429,11 @@ describe('WorkspaceSurfaceSession',()=>{
       expect(annotated.notes).toHaveLength(1)
       expect(annotated.notes[0]).toMatchObject({id:note.id,text:'Controlla la faccia inversa',faceIndex:index})
       await vi.advanceTimersByTimeAsync(90);await flush()
+      expect(session.isAnnotatedHistoryStampCurrent(annotated)).toBe(true)
+      expect(session.isAnnotatedHistoryStampCurrent({...annotated})).toBe(false)
+      annotated.recipe.faceIndex=(annotated.recipe.faceIndex+1)%faces.length
+      expect(session.isAnnotatedHistoryStampCurrent(annotated)).toBe(false)
+      annotated.recipe.faceIndex=index
       expect(session.isAnnotatedHistoryStampCurrent(annotated)).toBe(true)
       const annotatedEditor=new SurfaceEditorKernel(k), annotatedWorker=new KernelWorker(annotatedEditor)
       const annotatedRuntime=new SurfaceRuntime(()=>annotatedWorker as unknown as Worker)
