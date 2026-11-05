@@ -82,6 +82,7 @@ interface StripResult {
 interface StripMode {
   readonly baseNet: Net
   readonly basePreviewRevision: number
+  readonly baseFaceCount: number
   readonly initialPaths: readonly (readonly Point[])[]
   frames: (StripResult | null)[]
   at: number
@@ -90,7 +91,7 @@ interface StripMode {
   delta: Point
   error: string | null
 }
-interface DirectIdentity { readonly revision:number; readonly selectionEpoch:number; readonly face:number; readonly net:Net }
+interface DirectIdentity { readonly revision:number; readonly selectionEpoch:number; readonly face:number; readonly faceCount:number; readonly net:Net }
 interface DirectCache extends DirectIdentity { readonly paths:readonly (readonly Point[])[] }
 interface DirectPending extends DirectIdentity { readonly controller:AbortController; readonly generation:number; readonly key:string }
 type Frozen = { readonly ticketKey: string; readonly operationId: string; readonly stamp: PreviewStamp; readonly source: SourceBinding; readonly stripResult: StripResult | null; readonly notes?: readonly Note[]; readonly notesRevision?: number; preparing: boolean }
@@ -410,19 +411,20 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   undo(): void { this.change(() => { if (this.strip) { if (this.strip.at > 0) { this.strip.at--; this.strip.selectedEdge = -1; this.strip.delta = [0,0,0]; this.strip.error = null; this.message = null; this.historyRevision++ } } else this.draft.undo() }, false, false, true) }
   redo(): void { this.change(() => { if (this.strip) { if (this.strip.at + 1 < this.strip.frames.length) { this.strip.at++; this.strip.selectedEdge = -1; this.strip.delta = [0,0,0]; this.strip.error = null; this.message = null; this.historyRevision++ } } else this.draft.redo() }, false, false, true) }
 
-  /** Begin on one validated open face. Strip history is independent of pole history. */
+  /** Begin on a validated open face/shell. Strip history is independent of pole history. */
   async beginStrip(): Promise<void> {
     this.assertMutable()
     if (this.strip || this.stripPending || this.gesture !== 'idle' || this.notes.length || this.placingNote)
       throw new Error('Termina le altre operazioni e rimuovi le note prima di duplicare il bordo.')
     const d = this.draft.getSnapshot(), revision = d.preview?.previewRevision
-    if (this.faces.length !== 1 || !this.faces[this.face]?.openSheet || d.preview?.faceMeshes.length !== 1 ||
+    const faceCount = this.initialSheetFaceCount(d)
+    if (faceCount === null ||
         !d.net || d.validNet !== d.net || d.calculating || d.previewStale || revision === undefined || this.snapshot.validation.kind !== 'valid')
-      throw new Error('Serve una superficie aperta a una sola faccia con anteprima valida.')
+      throw new Error('Serve una superficie aperta con anteprima valida di tutte le facce.')
     const cached = this.directCache
     if (cached && this.matchesDirect(cached, this.directIdentity())) {
       this.change(() => {
-        this.strip = { baseNet:cached.net, basePreviewRevision:cached.revision, initialPaths:cached.paths,
+        this.strip = { baseNet:cached.net, basePreviewRevision:cached.revision, baseFaceCount:cached.faceCount, initialPaths:cached.paths,
           frames:[null], at:0, selectedEdge:-1, axis:this.directStripAxis, delta:[0,0,0], error:null }
         this.directGestureOrigin = false; this.message = null
       })
@@ -435,10 +437,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.assertLive()
       const current = this.draft.getSnapshot()
       if (generation !== this.stripGeneration || !this.stripPending || current.net !== net || current.validNet !== net ||
-          current.preview?.previewRevision !== revision || this.notes.length || this.placingNote)
+          current.preview?.previewRevision !== revision || this.initialSheetFaceCount(current) !== faceCount || this.notes.length || this.placingNote)
         throw new Error('Anteprima del bordo superata.')
       this.change(() => {
-        this.strip = { baseNet:net, basePreviewRevision:revision, initialPaths:paths, frames:[null], at:0,
+        this.strip = { baseNet:net, basePreviewRevision:revision, baseFaceCount:faceCount, initialPaths:paths, frames:[null], at:0,
           selectedEdge:-1, axis:this.directStripAxis, delta:[0,0,0], error:null }
         this.directGestureOrigin = false
         this.stripPending = false; this.stripAbort = null; this.busy = false
@@ -513,7 +515,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }
     if (revision !== cached.revision || !Number.isInteger(edge) || edge < 0 || edge >= cached.paths.length) return false
     this.change(() => {
-      this.strip = { baseNet:cached.net, basePreviewRevision:cached.revision, initialPaths:cached.paths,
+      this.strip = { baseNet:cached.net, basePreviewRevision:cached.revision, baseFaceCount:cached.faceCount, initialPaths:cached.paths,
         frames:[null], at:0, selectedEdge:edge, axis:this.directStripAxis, delta:[0,0,0], error:null }
       this.directGestureOrigin = true; this.gesture = 'strip'; this.message = null
     })
@@ -551,7 +553,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (!path || !Number.isInteger(edge)) throw new Error('Scegli prima un bordo libero.')
     if (!finitePoint(delta) || Math.hypot(...delta) <= 1e-7) throw new Error('Indica uno spostamento del bordo diverso da zero.')
     if (base.net !== strip.baseNet || base.validNet !== strip.baseNet || base.calculating || base.previewStale ||
-        base.preview?.previewRevision !== strip.basePreviewRevision || this.notes.length || this.placingNote)
+        base.preview?.previewRevision !== strip.basePreviewRevision || this.initialSheetFaceCount(base) !== strip.baseFaceCount || this.notes.length || this.placingNote)
       throw new Error('La superficie di partenza non è più valida.')
     const previous = frame?.moves ?? []
     if (previous.length >= 64) throw new Error('Raggiunto il limite di 64 estensioni per bozza.')
@@ -567,10 +569,11 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const current = this.draft.getSnapshot()
       if (generation !== this.stripGeneration || this.strip !== strip || !this.stripPending || strip.at !== at ||
           strip.frames[at] !== frame || strip.selectedEdge !== edge || current.net !== strip.baseNet ||
-          current.validNet !== strip.baseNet || current.preview?.previewRevision !== strip.basePreviewRevision || this.notes.length || this.placingNote)
+          current.validNet !== strip.baseNet || current.preview?.previewRevision !== strip.basePreviewRevision ||
+          this.initialSheetFaceCount(current) !== strip.baseFaceCount || this.notes.length || this.placingNote)
         throw new Error('Risultato del bordo superato.')
       if (!result || typeof result.step !== 'string' || !result.step.trim() || !result.preview?.valid ||
-          !Array.isArray(result.preview.faceMeshes) || result.preview.faceMeshes.length !== previous.length + 2 ||
+          !Array.isArray(result.preview.faceMeshes) || result.preview.faceMeshes.length !== strip.baseFaceCount + previous.length + 1 ||
           !Number.isFinite(result.addedArea) || result.addedArea <= 1e-8 || !Number.isFinite(result.totalArea) || result.totalArea <= 0 ||
           !Array.isArray(result.moves) || result.moves.length !== previous.length + 1)
         throw new Error('Il motore CAD non ha restituito una superficie estesa valida.')
@@ -1048,20 +1051,27 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         stampKey(this.snapshot.validation.stamp) !== stampKey(frozen.stamp))
       throw new Error('La bozza annotata congelata non corrisponde al ticket.')
   }
+  /** The CAD source must be an open face/shell, and the whole base must be present. */
+  private initialSheetFaceCount(d: SurfaceDraftSnapshot): number | null {
+    if (d.planeTangency || d.cylinderSession !== null || !this.faces.length || !this.faces[this.face]?.openSheet ||
+        this.faces.some(face => !face.openSheet) || !Array.isArray(d.preview?.faceMeshes) ||
+        d.preview.faceMeshes.length !== this.faces.length) return null
+    return this.faces.length
+  }
   private directIdentity(): DirectIdentity | null {
     const d = this.draft.getSnapshot(), queue = this.runtime.previews.getSnapshot()
-    const revision = d.preview?.previewRevision
+    const revision = d.preview?.previewRevision, faceCount = this.initialSheetFaceCount(d)
     if (this.disposed || !this.runtime.active || this.context.signal.aborted || this.mutating || this.frozen || this.busy ||
         this.strip || this.stripPending || this.gesture !== 'idle' || this.notes.length || this.placingNote ||
-        this.faces.length !== 1 || !this.faces[this.face]?.openSheet || !d.net || d.validNet !== d.net ||
-        d.calculating || d.previewStale || !d.preview?.valid || d.preview.faceMeshes.length !== 1 ||
+        faceCount === null || !d.net || d.validNet !== d.net ||
+        d.calculating || d.previewStale || !d.preview?.valid ||
         typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0 ||
         !queue.current || queue.validRevision !== queue.current.revision) return null
     try { this.assertLive() } catch { return null }
-    return { revision, selectionEpoch:this.selectionEpoch, face:this.face, net:d.net }
+    return { revision, selectionEpoch:this.selectionEpoch, face:this.face, faceCount, net:d.net }
   }
   private matchesDirect(a: DirectIdentity | null, b: DirectIdentity | null): boolean {
-    return !!a && !!b && a.revision === b.revision && a.selectionEpoch === b.selectionEpoch && a.face === b.face && a.net === b.net
+    return !!a && !!b && a.revision === b.revision && a.selectionEpoch === b.selectionEpoch && a.face === b.face && a.faceCount === b.faceCount && a.net === b.net
   }
   private clearDirectCache(): void {
     this.directGeneration++
@@ -1236,7 +1246,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       addedArea:stripResult?.addedArea ?? null, totalArea:stripResult?.totalArea ?? null, hasResult:!!stripResult,
     }) : null
     const canBeginStrip = !d.planeTangency && !strip && !this.stripPending && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
-      this.gesture === 'idle' && this.faces.length === 1 && !!face?.openSheet && d.preview?.faceMeshes.length === 1 &&
+      this.gesture === 'idle' && this.initialSheetFaceCount(d) !== null &&
       validation.kind === 'valid'
     const canExportStep = !this.disposed && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
       this.gesture === 'idle' && !this.stripPending && validation.kind === 'valid' &&

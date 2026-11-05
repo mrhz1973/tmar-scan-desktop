@@ -122,7 +122,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
             onClick={() => attempt(() => controller.redo())}>Ripeti bordo</button></div>
         <button type="button" data-test="surface-strip-cancel" disabled={disabled || strip.pending} onClick={closeStrip}>Torna ai poli</button>
       </fieldset> : <button type="button" data-test="surface-strip-begin" disabled={disabled || !state.canBeginStrip}
-        title={!state.canBeginStrip ? 'Serve una superficie aperta a una sola faccia con anteprima valida e senza note.' : 'Duplica un bordo della superficie aperta.'}
+        title={!state.canBeginStrip ? 'Serve una superficie aperta con anteprima valida e senza note o vincoli G1 attivi.' : 'Duplica un bordo libero della superficie aperta.'}
         onClick={() => attempt(() => controller.beginStrip())}>Duplica bordo libero</button>}
       {!strip && <>
       {state.canBeginStrip && <label>Direzione CAD per il bordo D
