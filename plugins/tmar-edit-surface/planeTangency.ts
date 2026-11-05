@@ -26,6 +26,9 @@ export interface PlaneTangencyResult {
   /** Never infer global surface regularity or a certified G1 join from samples. */
   globalG1Certified: false
 }
+export interface PlaneTangencyValidation extends Omit<PlaneTangencyResult,'net'|'changedIndices'> {
+  protectedPoleCount: number
+}
 const edges: NaturalEdge[] = ['U0', 'U1', 'V0', 'V1']
 const fail = (reason: string): never => { throw new Error(`Tangenza piano rifiutata: ${reason}`) }
 const dot = (a: readonly number[], b: readonly number[]) => a.reduce((s, x, i) => s + x*b[i], 0)
@@ -33,6 +36,7 @@ const sub = (a: Point, b: Point): Point => a.map((x, i) => x-b[i]) as Point
 const cross = (a: Point, b: Point): Point => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]
 const length = (a: Point) => Math.hypot(...a)
 const finitePoint = (p: Point) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite)
+const absoluteBound = (value: I) => Math.max(Math.abs(value[0]),Math.abs(value[1]))
 
 function row(n: Net, edge: NaturalEdge, inner = false): number[] {
   if (edge[0] === 'U') {
@@ -71,6 +75,10 @@ function times(a: I, b: I): I {
   if (!p.every(Number.isFinite)) fail('overflow nella prova continua')
   return enclosed(Math.min(...p),Math.max(...p))
 }
+function positiveDivide(a: I, b: I): I {
+  if (!(b[0]>0)) fail('denominatore dei nodi non comprovabilmente positivo')
+  return times(a,enclosed(1/b[1],1/b[0]))
+}
 const half = (a: H, b: H): H => a.map((x,i) => times(plus(x,b[i]),scalar(.5))) as H
 function split(c: H[]): [H[], H[]] {
   const left = [c[0]], right = [c.at(-1)!]
@@ -88,6 +96,31 @@ function numerator(a: H, d: H): [I,I,I] {
 }
 function intervalCross(a: [I,I,I], b: [I,I,I]): [I,I,I] {
   return [0,1,2].map(i=>minus(times(a[(i+1)%3],b[(i+2)%3]),times(a[(i+2)%3],b[(i+1)%3]))) as [I,I,I]
+}
+
+/** Exact B-spline -> Bernstein extraction enclosed at every arithmetic step.
+ * The input knots are exact binary floating-point values. Inserting each inner
+ * knot to multiplicity p yields overlapping p+1 control windows, one per closed
+ * span. Never reuse the ordinary floating-point refinement as a proof oracle.
+ */
+function bernsteinSpans(rows: H[][], degree: number, knots: number[], mult: number[]): H[][][] {
+  const full=knots.flatMap((x,i)=>Array<number>(mult[i]).fill(x))
+  let controls=rows
+  for (let node=1;node<knots.length-1;node++) {
+    const t=knots[node]
+    for (let s=mult[node];s<degree;s++) {
+      const k=full.findIndex((x,i)=>x<=t&&t<full[i+1])
+      if (k<degree) fail('estrazione degli span non valida')
+      controls=controls.map(c=>Array.from({length:c.length+1},(_,i)=> {
+        if (i<=k-degree) return c[i]
+        if (i>k-s) return c[i-1]
+        const alpha=positiveDivide(minus(scalar(t),scalar(full[i])),minus(scalar(full[i+degree]),scalar(full[i])))
+        return c[i].map((x,d)=>plus(times(alpha,x),times(minus(scalar(1),alpha),c[i-1][d]))) as H
+      }))
+      full.splice(k+1,0,t)
+    }
+  }
+  return knots.slice(1).map((_,span)=>controls.map(c=>c.slice(span*degree,span*degree+degree+1)))
 }
 
 /** Prove nonzero cross derivatives on the entire selected closed edge. */
@@ -113,8 +146,12 @@ function proveEdge(n: Net, edge: NaturalEdge, normal: Point, origin: Point): num
     const [al,ar] = split(a), [bl,br] = split(b), [dl,dr] = split(d)
     walk(al,bl,dl,depth+1); walk(ar,br,dr,depth+1)
   }
-  const a = homogeneous(boundary)
-  walk(a,homogeneous(inside),derivative(a),0)
+  const alongU=edge[0]==='V', degree=alongU?n.du:n.dv
+  const spans=bernsteinSpans([homogeneous(boundary),homogeneous(inside)],degree,alongU?n.ku:n.kv,alongU?n.mu:n.mv)
+  // Each walk includes both endpoints. With the validated C1 knot
+  // multiplicities the one-sided derivatives agree at every shared knot;
+  // a single orientation across all spans also rules out a hidden fold.
+  for (const [a,b] of spans) walk(a,b,derivative(a),0)
   return leaves
 }
 
@@ -134,19 +171,7 @@ function sampleDerivatives(n: Net, u: number, v: number): [Point,Point] {
   return result
 }
 
-/**
- * Pure proposal only: projects the first interior pole row onto an explicit
- * plane. The full perimeter, weights, knots, degrees and locks remain unchanged.
- * Positive weights + both pole rows on the plane imply tangent-plane containment
- * in exact arithmetic; the result records the actual coefficient residual.
- *
- * Continuous regularity is independently proven by interval subdivision only
- * for a single Bernstein span along the edge. Other spans fail closed. Other
- * natural edges may protect their existing tangent rows; this is preservation,
- * not a claim that those edges were tangent before. No topology/trim information
- * exists here: the caller must establish that this is a natural, untrimmed edge.
- */
-export function proposePlaneTangency(request: PlaneTangencyRequest): PlaneTangencyResult {
+function validatedRequest(request: PlaneTangencyRequest) {
   const {net,edge,plane,lockIndices,distanceTolerance} = request
   const n=refineClampedNet(net,[]) // Existing strict clamped/positive-weight validator, independent clone.
   if (!edges.includes(edge) || !finitePoint(plane.point) || !finitePoint(plane.normal) ||
@@ -155,17 +180,32 @@ export function proposePlaneTangency(request: PlaneTangencyRequest): PlaneTangen
   if (!Array.isArray(lockIndices) || lockIndices.some(i=>!Number.isInteger(i)||i<0||i>=n.poles.length)) fail('indice bloccato non valido')
   const protectedEdges=request.preserveTangentEdges??[]
   if (!Array.isArray(protectedEdges) || protectedEdges.some(e=>!edges.includes(e)||e===edge)) fail('vincolo di altro bordo non valido')
-  const along=edge[0]==='U'?'V':'U'
-  if ((along==='U'?n.ku:n.kv).length!==2) fail('bordo multi-span: prova continua non implementata')
   for (const [degree,mult] of [[n.du,n.mu],[n.dv,n.mv]] as const)
     if (mult.slice(1,-1).some(m=>m>=degree)) fail('nodi interni privi di continuità C1')
   const fixed=new Set([...lockIndices,...edges.flatMap(e=>row(n,e)),...protectedEdges.flatMap(e=>row(n,e,true))])
-  const distance=(p: Point)=>dot(sub(p,plane.point),plane.normal)
   const residualBound=(p: Point)=> {
     const d=p.reduce((sum,x,a)=>plus(sum,times(minus(scalar(x),scalar(plane.point[a])),scalar(plane.normal[a]))),scalar(0))
-    return Math.max(Math.abs(d[0]),Math.abs(d[1]))
+    return absoluteBound(d)
   }
-  const boundary=row(n,edge), inner=row(n,edge,true), n2=dot(plane.normal,plane.normal)
+  return {n,fixed,residualBound,boundary:row(n,edge),inner:row(n,edge,true)}
+}
+
+/**
+ * Pure proposal only: projects the first interior pole row onto an explicit
+ * plane. The full perimeter, weights, knots, degrees and locks remain unchanged.
+ * Positive weights + both pole rows on the plane imply tangent-plane containment
+ * in exact arithmetic; the result records the actual coefficient residual.
+ *
+ * Continuous regularity is independently proven by interval Bernstein extraction
+ * and subdivision on every closed knot span, including shared endpoints. Other
+ * natural edges may protect their existing tangent rows; this is preservation,
+ * not a claim that those edges were tangent before. No topology/trim information
+ * exists here: the caller must establish that this is a natural, untrimmed edge.
+ */
+export function proposePlaneTangency(request: PlaneTangencyRequest): PlaneTangencyResult {
+  const {net,plane,distanceTolerance}=request
+  const {n,fixed,residualBound,boundary,inner}=validatedRequest(request)
+  const distance=(p: Point)=>dot(sub(p,plane.point),plane.normal), n2=dot(plane.normal,plane.normal)
   if (boundary.some(id=>residualBound(n.poles[id])>distanceTolerance)) fail('bordo fuori dal piano; il perimetro è immutabile')
   const changedIndices: number[]=[]
   for (const id of inner) {
@@ -181,7 +221,12 @@ export function proposePlaneTangency(request: PlaneTangencyRequest): PlaneTangen
       if (n.poles[id].some((x,a)=>x!==net.poles[id][a])) changedIndices.push(id)
     }
   }
-  const maxPlaneCoefficientResidual=Math.max(...[...boundary,...inner].map(id=>residualBound(n.poles[id])))
+  return {net:n,changedIndices,...assessFinal(request,n,residualBound)}
+}
+
+function assessFinal(request: PlaneTangencyRequest, n: Net, residualBound: (p: Point)=>number): Omit<PlaneTangencyResult,'net'|'changedIndices'> {
+  const {edge,plane,distanceTolerance}=request
+  const maxPlaneCoefficientResidual=Math.max(...[...row(n,edge),...row(n,edge,true)].map(id=>residualBound(n.poles[id])))
   if (!(maxPlaneCoefficientResidual<=distanceTolerance)) fail('residuo del piano oltre tolleranza')
   const proofLeaves=proveEdge(n,edge,plane.normal,plane.point)
   let count=0, minSinAngle=Infinity, sampledMaxBoundaryNormalSin=0
@@ -201,6 +246,38 @@ export function proposePlaneTangency(request: PlaneTangencyRequest): PlaneTangen
       sampledMaxBoundaryNormalSin=Math.max(sampledMaxBoundaryNormalSin,error)
     }
   }
-  return {net:n,changedIndices,edgeRegularity:'outward-rounded-interval-proof',proofLeaves,
+  return {edgeRegularity:'outward-rounded-interval-proof',proofLeaves,
     maxPlaneCoefficientResidual,sampledRegularity:{count,minSinAngle},sampledMaxBoundaryNormalSin,globalG1Certified:false}
+}
+
+/**
+ * Validate the actual final in-memory kernel net against the pre-edit request.
+ * This function never projects, repairs, mutates, or compares with a regenerated
+ * proposal. Only the selected first interior row may move. All other poles,
+ * the full perimeter, explicit locks and other protected tangent rows must stay
+ * bit-for-bit identical, including signed zero. The plane residual alone uses
+ * distanceTolerance. Knot/weight/degree/index structure must retain its numeric
+ * values: reparametrization or weight normalization is unsupported.
+ *
+ * Kernel callers must separately verify topology, untrimmed natural-edge
+ * eligibility, face identity, reimport geometry and transaction atomicity.
+ * Kernel callers must pass the in-memory final net before BREP serialization;
+ * serialization roundoff must not weaken these strict invariants. This is coefficient
+ * and selected-edge validation, not a global G1 or topology certificate.
+ */
+export function validatePlaneTangencyResult(request: PlaneTangencyRequest, finalNet: Net): PlaneTangencyValidation {
+  const {n:base,fixed,inner,residualBound}=validatedRequest(request)
+  const final=refineClampedNet(finalNet,[])
+  const sameValues=(a:readonly number[],b:readonly number[])=>a.length===b.length&&a.every((x,i)=>Object.is(x,b[i]))
+  if (base.nu!==final.nu||base.nv!==final.nv||base.du!==final.du||base.dv!==final.dv||
+      !sameValues(base.ku,final.ku)||!sameValues(base.kv,final.kv)||!sameValues(base.mu,final.mu)||!sameValues(base.mv,final.mv)||
+      !sameValues(base.weights,final.weights)||!sameValues(base.rational,final.rational)||
+      !sameValues(base.periodic??[0,0],final.periodic??[0,0])) fail('struttura, nodi o pesi modificati dal kernel')
+  const editable=new Set(inner)
+  let protectedPoleCount=0
+  for (let id=0;id<base.poles.length;id++) if (!editable.has(id)||fixed.has(id)) {
+    if (!sameValues(base.poles[id],final.poles[id])) fail(`punto protetto modificato dal kernel: ${id}`)
+    protectedPoleCount++
+  }
+  return {...assessFinal(request,final,residualBound),protectedPoleCount}
 }

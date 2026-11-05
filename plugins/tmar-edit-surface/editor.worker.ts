@@ -10,6 +10,7 @@ import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectRefined'; face: number; refinements: KnotInsertion[] }
+  | { action: 'g1SupportCandidates' }
   | { action: 'sheetEdges'; previewRevision: number }
   | { action: 'duplicateSheetEdge'; previewRevision: number; edge: number; delta: Point; previous?: StripMove[]; path?: Point[] }
   | { action: 'finalFaceWitness'; previewRevision: number }
@@ -48,6 +49,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
           result={net,trimLocks:info.trimLocks,hiddenPoles:info.hiddenPoles}
           break
         }
+        case 'g1SupportCandidates': result = await editor.g1SupportCandidates(); break
         case 'sheetEdges': result = editor.sheetEdges(req.previewRevision); break
         case 'duplicateSheetEdge': result = editor.duplicateSheetEdge(req.previewRevision,req.edge,req.delta,req.previous,req.path); break
         case 'finalFaceWitness': result = editor.finalFaceWitness(req.previewRevision); break

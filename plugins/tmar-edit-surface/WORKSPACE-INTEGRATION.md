@@ -503,8 +503,17 @@ Experimental G1 building blocks: a topology helper enumerates certain natural
 straight edges with an adjacent planar face, using OCCT shape identity. A
 separate solver projects the interior pole row toward that plane while
 protecting the boundary and refusing conflicting locks or degenerate edges.
-The solver currently accepts a single along-edge span; its remaining surface
-checks are sampled and it explicitly does not certify global G1. The helpers
+The solver checks multiple along-edge spans with interval arithmetic; remaining
+surface checks are sampled and it explicitly does not certify global G1. The helpers
 are not connected to the worker, UI, history or recipe and do not provide a
 user-facing tangency operation. OCCT/STEP tests cover synthetic examples only;
-curved neighbors, general trims and multi-span edges remain open.
+curved neighbors and general trims remain open.
+
+Follow-up: the worker can enumerate planar-neighbor candidates from the
+kernel's frozen source and revalidate their source/selection identity. Recipe
+restore starts a fresh candidate generation. The planar solver now checks
+multiple C1 edge spans and has a separate non-mutating final-net validator;
+protected poles and metadata remain exact in memory. These are still
+preparatory APIs: proposal, full CAD evaluation, history, recipe and UI for a
+new G1 constraint are not connected. Independent continuity against a target,
+interactive usage and packaged-desktop behavior remain unqualified.

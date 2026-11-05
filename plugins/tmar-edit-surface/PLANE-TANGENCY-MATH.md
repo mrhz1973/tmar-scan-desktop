@@ -39,10 +39,10 @@ unrounded knot insertion and no sampling inference. Overflow, ambiguous signs,
 
 Explicit limits:
 
-- The direction along the selected edge must have exactly one knot span.
-  Multi-span edges are refused, including geometrically eligible ones. Internal
-  knots in the transverse direction are allowed only with at least C1
-  continuity. Nets are clamped, nonperiodic, positive-weight and <=1600 poles.
+- Each along-edge knot span is extracted into an outward-rounded interval
+  Bernstein representation and checked, including its endpoints. Internal
+  knots in either direction must have at least C1 continuity. Nets are clamped,
+  nonperiodic, positive-weight and <=1600 poles.
 - The plane normal must already be unit length within 1e-12. The explicit
   signed-plane coefficient residual budget must be positive and <=1e-6 model
   units. Its reported bound is outward-rounded. Projection is floating-point;
@@ -66,7 +66,7 @@ Explicit limits:
 `tests/planeTangency.test.ts` covers all four edges, positive nonuniform rational
 weights, oblique translated planes, all preserved coefficients, immutable input,
 compatible and conflicting locks/other edge constraints, malformed/periodic
-inputs, multi-span refusals, degeneracy and a between-grid edge singularity.
+inputs, multi-span and repeated C1 knots, degeneracy and a between-grid edge singularity.
 Two real OCCT WASM tests construct rational and nonrational faces, perform
 rejection checks on actual OCCT readback nets, verify valid natural-boundary
 faces, export/reimport STEP, check 33 by 33 surface samples and 33 boundary

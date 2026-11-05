@@ -8,8 +8,10 @@ import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
 import { prepareCylinder } from './cylinderPreparation'
 import { assertSimpleCylinderSource } from './cylinderSource'
+import { listG1SupportCandidates, resolveG1SupportCandidate as resolveSupport, type G1SourceStamp, type G1SupportCandidate } from './g1SupportTopology'
 
 export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[]; experimentalCylinder?: boolean }
+export interface G1SupportCandidates { stamp: G1SourceStamp; candidates: G1SupportCandidate[] }
 export interface DraftAnchor { face: number; selectionRevision: number; u: number; v: number }
 export interface Preview { previewRevision?: number; mesh: Mesh; faceMeshes: Mesh[]; valid: boolean; volume: number; maxBoundaryError: number; minimumNormalDot: number }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
@@ -80,6 +82,11 @@ function outerEdgeBoxes(k: OcctKernel, edge: ShapeHandle): BoundingBox[] {
 }
 export class SurfaceEditorKernel {
   private source: ShapeHandle | null = null
+  private g1SourceRevision = 0
+  private g1SelectionRevision = 0
+  private g1Selected = -1
+  private g1Fingerprint: Promise<string> | null = null
+  private g1SourceReady = false
   private faces: ShapeHandle[] = []
   private brep = ''
   private records: RecordSpan[] = []
@@ -103,6 +110,7 @@ export class SurfaceEditorKernel {
   private count(s: ShapeHandle, type: 'solid' | 'shell' | 'face') { const a = this.kernel.getSubShapes(s, type); const n = a.length; a.forEach(h => this.kernel.release(h)); return n }
   /** Experimental cylinder path. Only the worker retains the returned BREP. */
   prepareCylinderForPreview(face:number) {
+    this.invalidateG1Selection()
     if(!this.source) throw new Error('Apri prima un corpo CAD.')
     return prepareCylinder(this.kernel,this.source,face)
   }
@@ -142,7 +150,9 @@ export class SurfaceEditorKernel {
       return { index, trimLocks, hiddenPoles, openSheet, freeBoundary: openSheet && this.faces.length === 1 && natural, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
         enriched: !!record?.net && enrichBicubic(record.net) !== record.net, experimentalCylinder }
     })
-    return { faces: this.infos, preview: this.render(this.source) }
+    const preview = this.render(this.source)
+    this.g1SourceReady = true
+    return { faces: this.infos, preview }
   }
   private netFor(index: number, refinements: readonly KnotInsertion[] = []) {
     const face = this.faces[index], id = this.recordsByFace[index], r = this.records[id], k = this.kernel
@@ -295,6 +305,7 @@ export class SurfaceEditorKernel {
     return this.prepareSelection(index, refinements, true)
   }
   private prepareSelection(index: number, refinements: readonly KnotInsertion[], preserveAnchors: boolean) {
+    this.invalidateG1Selection()
     const info = this.netFor(index, refinements), net = info.net, record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
     if (record.kind === 1) {
@@ -326,9 +337,33 @@ export class SurfaceEditorKernel {
     this.revision++
     if (!preserveAnchors || this.chosen !== index) this.anchorSelectionRevision++
     this.chosen = index; this.originalNet = structuredClone(net); this.editBrep = text; this.editRecord = editRecord
+    this.g1Selected = index
     this.refinements = structuredClone(refinements) as KnotInsertion[]
     this.infos[index] = { ...this.infos[index], trimLocks: info.trimLocks, hiddenPoles: info.hiddenPoles }
     return net
+  }
+  private invalidateG1Selection() { this.g1Selected = -1; this.g1SelectionRevision++ }
+  /** Read-only original-source topology. Identity and revisions never come from a client.
+   * Fingerprint is captured before tessellation; an async digest cannot cross a
+   * source/selection boundary. No OCCT handle escapes into the worker response. */
+  async g1SupportCandidates(): Promise<G1SupportCandidates> {
+    if (!this.g1SourceReady || this.source === null || this.g1Selected < 0)
+      throw new Error('Seleziona prima una faccia per i supporti G1.')
+    const sourceRevision = this.g1SourceRevision, selectionRevision = this.g1SelectionRevision, faceIndex = this.g1Selected
+    const sourceId = 'brep-sha256:' + await (this.g1Fingerprint ??= sha256(this.brep))
+    if (!this.g1SourceReady || this.source === null || sourceRevision !== this.g1SourceRevision ||
+        selectionRevision !== this.g1SelectionRevision || faceIndex !== this.g1Selected)
+      throw new Error('Elenco dei supporti G1 scaduto: seleziona di nuovo la faccia.')
+    const stamp = { sourceId, sourceRevision, selectionRevision, faceIndex }
+    return { stamp, candidates: listG1SupportCandidates(this.kernel, this.source, stamp) }
+  }
+  /** Read-only revalidation: only current, kernel-stamped choices are accepted. */
+  async resolveG1SupportCandidate(choice: G1SupportCandidate): Promise<G1SupportCandidate> {
+    const { stamp } = await this.g1SupportCandidates()
+    if (this.source === null || stamp.sourceRevision !== this.g1SourceRevision ||
+        stamp.selectionRevision !== this.g1SelectionRevision || stamp.faceIndex !== this.g1Selected)
+      throw new Error('Scelta del supporto scaduta.')
+    return resolveSupport(this.kernel, this.source, stamp, choice)
   }
   private preparation(): SurfaceEditRecipe['preparation'] {
     const info = this.infos[this.chosen]
@@ -388,6 +423,11 @@ export class SurfaceEditorKernel {
       this.chosen = temporary.chosen; this.originalNet = temporary.originalNet; this.refinements = temporary.refinements
       this.editBrep = temporary.editBrep; this.editRecord = temporary.editRecord
       this.solids = temporary.solids; this.infos = temporary.infos
+      // clear() above creates a new host-owned generation. Transfer only the
+      // verified source/selection state, never the temporary editor's revisions.
+      this.g1SourceReady = temporary.g1SourceReady
+      this.g1Selected = temporary.g1Selected
+      this.g1Fingerprint = temporary.g1Fingerprint
       // Transfer handle ownership without disposing the shared OCCT runtime.
       this.validatedSheetBrep=temporary.validatedSheetBrep
       this.validatedFace = temporary.validatedFace; temporary.validatedFace = null
@@ -551,6 +591,6 @@ export class SurfaceEditorKernel {
       return { ...preview, volume, maxBoundaryError, minimumNormalDot, step, previewRevision: ++this.previewRevision }
     } finally { fs.forEach(f => k.release(f)); k.release(edited) }
   }
-  clear() { this.releasePreviewFace(); this.revision++; this.anchorSelectionRevision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null; this.refinements = [] }
+  clear() { this.g1SourceRevision++; this.g1Fingerprint = null; this.g1SourceReady = false; this.invalidateG1Selection(); this.releasePreviewFace(); this.revision++; this.anchorSelectionRevision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null; this.refinements = [] }
   dispose() { this.clear(); if (this.ownsKernel) this.kernel[Symbol.dispose]() }
 }
