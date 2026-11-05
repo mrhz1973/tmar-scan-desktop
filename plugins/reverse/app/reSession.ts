@@ -756,7 +756,10 @@ export function createReverseSession({
     const before = useReverse.getState(), originalClient = requireClient()
     // Host-derived identity, not an arbitrary ID from the plugin payload.
     const hideSourceBodyId = display?.hideSourceBodyId
-    if (hideSourceBodyId !== undefined && (!Number.isSafeInteger(hideSourceBodyId) || !before.bodies.some(b => b.id === hideSourceBodyId)))
+    // Reverse bodies may be fractional islands (featureId + n / ISLAND_IDS).
+    // Keep the same positive finite ID contract as workspaceEditors.open.
+    if (hideSourceBodyId !== undefined && (!Number.isFinite(hideSourceBodyId) || hideSourceBodyId <= 0 ||
+        !before.bodies.some(b => b.id === hideSourceBodyId)))
       throw new Error('Corpo sorgente da nascondere non disponibile.')
     if (running || scheduled || holding || before.building || before.playback ||
         before.sketchDraft || before.featureDraft || before.extrudeDraft || before.revolveDraft)

@@ -43,6 +43,15 @@ describe('opt-in host surface-edit history envelope',()=>{
       expect(qualified.record.recipeSha256).toMatch(/^[0-9a-f]{64}$/)
       expect(qualified.record.source.bodyKey).toBe('qualified-body')
       expect(readStoredSurfaceHistory(qualified.record)).toEqual(qualified.record)
+      // A single imported feature can create multiple bodies: the second
+      // has an exact positive fractional ID, not a feature/index counter.
+      const fractionalRecord = { ...qualified.record,
+        source: { ...qualified.record.source, bodyId: 1 + 1 / 1024 } }
+      expect(readStoredSurfaceHistory(fractionalRecord).source.bodyId).toBe(1.0009765625)
+      for (const invalid of [Number.NaN, Infinity, -Infinity, 0, -1, '1.0009765625']) {
+        expect(() => readStoredSurfaceHistory({ ...qualified.record,
+          source: { ...qualified.record.source, bodyId: invalid } })).toThrow('Sorgente STEP')
+      }
       const feature={id:2,kind:'import',name:'edited',visible:true,
         file:{key:stepFileKey(resultText),name:'edited.step',size:resultText.length},
         surfaceEditHistory:JSON.parse(JSON.stringify(qualified.record))} as ImportFeature
