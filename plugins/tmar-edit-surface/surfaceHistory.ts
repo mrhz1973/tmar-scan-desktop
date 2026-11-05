@@ -1,6 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Net } from './brep'
 import type { KnotInsertion } from './refineClampedNet'
+import type { G1SupportCandidate } from './g1SupportTopology'
+
+/** Exact proposal base and immutable constraint; never a legacy G1 border mode. */
+export interface SurfacePlaneTangency {
+  constraintId: number
+  /** Accepted proposal; double border and initial locks are fixed to this net. */
+  referenceNet: Net
+  baseNet: Net
+  choice: G1SupportCandidate
+  lockedPoles: number[]
+  distanceTolerance: number
+}
 
 /** Worker selection and index-dependent protections belonging to one net layout. */
 export interface SurfacePreparation {
@@ -18,6 +30,7 @@ export interface EditFrame {
   continuity: 'G0' | 'G1'
   freeBoundary: boolean
   preparation?: SurfacePreparation
+  planeTangency?: SurfacePlaneTangency
 }
 
 /** Local geometry/protection history. Strip editing retains its own history. */
@@ -40,15 +53,19 @@ export class SurfaceHistory {
       ? previous.net : structuredClone(frame.net)
     const samePreparation = previous?.preparation === frame.preparation ||
       JSON.stringify(previous?.preparation) === JSON.stringify(frame.preparation)
+    const samePlaneTangency = previous?.planeTangency === frame.planeTangency ||
+      JSON.stringify(previous?.planeTangency) === JSON.stringify(frame.planeTangency)
     const next: EditFrame = {
       net, locks: [...new Set(frame.locks)].sort((a, b) => a - b),
       continuity: frame.continuity, freeBoundary: frame.freeBoundary,
+      ...(frame.planeTangency ? { planeTangency: previous?.planeTangency && samePlaneTangency
+        ? previous.planeTangency : structuredClone(frame.planeTangency) } : {}),
       ...(frame.preparation ? { preparation: previous?.preparation && samePreparation
         ? previous.preparation : structuredClone(frame.preparation) } : {}),
     }
     if (!previous || previous.net !== next.net || JSON.stringify(previous.locks) !== JSON.stringify(next.locks) ||
         previous.continuity !== next.continuity || previous.freeBoundary !== next.freeBoundary ||
-        !samePreparation) {
+        !samePreparation || !samePlaneTangency) {
       this.frames = this.frames.slice(0, this.cursor + 1)
       this.frames.push(next)
       if (this.frames.length > this.limit) this.frames.shift()

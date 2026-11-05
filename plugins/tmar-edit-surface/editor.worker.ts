@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { SurfaceEditorKernel, type DraftAnchor } from './editorKernel'
+import { SurfaceEditorKernel, type DraftAnchor, type G1PlaneProposalRequest, type G1PlaneValidationRequest, type G1PlaneEvaluationRequest } from './editorKernel'
 import wasmUrl from 'occt-wasm/dist/occt-wasm.wasm?url'
 import type { Net, Point } from './brep'
 import type { KnotInsertion } from './refineClampedNet'
@@ -11,6 +11,10 @@ export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectRefined'; face: number; refinements: KnotInsertion[] }
   | { action: 'g1SupportCandidates' }
+  | ({ action: 'proposeG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneProposalRequest)
+  | ({ action: 'validateG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneValidationRequest)
+  | ({ action: 'publishG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneValidationRequest)
+  | ({ action: 'evaluateG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneEvaluationRequest)
   | { action: 'sheetEdges'; previewRevision: number }
   | { action: 'duplicateSheetEdge'; previewRevision: number; edge: number; delta: Point; previous?: StripMove[]; path?: Point[] }
   | { action: 'finalFaceWitness'; previewRevision: number }
@@ -50,6 +54,23 @@ self.onmessage = (event: MessageEvent<Request>) => {
           break
         }
         case 'g1SupportCandidates': result = await editor.g1SupportCandidates(); break
+        case 'proposeG1PlaneTangency': case 'validateG1PlaneTangency': case 'publishG1PlaneTangency': case 'evaluateG1PlaneTangency': {
+          // Never auto-reselect for G1: that would discard preview, anchors
+          // and kernel-owned constraint identity instead of rejecting stale work.
+          if(cylinder) throw new Error('La tangenza G1 non è disponibile per la sessione cilindrica attiva.')
+          if(!req.selection || selectionKey===null || selectionKey!==JSON.stringify(req.selection) ||
+              (req.action!=='evaluateG1PlaneTangency' && req.choice?.stamp?.faceIndex!==req.selection.face))
+            throw new Error('Selezione G1 scaduta: seleziona di nuovo la faccia.')
+          const {id: _id, action: _action, selection: _selection, ...request}=req
+          result = req.action==='proposeG1PlaneTangency'
+            ? await editor.proposeG1PlaneTangency(request as G1PlaneProposalRequest)
+            : req.action==='validateG1PlaneTangency'
+              ? await editor.validateG1PlaneTangency(request as G1PlaneValidationRequest)
+              : req.action==='publishG1PlaneTangency'
+                ? await editor.publishG1PlaneTangency(request as G1PlaneValidationRequest)
+                : await editor.evaluateG1PlaneTangency(request as G1PlaneEvaluationRequest)
+          break
+        }
         case 'sheetEdges': result = editor.sheetEdges(req.previewRevision); break
         case 'duplicateSheetEdge': result = editor.duplicateSheetEdge(req.previewRevision,req.edge,req.delta,req.previous,req.path); break
         case 'finalFaceWitness': result = editor.finalFaceWitness(req.previewRevision); break

@@ -9,7 +9,7 @@ import { rebuildFreeBoundary } from './freeBoundary'
 import { prepareCylinder } from './cylinderPreparation'
 import { assertSimpleCylinderSource } from './cylinderSource'
 import { listG1SupportCandidates, resolveG1SupportCandidate as resolveSupport, type G1SourceStamp, type G1SupportCandidate } from './g1SupportTopology'
-import { proposePlaneTangency, validatePlaneTangencyResult, type NaturalEdge, type PlaneTangencyRequest, type PlaneTangencyValidation } from './planeTangency'
+import { proposePlaneTangency, validatePlaneTangencyResult, validatePlaneTangencyConstraint, type NaturalEdge, type PlaneTangencyRequest, type PlaneTangencyValidation } from './planeTangency'
 
 export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[]; experimentalCylinder?: boolean }
 export interface G1SupportCandidates { stamp: G1SourceStamp; candidates: G1SupportCandidate[] }
@@ -33,6 +33,20 @@ export interface G1PlaneResult {
   validation: PlaneTangencyValidation
   preview: Preview
   step?: string
+}
+export interface G1PublishedPlaneResult extends Omit<G1PlaneResult, 'preview'> {
+  constraintId: number
+  preview: Preview & { previewRevision: number }
+}
+export interface G1PlaneEvaluationRequest {
+  constraintId: number
+  net: Net
+  lockedPoles?: readonly number[]
+  exportStep?: boolean
+}
+interface RegisteredPlaneTangency {
+  request: G1PlaneValidationRequest
+  referenceNet: Net
 }
 const tuple = (p: { x: number; y: number; z: number }): Point => [p.x, p.y, p.z]
 const dist = (a: Point, b: Point) => Math.hypot(...a.map((x, i) => x - b[i]))
@@ -107,6 +121,8 @@ export class SurfaceEditorKernel {
   private g1Selected = -1
   private g1Fingerprint: Promise<string> | null = null
   private g1SourceReady = false
+  private g1ConstraintSerial = 0
+  private readonly g1Constraints = new Map<number, RegisteredPlaneTangency>()
   private faces: ShapeHandle[] = []
   private brep = ''
   private records: RecordSpan[] = []
@@ -362,7 +378,7 @@ export class SurfaceEditorKernel {
     this.infos[index] = { ...this.infos[index], trimLocks: info.trimLocks, hiddenPoles: info.hiddenPoles }
     return net
   }
-  private invalidateG1Selection() { this.g1Selected = -1; this.g1SelectionRevision++ }
+  private invalidateG1Selection() { this.g1Selected = -1; this.g1SelectionRevision++; this.g1Constraints.clear() }
   /** Read-only original-source topology. Identity and revisions never come from a client.
    * Fingerprint is captured before tessellation; an async digest cannot cross a
    * source/selection boundary. No OCCT handle escapes into the worker response. */
@@ -395,7 +411,26 @@ export class SurfaceEditorKernel {
   async validateG1PlaneTangency(request: G1PlaneValidationRequest): Promise<G1PlaneResult> {
     return this.planeTangency(request, false)
   }
-  private async planeTangency(input: G1PlaneProposalRequest | G1PlaneValidationRequest, propose: boolean): Promise<G1PlaneResult> {
+  /** Register only a strictly verified proposal; source and logical UV selection stay unchanged. */
+  async publishG1PlaneTangency(request: G1PlaneValidationRequest): Promise<G1PublishedPlaneResult> {
+    return this.planeTangency(request, false, true) as Promise<G1PublishedPlaneResult>
+  }
+  /** Reassess the actual current net against a kernel-owned accepted baseline. Never projects or repairs. */
+  async evaluateG1PlaneTangency(input: G1PlaneEvaluationRequest): Promise<G1PublishedPlaneResult> {
+    const request = structuredClone(input), registered = this.g1Constraints.get(request.constraintId)
+    if (!Number.isSafeInteger(request.constraintId) || !registered) throw new Error('Vincolo G1 scaduto: verifica di nuovo la tangenza.')
+    const locks = request.lockedPoles ?? []
+    if (!Array.isArray(locks) || locks.some(i=>!Number.isInteger(i)||i<0||i>=registered.referenceNet.poles.length))
+      throw new Error('Blocco di un polo inesistente.')
+    // Later lock positions need a kernel-owned history token. Until that exists,
+    // refuse new interior locks rather than compare them to a moving last-preview baseline.
+    if (locks.some(i=>!registered.request.lockedPoles!.includes(i)&&!boundaryLocked(registered.referenceNet,i,'G1')))
+      throw new Error('Nuovi blocchi interni richiedono una nuova verifica del vincolo G1.')
+    return this.planeTangency({...registered.request, net:request.net, exportStep:request.exportStep}, false, true,
+      {id:request.constraintId, registered}) as Promise<G1PublishedPlaneResult>
+  }
+  private async planeTangency(input: G1PlaneProposalRequest | G1PlaneValidationRequest, propose: boolean, publish = false,
+    persistent?: {id:number; registered:RegisteredPlaneTangency}): Promise<G1PlaneResult | G1PublishedPlaneResult> {
     // Snapshot before the asynchronous identity read: client mutation and a
     // re-selection while hashing must never retarget this operation.
     const request = structuredClone(input), editRevision = this.revision
@@ -433,7 +468,15 @@ export class SurfaceEditorKernel {
       const net = propose ? proposePlaneTangency(pure).net : request.net
       // Strict validation of the actual final coefficient net, before any BREP
       // serialization. Protected coefficients never get a roundoff exemption.
-      const validation = validatePlaneTangencyResult(pure,net)
+      let validation: PlaneTangencyValidation
+      if (persistent) {
+        const reference = persistent.registered.referenceNet
+        assertNet(reference,net,'G1')
+        const protectedIds = [...new Set([...pure.lockIndices,...net.poles.flatMap((_,i)=>boundaryLocked(net,i,'G1')?[i]:[])])]
+        for (const i of protectedIds) if (net.poles[i].some((x,d)=>!Object.is(x,reference.poles[i][d])))
+          throw new Error('Un punto protetto dal vincolo G1 è stato modificato.')
+        validation = {...validatePlaneTangencyConstraint(pure,net),protectedPoleCount:protectedIds.length}
+      } else validation = validatePlaneTangencyResult(pure,net)
       const evaluated = isolated.evaluate(net,'G0',request.exportStep ?? false)
       const finalFace = isolated.validatedFace
       if (finalFace === null) throw new Error('Faccia CAD finale non determinata.')
@@ -453,13 +496,29 @@ export class SurfaceEditorKernel {
           this.checkUnselectedTangencyFaces(imported)
         } finally {fs.forEach(f=>k.release(f));k.release(imported)}
       }
-      if (this.revision !== editRevision || this.previewRevision !== previewRevision ||
+      if (this.revision !== editRevision || this.previewRevision !== previewRevision || this.anchorSelectionRevision !== anchorSelection ||
           choice.stamp.sourceRevision !== this.g1SourceRevision || choice.stamp.selectionRevision !== this.g1SelectionRevision)
         throw new Error('Scelta del supporto scaduta durante la verifica CAD.')
-      // This independent preview cannot be used as an interactive note witness.
       const {step,previewRevision: _isolatedRevision,...preview} = evaluated
-      return { net:structuredClone(net), changedIndices:net.poles.flatMap((p,i)=>p.some((x,d)=>!Object.is(x,base.poles[i][d]))?[i]:[]),
+      const result: G1PlaneResult = { net:structuredClone(net), changedIndices:net.poles.flatMap((p,i)=>p.some((x,d)=>!Object.is(x,base.poles[i][d]))?[i]:[]),
         choice,stamp:{...choice.stamp},revisions:{edit:editRevision,preview:previewRevision,anchorSelection},validation,preview,step }
+      if (!publish) return result // Isolated proposals never acquire an interactive witness.
+      if (persistent && this.g1Constraints.get(persistent.id)!==persistent.registered)
+        throw new Error('Vincolo G1 scaduto durante la verifica CAD.')
+      // Allocate snapshots and response before transferring any host-owned state.
+      const id = persistent?.id ?? this.g1ConstraintSerial + 1
+      const registered: RegisteredPlaneTangency = persistent ? persistent.registered : {
+        request:structuredClone({...request,choice,lockedPoles:[...pure.lockIndices]} as G1PlaneValidationRequest),
+        referenceNet:structuredClone(net)}
+      const published: G1PublishedPlaneResult = {...result,constraintId:id,preview:{...preview,previewRevision:previewRevision+1}}
+      // No asynchronous work follows the final fence. Only this verified face is transferred.
+      this.releasePreviewFace()
+      this.validatedFace = isolated.validatedFace; isolated.validatedFace = null
+      this.validatedSheetBrep = isolated.validatedSheetBrep; isolated.validatedSheetBrep = null
+      this.previewRevision++
+      this.g1ConstraintSerial = Math.max(this.g1ConstraintSerial,id)
+      this.g1Constraints.set(id,registered)
+      return published
     } finally {isolated.clear()}
   }
   private checkUnselectedTangencyFaces(shape: ShapeHandle) {

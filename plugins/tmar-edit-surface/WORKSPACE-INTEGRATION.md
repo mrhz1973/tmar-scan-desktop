@@ -528,3 +528,12 @@ readback and STEP import cleanup. A separate non-mutating constraint check is
 available for future edits. Worker/UI/history/recipe for the new constraint are
 not integrated. Geometry is restricted to eligible natural edges with planar
 neighbors; interior checks are sampled, not a global G1 certification.
+
+The G1 prototype now has internal worker and draft/history paths, including a
+kernel-owned constraint baseline and published face witness. An OCCT-backed
+draft/worker integration test on a synthetic two-face shell exercised G1,
+an interior edit, Undo/Redo, STEP export and note UV resolution. These APIs
+are not yet wired to workspace controls or an annotated Apply transaction;
+they are not a user-available G1 feature. Refinement and changing border mode
+while a G1 constraint is active remain unsupported. A new persistent recipe,
+real-world STEP coverage, physical input and packaged desktop remain open.
