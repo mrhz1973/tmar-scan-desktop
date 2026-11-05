@@ -85,6 +85,11 @@ export interface ReferenceDescriptor<Geometry = THREE.BufferGeometry> {
   readonly visible: boolean;
   isCurrent(): boolean;
 }
+export interface ReticleFrame {
+  readonly min: Vec3; // Bounds in part-frame millimetres; includes every editable net handle.
+  readonly max: Vec3;
+  readonly stamp: DraftStamp; // Exact current face/selection/draft revision.
+}
 export interface EditorViewportLease<Camera = THREE.OrthographicCamera, Group = THREE.Group, Geometry = THREE.BufferGeometry, Layer = SceneLayer> {
   readonly canvas: HTMLCanvasElement; // The existing host canvas, borrowed.
   readonly group: Group; // Session group in part coordinates, host detaches on cleanup.
@@ -93,6 +98,8 @@ export interface EditorViewportLease<Camera = THREE.OrthographicCamera, Group = 
   bounds(): DOMRectReadOnly;
   rayInPart(clientX: number, clientY: number): { origin: Vec3; direction: Vec3 } | null;
   projectPartPoint(point: Vec3): { clientX: number; clientY: number; visible: boolean };
+  /** Publish only. No camera movement; the host's explicit button owns framing. */
+  publishReticleFrame?(frame: ReticleFrame | null): void;
   addLayer(layer: Layer): Dispose;
   onCapturedPointer(handlers: {
     move(event: PointerEvent): void;

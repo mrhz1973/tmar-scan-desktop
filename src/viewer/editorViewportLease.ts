@@ -2,10 +2,11 @@
 import * as THREE from 'three'
 import { EditorLifetime } from '../plugins/editorLifetime'
 import { EditorReferenceNotifications } from '../plugins/editorReferenceNotifications'
-import type { EditorViewportLease, ReferenceDescriptor, Vec3 } from '../plugins/workspaceEditorTypes'
+import type { DraftStamp, EditorViewportLease, ReferenceDescriptor, ReticleFrame, Vec3 } from '../plugins/workspaceEditorTypes'
 import type { OwnedEditorViewport } from '../plugins/workspaceEditors'
 import type { SceneManager } from './SceneManager'
 import type { SceneLayer } from './sceneLayers'
+import { sameReticleFrame, sameReticleStamp, validatedReticleFrame, worldReticleBox } from './editorReticleFrame'
 
 export interface EditorSceneAdapter {
   references(): readonly ReferenceDescriptor[]
@@ -42,6 +43,8 @@ export function createEditorViewportLease(scene: SceneManager, adapter: EditorSc
   const referenceNotifications = new EditorReferenceNotifications()
   life.own(() => referenceNotifications.dispose())
   let disposed = false, capture: number | null = null
+  let reticle: ReticleFrame | null = null
+  const reticleListeners = new Set<() => void>()
   const layers = new Set<SceneLayer>(), frames = new Set<(time: number) => void>()
   const handlers = new Set<Parameters<EditorViewportLease['onCapturedPointer']>[0]>()
   const interruptions = new Set<(reason: 'blur' | 'source-invalid' | 'dispose') => void>()
@@ -132,6 +135,13 @@ export function createEditorViewportLease(scene: SceneManager, adapter: EditorSc
     canvas: host.canvas, group, overlayRoot: root, camera: () => host.camera(), bounds: () => host.canvas.getBoundingClientRect(),
     rayInPart: (x, y) => { current(); host.partGroup.updateWorldMatrix(true, false); return editorRayInPart(host.camera(), host.partGroup.matrixWorld, view.bounds(), x, y) },
     projectPartPoint: point => { current(); host.partGroup.updateWorldMatrix(true, false); return editorProjectPart(host.camera(), host.partGroup.matrixWorld, view.bounds(), point) },
+    publishReticleFrame: frame => {
+      current()
+      const next = validatedReticleFrame(frame)
+      if (sameReticleFrame(reticle, next)) return
+      reticle = next
+      for (const fn of [...reticleListeners]) { try { fn() } catch { /* A listener must not break an editor gesture. */ } }
+    },
     addLayer: layer => {
       current(); layers.add(layer)
       const remove = life.own(() => { layers.delete(layer); layer.dispose(); host.invalidate() })
@@ -166,6 +176,22 @@ export function createEditorViewportLease(scene: SceneManager, adapter: EditorSc
     referenceNotifications.notify()
   }))
   return { view, releaseCapture,
+    reticleFrame: () => disposed ? null : reticle,
+    onReticleFrameChanged: fn => {
+      current()
+      reticleListeners.add(fn)
+      return life.own(() => { reticleListeners.delete(fn) })
+    },
+    frameReticle: (stamp: DraftStamp) => {
+      if (disposed || capture !== null || !adapter.sourceVisible() ||
+          !reticle || !sameReticleStamp(reticle.stamp, stamp)) return false
+      try { current() } catch { return false }
+      host.partGroup.updateWorldMatrix(true, false)
+      const box = worldReticleBox(reticle, host.partGroup.matrixWorld)
+      if (!box) return false
+      scene.fitBox(box.min.toArray() as [number, number, number], box.max.toArray() as [number, number, number])
+      return true
+    },
     suspendReferenceNotifications: () => { current(); return referenceNotifications.suspend() },
     dispose: () => {
     if (disposed) return
@@ -173,6 +199,7 @@ export function createEditorViewportLease(scene: SceneManager, adapter: EditorSc
     interrupt('dispose')
     life.dispose()
     // Do not traverse/dispose borrowed buffers or materials. Plugin owns its layer resources.
+    reticle = null; reticleListeners.clear()
     group.clear(); frames.clear(); handlers.clear(); interruptions.clear()
     host.invalidate()
   } }
