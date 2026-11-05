@@ -7,6 +7,7 @@ import type { StripMove } from '../sheetExtension'
 import { SurfaceRuntime } from '../surfaceRuntime'
 import { SurfaceDraft } from '../surfaceDraft'
 import { createWorkspaceSurfaceSession, type WorkspaceSurfaceSession } from '../workspaceSession'
+import { replaySurfaceHistory } from '../historyReplay'
 
 type Msg = { id: number; action: string; exportStep?: boolean; net?: Net; edge?:number; delta?:number[]; path?:number[][]; previous?:Array<{edge:number;delta:number[];path:number[][]}> }
 class FakeWorker {
@@ -309,6 +310,7 @@ describe('WorkspaceSurfaceSession',()=>{
                 m.action==='evaluate' ? e.evaluate(m.net!,m.continuity,!!m.exportStep,m.freeBoundary) :
                 m.action==='createRecipe' ? await e.createRecipe(m.net!,m.continuity,m.lockedPoles,m.bodyId,m.freeBoundary) :
                 m.action==='restoreRecipe' ? await e.restoreRecipe(m.step,m.recipe,m.bodyId) :
+                m.action==='replayRecipe' ? await e.replayRecipe(m.step,m.recipe,m.bodyId) :
                 m.action==='notePick' ? e.anchorFromPick(m.point,m.previewRevision) :
                 m.action==='noteResolve' ? e.resolveAnchor(m.anchor,m.previewRevision) :
                 m.action==='finalFaceWitness' ? e.finalFaceWitness(m.previewRevision) : (()=>{throw Error(`unexpected worker action: ${m.action}`)})()
@@ -334,6 +336,25 @@ describe('WorkspaceSurfaceSession',()=>{
       expect(recipe.recipe.source.bodyId).toBe('box')
       expect(recipe.recipe.faceIndex).toBe(index)
       const replay=await editor.replayRecipe(source,recipe.recipe,'box')
+      const netBeforeReplay=session.getPanelState().net?.poles.map(point=>[...point])
+      const replayEditor=new SurfaceEditorKernel(k), replayWorker=new KernelWorker(replayEditor)
+      try {
+        const independent=await replaySurfaceHistory({bodyKey:'box',stepSha256:sha(context.step),step:context.step,assertCurrent:()=>{}},
+          JSON.parse(JSON.stringify(recipe.recipe)),undefined,()=>replayWorker as unknown as Worker)
+        expect(independent.valid).toBe(true)
+        expect(independent.step).toBeTruthy()
+        expect(replayWorker.terminate).toHaveBeenCalledOnce()
+        expect(session.getPanelState().net?.poles).toEqual(netBeforeReplay)
+      } finally { replayEditor.dispose() }
+      const staleEditor=new SurfaceEditorKernel(k), staleWorker=new KernelWorker(staleEditor)
+      try {
+        let checks=0
+        await expect(replaySurfaceHistory({bodyKey:'box',stepSha256:hash,step:context.step,
+          assertCurrent:()=>{if(++checks===3)throw Error('source changed')}},recipe.recipe,
+          undefined,()=>staleWorker as unknown as Worker)).rejects.toThrow('source changed')
+        expect(staleWorker.terminate).toHaveBeenCalledOnce()
+        expect(session.getPanelState().net?.poles).toEqual(netBeforeReplay)
+      } finally { staleEditor.dispose() }
       expect(replay.valid).toBe(true)
       expect(Math.abs(replay.volume - k.getVolume(box))).toBeGreaterThan(.001)
       await vi.advanceTimersByTimeAsync(90);await flush()

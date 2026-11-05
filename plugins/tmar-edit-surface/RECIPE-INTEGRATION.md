@@ -30,6 +30,13 @@ and closes the session. A real OCCT
 test restores an edited reversed STEP face and validates the resulting solid.
 This API does not restore notes or implement host project persistence.
 
+`replaySurfaceHistory()` in `historyReplay.ts` provides independent worker
+replay for a host transaction. It snapshots the recipe and STEP, verifies the
+body key and STEP SHA-256, checks the host's source guard before and after async
+boundaries, requires a valid CAD result and STEP, and disposes its worker. The
+host must check the same source again at its own atomic commit boundary; this
+helper does not publish a feature or preserve notes.
+
 Worker and draft APIs alone therefore do not
 make a saved project feature editable. An integration needs a versioned host
 contract that binds the recipe to the upstream body and validated draft stamp,
