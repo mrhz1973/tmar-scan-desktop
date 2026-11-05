@@ -26,6 +26,7 @@ Do not relabel or rewrite old frozen previews. They retain their historical tech
 | Version | Date | Channel | Change |
 | --- | --- | --- | --- |
 | 1 | 2026-11-03 | Preview | First human-numbered TMAR preview; prominent Versione 1 label, explicit Anteprima, technical provenance moved behind expandable Settings details. |
+| 2 | 2026-11-05 | Preview | Pinned web beta: eligible CAD Edit Surface editing, annotated copy/Undo/Redo/project round trip and Patch Network 3D offsets. Base QA revision `923bfe58`; publication isolated from main/stable. |
 
 Versione 1 is based on the current review branch with Edit Surface direct selection. Numbering changes no geometry or input behavior. The previously reported one-pixel drag threshold and Escape-during-drag limitations, unfinished annotated transactions/parametric history and recovery remain open. No general QS parity or stable desktop release is declared.
 
