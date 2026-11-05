@@ -7,6 +7,13 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Versione 2 - web beta with Edit Surface and Patch Network 3D - 2026-11-05
+
+- Number the already independently built web beta as **Versione 2 - Anteprima**, rather than repeating Versione 1. This release changes the delivery manifest and documentation only; it does not modify the CAD kernel or user projects.
+- The pinned feature checkpoint is `923bfe58`: eligible STEP-face control-net editing, Zebra/CAD notes, annotated Apply with preserved original, Undo/Redo, native Save/Load/export and Patch Network 3D point offsets.
+- Versione 2 is a separately hosted web beta; the stable site/main and the historical Versione 1 remain unchanged. The beta has no automatic update and does not claim desktop packaging, arbitrary cylindrical-face editing, global continuity or real-part metrological qualification.
+
+
 ### TMAR Patch Network 3D point checkpoint ? 2026-11-04
 
 - Preserve recovered work and connect explicit node, shared-curve grip and derived-centre offsets to coupled fitting, preview and native project persistence.
