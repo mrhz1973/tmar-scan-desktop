@@ -128,6 +128,7 @@ describe('WorkspaceSurfaceSession',()=>{
     expect(result.sourceKey).toContain(t.binding.bodyKey)
     expect(t.session.getPanelState().busy).toBe(false)
     expect(t.session.isHistoryRecipeStampCurrent(result)).toBe(true)
+    expect(t.session.isHistoryRecipeStampCurrent({ ...result, sessionId: 'other-session' })).toBe(false)
     t.session.selectPoints([12],false)
     expect(t.session.isHistoryRecipeStampCurrent(result)).toBe(false)
     create.mockRestore()

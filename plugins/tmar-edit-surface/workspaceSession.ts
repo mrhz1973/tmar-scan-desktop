@@ -25,6 +25,7 @@ export interface WorkspaceSurfaceNote {
 }
 export interface PreparedHistoryRecipe {
   readonly recipe: SurfaceEditRecipe | SurfaceEditRecipeV6
+  readonly sessionId: string
   readonly sourceKey: string
   readonly selectionEpoch: number
   readonly draftEpoch: number
@@ -887,7 +888,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (this.selectionEpoch !== selectionEpoch || this.draftEpoch !== draftEpoch || this.draft.getSnapshot().net !== net ||
           this.notes.length || this.strip || this.gesture !== 'idle')
         throw new Error('La bozza è cambiata durante la preparazione della ricetta.')
-      return { recipe, sourceKey: this.sourceId, selectionEpoch, draftEpoch }
+      return { recipe, sessionId: this.context.sessionId, sourceKey: this.sourceId, selectionEpoch, draftEpoch }
     } finally {
       if (!this.disposed) { this.busy = false; this.refresh(); this.resolveNotes() }
     }
@@ -897,7 +898,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   isHistoryRecipeStampCurrent(prepared: PreparedHistoryRecipe): boolean {
     try {
       this.assertLive()
-      return !!prepared && prepared.sourceKey === this.sourceId &&
+      return !!prepared && prepared.sessionId === this.context.sessionId && prepared.sourceKey === this.sourceId &&
         prepared.selectionEpoch === this.selectionEpoch && prepared.draftEpoch === this.draftEpoch &&
         !this.busy && !this.frozen && this.gesture === 'idle' && !this.placingNote && !this.notes.length &&
         !this.strip && !this.stripPending && this.snapshot.validation.kind === 'valid'

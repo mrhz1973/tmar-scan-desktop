@@ -19,7 +19,7 @@ Preparing a legacy recipe may invalidate its CAD preview temporarily; the host
 must wait for a new validated preview and check the current source and epochs at
 its commit boundary. The method explicitly refuses drafts with notes until an
 atomic host contract can preserve and revalidate them.
-`isHistoryRecipeStampCurrent()` checks source/epoch freshness, active editor
+`isHistoryRecipeStampCurrent()` checks session and source/epoch freshness, active editor
 state and a revalidated preview; it does not authenticate recipe contents or
 replace replay/validation within the host's atomic commit.
 
