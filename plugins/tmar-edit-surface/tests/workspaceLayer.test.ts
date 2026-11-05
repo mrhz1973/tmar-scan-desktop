@@ -227,6 +227,19 @@ it('leaves an unselected automatic cell press for navigation and allows dragging
   layer.dispose()
 })
 
+it('keeps direct cell dragging in explicit cell mode and leaves modified or middle presses to navigation', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  f.set({ selectionMode: 'cells' })
+  const press = f.event(1, [0, 0, 0])
+  expect(f.getLayer().pointerDown?.({ ...press, button: 1 } as PointerEvent)).toBe(false)
+  expect(f.getLayer().pointerDown?.({ ...press, shiftKey: true } as PointerEvent)).toBe(false)
+  expect(f.getLayer().pointerDown?.(press)).toBe(true)
+  f.getHandlers().move(f.event(1, [0.5, 0, 0]))
+  expect(f.previewPoles).toHaveBeenCalled()
+  f.getHandlers().up(f.event(1, [0.5, 0, 0]))
+  layer.dispose()
+})
+
 it('keeps snap calculations in the part frame after rotating and translating the body', () => {
   const f = fixture({ reference: 'scan', rotated: true }), layer = createWorkspaceLayer(f.view, f.owner)
   f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))
