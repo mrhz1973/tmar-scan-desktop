@@ -113,6 +113,18 @@ it('keeps the newest frame when a synchronous host callback changes selection an
   layer.dispose()
 })
 
+it('keeps the newest preview opacity when publication synchronously changes state', () => {
+  let reenter: (() => void) | undefined
+  const publish = vi.fn((frame: WorkspaceReticleFrame | null) => { if (frame && reenter) { const run = reenter; reenter = undefined; run() } })
+  const f = fixture(publish), layer = createWorkspaceLayer(f.view, f.owner)
+  reenter = () => f.set({ transparency: .6, reticleStamp: { ...f.state().reticleStamp!, draftEpoch: 7 } })
+  f.set({ transparency: .1, reticleStamp: { ...f.state().reticleStamp!, draftEpoch: 6 } })
+  const preview = f.group.getObjectByName('tmar-edit-surface-preview')!
+  const material = (preview.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.Material>).material
+  expect(material.opacity).toBeCloseTo(.4)
+  layer.dispose()
+})
+
 it('does not resume lease work after a synchronous publisher disposes the layer', () => {
   let disposeDuringPublish: (() => void) | undefined, invalidationsAtDispose = -1
   const publish = vi.fn((frame: WorkspaceReticleFrame | null) => { if (frame && disposeDuringPublish) {

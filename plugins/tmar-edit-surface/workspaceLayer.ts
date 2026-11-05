@@ -121,6 +121,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   let lastError = ''
   let hoverKey = ''
   let reticleKey: string | undefined
+  let syncRevision = 0
   const cleanups: Array<() => void> = []
 
   const cage = new THREE.Group(), hover = new THREE.Group(), pins = new THREE.Group(), stripGroup = new THREE.Group()
@@ -391,6 +392,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
 
   const sync = () => {
     if (disposed || layerDisposed) return
+    const revision = ++syncRevision
     try {
       const state = owner.getViewState()
       if (directSelection && (state.strip || state.placingNote || !state.directStrip ||
@@ -436,7 +438,9 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       }
       syncStrip(state)
       publishCageFrame(state)
-      if (disposed || layerDisposed) return // The optional host callback may synchronously revoke this layer.
+      // A host callback may revoke the layer or synchronously publish newer
+      // state. In either case this invocation must not apply its stale state.
+      if (disposed || layerDisposed || revision !== syncRevision) return
       positionStripHandle()
       if (state.snap && !state.strip) { refreshReferences(); refreshNeighbours() }
       else { disposeTargets(referenceTargets); referenceTargets = []; disposeTargets(neighbourTargets); neighbourTargets = []; referencesDirty = neighboursDirty = true; hideFeedback() }
