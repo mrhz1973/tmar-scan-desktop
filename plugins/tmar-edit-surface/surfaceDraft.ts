@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { assertNet, boundaryLocked, type Net, type Point } from './brep'
-import type { Preview, G1PlaneResult, G1PublishedPlaneResult, RecipeRestoreResult } from './editorKernel'
+import type { Preview, G1PlaneResult, G1PublishedPlaneResult, G1CurvedResult, G1PublishedCurvedResult, RecipeRestoreResult } from './editorKernel'
 import { readRecipe, sha256, decodeRecipePoint, type SurfaceEditRecipe } from './recipe'
-import type { EditFrame, SurfacePreparation, SurfacePlaneTangency } from './surfaceHistory'
+import type { EditFrame, SurfacePreparation, SurfacePlaneTangency, SurfaceCurvedTangency } from './surfaceHistory'
 import type { PreviewDraft, SurfaceRuntime } from './surfaceRuntime'
 import { PreviewQueue } from './previewQueue'
 import { assertSmoothCylinderMove, canonicalizeCylinderGesture } from './periodic'
 import type { Mesh } from 'occt-wasm'
 import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
 import type { G1SupportCandidate } from './g1SupportTopology'
+import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupportTopology'
 import { validatePlaneTangencyResult, validatePlaneTangencyConstraint, type PlaneTangencyRequest, type NaturalEdge } from './planeTangency'
 
 export interface CylinderProvisionalPreview { kind: 'provisional'; mesh: Mesh; faceMeshes?: Mesh[] }
@@ -27,6 +28,7 @@ export interface SurfaceDraftSnapshot {
   readonly hiddenPoles: readonly number[]
   readonly refinements: readonly KnotInsertion[]
   readonly planeTangency: SurfacePlaneTangency | null
+  readonly curvedTangency: SurfaceCurvedTangency | null
   readonly continuity: 'G0' | 'G1'
   readonly freeBoundary: boolean
   /** The latest visible preview can be older than net. It is borrowed, not copied. */
@@ -82,7 +84,7 @@ export class SurfaceDraft {
   private readonly unsubscribe: () => void
   private snapshot: SurfaceDraftSnapshot = Object.freeze({
     cylinderSession: null, cylinderPreview: null, net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY, continuity: 'G1',
-    hiddenPoles: EMPTY, refinements: NO_REFINEMENTS, planeTangency: null, freeBoundary: false, preview: null, previewStale: false, validNet: null,
+    hiddenPoles: EMPTY, refinements: NO_REFINEMENTS, planeTangency: null, curvedTangency: null, freeBoundary: false, preview: null, previewStale: false, validNet: null,
     calculating: false, error: '', canUndo: false, canRedo: false,
   })
   private base: Net | null = null
@@ -109,6 +111,18 @@ export class SurfaceDraft {
     },
   })
   private readonly unsubscribePlane: () => void
+  private proposingCurvedTangency = false
+  private publishingCurvedTangency = false
+  private curvedPublished: { epoch: number; net: Net; constraint: SurfaceCurvedTangency; value: Pick<G1PublishedCurvedResult, 'preview'> } | null = null
+  private readonly curvedPreviews = new PreviewQueue<{ net: Net; constraint: SurfaceCurvedTangency; epoch: number; selection: { face: number; refinements: KnotInsertion[] } }, G1PublishedCurvedResult>({
+    evaluate: async draft => {
+      const result = await this.runtime.worker.ask<G1PublishedCurvedResult>({ action: 'evaluateG1CurvedTangency', net: draft.net,
+        constraintId: draft.constraint.constraintId, lockedPoles: draft.constraint.lockedPoles, selection: draft.selection })
+      this.checkPublishedCurvedResult(result, draft.constraint, draft.net)
+      return result
+    },
+  })
+  private readonly unsubscribeCurved: () => void
   private readonly cylinderPreviews = new PreviewQueue<PreviewDraft & { session: number }, CylinderProvisionalPreview>({
     evaluate: async draft => {
       const value = await this.runtime.worker.ask<CylinderProvisionalPreview>({
@@ -129,6 +143,7 @@ export class SurfaceDraft {
     owners.set(runtime, this)
     this.unsubscribe = runtime.previews.subscribe(this.syncPreview)
     this.unsubscribePlane = this.planePreviews.subscribe(this.syncPreview)
+    this.unsubscribeCurved = this.curvedPreviews.subscribe(this.syncPreview)
     this.unsubscribeCylinder = this.cylinderPreviews.subscribe(this.syncPreview)
   }
 
@@ -174,7 +189,7 @@ export class SurfaceDraft {
     this.freezePreparation(frame.preparation)
     this.base = frame.preparation?.originalNet ?? base
     this.update({ cylinderSession, cylinderPreview: null, net: frame.net, committedNet: frame.net, originalNet: this.base, selected: EMPTY, locks: EMPTY, trimLocks,
-      hiddenPoles, refinements: frame.preparation?.refinements ?? NO_REFINEMENTS, planeTangency: null,
+      hiddenPoles, refinements: frame.preparation?.refinements ?? NO_REFINEMENTS, planeTangency: null, curvedTangency: null,
       continuity, freeBoundary: false, preview: null, previewStale: false,
       validNet: null, calculating: false, error: '', canUndo: false, canRedo: false })
     this.schedule(frame.net)
@@ -189,8 +204,9 @@ export class SurfaceDraft {
   async createRecipe(bodyId: string): Promise<SurfaceEditRecipe> {
     this.ensureActive()
     const before = this.snapshot, preparation = this.runtime.history.current?.preparation
+    if (before.curvedTangency) throw new Error('La ricetta del vincolo G1 curvo non è ancora supportata.')
     if (!preparation || !before.net || before.cylinderSession !== null || before.net !== before.committedNet ||
-        before.validNet !== before.net || before.calculating || this.proposingPlaneTangency || this.exportRequests)
+        before.validNet !== before.net || before.calculating || this.proposingPlaneTangency || this.proposingCurvedTangency || this.exportRequests)
       throw new Error('Termina le operazioni e attendi la verifica CAD prima di salvare la ricetta.')
     this.recipeBusy = true
     try {
@@ -233,7 +249,7 @@ export class SurfaceDraft {
   async restoreRecipe(step: string, value: unknown, bodyId: string): Promise<RecipeRestoreResult> {
     this.ensureActive(true)
     const recipe = readRecipe(value), before = this.snapshot
-    if (before.calculating || before.net !== before.committedNet || this.proposingPlaneTangency || this.exportRequests)
+    if (before.calculating || before.net !== before.committedNet || this.proposingPlaneTangency || this.proposingCurvedTangency || this.exportRequests)
       throw new Error('Termina le operazioni prima di ripristinare la ricetta CAD.')
     this.recipeBusy = true
     this.update({ validNet: null, calculating: true, error: '' })
@@ -257,7 +273,7 @@ export class SurfaceDraft {
       this.update({ cylinderSession: null, cylinderPreview: null, net: frame.net, committedNet: frame.net, originalNet: this.base,
         selected: EMPTY, locks: Object.freeze([...frame.locks]), trimLocks: frame.preparation!.trimLocks,
         hiddenPoles: frame.preparation!.hiddenPoles, refinements: frame.preparation!.refinements,
-        planeTangency: frame.planeTangency ?? null, continuity: frame.continuity, freeBoundary: frame.freeBoundary,
+        planeTangency: frame.planeTangency ?? null, curvedTangency: null, continuity: frame.continuity, freeBoundary: frame.freeBoundary,
         preview: frame.planeTangency ? result.preview : null, previewStale: false,
         validNet: frame.planeTangency ? frame.net : null, calculating: !frame.planeTangency, error: '', canUndo: false, canRedo: false })
       if (!frame.planeTangency) this.schedule(frame.net)
@@ -382,7 +398,7 @@ export class SurfaceDraft {
     this.ensureNoPlaneTangency()
     const before = this.snapshot, previous = this.runtime.history.current
     const preparation = previous?.preparation
-    if (this.proposingPlaneTangency) throw new Error('Attendi la verifica della tangenza.')
+    if (this.proposingPlaneTangency || this.proposingCurvedTangency) throw new Error('Attendi la verifica della tangenza.')
     if (!preparation || before.cylinderSession !== null || before.freeBoundary)
       throw new Error('La tangenza richiede una faccia naturale preparata con bordi protetti.')
     if (before.net !== before.committedNet || before.validNet !== before.net || before.calculating)
@@ -431,6 +447,83 @@ export class SurfaceDraft {
     } finally { this.proposingPlaneTangency = false; this.publishingPlaneTangency = false }
   }
 
+  /** Curved G1 owns a separate constraint and preview queue; it never becomes a plane recipe. */
+  async applyCurvedTangency(choice: CompatibleCurvedSupportCandidate,
+    options: { scale?: number; distanceTolerance?: number; derivativeTolerance?: number } = {}): Promise<void> {
+    this.ensureActive()
+    this.ensureNoPlaneTangency()
+    const before = this.snapshot, previous = this.runtime.history.current, preparation = previous?.preparation
+    if (this.proposingPlaneTangency || this.proposingCurvedTangency) throw new Error('Attendi la verifica della tangenza.')
+    if (!preparation || before.cylinderSession !== null || before.freeBoundary || !before.net ||
+        before.net !== before.committedNet || before.validNet !== before.net || before.calculating || !before.preview)
+      throw new Error('Attendi la verifica CAD della faccia naturale preparata con bordi protetti.')
+    if (choice.kind !== 'compatible-bspline' || choice.stamp.faceIndex !== preparation.face) throw new Error('Scelta del supporto curvo scaduta.')
+    const epoch = this.epoch, requested = structuredClone(choice)
+    const lockedPoles = [...new Set([...before.locks, ...before.trimLocks, ...before.hiddenPoles])]
+    const scale = options.scale ?? 1, distanceTolerance = options.distanceTolerance ?? 1e-8, derivativeTolerance = options.derivativeTolerance ?? 1e-8
+    if (!Number.isFinite(scale) || scale <= 0 || !Number.isFinite(distanceTolerance) || distanceTolerance <= 0 || distanceTolerance > 1e-6 ||
+        !Number.isFinite(derivativeTolerance) || derivativeTolerance <= 0 || derivativeTolerance > 1e-6)
+      throw new Error('Scala o tolleranze della tangenza curva non valide.')
+    this.proposingCurvedTangency = true
+    let publishedReply = false
+    try {
+      const result = structuredClone(await this.runtime.worker.ask<G1CurvedResult>({ action: 'proposeG1CurvedTangency', net: before.net,
+        choice: requested, lockedPoles, scale, distanceTolerance, derivativeTolerance,
+        selection: { face: preparation.face, refinements: preparation.refinements } }))
+      this.ensureActive()
+      if (this.epoch !== epoch || this.snapshot !== before || this.runtime.history.current !== previous)
+        throw new Error('La bozza è cambiata durante la verifica della tangenza curva.')
+      const isolated = { kind: 'compatible-bspline' as const, baseNet: before.net, choice: requested, lockedPoles,
+        scale, distanceTolerance, derivativeTolerance, faceCount: before.preview.faceMeshes.length }
+      if (result.revisions?.preview !== before.preview.previewRevision) throw new Error('Anteprima della tangenza curva scaduta.')
+      this.checkCurvedResult(result, isolated)
+      this.publishingCurvedTangency = true
+      const publishedValue = await this.runtime.worker.ask<G1PublishedCurvedResult>({ action: 'publishG1CurvedTangency',
+        baseNet: before.net, net: result.net, choice: requested, lockedPoles, scale, distanceTolerance, derivativeTolerance,
+        selection: { face: preparation.face, refinements: preparation.refinements } })
+      publishedReply = true
+      const published = structuredClone(publishedValue)
+      this.publishingCurvedTangency = false
+      this.ensureActive()
+      if (this.epoch !== epoch || this.snapshot !== before || this.runtime.history.current !== previous)
+        throw new Error('La bozza è cambiata durante la pubblicazione della tangenza curva.')
+      const curvedTangency: SurfaceCurvedTangency = { ...isolated, constraintId: published.constraintId, referenceNet: result.net }
+      this.checkPublishedCurvedResult(published, curvedTangency, result.net)
+      if (!sameExact(published.revisions, result.revisions) || published.preview.previewRevision !== result.revisions.preview + 1)
+        throw new Error('Revisione pubblicata della tangenza curva non valida.')
+      const frame = this.runtime.history.commit({ net: result.net, locks: [...before.locks], continuity: before.continuity,
+        freeBoundary: false, preparation, curvedTangency })
+      this.applyFrame(frame, false, published)
+    } catch (error) {
+      if (publishedReply) this.recoverCurvedWitness(before)
+      throw error
+    } finally { this.proposingCurvedTangency = false; this.publishingCurvedTangency = false }
+  }
+
+  async evaluateCurvedTangencyForExport(): Promise<G1PublishedCurvedResult & { step: string }> {
+    this.ensureActive()
+    this.exportRequests++
+    try {
+      const before = this.snapshot, constraint = before.curvedTangency, selection = this.selectionPayload().selection, epoch = this.epoch
+      if (!constraint || !selection || !before.net || before.validNet !== before.net || before.calculating)
+        throw new Error('Attendi la verifica CAD della tangenza curva.')
+      const reply = await this.runtime.worker.ask<G1PublishedCurvedResult>({ action: 'evaluateG1CurvedTangency',
+        constraintId: constraint.constraintId, net: before.net, lockedPoles: constraint.lockedPoles, selection, exportStep: true })
+      try {
+        const result = structuredClone(reply)
+        this.ensureActive()
+        if (this.epoch !== epoch || this.snapshot.net !== before.net || this.snapshot.curvedTangency !== constraint ||
+            this.snapshot.validNet !== before.net || this.snapshot.calculating)
+          throw new Error('La bozza è cambiata durante la valutazione STEP della tangenza curva.')
+        this.checkPublishedCurvedResult(result, constraint, before.net)
+        if (typeof result.step !== 'string' || !result.step.trim()) throw new Error('STEP della tangenza curva non valido.')
+        this.curvedPublished = { epoch, net: before.net, constraint, value: result }
+        this.update({ preview: result.preview, previewStale: false })
+        return result as G1PublishedCurvedResult & { step: string }
+      } catch (error) { this.recoverCurvedWitness(before); throw error }
+    } finally { this.exportRequests-- }
+  }
+
   /** Reevaluate the actual G1 net and STEP, then adopt the returned real note witness. */
   async evaluatePlaneTangencyForExport(): Promise<G1PublishedPlaneResult & { step: string }> {
     this.ensureActive()
@@ -475,7 +568,7 @@ export class SurfaceDraft {
     this.base = null
     this.queueNet = null
     this.update({ cylinderSession: null, cylinderPreview: null, net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY,
-      hiddenPoles: EMPTY, refinements: NO_REFINEMENTS, planeTangency: null, continuity, freeBoundary: false, preview: null, previewStale: false,
+      hiddenPoles: EMPTY, refinements: NO_REFINEMENTS, planeTangency: null, curvedTangency: null, continuity, freeBoundary: false, preview: null, previewStale: false,
       validNet: null, calculating: false, error: '', canUndo: false, canRedo: false })
   }
 
@@ -503,7 +596,7 @@ export class SurfaceDraft {
     const equivalentToShown = supplied === this.snapshot.net
     const frame = this.runtime.history.commit({ net, locks: [...this.snapshot.locks],
       continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, preparation: this.runtime.history.current?.preparation,
-      planeTangency: this.runtime.history.current?.planeTangency })
+      planeTangency: this.runtime.history.current?.planeTangency, curvedTangency: this.runtime.history.current?.curvedTangency })
     this.applyFrame(frame, equivalentToShown)
   }
 
@@ -514,7 +607,7 @@ export class SurfaceDraft {
     if (!this.base) throw new Error('Scegli prima una faccia CAD.')
     const frame = this.runtime.history.commit({ net: this.base, locks: [...this.snapshot.locks],
       continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, preparation: this.runtime.history.current?.preparation,
-      planeTangency: this.runtime.history.current?.planeTangency })
+      planeTangency: this.runtime.history.current?.planeTangency, curvedTangency: this.runtime.history.current?.curvedTangency })
     this.applyFrame(frame, this.base === this.snapshot.net)
   }
 
@@ -530,6 +623,10 @@ export class SurfaceDraft {
   }
   private async evaluateForExportCurrent(): Promise<Preview & { step: string; previewRevision: number }> {
     this.ensureActive()
+    if (this.snapshot.curvedTangency) {
+      const result = await this.evaluateCurvedTangencyForExport()
+      return { ...result.preview, step: result.step }
+    }
     if (this.snapshot.planeTangency) {
       const result = await this.evaluatePlaneTangencyForExport()
       return { ...result.preview, step: result.step }
@@ -589,7 +686,7 @@ export class SurfaceDraft {
     this.ensureActive()
     const net = this.requireNet()
     const locks = frozenIds(ids, net.poles.length)
-    const constraint = this.snapshot.planeTangency
+    const constraint = this.snapshot.planeTangency ?? this.snapshot.curvedTangency
     if (constraint) {
       if (locks.some(i => !constraint.lockedPoles.includes(i) && !boundaryLocked(net, i, 'G1')))
         throw new Error('Nuovi blocchi interni richiedono una nuova verifica del vincolo G1.')
@@ -598,7 +695,7 @@ export class SurfaceDraft {
     }
     const frame = this.runtime.history.commit({ net, locks: [...locks],
       continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, preparation: this.runtime.history.current?.preparation,
-      planeTangency: this.runtime.history.current?.planeTangency })
+      planeTangency: this.runtime.history.current?.planeTangency, curvedTangency: this.runtime.history.current?.curvedTangency })
     this.applyFrame(frame, true)
   }
 
@@ -643,7 +740,9 @@ export class SurfaceDraft {
     this.unsubscribe()
     this.unsubscribeCylinder()
     this.unsubscribePlane()
+    this.unsubscribeCurved()
     this.planePreviews.dispose()
+    this.curvedPreviews.dispose()
     this.cylinderPreviews.dispose()
     this.epoch++
     this.runtime.previews.invalidate({ clearPreview: true })
@@ -654,7 +753,7 @@ export class SurfaceDraft {
     owners.delete(this.runtime)
     this.update({ cylinderSession: null, cylinderPreview: null, net: null, committedNet: null, originalNet: null, selected: EMPTY, locks: EMPTY, trimLocks: EMPTY,
       preview: null, previewStale: false, validNet: null, calculating: false,
-      hiddenPoles: EMPTY, refinements: NO_REFINEMENTS, planeTangency: null, error: '', canUndo: false, canRedo: false })
+      hiddenPoles: EMPTY, refinements: NO_REFINEMENTS, planeTangency: null, curvedTangency: null, error: '', canUndo: false, canRedo: false })
     this.listeners.clear()
   }
 
@@ -663,7 +762,7 @@ export class SurfaceDraft {
     if (this.recipeBusy) throw new Error('Attendi il completamento della ricetta CAD.')
     if (this.restoreUnverified && !allowUnverifiedRestore) throw new Error('Ripristino CAD non verificabile: seleziona di nuovo la faccia o ripristina una ricetta valida.')
     if (this.refining) throw new Error('Attendi il raffinamento del reticolo.')
-    if (this.publishingPlaneTangency) throw new Error('Attendi la pubblicazione della tangenza.')
+    if (this.publishingPlaneTangency || this.publishingCurvedTangency) throw new Error('Attendi la pubblicazione della tangenza.')
   }
   private requireNet(): Net {
     if (!this.snapshot.net) throw new Error('Scegli prima una faccia CAD.')
@@ -672,10 +771,12 @@ export class SurfaceDraft {
   private invalidate(): void {
     this.exported = null
     this.planePublished = null
+    this.curvedPublished = null
     this.epoch++
     this.runtime.previews.invalidate({ clearPreview: true })
     this.cylinderPreviews.invalidate({ clearPreview: true })
     this.planePreviews.invalidate({ clearPreview: true })
+    this.curvedPreviews.invalidate({ clearPreview: true })
   }
   private recoverPlaneWitness(before: SurfaceDraftSnapshot): void {
     if (this.disposed || !this.runtime.active || !before.net || this.snapshot.net !== before.net ||
@@ -684,18 +785,27 @@ export class SurfaceDraft {
     this.update({ preview: null, previewStale: false, validNet: null, calculating: true, error: '' })
     this.schedule(before.net)
   }
+  private recoverCurvedWitness(before: SurfaceDraftSnapshot): void {
+    if (this.disposed || !this.runtime.active || !before.net || this.snapshot.net !== before.net ||
+        this.snapshot.curvedTangency !== before.curvedTangency || this.snapshot.validNet !== before.net) return
+    this.invalidate()
+    this.update({ preview: null, previewStale: false, validNet: null, calculating: true, error: '' })
+    this.schedule(before.net)
+  }
   private ensureNoPlaneTangency(): void {
-    if (this.snapshot.planeTangency) throw new Error('Annulla la tangenza prima di questa operazione.')
+    if (this.snapshot.planeTangency || this.snapshot.curvedTangency) throw new Error('Annulla la tangenza prima di questa operazione.')
   }
   private checkEdit(candidate: Net): Net {
     const constraint = this.snapshot.planeTangency
     if (constraint) this.checkPlaneEdit(candidate, constraint)
+    const curved = this.snapshot.curvedTangency
+    if (curved) this.checkCurvedEdit(candidate, curved)
     const base = this.base, frame = this.runtime.history.current
     if (!base || !frame) throw new Error('Scegli prima una faccia CAD.')
     if (this.snapshot.cylinderSession !== null) {
       candidate = canonicalizeCylinderGesture(frame.net, candidate)
       assertSmoothCylinderMove(base, candidate)
-    } else if (!constraint) assertNet(base, candidate, this.snapshot.continuity, this.snapshot.freeBoundary)
+    } else if (!constraint && !curved) assertNet(base, candidate, this.snapshot.continuity, this.snapshot.freeBoundary)
     for (const i of [...this.snapshot.locks, ...this.snapshot.trimLocks]) {
       if (candidate.poles[i].some((value, axis) => value !== frame.net.poles[i][axis]))
         throw new Error('Un punto bloccato è stato modificato.')
@@ -709,12 +819,14 @@ export class SurfaceDraft {
     this.applyFrame(frame, false)
     return true
   }
-  private applyFrame(frame: EditFrame, equivalentToShown: boolean, published?: G1PublishedPlaneResult): void {
+  private applyFrame(frame: EditFrame, equivalentToShown: boolean, published?: G1PublishedPlaneResult | G1PublishedCurvedResult): void {
     const previous = this.snapshot
     freezeNet(frame.net)
     this.freezePreparation(frame.preparation)
     this.freezePlaneTangency(frame.planeTangency)
-    const changedPlaneTangency = previous.planeTangency !== (frame.planeTangency ?? null)
+    this.freezeCurvedTangency(frame.curvedTangency)
+    const changedPlaneTangency = previous.planeTangency !== (frame.planeTangency ?? null) ||
+      previous.curvedTangency !== (frame.curvedTangency ?? null)
     if (changedPlaneTangency) this.invalidate()
     const changedPreparation = this.runtime.history.current?.preparation !== undefined &&
       this.base !== frame.preparation?.originalNet
@@ -723,7 +835,8 @@ export class SurfaceDraft {
     const sameMode = previous.continuity === frame.continuity && previous.freeBoundary === frame.freeBoundary
     const requiresPreview = !sameGeometry || !sameMode || changedPreparation || changedPlaneTangency
     const locks = Object.freeze([...frame.locks])
-    this.update({ net: frame.net, committedNet: frame.net, locks, planeTangency: frame.planeTangency ?? null, continuity: frame.continuity, freeBoundary: frame.freeBoundary,
+    this.update({ net: frame.net, committedNet: frame.net, locks, planeTangency: frame.planeTangency ?? null,
+      curvedTangency: frame.curvedTangency ?? null, continuity: frame.continuity, freeBoundary: frame.freeBoundary,
       ...(frame.preparation ? { originalNet: frame.preparation.originalNet,
         trimLocks: frame.preparation.trimLocks, hiddenPoles: frame.preparation.hiddenPoles,
         refinements: frame.preparation.refinements } : {}),
@@ -733,19 +846,31 @@ export class SurfaceDraft {
       calculating: requiresPreview ? true : previous.calculating,
       error: requiresPreview ? '' : previous.error,
       canUndo: this.runtime.history.canUndo, canRedo: this.runtime.history.canRedo })
-    if (published && frame.planeTangency) {
+    if (published && frame.curvedTangency) {
+      this.curvedPublished = { epoch: this.epoch, net: frame.net, constraint: frame.curvedTangency, value: published }
+      this.update({ preview: published.preview, previewStale: false, validNet: frame.net, calculating: false, error: '' })
+    } else if (published && frame.planeTangency) {
       this.planePublished = { epoch: this.epoch, net: frame.net, constraint: frame.planeTangency, value: published }
       this.update({ preview: published.preview, previewStale: false, validNet: frame.net, calculating: false, error: '' })
     } else if (requiresPreview) this.schedule(frame.net)
     else {
       if (this.planePublished?.net === previous.net) this.planePublished.net = frame.net
+      if (this.curvedPublished?.net === previous.net) this.curvedPublished.net = frame.net
       this.syncPreview()
     }
   }
   private schedule(net: Net): void {
     this.exported = null
     this.planePublished = null
+    this.curvedPublished = null
     this.queueNet = net
+    const curvedTangency = this.snapshot.curvedTangency
+    if (curvedTangency) {
+      const selection = this.selectionPayload().selection
+      const revision = selection && this.curvedPreviews.schedule({ net, constraint: curvedTangency, epoch: this.epoch, selection })
+      if (!revision) this.update({ validNet: null, calculating: false, error: 'Preparazione della tangenza curva non disponibile.' })
+      return
+    }
     const planeTangency = this.snapshot.planeTangency
     if (planeTangency) {
       const selection = this.selectionPayload().selection
@@ -767,6 +892,28 @@ export class SurfaceDraft {
     if (this.disposed) return
     if (this.recipeBusy || this.restoreUnverified) return
     if (this.refining) return
+    if (this.snapshot.curvedTangency) {
+      const published = this.curvedPublished
+      if (published && published.epoch === this.epoch && published.net === this.snapshot.net &&
+          published.constraint === this.snapshot.curvedTangency) {
+        this.update({ preview: published.value.preview, cylinderPreview: null, validNet: this.runtime.active ? this.snapshot.net : null,
+          calculating: false, previewStale: false, error: this.runtime.active ? '' : 'Editor chiuso.' })
+        return
+      }
+      const queue = this.curvedPreviews.getSnapshot(), current = queue.current
+      const matches = !!current && current.draft.epoch === this.epoch && current.draft.net === this.queueNet &&
+        current.draft.constraint === this.snapshot.curvedTangency
+      const visible = queue.preview?.identity.epoch === this.epoch &&
+        queue.preview.identity.constraint === this.snapshot.curvedTangency ? queue.preview : null
+      const valid = this.runtime.active && matches && queue.validRevision === current?.revision &&
+        visible?.revision === current?.revision && visible.value.preview.valid === true
+      this.update({ preview: visible?.value.preview ?? null, cylinderPreview: null,
+        validNet: valid ? this.snapshot.net : null, previewStale: !!visible && (!valid || visible.stale),
+        calculating: this.runtime.active && queue.calculating,
+        error: !this.runtime.active ? 'Editor chiuso.' : matches && queue.error?.revision === current?.revision
+          ? String((queue.error.error as Error)?.message ?? queue.error.error) : '' })
+      return
+    }
     if (this.snapshot.planeTangency) {
       const published = this.planePublished
       if (published && published.epoch === this.epoch && published.net === this.snapshot.net &&
@@ -821,6 +968,75 @@ export class SurfaceDraft {
   private selectionPayload(): { selection?: { face: number; refinements: KnotInsertion[] } } {
     const preparation = this.runtime.history.current?.preparation
     return preparation ? { selection: { face: preparation.face, refinements: preparation.refinements } } : {}
+  }
+  private checkCurvedStructure(base: Net, net: Net): void {
+    assertNet(base, net, 'G0', true)
+    if (!sameExact({ ...base, poles: [] }, { ...net, poles: [] }) ||
+        Array.from(net.poles).some(p => !Array.isArray(p) || p.length !== 3 || Array.from(p).some(x => !Number.isFinite(x))))
+      throw new Error('Reticolo della tangenza curva non valido o struttura modificata.')
+  }
+  private curvedProposalEditable(net: Net, choice: CompatibleCurvedSupportCandidate, locks: readonly number[], id: number): boolean {
+    const u = Math.floor(id / net.nv), v = id % net.nv
+    const distances = { uMin: u, uMax: net.nu - 1 - u, vMin: v, vMax: net.nv - 1 - v }
+    return distances[choice.side] === 1 && !locks.includes(id) &&
+      (Object.keys(distances) as (keyof typeof distances)[]).every(side => side === choice.side || distances[side] >= 2)
+  }
+  private checkCurvedProof(result: G1CurvedResult, constraint: Omit<SurfaceCurvedTangency, 'constraintId' | 'referenceNet'>,
+    protectedCount: number): void {
+    const v = result?.validation, preview = result?.preview, choice = constraint.choice
+    const along = choice.side === 'uMin' || choice.side === 'uMax' ? result.net.nv : result.net.nu
+    const pairCount = (along - 1) * along
+    if (!result || !sameExact(choice, result.choice) || !sameExact(result.stamp, choice.stamp) ||
+        choice.kind !== 'compatible-bspline' || preview?.valid !== true || !preview.mesh || !Array.isArray(preview.faceMeshes) ||
+        Array.from(preview.faceMeshes).some(mesh => !mesh) ||
+        ![preview.volume, preview.maxBoundaryError, preview.minimumNormalDot].every(Number.isFinite) ||
+        preview.maxBoundaryError < 0 || preview.maxBoundaryError > 1e-6 || preview.minimumNormalDot < 0.05 ||
+        preview.faceMeshes.length !== constraint.faceCount || constraint.faceCount <= Math.max(choice.stamp.faceIndex, choice.supportFaceIndex) ||
+        !result.revisions || ![result.revisions.edit, result.revisions.preview, result.revisions.anchorSelection].every(n => Number.isSafeInteger(n) && n >= 0) ||
+        v?.globalG1Certified !== false || v.edgeRegularity !== 'outward-rounded-coefficient-hull-proof' ||
+        v.checkedDerivativePairs !== pairCount || v.protectedPoleCount !== protectedCount ||
+        ![v.minSupportNormalMagnitudeBound, v.minSelectedNormalMagnitudeBound].every(n => Number.isFinite(n) && n > 0) ||
+        ![v.maxDerivativeCoefficientResidual, v.maxStraightnessResidual, v.maxNormalSinBound].every(n => Number.isFinite(n) && n >= 0) ||
+        v.maxDerivativeCoefficientResidual > constraint.derivativeTolerance || v.maxStraightnessResidual > constraint.distanceTolerance || v.maxNormalSinBound > 1e-7)
+      throw new Error('Risposta CAD della tangenza curva non verificabile.')
+  }
+  private checkCurvedResult(result: G1CurvedResult, constraint: Omit<SurfaceCurvedTangency, 'constraintId' | 'referenceNet'>): void {
+    if (!result?.net || result.preview?.previewRevision !== undefined) throw new Error('Proposta curva non isolata.')
+    this.checkCurvedStructure(constraint.baseNet, result.net)
+    const protectedIds = result.net.poles.flatMap((_, i) => this.curvedProposalEditable(result.net, constraint.choice, constraint.lockedPoles, i) ? [] : [i])
+    for (const id of protectedIds) if (!sameExact(result.net.poles[id], constraint.baseNet.poles[id]))
+      throw new Error('Polo protetto modificato dalla proposta curva.')
+    const changed = result.net.poles.flatMap((p, i) => sameExact(p, constraint.baseNet.poles[i]) ? [] : [i])
+    if (!sameExact(changed, result.changedIndices)) throw new Error('Modifiche della proposta curva non verificabili.')
+    this.checkCurvedProof(result, constraint, protectedIds.length)
+  }
+  private checkCurvedEdit(net: Net, constraint: SurfaceCurvedTangency): number[] {
+    if (constraint.kind !== 'compatible-bspline') throw new Error('Vincolo curvo non valido.')
+    this.checkCurvedStructure(constraint.referenceNet, net)
+    const ids = net.poles.flatMap((_, i) => boundaryLocked(net, i, 'G1') || constraint.lockedPoles.includes(i) ? [i] : [])
+    for (const id of ids) if (!sameExact(net.poles[id], constraint.referenceNet.poles[id]))
+      throw new Error('Un punto protetto dal vincolo G1 curvo è stato modificato.')
+    return ids
+  }
+  private checkPublishedCurvedResult(result: G1PublishedCurvedResult, constraint: SurfaceCurvedTangency, expected: Net): void {
+    if (!result || result.constraintKind !== 'compatible-bspline' || !Number.isSafeInteger(result.constraintId) || result.constraintId < 1 ||
+        result.constraintId !== constraint.constraintId || !sameExact(result.net, expected) ||
+        !Number.isSafeInteger(result.preview?.previewRevision) || result.preview.previewRevision < 1 ||
+        result.preview.previewRevision !== result.revisions?.preview + 1)
+      throw new Error('Risultato pubblicato della tangenza curva non valido.')
+    const protectedIds = this.checkCurvedEdit(result.net, constraint)
+    // Initial publication reports the proposal's protections; later evaluation
+    // reports the accepted double ring. Both must be certified by the kernel.
+    const proposalProtected = result.net.poles.filter((_, i) => !this.curvedProposalEditable(result.net, constraint.choice, constraint.lockedPoles, i)).length
+    const count = result.validation?.protectedPoleCount
+    if (count !== protectedIds.length && count !== proposalProtected) throw new Error('Protezioni della tangenza curva non valide.')
+    this.checkCurvedProof(result, constraint, count)
+  }
+  private freezeCurvedTangency(constraint?: SurfaceCurvedTangency): void {
+    if (!constraint) return
+    freezeNet(constraint.baseNet); freezeNet(constraint.referenceNet)
+    Object.freeze(constraint.lockedPoles)
+    Object.freeze(constraint.choice.stamp); Object.freeze(constraint.choice); Object.freeze(constraint)
   }
   private samePlaneChoice(a: G1SupportCandidate, b?: G1SupportCandidate): boolean {
     return !!b && a.id === b.id && a.side === b.side && a.edgeIndex === b.edgeIndex &&

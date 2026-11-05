@@ -2,6 +2,29 @@
 import type { Net } from './brep'
 import type { KnotInsertion } from './refineClampedNet'
 import type { G1SupportCandidate } from './g1SupportTopology'
+import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupportTopology'
+
+export interface SurfaceCurvedTangency {
+  kind: 'compatible-bspline'
+  constraintId: number
+  referenceNet: Net
+  baseNet: Net
+  choice: CompatibleCurvedSupportCandidate
+  lockedPoles: number[]
+  scale: number
+  distanceTolerance: number
+  derivativeTolerance: number
+  faceCount: number
+}
+
+function sameExact(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false
+  if (Array.isArray(a) && Array.isArray(b) && a.length !== b.length) return false
+  const keys = Object.keys(a), other = Object.keys(b)
+  return keys.length === other.length && keys.every(key => Object.prototype.hasOwnProperty.call(b, key) &&
+    sameExact((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
+}
 
 /** Exact proposal base and immutable constraint; never a legacy G1 border mode. */
 export interface SurfacePlaneTangency {
@@ -31,6 +54,7 @@ export interface EditFrame {
   freeBoundary: boolean
   preparation?: SurfacePreparation
   planeTangency?: SurfacePlaneTangency
+  curvedTangency?: SurfaceCurvedTangency
 }
 
 /** Local geometry/protection history. Strip editing retains its own history. */
@@ -47,25 +71,30 @@ export class SurfaceHistory {
   reset(): void { this.frames = []; this.cursor = -1 }
 
   commit(frame: EditFrame): EditFrame {
+    if (frame.planeTangency && frame.curvedTangency) throw new Error('Vincoli di tangenza incompatibili nella stessa bozza.')
     const previous = this.current
     // Reuse an unchanged net: changing locks alone must not trigger CAD evaluation.
-    const net = previous && JSON.stringify(previous.net) === JSON.stringify(frame.net)
+    const net = previous && (previous.curvedTangency || frame.curvedTangency
+      ? sameExact(previous.net, frame.net) : JSON.stringify(previous.net) === JSON.stringify(frame.net))
       ? previous.net : structuredClone(frame.net)
     const samePreparation = previous?.preparation === frame.preparation ||
       JSON.stringify(previous?.preparation) === JSON.stringify(frame.preparation)
     const samePlaneTangency = previous?.planeTangency === frame.planeTangency ||
       JSON.stringify(previous?.planeTangency) === JSON.stringify(frame.planeTangency)
+    const sameCurvedTangency = sameExact(previous?.curvedTangency, frame.curvedTangency)
     const next: EditFrame = {
       net, locks: [...new Set(frame.locks)].sort((a, b) => a - b),
       continuity: frame.continuity, freeBoundary: frame.freeBoundary,
       ...(frame.planeTangency ? { planeTangency: previous?.planeTangency && samePlaneTangency
         ? previous.planeTangency : structuredClone(frame.planeTangency) } : {}),
+      ...(frame.curvedTangency ? { curvedTangency: previous?.curvedTangency && sameCurvedTangency
+        ? previous.curvedTangency : structuredClone(frame.curvedTangency) } : {}),
       ...(frame.preparation ? { preparation: previous?.preparation && samePreparation
         ? previous.preparation : structuredClone(frame.preparation) } : {}),
     }
     if (!previous || previous.net !== next.net || JSON.stringify(previous.locks) !== JSON.stringify(next.locks) ||
         previous.continuity !== next.continuity || previous.freeBoundary !== next.freeBoundary ||
-        !samePreparation || !samePlaneTangency) {
+        !samePreparation || !samePlaneTangency || !sameCurvedTangency) {
       this.frames = this.frames.slice(0, this.cursor + 1)
       this.frames.push(next)
       if (this.frames.length > this.limit) this.frames.shift()
