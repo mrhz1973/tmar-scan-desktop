@@ -23,6 +23,12 @@ export interface WorkspaceSurfaceNote {
   readonly normal: Point
   readonly revision: number
 }
+export interface PreparedHistoryRecipe {
+  readonly recipe: SurfaceEditRecipe | SurfaceEditRecipeV6
+  readonly sourceKey: string
+  readonly selectionEpoch: number
+  readonly draftEpoch: number
+}
 interface Note extends WorkspaceSurfaceNote { readonly anchor: DraftAnchor }
 export type WorkspaceG1Candidate = (G1SupportCandidate & { readonly kind?: never }) | CompatibleCurvedSupportCandidate
 export interface WorkspaceSurfacePanelState {
@@ -863,7 +869,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   /** Prepare the current unannotated net for a future host history feature.
    * This does not publish a feature or change the host project. The caller
    * must still check the source and draft epochs at its own commit boundary. */
-  async prepareHistoryRecipe(): Promise<{ recipe: SurfaceEditRecipe | SurfaceEditRecipeV6; sourceKey: string; selectionEpoch: number; draftEpoch: number }> {
+  async prepareHistoryRecipe(): Promise<PreparedHistoryRecipe> {
     this.assertMutable()
     const before = this.draft.getSnapshot()
     if (this.gesture !== 'idle' || this.placingNote || this.notes.length || this.strip || this.stripPending ||
@@ -885,6 +891,17 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     } finally {
       if (!this.disposed) { this.busy = false; this.refresh(); this.resolveNotes() }
     }
+  }
+
+  /** Freshness only, not recipe-integrity validation; the host must replay it. */
+  isHistoryRecipeStampCurrent(prepared: PreparedHistoryRecipe): boolean {
+    try {
+      this.assertLive()
+      return !!prepared && prepared.sourceKey === this.sourceId &&
+        prepared.selectionEpoch === this.selectionEpoch && prepared.draftEpoch === this.draftEpoch &&
+        !this.busy && !this.frozen && this.gesture === 'idle' && !this.placingNote && !this.notes.length &&
+        !this.strip && !this.stripPending && this.snapshot.validation.kind === 'valid'
+    } catch { return false }
   }
 
   /** Explicit, slower CAD check. A provisional rendering alone cannot Apply. */
