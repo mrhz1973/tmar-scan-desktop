@@ -27,14 +27,16 @@ describe('main viewport math and exclusive routing', () => {
   it('dispatches the exclusive editor before marking and grips and does not fall through', () => {
     // Exercise the actual routing method without constructing a WebGL renderer.
     const scene = Object.create(SceneManager.prototype)
-    scene.gizmoAt = vi.fn(() => 'x')
+    // A non-gizmo press must remain exclusively owned by the editor.
+    // Gizmo hits have higher priority and are covered by qaEditorGizmoRouting.
+    scene.gizmoAt = vi.fn(() => null)
     scene.editorInput = { pointerDown: vi.fn(() => false) }
     scene.marking = { pointerGesture: vi.fn(() => ({})), handlePointerDown: vi.fn() }
     scene.grips = { handlePointerDown: vi.fn() }
     scene.sortedLayers = vi.fn(() => [])
     expect(scene.handlePointerDown({ button:0,shiftKey:false,ctrlKey:false,metaKey:false })).toBe(false)
     expect(scene.editorInput.pointerDown).toHaveBeenCalledTimes(1)
-    expect(scene.gizmoAt).not.toHaveBeenCalled()
+    expect(scene.gizmoAt).toHaveBeenCalledOnce()
     expect(scene.marking.pointerGesture).not.toHaveBeenCalled(); expect(scene.grips.handlePointerDown).not.toHaveBeenCalled()
   })
   it('does not leak an empty editor click to model selection', () => {

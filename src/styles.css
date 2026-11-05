@@ -1887,6 +1887,19 @@ button.x:disabled {
   pointer-events: auto;
 }
 
+/* The view bar may fill the width of a narrow editor viewport even when its
+   actual controls occupy only the left side. Pass pointer events through its
+   empty flex area so the bottom-right orientation gizmo remains clickable. */
+.stagecorner > .viewbar,
+.stagecorner > .viewbar > .viewrow {
+  pointer-events: none;
+}
+
+.stagecorner > .viewbar > .viewrow > *,
+.stagecorner > .viewbar > :not(.viewrow) {
+  pointer-events: auto;
+}
+
 /* The ways of looking at the parts: one row of housings — the parts, the
    workspace's keys at the side, the section view — with the section view's
    own row above it while it is open. Words rather than glyphs — there is
