@@ -13,6 +13,7 @@ import { validatePointOffsets, type PointNetwork } from '../core/networkPointMot
 // would have used them up.
 
 import { validateAnnotationSource } from '../core/annotationSchema'
+import { readStoredSurfaceHistory } from './surfaceEditHistory'
 import { strFromU8, strToU8 } from 'fflate'
 import type { CollectContext, ProjectSection, RestoreContext } from '../../../src/app/projectSections'
 import { array, entries, fields, indices, invalid, object, vector } from '../../../src/core/project/validation'
@@ -216,7 +217,18 @@ export function validateReversePart(raw: unknown): ReversePart {
 
 /** The keys of the STEP files the features import. */
 function importedKeys(features: readonly Feature[]): string[] {
-  return [...new Set(features.flatMap((f) => (f.kind === 'import' ? [f.file.key] : [])))]
+  return [...new Set(features.flatMap(f => {
+    if (f.kind !== 'import') return []
+    // Preserve the exact upstream STEP with a qualified history snapshot.
+    // Bad/unknown metadata may still round-trip, but never suppresses the
+    // ordinary saved copy nor causes project-open failure.
+    let sourceKey: string | null = null
+    if (f.surfaceEditHistory !== undefined) {
+      try { sourceKey = readStoredSurfaceHistory(f.surfaceEditHistory).source.file.key }
+      catch { /* Static CAD import remains usable. */ }
+    }
+    return sourceKey ? [f.file.key, sourceKey] : [f.file.key]
+  }))]
 }
 
 /** The workspace as the file is to hold it, or undefined with no feature —

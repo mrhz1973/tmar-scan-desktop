@@ -700,6 +700,10 @@ export function stepFileKey(text: string): string {
  *  faces with no solid comes in as a surface body. */
 export interface ImportFeature extends FeatureFlags {
   annotationSource?: {version:1;featureUuid:string;stepSha256:string;witnessSha256:string;faceBrep:string}
+  /** Inert, versioned history record. The CAD copy stays authoritative until
+   * an independent replay has verified it; unknown/corrupt records never
+   * prevent the original STEP import from loading. */
+  surfaceEditHistory?: unknown
   id: number
   kind: 'import'
   name: string

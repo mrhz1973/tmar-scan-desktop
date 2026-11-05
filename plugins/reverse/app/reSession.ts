@@ -12,9 +12,10 @@
 // stands without a viewport, its kernel in the test's own thread.
 
 import { annotationNoteDelta } from './annotatedNoteDelta'
+import { claimQualifiedSurfaceHistory, readStoredSurfaceHistory, canonicalReplayStep, type QualifiedSurfaceHistory } from './surfaceEditHistory'
 import type { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
 import { historyAtomic } from '../../../src/state/historyStore'
-import { abortIfNeeded } from '../../../src/plugins/editorLifetime'
+import { abortIfNeeded, editorSha256 } from '../../../src/plugins/editorLifetime'
 import type { CommitReceipt } from '../../../src/plugins/workspaceEditorTypes'
 import { stepFileKey, type ImportFeature } from '../core/features'
 import { nameBodies } from '../state/reFeatureHelpers'
@@ -750,7 +751,7 @@ export function createReverseSession({
   /** Build an immutable copy candidate in a DIFFERENT kernel. Nothing enters the
    * project before all CAD validation finishes. The tested kernel is adopted,
    * avoiding a second fallible rebuild after publication. */
-  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal, display?: Readonly<{ hideSourceBodyId: number }>, annotation?: Awaited<ReturnType<typeof validateAnnotatedCopy>>) => {
+  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal, display?: Readonly<{ hideSourceBodyId: number }>, annotation?: Awaited<ReturnType<typeof validateAnnotatedCopy>>, history?: QualifiedSurfaceHistory) => {
     assertCurrent(); abortIfNeeded(signal)
     const before = useReverse.getState(), originalClient = requireClient()
     // Host-derived identity, not an arbitrary ID from the plugin payload.
@@ -761,11 +762,39 @@ export function createReverseSession({
         before.sketchDraft || before.featureDraft || before.extrudeDraft || before.revolveDraft)
       throw new Error('Concludi la costruzione o la bozza CAD corrente.')
     if (!/^\s*ISO-10303-21\s*;/.test(text.slice(0, 256))) throw new Error('Il risultato non è un file STEP.')
-    const feature: ImportFeature = { ...(annotation?{annotationSource:{version:1 as const,featureUuid:crypto.randomUUID(),stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256,faceBrep:annotation.prepared.witnesses[0].brep}}:{}), id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
+    // Replay qualification is an ephemeral in-memory capability, not a JSON
+    // assertion supplied by an editor. Reject before touching project history.
+    if (history && annotation) throw new Error('History con note: contratto atomico non ancora qualificato.')
+    const qualified = history ? claimQualifiedSurfaceHistory(history) : null
+    const record = qualified ? readStoredSurfaceHistory(qualified.record) : null
+    if (record) {
+      const originalText = qualified!.sourceStep
+      if (!before.bodies.some(b => b.id === record.source.bodyId) ||
+          stepFileKey(originalText) !== record.source.file.key ||
+          originalText.length !== record.source.file.size)
+        throw new Error('Sorgente della ricetta assente o differente.')
+      if (await editorSha256(new TextEncoder().encode(originalText)) !== record.source.stepSha256 ||
+          await editorSha256(new TextEncoder().encode(text)) !== record.resultStepSha256)
+        throw new Error('L\u2019impronta STEP della ricetta non coincide.')
+      assertCurrent(); abortIfNeeded(signal)
+      const actual = await originalClient.bodyEditSource(record.source.bodyId, record.source.bodyKey)
+      assertCurrent(); abortIfNeeded(signal)
+      if (actual.bodyKey !== record.source.bodyKey ||
+          await editorSha256(new TextEncoder().encode(canonicalReplayStep(actual.text))) !== record.source.sourceReplaySha256)
+        throw new Error('Corpo CAD sorgente diverso da quello qualificato per il replay.')
+    }
+    const feature: ImportFeature = { ...(record ? {surfaceEditHistory:record} : {}), ...(annotation?{annotationSource:{version:1 as const,featureUuid:crypto.randomUUID(),stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256,faceBrep:annotation.prepared.witnesses[0].brep}}:{}), id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
       file: { key: stepFileKey(text), name, size: text.length } }
+    if (record && record.source.file.key === feature.file.key)
+      throw new Error('La sorgente e il risultato condividono la stessa chiave STEP: history rifiutata.')
     if (before.stepFiles[feature.file.key] !== undefined && before.stepFiles[feature.file.key] !== text)
       throw new Error('Collisione della chiave STEP: importazione rifiutata.')
-    const files = { ...before.stepFiles, [feature.file.key]: text }
+    if (record && before.stepFiles[record.source.file.key] !== undefined &&
+        before.stepFiles[record.source.file.key] !== qualified!.sourceStep)
+      throw new Error('Collisione nell\u2019archivio STEP sorgente.')
+    const files = { ...before.stepFiles,
+      ...(record ? {[record.source.file.key]:qualified!.sourceStep} : {}),
+      [feature.file.key]: text }
     const features = [...before.features, feature]
     const built = featuresToBuild({ ...before, features })
     const candidate = kernel()
@@ -807,6 +836,8 @@ export function createReverseSession({
             return receipt
           }
           if(annotation&&(operationId!==annotation.prepared.operationId||artifactSha256!==annotation.artifactSha256))throw new Error('Ticket annotato o hash CAD cambiato.')
+          if (record && artifactSha256 !== record.resultStepSha256)
+            throw new Error('Hash del replay CAD differente al commit: history rifiutata.')
           alive()
           if (client !== originalClient) throw new Error('Il kernel sorgente è cambiato.')
           const live = useReverse.getState(), oldMeshes = new Map(meshes), oldTopologies = new Map(topologies), oldLanded = landed
