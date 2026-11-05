@@ -12,7 +12,7 @@ import {createWorkspaceSurfaceSession,type WorkspaceSurfaceSession} from '../wor
 it('starts D on two-face shells, reopens three faces and retains valid geometry across pending/error/stale replies',async()=>{
   const editor=await SurfaceEditorKernel.load(),k=editor.kernel,owned:ShapeHandle[]=[]
   const load=vi.spyOn(SurfaceEditorKernel,'load').mockResolvedValue(editor)
-  let client:{onmessage:((event:MessageEvent)=>void)|null;postMessage:(request:Request)=>void;onerror:null;onmessageerror:null;terminate:()=>void}
+  let client!:{onmessage:((event:MessageEvent)=>void)|null;postMessage:(request:Request)=>void;onerror:null;onmessageerror:null;terminate:()=>void}
   let held:Request|null=null,holdDuplicate=false,corruptDuplicate=false
   const actions=new Map<number,string>()
   const host={onmessage:null as ((event:MessageEvent<Request>)=>void)|null,
@@ -127,4 +127,3 @@ it('starts D on two-face shells, reopens three faces and retains valid geometry 
     vi.unstubAllGlobals();load.mockRestore();owned.forEach(h=>k.release(h));editor.dispose()
   }
 },60000)
-
