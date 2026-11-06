@@ -261,7 +261,11 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
     const selectedFace = faces[index]
     if (!selectedFace || busy || draft.getSnapshot().calculating || (net && face === index)) return
     if (selectedFace.reason) { setError(selectedFace.reason); return }
-    if (face !== index && notes.length && !window.confirm('Cambiare faccia e scartare le note della faccia attuale?')) return
+    const currentDraft = draft.getSnapshot()
+    const geometryChanged = currentDraft.canUndo || !!(currentDraft.net && currentDraft.net !== currentDraft.committedNet) ||
+      !!(currentDraft.net && currentDraft.originalNet && JSON.stringify(currentDraft.net.poles) !== JSON.stringify(currentDraft.originalNet.poles))
+    if (face !== index && (notes.length || geometryChanged) &&
+        !window.confirm('Cambiare faccia e scartare le modifiche e le note non applicate?')) return
     const generation = ++session.generation
     const chosenContinuity = draft.getSnapshot().continuity
     setBusy(true); setError('')
