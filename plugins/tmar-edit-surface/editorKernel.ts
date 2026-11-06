@@ -4,7 +4,9 @@ import { assertNet, boundaryLocked, enrichBicubic, perforatedPlaneNet, planeNet,
 import { readRecipe, readCurvedRecipe, sha256, encodeRecipePoint, decodeRecipePoint, type SurfaceEditRecipe, type SurfaceEditRecipeV5, type SurfaceEditRecipeV6, type SerializedPoleEdit } from './recipe'
 import type { SurfacePlaneTangency, SurfaceCurvedTangency, SurfacePreparation } from './surfaceHistory'
 import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
-import { readAdaptiveTrimRecipe } from './adaptiveTrimRecipe'
+import { readAdaptiveTrimRecipe, type AdaptiveTrimRecipe } from './adaptiveTrimRecipe'
+import { adaptiveTrimPlan } from './adaptiveTrimPlan'
+import { visiblePoleWitness } from './visiblePoleWitness'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
@@ -186,6 +188,7 @@ export class SurfaceEditorKernel {
   private chosen = -1
   private originalNet: Net | null = null
   private refinements: KnotInsertion[] = []
+  private adaptiveSelection = false
   private editBrep = ''
   private editRecord: RecordSpan | null = null
   private solids = 0
@@ -413,6 +416,29 @@ export class SurfaceEditorKernel {
     const net=this.select(index,plan), selected=this.infos[index]
     return {net,refinements:plan,trimLocks:selected.trimLocks,hiddenPoles:selected.hiddenPoles}
   }
+  /** Research-only candidate. No worker/UI exposes this until qualification. */
+  selectAdaptiveExperimental(index: number) {
+    const k=this.kernel, face=this.faces[index], info=this.infos[index]
+    if (!face || info?.kind !== 'plane') throw new Error('La preparazione adattiva richiede un piano CAD.')
+    const wires=k.getSubShapes(face,'wire')
+    let outer:ShapeHandle|undefined
+    let plan:KnotInsertion[]
+    try {
+      const outerWire=k.outerWire(face); outer=outerWire
+      const inner=wires.filter(w=>!k.isSame(w,outerWire))
+      if(inner.length!==1) throw new Error('La preparazione adattiva richiede un solo contorno interno.')
+      const box=k.getBoundingBox(inner[0],{useTriangulation:false}), b=k.uvBounds(face)
+      const uv=[box.xmin,box.xmax].flatMap(x=>[box.ymin,box.ymax].flatMap(y=>[box.zmin,box.zmax].map(z=>k.uvFromPoint(face,{x,y,z}))))
+      plan=adaptiveTrimPlan([b.uMin,b.uMax,b.vMin,b.vMax],
+        [Math.min(...uv.map(q=>q.u)),Math.max(...uv.map(q=>q.u)),Math.min(...uv.map(q=>q.v)),Math.max(...uv.map(q=>q.v))])
+    } finally {wires.forEach(w=>k.release(w));if(outer!==undefined)k.release(outer)}
+    const candidate=this.netFor(index,plan,true), locks=new Set([...candidate.trimLocks,...candidate.hiddenPoles])
+    const witness=candidate.net.poles.findIndex((_,i)=>!locks.has(i)&&!boundaryLocked(candidate.net,i,'G1') &&
+      visiblePoleWitness(candidate.net,i,(u,v)=>k.classifyPointOnFace(face,u,v),0.01)!==null)
+    if(witness<0) throw new Error('Nessun punto libero con influenza interna verificata: preparazione non applicata.')
+    const net=this.prepareSelection(index,plan,false,true),selected=this.infos[index]
+    return {net,refinements:plan,trimLocks:selected.trimLocks,hiddenPoles:selected.hiddenPoles,witnessPole:witness}
+  }
   /** Reprepare the active face without invalidating its UV anchors. Switching
    * face still starts a new logical selection; failed preparation commits neither. */
   selectRefined(index: number, refinements: readonly KnotInsertion[] = []) {
@@ -456,6 +482,7 @@ export class SurfaceEditorKernel {
     this.chosen = index; this.originalNet = structuredClone(net); this.editBrep = text; this.editRecord = editRecord
     this.g1Selected = index
     this.refinements = structuredClone(refinements) as KnotInsertion[]
+    this.adaptiveSelection = fineTrim
     this.infos[index] = { ...this.infos[index], trimLocks: info.trimLocks, hiddenPoles: info.hiddenPoles }
     return net
   }
@@ -872,6 +899,20 @@ export class SurfaceEditorKernel {
   }
   /** Persist only after exact CAD validation. The host supplies its stable body ID. */
   async createRecipe(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string, freeBoundary = false, constraintId?: number): Promise<SurfaceEditRecipe> {
+    if (this.adaptiveSelection) throw new Error('La preparazione adattiva richiede una ricetta v7 esplicita.')
+    return this.createRecipeCommon(net,continuity,lockedPoles,bodyId,freeBoundary,constraintId)
+  }
+  /** Research-only v7 creation; never encode fine trim as a legacy recipe. */
+  async createAdaptiveRecipe(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string): Promise<AdaptiveTrimRecipe> {
+    if (!this.adaptiveSelection || !this.originalNet) throw new Error('Seleziona prima una preparazione adattiva.')
+    if (!Array.isArray(lockedPoles) || lockedPoles.some(i=>!Number.isSafeInteger(i) || i<0 || i>=this.originalNet!.poles.length ||
+      !net.poles[i] || net.poles[i].some((x,d)=>x!==this.originalNet!.poles[i][d])))
+      throw new Error('Un punto bloccato è stato modificato o non è valido.')
+    const recipe=await this.createRecipeCommon(net,continuity,lockedPoles,bodyId,false)
+    if (recipe.version!==4) throw new Error('Raffinamento adattivo non disponibile.')
+    return readAdaptiveTrimRecipe({...recipe,version:7,trimPolicy:'circular-fine-v1'})
+  }
+  private async createRecipeCommon(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string, freeBoundary = false, constraintId?: number): Promise<SurfaceEditRecipe> {
     if (!this.originalNet || !this.source) throw new Error('Seleziona prima una faccia.')
     if (typeof freeBoundary !== 'boolean' || !['G0', 'G1'].includes(continuity)) throw new Error('Modalità bordo non valida.')
     if (constraintId !== undefined) {
@@ -879,7 +920,7 @@ export class SurfaceEditorKernel {
       if (this.g1CurvedConstraints.has(constraintId)) throw new Error('La ricetta G1 B-spline richiede il percorso curvo esplicito.')
       return this.createPlaneRecipe(net, continuity, lockedPoles, bodyId, constraintId)
     }
-    const base = structuredClone(this.originalNet), next = structuredClone(net), rev = this.revision
+    const base = structuredClone(this.originalNet), next = structuredClone(net), rev = this.revision, preview = this.previewRevision
     if (freeBoundary && !this.infos[this.chosen].freeBoundary)
       throw new Error('Il bordo libero richiede una sola faccia aperta con contorno naturale rettangolare.')
     assertNet(base, next, continuity, freeBoundary)
@@ -894,7 +935,7 @@ export class SurfaceEditorKernel {
       lockedPoles: [...lockedPoles],
     }
     ;[recipe.source.brepSha256, recipe.baseNetSha256] = await Promise.all([sha256(this.brep), sha256(JSON.stringify(base))])
-    if (this.revision !== rev) throw new Error('Sorgente cambiata durante il salvataggio della ricetta.')
+    if (this.revision !== rev || this.previewRevision !== preview) throw new Error('Sorgente o anteprima cambiata durante il salvataggio della ricetta.')
     const checked = readRecipe(recipe)
     if (checked.lockedPoles.some(i => i >= base.poles.length)) throw new Error('Blocco di un polo inesistente.')
     this.evaluate(next, continuity, false, freeBoundary)
@@ -1055,6 +1096,8 @@ export class SurfaceEditorKernel {
         planeTangency: this.planeSnapshot(accepted.constraintId) }
     }
     if ([...recipe.edits.map(e => e.index), ...recipe.lockedPoles].some(i => i >= net.poles.length)) throw new Error('La ricetta contiene un polo inesistente.')
+    if (recipe.version === 7 && recipe.edits.some(e => recipe.lockedPoles.includes(e.index) && e.point.some((x,d)=>x!==net.poles[e.index][d])))
+      throw new Error('La ricetta modifica un punto bloccato.')
     for (const edit of recipe.edits) net.poles[edit.index] = [...edit.point]
     const freeBoundary = recipe.version === 3 || (recipe.version === 4 && recipe.boundaryMode === 'free-natural')
     const preview = this.evaluate(net, recipe.continuity, exportStep, freeBoundary)
@@ -1302,6 +1345,6 @@ export class SurfaceEditorKernel {
       return { ...preview, volume, maxBoundaryError, minimumNormalDot, step, previewRevision: ++this.previewRevision }
     } finally { fs.forEach(f => k.release(f)); k.release(edited) }
   }
-  clear() { this.g1SourceRevision++; this.g1Fingerprint = null; this.g1SourceReady = false; this.invalidateG1Selection(); this.releasePreviewFace(); this.revision++; this.anchorSelectionRevision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null; this.refinements = [] }
+  clear() { this.g1SourceRevision++; this.g1Fingerprint = null; this.g1SourceReady = false; this.invalidateG1Selection(); this.releasePreviewFace(); this.revision++; this.anchorSelectionRevision++; this.faces.forEach(f => this.kernel.release(f)); this.faces = []; if (this.source) this.kernel.release(this.source); this.source = null; this.chosen = -1; this.originalNet = null; this.refinements = []; this.adaptiveSelection = false }
   dispose() { this.clear(); if (this.ownsKernel) this.kernel[Symbol.dispose]() }
 }

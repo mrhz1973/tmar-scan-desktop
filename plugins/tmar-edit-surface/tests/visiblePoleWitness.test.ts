@@ -16,6 +16,10 @@ it('finds a sampled interior point inside the selected pole support', () => {
 it('does not claim visibility for points outside support or on the boundary', () => {
   expect(visiblePoleWitness(net, 0, (u, v) => u > 1 || v > 1 ? 'in' : 'on')).toBeNull()
 })
+it('requires meaningful influence when a minimum is requested', () => {
+  expect(visiblePoleWitness(net,0,(u,v)=>u>.9&&v>.9?'in':'out',.01)).toBeNull()
+  expect(visiblePoleWitness(net,0,()=> 'in',.1)).not.toBeNull()
+})
 it('rejects a periodic or invalid rational net before classifying', () => {
   expect(() => visiblePoleWitness({ ...net, periodic: [1, 0] }, 0, () => 'in')).toThrow()
   expect(() => visiblePoleWitness({ ...net, weights: Array(9).fill(0) }, 0, () => 'in')).toThrow()

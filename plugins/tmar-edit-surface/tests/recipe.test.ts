@@ -1,10 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { readRecipe } from '../recipe'
 import { readFileSync } from 'node:fs'
 
 describe('Surface Edit persistent CAD recipe', () => {
+  it('does not overwrite a newer preview when hashing a recipe is delayed', async () => {
+    const editor=await SurfaceEditorKernel.load(),k=editor.kernel,box=k.makeBox(20,30,10),step=k.exportStep(box)
+    k.release(box)
+    let release!:()=>void
+    const gate=new Promise<void>(resolve=>{release=resolve}),digest=crypto.subtle.digest.bind(crypto.subtle)
+    try {
+      const opened=editor.open(step),net=editor.select(opened.faces.find(f=>!f.reason)!.index)
+      const spy=vi.spyOn(crypto.subtle,'digest').mockImplementation(async (...args)=>{await gate;return digest(...args)})
+      try {
+        const pending=editor.createRecipe(net,'G0',[],'race-qa')
+        editor.evaluate(net,'G0')
+        release()
+        await expect(pending).rejects.toThrow(/anteprima cambiata/)
+      } finally {release();spy.mockRestore()}
+    } finally {editor.dispose()}
+  })
   const schemaBase = {
     schema: 'tmar.surface-edit', version: 2, engine: 'occt-wasm-5.7.1/brep-v3',
     units: 'mm', coordinateFrame: 'imported-step',
