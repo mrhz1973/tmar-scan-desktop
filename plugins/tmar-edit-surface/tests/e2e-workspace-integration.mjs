@@ -212,6 +212,8 @@ try {
     check(true,'Undo restores the edited point after navigation')
     await page.screenshot({path:join(out,'navigation-mode.png')})
     check(report.consoleErrors.length===0,'no browser console errors')
+    report.bodyIndex=Number(requestedBody)
+    if(sourceFile) {report.inputHashAfter=sha(readFileSync(sourceFile));report.sourceUnchanged=report.inputHashAfter===inputHash;check(report.sourceUnchanged,'original STEP is unchanged')}
     report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
   }
   if (process.env.TEST_FUSION_NAVIGATION === '1') {
