@@ -50,6 +50,7 @@ export interface WorkspaceSurfaceViewState {
   readonly locked: readonly number[]
   readonly hiddenPoles: readonly number[]
   readonly selectionMode: NetSelectionMode
+  readonly navigationOnly?: boolean
   readonly dragMode: DragMode
   readonly axis: number
   readonly dragStrength: number

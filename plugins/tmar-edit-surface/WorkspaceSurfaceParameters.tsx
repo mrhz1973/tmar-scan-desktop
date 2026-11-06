@@ -183,6 +183,9 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       {state.canFreeBoundary && <label className="inline"><input data-test="surface-free-boundary" type="checkbox"
         checked={state.freeBoundary} disabled={disabled} onChange={e => attempt(() => controller.setFreeBoundary(e.target.checked))} />
         Consenti movimento dei bordi liberi</label>}
+      <label className="inline"><input data-test="surface-navigation-only" type="checkbox" checked={state.navigationOnly} disabled={disabled}
+        onChange={e => attempt(() => controller.setNavigationOnly(e.target.checked))} />
+        Naviga nella vista (sospendi modifica del reticolo)</label>
       <label>Selezione del reticolo
         <select data-test="surface-selection-mode" value={state.selectionMode} disabled={disabled}
           onChange={e => attempt(() => controller.setSelectionMode(e.target.value as NetSelectionMode))}>

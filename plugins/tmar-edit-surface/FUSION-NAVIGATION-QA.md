@@ -30,3 +30,5 @@ These code paths are possible contributors, not a diagnosed cause of the
 reported failure. Qualification must record the actual scheme and build and
 exercise both gestures on and away from the control net, including release
 and cancellation, before claiming the owner's issue fixed.
+
+Navigation-only prototype: the workspace panel can temporarily release pointer presses over the control cage to the host, including when a cell is already selected. The mode also hides the free-edge drag handle. Unit tests verify routing back to the host layer and resumption of editing; this is not proof that the host camera or the owner's specific build and mouse scheme work. Actual application/desktop qualification remains required.

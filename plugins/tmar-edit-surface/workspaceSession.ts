@@ -81,6 +81,7 @@ export interface WorkspaceSurfacePanelState {
   readonly axis: number
   readonly dragStrength: number
   readonly selectionMode: NetSelectionMode
+  readonly navigationOnly: boolean
   readonly showNet: boolean
   readonly stripes: WorkspaceStripeSettings | null
   readonly symmetry: boolean
@@ -216,6 +217,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private axis = 2
   private dragStrength = 1
   private selectionMode: NetSelectionMode = 'auto'
+  private navigationOnly = false
   private showNet = true
   private symmetry = false
   private transparency = 0
@@ -873,6 +875,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   setAxis(value: number): void { this.change(() => { if (![0,1,2].includes(value)) throw new Error('Asse non valido.'); this.axis = value }) }
   setDragStrength(value: number): void { this.change(() => { if (!Number.isFinite(value) || value < .05 || value > 1) throw new Error('Intensità non valida.'); this.dragStrength = value }) }
   setSelectionMode(value: NetSelectionMode): void { this.change(() => { if (!['auto','points','edges','cells','mixed'].includes(value)) throw new Error('Selezione non valida.'); this.selectionMode = value }) }
+  setNavigationOnly(value: boolean): void { this.change(() => { this.navigationOnly = value }, false, false, true) }
   setShowNet(value: boolean): void { this.change(() => { this.showNet = value }) }
   setStripes(value: WorkspaceStripeSettings | null): void {
     this.change(() => {
@@ -1700,14 +1703,14 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,
-      dragMode: this.dragMode, axis: this.axis, dragStrength: this.dragStrength, selectionMode: this.selectionMode,
+      dragMode: this.dragMode, axis: this.axis, dragStrength: this.dragStrength, selectionMode: this.selectionMode, navigationOnly: this.navigationOnly,
       showNet: this.showNet, stripes: this.stripes, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
       mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency,
       placingNote: this.placingNote, canPlaceNote:validation.kind==='valid' && this.gesture==='idle' && !this.busy && !this.frozen, notes: this.notes, annotatedCopyAvailable, noteResolutionError, gesture: this.gesture, canBeginStrip, directStripAxis:this.directStripAxis,
       directStripError,
       canExportStep, strip:stripView })
     this.viewState = Object.freeze({ reticleStamp: current, net: strip ? null : d.net, preview, provisionalPreview:d.cylinderPreview?.faceMeshes ? {kind:'provisional' as const,faceMeshes:d.cylinderPreview.faceMeshes} : null, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
-      hiddenPoles: d.hiddenPoles, selectionMode: this.selectionMode, dragMode: this.dragMode,
+      hiddenPoles: d.hiddenPoles, selectionMode: this.selectionMode, navigationOnly: this.navigationOnly, dragMode: this.dragMode,
       axis: this.axis, dragStrength: this.dragStrength, showNet: this.showNet, snap: this.snap,
       snapDistance: this.snapDistance, busy: this.busy || !!this.frozen, placingNote: this.placingNote,
       stripes: this.stripes, notePins, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,

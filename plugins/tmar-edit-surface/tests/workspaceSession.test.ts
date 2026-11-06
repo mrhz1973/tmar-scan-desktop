@@ -114,6 +114,18 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 afterEach(()=>vi.useRealTimers())
 
 describe('WorkspaceSurfaceSession',()=>{
+  it('switches between navigation and reticle editing without changing the draft',async()=>{
+    const t=await setup();await selectFace(t)
+    const before=t.session.getViewState().net
+    expect(t.session.getPanelState().navigationOnly).toBe(false)
+    t.session.setNavigationOnly(true)
+    expect(t.session.getPanelState().navigationOnly).toBe(true)
+    expect(t.session.getViewState().navigationOnly).toBe(true)
+    expect(t.session.getViewState().net).toBe(before)
+    t.session.setNavigationOnly(false)
+    expect(t.session.getViewState().navigationOnly).toBe(false)
+    await t.session.dispose('cancelled')
+  })
   it('does not silently retain a legacy selection when adaptive selection fails on the same face',async()=>{
     const t=await setup();await selectFace(t)
     const choosing=t.session.chooseFace(0,true,true)

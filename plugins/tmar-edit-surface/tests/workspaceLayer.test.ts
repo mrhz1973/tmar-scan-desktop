@@ -871,3 +871,17 @@ it('does not pick clipped or busy strip boundaries and leaves face selection alo
   expect(f.counts().captured).toBeNull()
   layer.dispose()
 })
+
+it('leaves the selected net and cell to camera navigation when navigation mode is on', () => {
+  const f=fixture(), layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({selectionMode:'cells',selected:[0,1,2,3],navigationOnly:true})
+  const at=f.client([0,0,0])
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,0,0]))).toBe(false)
+  expect(f.getLayer().pointerDown?.(f.event(2,[-1,-1,0]))).toBe(false)
+  expect(f.getLayer().click?.(at.clientX,at.clientY,false)).toBe(false)
+  expect(f.claimEditDrag).not.toHaveBeenCalled()
+  f.set({navigationOnly:false})
+  expect(f.getLayer().pointerDown?.(f.event(3,[0,0,0]))).toBe(true)
+  f.getHandlers().up(f.event(3,[0,0,0]))
+  layer.dispose()
+})

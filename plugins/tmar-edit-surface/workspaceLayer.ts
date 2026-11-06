@@ -208,7 +208,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (disposed || layerDisposed) return
     try {
       const state = owner.getViewState(), anchor = stripAnchor(state)
-      if (!anchor || state.placingNote) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
+      if (!anchor || state.placingNote || state.navigationOnly) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
       const direct = !state.strip && state.directStrip && directSelection &&
         state.directStrip.paths === directSelection.paths && state.directStrip.revision === directSelection.revision ? directSelection : null
       stripHandle.dataset.edge = String(state.strip ? state.strip.selectedEdge : direct?.edge ?? -1)
@@ -626,7 +626,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     try {
       const state = owner.getViewState()
       if (disposed || layerDisposed || capture || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey ||
-          state.busy || state.placingNote || !displayed || !owner.previewStripDelta || !owner.finishStripGesture) return false
+          state.busy || state.placingNote || state.navigationOnly || !displayed || !owner.previewStripDelta || !owner.finishStripGesture) return false
       if (direct) {
         if (state.strip || !state.directStrip || state.directStrip.paths !== direct.paths ||
             state.directStrip.revision !== direct.revision || !owner.beginDirectStripGesture) return false
@@ -691,7 +691,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const down = (event: PointerEvent): boolean => {
     if (disposed || layerDisposed || capture || event.button !== 0 || event.shiftKey) return false
     const state = owner.getViewState(), net = state.net
-    if (state.busy || state.placingNote || !displayed || event.ctrlKey || event.metaKey) return false
+    if (state.busy || state.placingNote || state.navigationOnly || !displayed || event.ctrlKey || event.metaKey) return false
     let claimed = false, begun = false
     try {
       if (state.strip) {
@@ -782,6 +782,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const click = (x: number, y: number, additive: boolean): boolean => {
     if (disposed || layerDisposed) return false
     const state = owner.getViewState()
+    if (state.navigationOnly) return false
     if (state.busy || faceRequest) return true
     if (state.strip) return true
     try {
@@ -854,7 +855,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const layer: SceneLayer = {
     order: 0, covers: true, pointerDown: down, click,
     hover: (at, covered) => {
-      if (capture || covered || !at || owner.getViewState().busy || owner.getViewState().placingNote) { showHover(null); return false }
+      if (capture || covered || !at || owner.getViewState().busy || owner.getViewState().placingNote || owner.getViewState().navigationOnly) { showHover(null); return false }
       try { const picked = pickNet(at.x, at.y); showHover(picked); return !!picked } catch (error) { report(errorText(error)); return false }
     },
     clippingChanged: planes => { clipping = { planes, intersection: false }; preview.refreshClipping(); syncStripClipping(); positionStripHandle() },
