@@ -114,6 +114,20 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 afterEach(()=>vi.useRealTimers())
 
 describe('WorkspaceSurfaceSession',()=>{
+  it('keeps the navigation control visible while editing a free edge',async()=>{
+    const {createElement}=await import('react')
+    const {renderToStaticMarkup}=await import('react-dom/server')
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const t=await setup({sheet:true});await selectFace(t);await enterStrip(t)
+    t.session.setNavigationOnly(true)
+    const html=renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:t.session}))
+    expect(html).toContain('data-test=\"surface-strip-panel\"')
+    expect(html).toContain('data-test=\"surface-navigation-only\"')
+    expect(html).toMatch(/data-test=\"surface-navigation-only\"[^>]*checked/)
+    t.session.setNavigationOnly(false)
+    expect(t.session.getViewState().navigationOnly).toBe(false)
+    await t.session.dispose('cancelled')
+  })
   it('switches between navigation and reticle editing without changing the draft',async()=>{
     const t=await setup();await selectFace(t)
     const before=t.session.getViewState().net
