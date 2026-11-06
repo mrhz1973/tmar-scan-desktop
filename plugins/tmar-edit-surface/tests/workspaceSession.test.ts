@@ -114,6 +114,35 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 afterEach(()=>vi.useRealTimers())
 
 describe('WorkspaceSurfaceSession',()=>{
+  it('does not silently retain a legacy selection when adaptive selection fails on the same face',async()=>{
+    const t=await setup();await selectFace(t)
+    const choosing=t.session.chooseFace(0,true,true)
+    expect(t.worker.sent.at(-1)?.action).toBe('selectAdaptiveExperimental')
+    t.worker.fail(t.worker.sent.at(-1)!.id,'risposta persa')
+    await expect(choosing).rejects.toThrow('risposta persa')
+    expect(t.context.reportFatal).toHaveBeenCalledOnce()
+    expect(t.worker.terminate).toHaveBeenCalledOnce()
+  })
+  it('keeps adaptive selection explicitly opt-in and routes its history recipe',async()=>{
+    const t=await setup({blockedPlane:true}), choosing=t.session.chooseFace(0,false,true)
+    const request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('selectAdaptiveExperimental')
+    const selection={face:0,refinements:[{axis:'U',value:.25,count:1}],trimPolicy:'circular-fine-v1',generation:1,trimLocks:[6],hiddenPoles:[]}
+    t.worker.reply(request.id,{net:plane(),selection})
+    await choosing
+    expect(t.session.getViewState().locked).toContain(6)
+    await vi.advanceTimersByTimeAsync(90)
+    expect(t.worker.sent.at(-1)?.action).toBe('evaluateAdaptiveExperimental')
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(1));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    const marker={version:8,source:{bodyId:t.binding.bodyKey}} as never
+    const save=vi.spyOn(SurfaceDraft.prototype,'createAdaptiveLockedRecipe').mockResolvedValueOnce(marker)
+    const prepared=await t.session.prepareHistoryRecipe()
+    expect(save).toHaveBeenCalledWith(t.binding.bodyKey)
+    expect(prepared.recipe).toBe(marker)
+    save.mockRestore()
+    await t.session.dispose('cancelled')
+  })
   it('installs a protected refined plane with its trim locks and recipe preparation',async()=>{
     const t=await setup({blockedPlane:true}), selecting=t.session.chooseFace(0)
     const request=t.worker.sent.at(-1)!

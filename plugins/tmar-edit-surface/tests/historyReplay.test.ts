@@ -6,6 +6,8 @@ import { replaySurfaceHistory } from '../historyReplay'
 const recipe = () => ({ schema:'tmar.surface-edit',version:2,engine:'occt-wasm-5.7.1/brep-v3',
   units:'mm',coordinateFrame:'imported-step',source:{bodyId:'body',brepSha256:'a'.repeat(64),faceCount:1,solidCount:0},
   faceIndex:0,preparation:'native-nurbs',baseNetSha256:'b'.repeat(64),continuity:'G0',edits:[],lockedPoles:[] })
+const adaptiveRecipe = () => ({ ...recipe(), version:8, preparation:'plane-to-bicubic', boundaryMode:'locked',
+  refinements:[{axis:'U',value:.5,count:1}],trimPolicy:'circular-fine-v1',lockedValues:[] })
 const bytes = new TextEncoder().encode('STEP fixture')
 const source = () => ({bodyKey:'body',stepSha256:createHash('sha256').update(bytes).digest('hex'),step:bytes.slice(),assertCurrent:vi.fn()})
 class WorkerStub {
@@ -19,6 +21,19 @@ class WorkerStub {
 const tick = () => new Promise<void>(resolve=>setTimeout(resolve,10))
 
 describe('independent surface history replay',()=>{
+  it('uses isolated adaptive replay and rejects invalid adaptive recipes',async()=>{
+    const worker=new WorkerStub(),input=source(),saved=adaptiveRecipe()
+    const call=replaySurfaceHistory(input,saved,undefined,()=>worker as unknown as Worker)
+    await tick()
+    expect(worker.postMessage.mock.calls[0][0].action).toBe('replayAdaptiveLockedRecipe')
+    expect(worker.postMessage.mock.calls[0][0].recipe).toEqual(saved)
+    worker.reply({valid:true,step:'valid STEP'})
+    await expect(call).resolves.toMatchObject({valid:true})
+    expect(worker.terminate).toHaveBeenCalledOnce()
+    const factory=vi.fn(()=>new WorkerStub() as unknown as Worker)
+    await expect(replaySurfaceHistory(input,{...saved,trimPolicy:'legacy'},undefined,factory)).rejects.toThrow()
+    expect(factory).not.toHaveBeenCalled()
+  })
   it('rejects wrong body, wrong STEP and cancellation before creating a worker',async()=>{
     const factory=vi.fn(()=>new WorkerStub() as unknown as Worker), input=source()
     await expect(replaySurfaceHistory({...input,bodyKey:'other'},recipe(),undefined,factory)).rejects.toThrow('altro corpo')

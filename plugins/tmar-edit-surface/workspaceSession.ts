@@ -15,6 +15,8 @@ import { mirrorEdit, mirrorPartners } from './symmetry'
 import type { StripMove } from './sheetExtension'
 import type { KnotInsertion } from './refineClampedNet'
 import { readRecipe, readCurvedRecipe, type SurfaceEditRecipe, type SurfaceEditRecipeV6 } from './recipe'
+import { readAdaptiveLockedRecipe, type AdaptiveLockedRecipe } from './adaptiveLockedRecipe'
+import type { AdaptiveSelection } from './editor.worker'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
 
 export interface WorkspaceSurfaceNote {
@@ -25,7 +27,7 @@ export interface WorkspaceSurfaceNote {
   readonly revision: number
 }
 export interface PreparedHistoryRecipe {
-  readonly recipe: SurfaceEditRecipe | SurfaceEditRecipeV6
+  readonly recipe: SurfaceEditRecipe | SurfaceEditRecipeV6 | AdaptiveLockedRecipe
   readonly sessionId: string
   readonly sourceKey: string
   readonly selectionEpoch: number
@@ -339,15 +341,17 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     await this.chooseFace(index, dirty)
   }
 
-  async chooseFace(index: number, discardChanges = false): Promise<void> {
+  async chooseFace(index: number, discardChanges = false, adaptiveExperimental = false): Promise<void> {
     this.assertMutable()
     if (this.strip || this.stripPending) throw new Error('Chiudi prima la modifica del bordo.')
     const face = this.faces[index]
     if (!face || !Number.isInteger(index)) throw new Error('Faccia non disponibile.')
     const densePlane=face.kind==='plane' && face.reason==='Tutti i poli influenzano un contorno ritagliato.'
+    if (adaptiveExperimental && face.kind !== 'plane') throw new Error('La preparazione adattiva richiede un piano CAD.')
     if (face.reason && !face.experimentalCylinder && !densePlane) throw new Error(face.reason)
     if (this.gesture !== 'idle') throw new Error('Termina prima il trascinamento.')
-    if (index === this.face && this.draft.getSnapshot().net) return
+    if (index === this.face && this.draft.getSnapshot().net &&
+        !!this.runtime.history.current?.preparation?.adaptiveSelection === adaptiveExperimental) return
     if (this.notes.length && !discardChanges) throw new Error('La bozza contiene note: conferma prima di cambiare faccia.')
     if (this.snapshot.dirty && !discardChanges) throw new Error('La bozza contiene modifiche: conferma prima di cambiare faccia.')
     if (this.notes.length && (!Number.isSafeInteger(this.notesRevision) || this.notesRevision >= Number.MAX_SAFE_INTEGER))
@@ -361,8 +365,13 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.busy = true; this.message = null
     })
     const epoch = this.selectionEpoch
+    // Once dispatched, a lost or aborted worker reply may still have changed
+    // its selection, so the prior draft cannot safely remain active.
+    const adaptiveSelected = adaptiveExperimental
     try {
-      const picked = face.experimentalCylinder
+      const picked = adaptiveExperimental
+        ? {...await this.runtime.worker.ask<{net:Net;selection:AdaptiveSelection}>({action:'selectAdaptiveExperimental',face:index},this.context.signal),session:null}
+        : face.experimentalCylinder
         ? await this.runtime.worker.ask<{net:Net;session:number}>({ action:'prepareCylinder', face:index }, this.context.signal)
         : densePlane
           ? {...await this.runtime.worker.ask<{net:Net;refinements:KnotInsertion[];trimLocks:number[];hiddenPoles:number[]}>({action:'selectDenseTrimmedPlane',face:index},this.context.signal),session:null}
@@ -372,9 +381,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.change(() => {
         if (picked.session !== null) this.draft.installCylinder(picked.net,picked.session)
         else this.draft.install(picked.net, { continuity: previousContinuity,
-          trimLocks: 'trimLocks' in picked ? picked.trimLocks : face.trimLocks,
-          hiddenPoles: 'hiddenPoles' in picked ? picked.hiddenPoles : face.hiddenPoles,
-          refinements: 'refinements' in picked ? picked.refinements : [], face:index })
+          trimLocks: 'selection' in picked ? picked.selection.trimLocks : 'trimLocks' in picked ? picked.trimLocks : face.trimLocks,
+          hiddenPoles: 'selection' in picked ? picked.selection.hiddenPoles : 'hiddenPoles' in picked ? picked.hiddenPoles : face.hiddenPoles,
+          refinements: 'selection' in picked ? picked.selection.refinements : 'refinements' in picked ? picked.refinements : [], face:index,
+          ...('selection' in picked ? {adaptiveSelection:picked.selection,experimentalAdaptiveLocks:true} : {}) })
         if (this.notes.length) { this.advanceNotesRevision(); this.notes = Object.freeze([]) }
         this.selectionEpoch++; this.face = index; this.busy = false
         this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
@@ -383,6 +393,11 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       }, true)
     } catch (error) {
       if (!this.disposed && epoch === this.selectionEpoch) {
+        if (adaptiveSelected) {
+          try { this.context.reportFatal('Selezione adattiva non verificabile: riapri Edit Surface.') } catch { /* Keep original error. */ }
+          try { this.releaseOwned() } catch { /* Keep original error. */ }
+          throw error
+        }
         this.busy = false; this.message = String((error as Error)?.message ?? error); this.refresh()
       }
       throw error
@@ -916,7 +931,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.busy = true
     this.refresh()
     try {
-      const recipe = before.curvedTangency
+      const recipe = this.runtime.history.current?.preparation?.adaptiveSelection
+        ? await this.draft.createAdaptiveLockedRecipe(this.source.bodyKey)
+        : before.curvedTangency
         ? await this.draft.createCurvedRecipe(this.source.bodyKey)
         : await this.draft.createRecipe(this.source.bodyKey)
       this.assertLive()
@@ -960,7 +977,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const savedNotes=Object.freeze(notes.map(note=>Object.freeze({id:note.id,text:note.text,faceIndex:note.anchor.face,u:note.anchor.u,v:note.anchor.v})))
     this.busy=true;this.refresh()
     try {
-      const recipe=before.curvedTangency ? await this.draft.createCurvedRecipe(this.source.bodyKey) : await this.draft.createRecipe(this.source.bodyKey)
+      const recipe=this.runtime.history.current?.preparation?.adaptiveSelection
+        ? await this.draft.createAdaptiveLockedRecipe(this.source.bodyKey)
+        : before.curvedTangency ? await this.draft.createCurvedRecipe(this.source.bodyKey) : await this.draft.createRecipe(this.source.bodyKey)
       this.assertLive()
       if (this.selectionEpoch!==selectionEpoch || this.draftEpoch!==draftEpoch || this.notesRevision!==notesRevision ||
           this.notes!==notes || this.draft.getSnapshot().net!==net || this.strip || this.gesture!=='idle')
@@ -1031,7 +1050,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         this.strip || this.stripPending || this.gesture !== 'idle')
       throw new Error('Apri una nuova sessione vuota per ripristinare la ricetta.')
     const version = (value as { version?: unknown } | null)?.version
-    const recipe = version === 6 ? readCurvedRecipe(value) : readRecipe(value)
+    const recipe = version === 8 ? readAdaptiveLockedRecipe(value) : version === 6 ? readCurvedRecipe(value) : readRecipe(value)
     if (recipe.source.bodyId !== this.source.bodyKey) throw new Error('La ricetta appartiene a un altro corpo CAD.')
     this.busy = true
     this.refresh()
@@ -1044,7 +1063,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (digest.toLowerCase() !== this.source.stepSha256.toLowerCase()) throw new Error('Il contenuto STEP non corrisponde alla sorgente.')
       const step = new TextDecoder().decode(bytes)
       workerRestoreStarted = true
-      const result = version === 6
+      const result = version === 8
+        ? await this.draft.restoreAdaptiveLockedRecipe(step, recipe, this.source.bodyKey)
+        : version === 6
         ? await this.draft.restoreCurvedRecipe(step, recipe, this.source.bodyKey)
         : await this.draft.restoreRecipe(step, recipe, this.source.bodyKey)
       this.assertLive()

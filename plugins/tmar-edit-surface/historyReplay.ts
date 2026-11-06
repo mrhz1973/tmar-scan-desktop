@@ -2,6 +2,7 @@
 import type { Preview } from './editorKernel'
 import { readCurvedRecipe, readRecipe } from './recipe'
 import { SurfaceWorkerClient } from './workerClient'
+import { readAdaptiveLockedRecipe } from './adaptiveLockedRecipe'
 
 export interface SurfaceReplaySource {
   readonly bodyKey: string
@@ -22,7 +23,7 @@ export async function replaySurfaceHistory(source: SurfaceReplaySource, value: u
   ensureCurrent()
   const saved = structuredClone(value)
   const version = (saved as { version?: unknown } | null)?.version
-  const recipe = version === 6 ? readCurvedRecipe(saved) : readRecipe(saved)
+  const recipe = version === 8 ? readAdaptiveLockedRecipe(saved) : version === 6 ? readCurvedRecipe(saved) : readRecipe(saved)
   const bodyKey = source.bodyKey, stepSha256 = source.stepSha256
   if (recipe.source.bodyId !== bodyKey) throw new Error('La ricetta appartiene a un altro corpo CAD.')
   const bytes = source.step.slice()
@@ -32,7 +33,7 @@ export async function replaySurfaceHistory(source: SurfaceReplaySource, value: u
   if (hash.toLowerCase() !== stepSha256.toLowerCase()) throw new Error('Il contenuto STEP non corrisponde alla sorgente.')
   const worker = new SurfaceWorkerClient(makeWorker)
   try {
-    const reply = await worker.ask<Preview & {step?: unknown}>({ action: version === 6 ? 'replayCurvedRecipe' : 'replayRecipe',
+    const reply = await worker.ask<Preview & {step?: unknown}>({ action: version === 8 ? 'replayAdaptiveLockedRecipe' : version === 6 ? 'replayCurvedRecipe' : 'replayRecipe',
       step: new TextDecoder().decode(bytes), recipe, bodyId: bodyKey }, signal)
     ensureCurrent()
     if (!reply || reply.valid !== true || typeof reply.step !== 'string' || !reply.step.trim())
