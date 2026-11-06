@@ -54,17 +54,16 @@ describe('opt-in host history publication and project restoration',()=>{
         source.binding.kernelGeneration,source.binding.frameRevision,
         source.binding.stepSha256,source.binding.units,source.binding.coordinateFrame]),
       selectionEpoch:3,draftEpoch:9}
-    const qualified=await qualifySurfaceHistory({source,prepared,isStampCurrent:()=>true,
-      resultStep:enc(finalStep),noteCount:0,replay,signal:ctrl.signal})
     const previous=useReverse.getState(),past=useHistory.getState().past.length
     // Simulate revocation AFTER an isolated CAD candidate was built but
     // BEFORE the host historyAtomic commit; no body or history may publish.
-    const staleQualified=await qualifySurfaceHistory({source,prepared,isStampCurrent:()=>true,
-      resultStep:enc(finalStep),noteCount:0,replay,signal:ctrl.signal})
     let revoked=false,revokedReleased=0
     await withFrozenHistoryTransaction({
       freezeHistory:()=>({isCurrent:()=>!revoked,release:()=>{revokedReleased++}}),
     },prepared,async gate=>{
+      const staleQualified=await qualifySurfaceHistory({source,prepared,
+        isStampCurrent:()=>{gate.assertCurrent();return true},
+        resultStep:enc(finalStep),noteCount:0,replay,signal:ctrl.signal})
       const staged=await session.stageEditorCopy(finalStep,'revoked-param.step',
         source.assertCurrent,ctrl.signal,undefined,undefined,gate.bindQualified(staleQualified))
       try{
@@ -83,6 +82,9 @@ describe('opt-in host history publication and project restoration',()=>{
         return {isCurrent:()=>lockActive,release:()=>{released++;lockActive=false}}
       },
     },prepared,async gate=>{
+      const qualified=await qualifySurfaceHistory({source,prepared,
+        isStampCurrent:()=>{gate.assertCurrent();return true},
+        resultStep:enc(finalStep),noteCount:0,replay,signal:ctrl.signal})
       const stage=await session.stageEditorCopy(finalStep,'qualified-param.step',
         source.assertCurrent,ctrl.signal,undefined,undefined,gate.bindQualified(qualified))
       try {

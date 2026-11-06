@@ -82,9 +82,6 @@ describe('independently replay-qualified, atomic annotated history sidecar',()=>
     await expect(qualifyAnnotatedSurfaceHistory({source,prepared:{...prepared,
       notes:[{...prepared.notes[0],text:'forged text'}]},annotationPlan:plan,
       isStampCurrent:()=>true,resultStep:enc(finalStep),replay,signal:controller.signal})).rejects.toThrow('non coincidono')
-    const qualified=await qualifyAnnotatedSurfaceHistory({source,prepared,annotationPlan:plan,
-      isStampCurrent:()=>true,resultStep:enc(finalStep),replay,signal:controller.signal})
-    expect(qualified.record.notePolicy).toBe('annotated-v1')
     const initialHistory=useHistory.getState().past.length
     const initialStore=useReverse.getState()
     let frozen=true,releaseCount=0
@@ -94,6 +91,10 @@ describe('independently replay-qualified, atomic annotated history sidecar',()=>
         return {isCurrent:()=>frozen,release:()=>{releaseCount++;frozen=false}}
       },
     },prepared,async gate=>{
+      const qualified=await qualifyAnnotatedSurfaceHistory({source,prepared,annotationPlan:plan,
+        isStampCurrent:()=>{gate.assertCurrent();return true},
+        resultStep:enc(finalStep),replay,signal:controller.signal})
+      expect(qualified.record.notePolicy).toBe('annotated-v1')
       const staging=await session.stageEditorCopy(finalStep,'annotated-history.step',
         source.assertCurrent,controller.signal,undefined,plan,gate.bindQualified(qualified))
       try {
