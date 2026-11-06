@@ -10,6 +10,8 @@ import type { SurfaceWorkerPayload } from '../workerClient'
 import type { ExperimentalSharedPlaneIdentity } from '../editor.worker'
 import type { SurfaceWorkerClient } from '../workerClient'
 import { ExperimentalSharedPlaneSession } from '../experimentalSharedPlaneSession'
+import { ExperimentalSharedPlanePreview } from '../experimentalSharedPlanePreview'
+import { WorkspacePreview } from '../workspacePreview'
 
 it('characterizes a STEP solid whose top is split into coplanar faces', async () => {
   const editor=await SurfaceEditorKernel.load(), k=editor.kernel, owned:ShapeHandle[]=[]
@@ -139,6 +141,20 @@ it('characterizes a STEP solid whose top is split into coplanar faces', async ()
         expect(k.isValid(sessionSolid)).toBe(true)
         expect(await ask({action:'finalFaceWitness',previewRevision:beforePreview.previewRevision})).toEqual(witness)
       } finally {session.dispose()}
+      let masks=0,restores=0
+      const view=new WorkspacePreview({session:new THREE.Group(),invalidate:()=>{},maskSource:()=>{masks++;return()=>{restores++}}})
+      const preview=new ExperimentalSharedPlanePreview(new ExperimentalSharedPlaneSession({ask} as unknown as SurfaceWorkerClient),view)
+      try {
+        const drawNet=await preview.prepare(step,target);drawNet.poles[pole][2]+=.02
+        await preview.update(drawNet)
+        expect(view.group.children).toHaveLength(7);expect(masks).toBe(1)
+        const unsafe=structuredClone(drawNet);unsafe.poles[0][2]+=.1
+        await expect(preview.update(unsafe)).rejects.toThrow()
+        expect(view.group.visible).toBe(false);expect(restores).toBe(1)
+        await preview.update(drawNet)
+        expect(view.group.visible).toBe(true);expect(masks).toBe(2)
+      } finally {preview.dispose()}
+      expect(restores).toBe(2)
       expect(()=>editor.select(target)).toThrow(/ambigua|condivisa/i)
     } finally {vi.unstubAllGlobals();load.mockRestore()}
   } finally {owned.reverse().forEach(shape=>k.release(shape));editor.dispose()}
