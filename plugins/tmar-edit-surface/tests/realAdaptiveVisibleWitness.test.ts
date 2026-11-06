@@ -10,6 +10,8 @@ import { boundaryLocked } from '../brep'
 import { adaptiveTrimPlan } from '../adaptiveTrimPlan'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { createServer } from 'vite'
+import { readAdaptiveTrimRecipe } from '../adaptiveTrimRecipe'
+import { readRecipe } from '../recipe'
 
 const path=process.env.SURFACE_QA_STEP
 // Explicit opt-in: the production π/12 case is a known failing experiment.
@@ -72,10 +74,27 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1').each([3,7])('mea
       const [pole,witness]=best, before=k.pointOnSurface(source,witness.u,witness.v),normal=k.surfaceNormal(source,witness.u,witness.v)
       net.poles[pole]=[net.poles[pole][0]+normal.x*.02,net.poles[pole][1]+normal.y*.02,net.poles[pole][2]+normal.z*.02]
       const edited=editor.evaluate(net,'G1',true);expect(edited.valid).toBe(true);expect(edited.step).toBeTruthy()
+      // Research-only adapter: persist an explicit v7 policy, then replay via
+      // the transitorily transformed kernel. This is NOT a product v7 replay.
+      const legacy=await editor.createRecipe(net,'G1',[],'adaptive-research')
+      expect(legacy.version).toBe(4)
+      const versioned=readAdaptiveTrimRecipe({...legacy,version:7,trimPolicy:'circular-fine-v1'})
+      expect(()=>readRecipe(versioned)).toThrow()
+      const roundTrip=readAdaptiveTrimRecipe(JSON.parse(JSON.stringify(versioned)))
+      expect(()=>readAdaptiveTrimRecipe({...roundTrip,trimPolicy:'legacy'})).toThrow()
+      const {trimPolicy: _policy,...common}=roundTrip
+      await expect(editor.replayRecipe(step,{...common,version:4},'wrong-source')).rejects.toThrow()
+      const replay=await editor.replayRecipe(step,{...common,version:4},'adaptive-research')
+      expect(replay.valid).toBe(true);expect(replay.step).toBeTruthy()
       const output=k.importStep(edited.step!),afterFaces=k.getSubShapes(output,'face')
+      const restored=k.importStep(replay.step!),restoredFaces=k.getSubShapes(restored,'face')
       try {
-        expect(k.isValid(output)).toBe(true);expect(afterFaces).toHaveLength(beforeFaces.length)
+        expect(k.isValid(output)).toBe(true);expect(k.isValid(restored)).toBe(true)
+        expect(afterFaces).toHaveLength(beforeFaces.length);expect(restoredFaces).toHaveLength(beforeFaces.length)
         const after=k.pointOnSurface(afterFaces[faceIndex],witness.u,witness.v)
+        const restoredPoint=k.pointOnSurface(restoredFaces[faceIndex],witness.u,witness.v)
+        expect(Math.hypot(after.x-restoredPoint.x,after.y-restoredPoint.y,after.z-restoredPoint.z)).toBeLessThan(1e-7)
+        expect(k.getVolume(restored)).toBeCloseTo(k.getVolume(output),6)
         const measured=Math.hypot(before.x-after.x,before.y-after.y,before.z-after.z)
         expect(measured).toBeGreaterThan(1e-4)
         expect(measured).toBeCloseTo(.02*witness.weight,7)
@@ -116,7 +135,7 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1').each([3,7])('mea
         }finally{wa.forEach(w=>k.release(w));wb.forEach(w=>k.release(w));k.release(oa);k.release(ob)}
         expect(boundarySamples).toBeGreaterThan(0);expect(boundaryMax).toBeLessThan(1e-6);expect(normalMin).toBeGreaterThan(1-1e-8)
         console.log(JSON.stringify({face:faceIndex,insideSamples:inside,freeInfluentialPoles:maxima.size,pole,measuredMm:measured,uv:[witness.u,witness.v],otherSamples,otherMax,boundarySamples,boundaryMax,normalMin}))
-      } finally {afterFaces.forEach(f=>k.release(f));k.release(output)}
+      } finally {restoredFaces.forEach(f=>k.release(f));k.release(restored);afterFaces.forEach(f=>k.release(f));k.release(output)}
     } finally {beforeFaces.forEach(f=>k.release(f));k.release(original)}
   } finally {
     expect(sha(readFileSync(path!))).toBe(sha(input))
