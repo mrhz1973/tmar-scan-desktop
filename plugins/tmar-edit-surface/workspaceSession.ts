@@ -1661,7 +1661,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       canUndo, canRedo, undoLabel: canUndo ? (strip ? 'Annulla striscia' : 'Annulla modifica superficie') : null,
       redoLabel: canRedo ? (strip ? 'Ripeti striscia' : 'Ripeti modifica superficie') : null, historyRevision: this.historyRevision,
       draftNoteCount: this.notes.length, notesRevision:this.notesRevision, message })
-    const canLoadG1 = !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
+    const adaptive = !!this.runtime.history.current?.preparation?.adaptiveSelection
+    const canLoadG1 = !adaptive && !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
       this.gesture === 'idle' && !!d.net && d.net === d.committedNet && d.validNet === d.net &&
       !d.calculating && !d.previewStale && !d.freeBoundary && !tangency && d.cylinderSession === null
     this.panel = Object.freeze({ faces: this.faces, face: this.face, net: d.net, selected: d.selected,
@@ -1670,7 +1671,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       canApplyG1: canLoadG1 && !!this.g1Choice && this.g1Candidates.some(candidate => candidate.id === this.g1Choice),
       planeTangencyActive: !!d.planeTangency,
       curvedTangencyActive: !!d.curvedTangency,
-      canFreeBoundary: !!face?.freeBoundary && !tangency, canRefineNet: !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
+      canFreeBoundary: !adaptive && !!face?.freeBoundary && !tangency, canRefineNet: !adaptive && !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
         !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,

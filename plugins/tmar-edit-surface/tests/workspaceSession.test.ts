@@ -135,6 +135,9 @@ describe('WorkspaceSurfaceSession',()=>{
     expect(t.worker.sent.at(-1)?.action).toBe('evaluateAdaptiveExperimental')
     t.worker.reply(t.worker.sent.at(-1)!.id,preview(1));await flush()
     expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    expect(t.session.getPanelState().canRefineNet).toBe(false)
+    expect(t.session.getPanelState().canLoadG1).toBe(false)
+    expect(t.session.getPanelState().canFreeBoundary).toBe(false)
     const marker={version:8,source:{bodyId:t.binding.bodyKey}} as never
     const save=vi.spyOn(SurfaceDraft.prototype,'createAdaptiveLockedRecipe').mockResolvedValueOnce(marker)
     const prepared=await t.session.prepareHistoryRecipe()
