@@ -18,6 +18,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const [g1Error, setG1Error] = useState('')
   const disabled = state.busy || state.gesture !== 'idle'
   const editable = state.selected.filter(i => !state.locked.includes(i))
+  const hiddenPoles = controller.getViewState().hiddenPoles
+  const hasFreeVisiblePoint = !!state.net?.poles.some((_, index) => !state.locked.includes(index) && !hiddenPoles.includes(index))
   const axisNames = state.dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']
   const strip = state.strip
   const cylinder = !!state.faces[state.face]?.experimentalCylinder
@@ -277,7 +279,17 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         onChange={e => attempt(() => controller.setTransparency(Number(e.target.value)))} /></label>
       {!strip && <>
       <p data-test="surface-selection">{state.selected.length} selezionati · {editable.length} modificabili</p>
-      <div className="row"><button type="button" disabled={disabled} onClick={() => attempt(() => controller.selectAllFree())}>Seleziona liberi</button>
+      <div className="row"><button type="button" data-test="surface-next-free" disabled={disabled || !hasFreeVisiblePoint}
+        title="Seleziona il prossimo punto visibile e non bloccato, utile nei reticoli fitti."
+        onClick={() => attempt(() => {
+          const view=controller.getViewState(), net=view.net
+          if (!net) throw new Error('Seleziona prima una faccia.')
+          const available=net.poles.map((_,index)=>index).filter(index=>!view.locked.includes(index) && !view.hiddenPoles.includes(index))
+          if (!available.length) throw new Error('Nessun punto modificabile disponibile.')
+          const current=available.indexOf(view.selected.length===1 ? view.selected[0] : -1)
+          controller.selectPoints([available[(current+1)%available.length]],false)
+        })}>Prossimo punto modificabile</button>
+        <button type="button" disabled={disabled} onClick={() => attempt(() => controller.selectAllFree())}>Seleziona liberi</button>
         <button type="button" disabled={disabled} onClick={() => attempt(() => controller.clearSelection())}>Nessuno</button></div>
       <div className="row"><button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(true))}>Blocca punti</button>
         <button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(false))}>Sblocca punti</button></div>

@@ -194,6 +194,23 @@ try {
     await page.click('[data-test=surface-navigation-only]')
     check(await page.$eval('[data-test=surface-navigation-only]',e=>!e.checked),'navigation toggle can be turned off')
     await page.evaluate(()=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller;c.setDragMode('screen');c.setSnap(false)})
+    if(process.env.TEST_DENSE_NEXT==='1') {
+      if (!sourceFile) throw Error('TEST_DENSE_NEXT requires STEP_FILE')
+      await page.waitForSelector('[data-test=surface-next-free]:enabled');await page.click('[data-test=surface-next-free]')
+      const before=await page.evaluate(()=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller,s=c.getViewState(),i=s.selected[0];c.setDragMode('local');c.setAxis(2);return {i,point:[...s.net.poles[i]],locked:s.locked.includes(i),hidden:s.hiddenPoles.includes(i),volume:s.preview.volume}})
+      check(!before.locked&&!before.hidden,'next control selects one unlocked visible pole')
+      await page.click('[data-test=surface-move]')
+      await page.waitForFunction(({i,point})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),v=s.controller?.getViewState();return s.snapshot?.validation.kind==='valid'&&!s.controller?.getPanelState().calculating&&v?.net?.poles[i].some((x,j)=>Math.abs(x-point[j])>1e-6)}, {timeout:120000},before)
+      const after=await page.evaluate(()=>window.surfaceQa.useWorkspaceEditor.getState().controller.getViewState().preview.volume)
+      report.dense={pole:before.i,volumeBefore:before.volume,volumeAfter:after,volumeDelta:after-before.volume}
+      check(true,'numeric move validates after selecting the next free pole')
+      await page.click('[data-test=surface-undo]')
+      await page.waitForFunction(({i,point})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[i];return s.snapshot?.validation.kind==='valid'&&p&&p.every((v,j)=>Math.abs(v-point[j])<1e-8)}, {timeout:120000},before)
+      check(true,'Undo restores the selected pole')
+      check(report.consoleErrors.length===0,'no browser console errors')
+      report.inputHashAfter=sha(readFileSync(sourceFile));report.sourceUnchanged=report.inputHashAfter===inputHash;check(report.sourceUnchanged,'original STEP unchanged')
+      report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
+    }
     const target=await page.evaluate(()=>{
       const q=window.surfaceQa,h=q.scene.layerHost(),c=q.useWorkspaceEditor.getState().controller,state=c.getViewState(),cam=h.camera(),r=h.canvas.getBoundingClientRect()
       h.partGroup.updateWorldMatrix(true,true);cam.updateMatrixWorld(true)
