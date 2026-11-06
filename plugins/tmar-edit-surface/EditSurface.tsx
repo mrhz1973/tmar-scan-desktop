@@ -14,6 +14,7 @@ import type { StripMove } from './sheetExtension'
 import type { DraftAnchor, FaceInfo, Preview } from './editorKernel'
 import type { SurfaceWorkerPayload } from './workerClient'
 import { SurfaceRuntime } from './surfaceRuntime'
+import { changeSurfaceFace } from './faceSelection'
 import { SurfaceViewport, hasSurfaceZebra, type StripeSettings } from './SurfaceViewport'
 import { dragDirection, type DragMode } from './localFrame'
 import { mirrorPartners, mirrorEdit } from './symmetry'
@@ -258,19 +259,26 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
   }
   const chooseFace = async (index: number) => {
     const selectedFace = faces[index]
-    if (!selectedFace || busy || (net && face === index)) return
+    if (!selectedFace || busy || draft.getSnapshot().calculating || (net && face === index)) return
     if (selectedFace.reason) { setError(selectedFace.reason); return }
-    if (face >= 0 && face !== index && notes.length && !window.confirm('Cambiare faccia e scartare le note della faccia attuale?')) return
+    if (face !== index && notes.length && !window.confirm('Cambiare faccia e scartare le note della faccia attuale?')) return
     const generation = ++session.generation
     const chosenContinuity = draft.getSnapshot().continuity
-    draft.reset({ preserveContinuity: true })
-    setFace(-1); setNotes([]); setPlacingNote(false); setNoteError(''); setBusy(true); setError('')
+    setBusy(true); setError('')
     try {
-      const n = await ask<Net>({ action: 'select', face: index })
-      ensureSession()
-      if (generation !== session.generation) return
-      draft.install(n, { continuity: chosenContinuity, trimLocks: selectedFace.trimLocks })
-      setFace(index)
+      await changeSurfaceFace({
+        select: () => ask<Net>({ action: 'select', face: index }),
+        current: () => mounted.current && runtime.active && generation === session.generation,
+        install: n => {
+          draft.install(n, { continuity: chosenContinuity, trimLocks: selectedFace.trimLocks })
+          setFace(index); setNotes([]); setPlacingNote(false); setNoteError('')
+        },
+        invalidate: () => {
+          // Keep note text for review, but never apply an uncertain CAD selection.
+          draft.reset({ preserveContinuity: true }); setFace(-1); setPlacingNote(false)
+          setNoteError('Selezione CAD non verificata. Le note sono conservate; scegli di nuovo la faccia o riapri Edit Surface.')
+        },
+      })
     } catch (e) {
       if (mounted.current && runtime.active && generation === session.generation) setError((e as Error).message)
     } finally { if (mounted.current && runtime.active && generation === session.generation) setBusy(false) }
@@ -430,9 +438,13 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
         <button data-test="surface-load-body" disabled={busy || !re.bodies.some(b => b.id === bodyId)} onClick={() => void loadBody()}>Carica corpo</button>
         <label>Oppure apri STEP<input type="file" accept=".step,.stp" disabled={busy} data-test="surface-step-file" onChange={e => { const f = e.target.files?.[0]; if (f) void f.text().then(text => { if (mounted.current && runtime.active) return load(text, f.name) }).catch(err => { if (mounted.current && runtime.active) setError((err as Error).message) }) }} /></label>
         <p>Seleziona una faccia nel modello o nell’elenco.</p>
-        <select aria-label="Faccia CAD" data-test="surface-face" value={face} disabled={busy || !faces.length} onChange={e => void chooseFace(Number(e.target.value))}><option value={-1}>Scegli faccia…</option>{faces.map(f => <option key={f.index} value={f.index} disabled={!!f.reason}>Faccia {f.index + 1} · {f.kind}{f.reason ? ' · non supportata' : ''}</option>)}</select>
+        <select aria-label="Faccia CAD" data-test="surface-face" value={face} disabled={busy || calculating || !faces.length} onChange={e => void chooseFace(Number(e.target.value))}><option value={-1}>Scegli faccia…</option>{faces.map(f => <option key={f.index} value={f.index} disabled={!!f.reason}>Faccia {f.index + 1} · {f.kind}{f.reason ? ' · non supportata' : ''}</option>)}</select>
         {faces.some(f => f.reason) && <details><summary>Facce non supportate</summary>{faces.filter(f => f.reason).map(f => <p key={f.index}>#{f.index + 1}: {f.reason}</p>)}</details>}
       </>}
+      {!net && notes.length > 0 && <fieldset><legend>Note conservate</legend>
+        <p role="alert">{noteError}</p>
+        {notes.map(n => <label key={n.id}>Nota {n.id}<textarea readOnly value={n.text} /></label>)}
+      </fieldset>}
       {stripPaths && <><h3>Duplica bordo libero</h3><p>Scegli la direzione e trascina un bordo evidenziato. Dopo la cucitura puoi trascinare un altro bordo libero.</p>
         <div className="es-row">{['X','Y','Z'].map((label,i)=><button key={label} disabled={busy} data-test={'strip-axis-'+i} aria-pressed={axis===i} onClick={()=>setAxis(i)}>{label}</button>)}</div>
         <p data-test="strip-result">{stripEdge>=0?'Anteprima striscia':stripResult?'Striscia valida · '+stripResult.addedArea.toFixed(3)+' mm²': 'Trascina il bordo esterno'}</p>
