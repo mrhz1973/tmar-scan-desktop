@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Opt-in: dispatches through the real worker implementation, not a browser UI.
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { expect, it, vi } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { SurfaceRuntime } from '../surfaceRuntime'
@@ -9,6 +10,7 @@ import { updateAdaptiveLocks } from '../adaptiveLockSnapshot'
 import type { Net } from '../brep'
 import type { Request } from '../editor.worker'
 import type { KnotInsertion } from '../refineClampedNet'
+import { createWorkspaceSurfaceSession, type WorkspaceSurfaceSession } from '../workspaceSession'
 
 const path=process.env.SURFACE_QA_STEP
 it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive worker selection and replays v8 on the real STEP',async()=>{
@@ -101,5 +103,47 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
       expect(runtime.history.current?.lockSnapshots).toEqual(draftRecipe.lockedValues)
       expect(()=>draft.setFreeBoundary(true)).toThrow(/protetti/)
     } finally {draft.dispose()}
+    // Exercise the session boundary with the same real dispatcher/kernel, but
+    // a simulated host and no browser or project persistence.
+    const bytes=new TextEncoder().encode(step),digest=(data:Uint8Array)=>createHash('sha256').update(data).digest('hex')
+    const abort=new AbortController(), binding={documentEpoch:'qa',sourceEpoch:1,bodyId:1,bodyKey:'worker-qa',buildVersion:1,
+      kernelGeneration:1,frameRevision:1,stepSha256:digest(bytes),units:'mm',coordinateFrame:'part'}
+    const context={apiVersion:1,sessionId:'adaptive-session',source:binding,step:bytes,
+      capabilities:{apiVersion:1,enabled:true,commitKinds:['cad-copy']},signal:abort.signal,
+      assertSourceCurrent:()=>{},own:(fn:()=>void)=>fn,reportFatal:vi.fn()}
+    const waitSession=(session:WorkspaceSurfaceSession)=>new Promise<void>((resolve,reject)=>{
+      if(session.getSnapshot().validation.kind==='valid') return resolve()
+      const timeout=setTimeout(()=>{unsubscribe();reject(new Error('Sessione adattiva scaduta'))},30000)
+      const unsubscribe=session.subscribe(()=>{
+        const state=session.getSnapshot()
+        if(state.validation.kind==='valid'){clearTimeout(timeout);unsubscribe();resolve()}
+      })
+    })
+    const session=await createWorkspaceSurfaceSession(context as never,vi.fn() as never,{runtime,sha256:async data=>digest(data)})
+    try {
+      await session.chooseFace(7,false,true)
+      await waitSession(session)
+      expect(session.getViewState().locked).not.toContain(again.witnessPole)
+      const beforePoint=structuredClone(session.getPanelState().net!.poles[again.witnessPole])
+      session.selectPoints([again.witnessPole],false)
+      session.moveSelected(.02)
+      expect(session.getPanelState().net!.poles[again.witnessPole]).not.toEqual(beforePoint)
+      expect(session.getSnapshot().validation.kind).not.toBe('valid')
+      await waitSession(session)
+      session.lockSelected(true)
+      const prepared=await session.prepareHistoryRecipe()
+      expect(prepared.recipe.version).toBe(8)
+      const saved=structuredClone(prepared.recipe),poles=structuredClone(session.getPanelState().net!.poles)
+      await session.dispose('cancelled')
+      runtime=new SurfaceRuntime(()=>client as unknown as Worker)
+      const reopened=await createWorkspaceSurfaceSession({...context,sessionId:'adaptive-reopen'} as never,vi.fn() as never,{runtime,sha256:async data=>digest(data)})
+      try {
+        await reopened.restoreHistoryRecipe(saved)
+        await reopened.waitRestoredHistoryReady()
+        expect(reopened.getPanelState().net?.poles).toEqual(poles)
+        expect(reopened.getPanelState().manualLocks).toContain(again.witnessPole)
+        expect(reopened.getSnapshot().validation.kind).toBe('valid')
+      } finally {await reopened.dispose('cancelled')}
+    } finally {await session.dispose('cancelled')}
   } finally {runtime?.dispose();vi.unstubAllGlobals();load.mockRestore();solids.forEach(s=>k.release(s));k.release(imported);editor.dispose()}
 },120000)
