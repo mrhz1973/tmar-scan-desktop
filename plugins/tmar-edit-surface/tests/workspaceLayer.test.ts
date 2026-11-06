@@ -407,8 +407,11 @@ it('recovers one temporarily unreadable reference while keeping the others usabl
   expect(f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))).toBe(true)
   f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
   expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(-0.1)
+  now += 500
+  f.getHandlers().move(f.event(1, [-0.09, -1, 0]))
+  expect(f.view.references).toHaveBeenCalledTimes(1)
   unavailable = false
-  now += 1100
+  now += 600
   f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
   expect(f.view.references).toHaveBeenCalledTimes(2)
   expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(0)
