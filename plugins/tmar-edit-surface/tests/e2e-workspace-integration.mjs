@@ -14,6 +14,7 @@ if (url.protocol !== 'http:' || !['localhost','127.0.0.1','[::1]'].includes(url.
 const sourceFile = process.env.STEP_FILE
 const testAlignedDepth = process.env.TEST_ALIGNED_DEPTH === '1'
 const annotatedApply = process.env.TEST_ANNOTATED_APPLY === '1'
+if(process.env.TEST_ADAPTIVE_NOTE==='1' && (process.env.TEST_ADAPTIVE_APPLY!=='1' || process.env.TEST_PROJECT_ROUNDTRIP!=='1')) throw Error('TEST_ADAPTIVE_NOTE requires adaptive Apply and project roundtrip.')
 if(annotatedApply && (process.env.TEST_ZEBRA_NOTES!=='1' || process.env.TEST_PROJECT_ROUNDTRIP!=='1'))
   throw Error('TEST_ANNOTATED_APPLY requires Zebra notes and project roundtrip.')
 if(process.env.TEST_HISTORY_RECIPE==='1' && !annotatedApply)
@@ -199,12 +200,28 @@ try {
       for(let i=0;i<=128;i++)for(let j=0;j<=128;j++){const x=u.uMin+(u.uMax-u.uMin)*i/128,y=u.vMin+(u.vMax-u.vMin)*j/128;if(kernel.classifyPointOnFace(a,x,y)!=='in')continue;const p=kernel.pointOnSurface(a,x,y),q=kernel.pointOnSurface(b,x,y);const d=Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z);if(!Number.isFinite(d))throw Error('Invalid witness distance');maximum=Math.max(maximum,d);samples++}
       check(samples>0&&maximum>0.001,'adaptive edit changes sampled interior of the original face')
     } finally {faces.forEach(x=>kernel.release(x));resultFaces.forEach(x=>kernel.release(x));solids.forEach(x=>kernel.release(x));kernel.release(source);kernel.release(result)}
+    if(process.env.TEST_ADAPTIVE_NOTE==='1') {
+      await page.click('[data-test=surface-zebra]')
+      await page.waitForFunction(()=>{const root=window.surfaceQa.scene.layerHost().partGroup.getObjectByName('tmar-edit-surface-preview');let count=0;root?.traverse(n=>{if(n.userData.tmarZebra)count++});return count>0},{timeout:10000})
+      await page.click('[data-test=surface-note-add]')
+      await page.evaluate(()=>window.surfaceQa.scene.viewFrom('bottom'));await new Promise(r=>setTimeout(r,350))
+      const hit=await page.evaluate(async()=>{const THREE=await import('/node_modules/three/build/three.module.js'),q=window.surfaceQa,c=q.useWorkspaceEditor.getState().controller,host=q.scene.layerHost(),rect=host.canvas.getBoundingClientRect(),root=host.partGroup.getObjectByName('tmar-edit-surface-preview'),camera=host.camera(),ray=new THREE.Raycaster();root.updateWorldMatrix(true,true);camera.updateMatrixWorld(true)
+        for(const mesh of root.children){if(mesh.userData.face!==c.getViewState().face||!mesh.geometry?.index)continue;const pos=mesh.geometry.attributes.position,idx=mesh.geometry.index
+          for(let i=0;i+2<idx.count;i+=3){const p=new THREE.Vector3();for(let j=0;j<3;j++)p.add(new THREE.Vector3().fromBufferAttribute(pos,idx.getX(i+j)));p.multiplyScalar(1/3).applyMatrix4(mesh.matrixWorld).project(camera);const x=rect.left+(p.x+1)*rect.width/2,y=rect.top+(1-p.y)*rect.height/2;if(p.z< -1||p.z>1||x<rect.left+10||x>rect.right-10||y<rect.top+10||y>rect.bottom-10||document.elementFromPoint(x,y)!==host.canvas)continue;ray.setFromCamera(new THREE.Vector2(p.x,p.y),camera);if(ray.intersectObjects(root.children,true)[0]?.object===mesh)return {x,y}}
+        }throw Error('No visible face triangle for note')})
+      await page.mouse.click(hit.x,hit.y);await page.waitForSelector('[data-test=surface-note-text]',{timeout:15000});await page.type('[data-test=surface-note-text]','Nota Zebra adattiva')
+      const note=await page.evaluate(()=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller;return {notes:c.getPanelState().notes.length,pins:c.getViewState().notePins.length,text:c.getPanelState().notes[0]?.text}})
+      check(note.notes===1&&note.pins===1&&note.text==='Nota Zebra adattiva','note is anchored while Zebra is enabled')
+    }
     if(process.env.TEST_ADAPTIVE_APPLY==='1') {
       if(process.env.TEST_PROJECT_ROUNDTRIP!=='1')throw Error('Adaptive apply QA requires project roundtrip')
       await page.waitForSelector('[data-test=workspace-editor-apply]:enabled',{timeout:120000})
       await page.click('[data-test=workspace-editor-apply]')
-      await page.waitForFunction(()=>window.surfaceQa.useWorkspaceEditor.getState().phase==='closed',{timeout:120000})
+      await page.waitForFunction(()=>{const s=window.surfaceQa.useWorkspaceEditor.getState();return s.phase==='closed'||!!s.error},{timeout:120000})
+      const status=await page.evaluate(()=>{const s=window.surfaceQa.useWorkspaceEditor.getState();return {phase:s.phase,error:s.error}})
+      assert(status.phase==='closed',`Apply refused: ${status.error}`)
       const after=await page.evaluate(async()=>{const q=window.surfaceQa,s=q.useReverse.getState(),receipt=q.useWorkspaceEditor.getState().receipt,created=receipt?.createdBodyIds?.[0];if(!created)throw Error('No CAD copy');const answer=await q.runCommand('reverse.body.edit_source',{body:created});return {created,original:q.id,count:s.bodies.length,step:new TextDecoder().decode(answer.file.bytes)}})
+      if(process.env.TEST_ADAPTIVE_NOTE==='1') {const savedNote=await page.evaluate(async id=>{const {useNotes}=await import('/plugins/reverse/state/noteStore.ts');return useNotes.getState().notes.find(n=>n.text==='Nota Zebra adattiva'&&n.on[0]?.body===id)},after.created);check(!!savedNote&&savedNote.attachment?.status==='verified','Apply keeps the note on the adaptive CAD copy');report.note={uuid:savedNote.attachment.noteUuid,text:savedNote.text,at:savedNote.at}}
       const shape=kernel.importStep(after.step),solids=kernel.getSubShapes(shape,'solid');let volume
       try {volume=kernel.getVolume(shape);check(kernel.isValid(shape)&&solids.length===1,'Apply publishes a valid adaptive CAD copy')} finally {solids.forEach(x=>kernel.release(x));kernel.release(shape)}
       await page.waitForSelector('[data-test=save-project]:enabled');await page.click('[data-test=save-project]')
@@ -213,6 +230,7 @@ try {
       const reopened=await browser.newPage();reopened.on('dialog',d=>void d.accept());reopened.on('pageerror',e=>report.consoleErrors.push('reopen: '+e.message))
       await reopened.goto(url.href,{waitUntil:'domcontentloaded'});await reopened.waitForSelector('[data-test=project-input]');await(await reopened.$('[data-test=project-input]')).uploadFile(saved);await reopened.click('[data-test=workspace-reverse]')
       await reopened.waitForFunction(async({count,original,created})=>{const {useReverse}=await import('/plugins/reverse/state/reStore.ts');const s=useReverse.getState();return !s.building&&s.bodies.length===count&&s.bodies.some(b=>b.id===original)&&s.bodies.some(b=>b.id===created)}, {timeout:120000},{count:after.count,original:after.original,created:after.created})
+      if(process.env.TEST_ADAPTIVE_NOTE==='1') {await reopened.waitForFunction(async({body,uuid})=>{const {useNotes}=await import('/plugins/reverse/state/noteStore.ts');return useNotes.getState().notes.some(n=>n.on[0]?.body===body&&n.text==='Nota Zebra adattiva'&&n.attachment?.noteUuid===uuid&&n.attachment?.status==='verified')},{timeout:120000},{body:after.created,uuid:report.note.uuid});check(true,'saved project reopens the verified adaptive surface note')}
       const reopenedStep=await reopened.evaluate(async id=>{const {reverseSession}=await import('/plugins/reverse/app/reSession.ts');return (await reverseSession().client().bodyEditSource(id)).text},after.created)
       const restored=kernel.importStep(reopenedStep),rs=kernel.getSubShapes(restored,'solid');try {check(kernel.isValid(restored)&&rs.length===1&&Math.abs(kernel.getVolume(restored)-volume)<1e-6,'saved project reopens the valid adaptive CAD copy')} finally {rs.forEach(x=>kernel.release(x));kernel.release(restored)}
       await reopened.close();report.adaptiveApply={bodyIndex:0,faceIndex:7,witnessPole:witness,interiorSamples:samples,maximumDisplacementMm:maximum,volume,savedSha256:sha(readFileSync(saved))}
