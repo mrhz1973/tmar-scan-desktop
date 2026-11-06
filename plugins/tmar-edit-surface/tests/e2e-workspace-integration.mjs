@@ -532,15 +532,42 @@ try {
     }, { timeout: 10000 })
     await page.click('[data-test=surface-note-add]')
     check(await page.$eval('[data-test=workspace-editor-apply]', button => button.disabled), 'arming note placement disables Apply')
-    // Exercise the real CAD anchor/resolve and note UI. The point is taken from
-    // the selected face's display triangle; viewport clicking has separate tests.
-    await page.evaluate(async () => {
-      const controller = window.surfaceQa.useWorkspaceEditor.getState().controller
-      const view = controller.getViewState(), mesh = view.preview.faceMeshes[view.face]
-      const ids = [...mesh.indices.slice(0,3)], point = [0,1,2].map(axis =>
-        ids.reduce((sum,id) => sum + mesh.positions[id*3+axis], 0)/3)
-      await controller.placeNote(point)
-    })
+    if (process.env.TEST_NOTE_MOUSE === '1') {
+      // Choose a visible triangle of the selected face and click the shared
+      // viewport, exercising its actual picking and note-placement path.
+      const hit = await page.evaluate(async () => {
+        const THREE = await import('/node_modules/.vite/deps/three.js')
+        const q = window.surfaceQa, c = q.useWorkspaceEditor.getState().controller
+        const face = c.getViewState().face, host = q.scene.layerHost(), rect = host.canvas.getBoundingClientRect()
+        const root = host.partGroup.getObjectByName('tmar-edit-surface-preview'), camera = host.camera()
+        root.updateWorldMatrix(true, true); camera.updateMatrixWorld(true)
+        const ray = new THREE.Raycaster()
+        for (const mesh of root.children) {
+          if (mesh.userData.face !== face || !mesh.geometry?.index) continue
+          const pos = mesh.geometry.attributes.position, idx = mesh.geometry.index
+          for (let i = 0; i + 2 < idx.count; i += 3) {
+            const p = new THREE.Vector3()
+            for (let j = 0; j < 3; j++) p.add(new THREE.Vector3().fromBufferAttribute(pos, idx.getX(i + j)))
+            p.multiplyScalar(1 / 3).applyMatrix4(mesh.matrixWorld).project(camera)
+            const x = rect.left + (p.x + 1) * rect.width / 2, y = rect.top + (1 - p.y) * rect.height / 2
+            if (p.z < -1 || p.z > 1 || x < rect.left + 10 || x > rect.right - 10 || y < rect.top + 10 || y > rect.bottom - 10 || document.elementFromPoint(x,y) !== host.canvas) continue
+            ray.setFromCamera(new THREE.Vector2(p.x,p.y), camera)
+            if (ray.intersectObjects(root.children, true)[0]?.object === mesh) return { x, y }
+          }
+        }
+        throw Error('No visible selected-face triangle is available for a physical note click')
+      })
+      await page.mouse.click(hit.x, hit.y)
+    } else {
+      // Separate controller-level path retained for cases without viewport picking.
+      await page.evaluate(async () => {
+        const controller = window.surfaceQa.useWorkspaceEditor.getState().controller
+        const view = controller.getViewState(), mesh = view.preview.faceMeshes[view.face]
+        const ids = [...mesh.indices.slice(0,3)], point = [0,1,2].map(axis =>
+          ids.reduce((sum,id) => sum + mesh.positions[id*3+axis], 0)/3)
+        await controller.placeNote(point)
+      })
+    }
     await page.waitForSelector('[data-test=surface-note-text]', { timeout: 15000 })
     await page.type('[data-test=surface-note-text]', 'Nota durante Zebra')
     const note = await page.evaluate(() => {
