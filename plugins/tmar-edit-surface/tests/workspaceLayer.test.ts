@@ -54,6 +54,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     return child
   } }
   let maskCount = 0, restoreCount = 0, captured: number | null = null
+  const claimEditDrag = vi.fn()
   let layer: import('../../../src/viewer/sceneLayers').SceneLayer | null = null
   let handlers: { move(e: PointerEvent): void; up(e: PointerEvent): void; cancel(e: PointerEvent): void; lostCapture(e: PointerEvent): void } | null = null
   let interrupted: (() => void) | null = null
@@ -117,7 +118,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     references: () => options.reference ? [reference] : [],
     maskSourceForPreview() { maskCount++; let restored = false; return () => { if (!restored) { restored = true; restoreCount++ } } },
     capturePointer(id: number) { captured = id; return true }, releasePointer(id: number) { if (captured === id) captured = null },
-    hasPointerCapture: (id: number) => captured === id, claimEditDrag: () => {}, invalidate: () => {},
+    hasPointerCapture: (id: number) => captured === id, claimEditDrag, invalidate: () => {},
   } as unknown as WorkspaceSurfaceView
   const client = (p: Point) => view.projectPartPoint(p)
   const event = (id: number, p: Point, altKey = false): PointerEvent => ({ pointerId: id, button: 0, shiftKey: false, ctrlKey: false, metaKey: false,
@@ -125,11 +126,24 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
   const getLayer = () => layer as unknown as NonNullable<typeof layer>
   const getHandlers = () => handlers as unknown as NonNullable<typeof handlers>
   return { view, owner, set, net, group, rect, client, event, getLayer, getHandlers, counts: () => ({ maskCount, restoreCount, captured }),
-    selectPoints, requestFaceSelection, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError, referenceGeometry, beforePosition,
+    selectPoints, requestFaceSelection, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError, referenceGeometry, beforePosition, claimEditDrag,
     beginStripGesture, beginDirectStripGesture, previewStripDelta, finishStripGesture,
     overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
+
+it.each(['up', 'cancel', 'lostCapture', 'interruption', 'dispose'] as const)(
+  'releases the navigation claim after pole gesture %s', termination => {
+    const f=fixture(), layer=createWorkspaceLayer(f.view,f.owner), press=f.event(4,[-1,-1,0])
+    expect(f.getLayer().pointerDown?.(press)).toBe(true)
+    expect(f.claimEditDrag).toHaveBeenLastCalledWith(true)
+    if(termination==='interruption') f.interrupt()
+    else if(termination==='dispose') layer.dispose()
+    else f.getHandlers()[termination](press)
+    expect(f.counts().captured).toBeNull()
+    expect(f.claimEditDrag).toHaveBeenLastCalledWith(false)
+    layer.dispose()
+  })
 
 it('masks only a valid preview, supports picking and restores the source on disposal', async () => {
   const f = fixture({ preview: { ...validPreview, valid: false } })
