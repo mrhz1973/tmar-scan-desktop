@@ -55,6 +55,15 @@ describe('atomic refinement history', () => {
       expect(draft.getSnapshot().validNet).toBe(draft.getSnapshot().net)
       expect(()=>draft.setFreeBoundary(true)).toThrow(/protetti/)
       await expect(draft.createRecipe('body')).rejects.toThrow(/adattivo/)
+      const saving=draft.createAdaptiveLockedRecipe('body')
+      expect(worker.sent.at(-1)?.action).toBe('createAdaptiveLockedRecipe')
+      expect(()=>draft.setLocks([12])).toThrow(/ricetta/)
+      worker.reject('Salvataggio rifiutato')
+      await expect(saving).rejects.toThrow(/rifiutato/)
+      expect(draft.getSnapshot().validNet).toBeNull()
+      await evaluate(worker)
+      expect(worker.sent.at(-1)?.action).toBe('evaluateAdaptiveExperimental')
+      expect(draft.getSnapshot().validNet).toBe(draft.getSnapshot().net)
     } finally {draft.dispose();runtime.dispose()}
   })
   it('retains adaptive lock-at-position history when editing the draft',async()=>{

@@ -11,6 +11,7 @@ import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
 import type { G1SupportCandidate } from './g1SupportTopology'
 import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupportTopology'
 import type { AdaptiveSelection } from './editor.worker'
+import { readAdaptiveLockedRecipe, type AdaptiveLockedRecipe } from './adaptiveLockedRecipe'
 import { validatePlaneTangencyResult, validatePlaneTangencyConstraint, type PlaneTangencyRequest, type NaturalEdge } from './planeTangency'
 
 export interface CylinderProvisionalPreview { kind: 'provisional'; mesh: Mesh; faceMeshes?: Mesh[] }
@@ -210,6 +211,43 @@ export class SurfaceDraft {
   /** Install only the net returned by prepareCylinder in this runtime's worker. */
   installCylinder(net: Net, session: number): void {
     this.install(net, { continuity: 'G1', cylinderSession: session })
+  }
+
+  /** Experimental v8 save; it does not publish a project or replace its source. */
+  async createAdaptiveLockedRecipe(bodyId: string): Promise<AdaptiveLockedRecipe> {
+    this.ensureActive()
+    const before = this.snapshot, frame = this.runtime.history.current, preparation = frame?.preparation
+    const selection = preparation?.adaptiveSelection, epoch = this.epoch
+    if (!selection || !preparation || frame?.lockSnapshots === undefined || !before.net ||
+        before.net !== before.committedNet || before.validNet !== before.net || before.calculating ||
+        before.freeBoundary || before.planeTangency || before.curvedTangency || this.exportRequests ||
+        this.proposingPlaneTangency || this.proposingCurvedTangency)
+      throw new Error('Termina le operazioni e attendi la verifica CAD della bozza adattiva.')
+    const locks = structuredClone(frame.lockSnapshots)
+    this.recipeBusy = true
+    try {
+      const recipe = readAdaptiveLockedRecipe(await this.runtime.worker.ask({ action: 'createAdaptiveLockedRecipe',
+        bodyId, net: before.net, continuity: before.continuity, locks, selection }))
+      if (this.disposed || !this.runtime.active || this.epoch !== epoch || this.snapshot.net !== before.net ||
+          this.runtime.history.current !== frame || recipe.source.bodyId !== bodyId ||
+          recipe.faceIndex !== preparation.face || recipe.continuity !== before.continuity ||
+          !sameExact(recipe.refinements, preparation.refinements) || !sameExact(recipe.lockedPoles, before.locks) ||
+          !sameExact(recipe.lockedValues, locks) ||
+          await sha256(JSON.stringify(preparation.originalNet)) !== recipe.baseNetSha256 ||
+          !sameExact(this.netFromRecipe(preparation.originalNet, recipe.edits, false), before.net))
+        throw new Error('Ricetta adattiva diversa dalla bozza richiesta.')
+      if (this.disposed || !this.runtime.active || this.epoch !== epoch || this.runtime.history.current !== frame)
+        throw new Error('La bozza è cambiata durante il salvataggio.')
+      return recipe
+    } finally {
+      try {
+        if (!this.disposed && this.runtime.active && this.epoch === epoch && this.runtime.history.current === frame) {
+          this.invalidate()
+          this.update({ preview: null, validNet: null, previewStale: false, calculating: true })
+          this.schedule(before.net!)
+        }
+      } finally { this.recipeBusy = false }
+    }
   }
 
   /** Serialize the actual committed draft; a plane constraint always uses v5. */

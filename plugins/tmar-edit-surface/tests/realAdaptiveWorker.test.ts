@@ -72,6 +72,10 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
       expect(draft.getSnapshot().validNet).toBe(draft.getSnapshot().net)
       const exported=await draft.evaluateForExport()
       expect(exported.valid).toBe(true);expect(exported.step).toBeTruthy()
+      draft.setLocks([again.witnessPole])
+      const draftRecipe=await draft.createAdaptiveLockedRecipe('worker-qa')
+      expect(draftRecipe.version).toBe(8)
+      expect(draftRecipe.lockedValues).toEqual([{index:again.witnessPole,point:again.net.poles[again.witnessPole]}])
       expect(()=>draft.setFreeBoundary(true)).toThrow(/protetti/)
     } finally {draft.dispose()}
   } finally {runtime?.dispose();vi.unstubAllGlobals();load.mockRestore();solids.forEach(s=>k.release(s));k.release(imported);editor.dispose()}
