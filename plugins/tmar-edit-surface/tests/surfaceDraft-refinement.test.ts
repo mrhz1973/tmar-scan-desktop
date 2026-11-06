@@ -40,6 +40,25 @@ async function evaluate(worker: FakeWorker) {
 afterEach(() => vi.useRealTimers())
 
 describe('atomic refinement history', () => {
+  it('retains adaptive lock-at-position history when editing the draft',async()=>{
+    vi.useFakeTimers()
+    const worker=new FakeWorker(),runtime=new SurfaceRuntime(()=>worker as unknown as Worker),draft=new SurfaceDraft(runtime)
+    try {
+      draft.install(refineClampedNet(plane(),insertion),{face:2,refinements:insertion,experimentalAdaptiveLocks:true})
+      const moved=structuredClone(draft.getSnapshot().net!);moved.poles[12][2]=.2;draft.commit(moved)
+      draft.setLocks([12])
+      expect(runtime.history.current?.lockSnapshots).toEqual([{index:12,point:moved.poles[12]}])
+      const illegal=structuredClone(draft.getSnapshot().net!);illegal.poles[12][2]=.3
+      expect(()=>draft.commit(illegal)).toThrow(/bloccato/)
+      expect(draft.undo()).toBe(true);expect(runtime.history.current?.lockSnapshots).toEqual([])
+      expect(draft.redo()).toBe(true);expect(runtime.history.current?.lockSnapshots).toEqual([{index:12,point:moved.poles[12]}])
+      draft.setLocks([]);draft.commit(illegal);draft.setLocks([12])
+      expect(runtime.history.current?.lockSnapshots).toEqual([{index:12,point:illegal.poles[12]}])
+      const sent=worker.sent.length
+      await expect(draft.refine(insertion)).rejects.toThrow(/rimappare/)
+      expect(worker.sent).toHaveLength(sent)
+    } finally {draft.dispose();runtime.dispose()}
+  })
   it('preserves deformation and restores each base, protection map and worker selection on undo/redo', async () => {
     const { worker, runtime, draft, finish } = setup()
     await evaluate(worker)

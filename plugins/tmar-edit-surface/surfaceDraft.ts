@@ -157,7 +157,7 @@ export class SurfaceDraft {
 
   /** Install a worker-selected CAD net. No project or worker selection is performed. */
   install(net: Net, options: { continuity?: 'G0' | 'G1'; trimLocks?: readonly number[]; hiddenPoles?: readonly number[];
-    cylinderSession?: number; face?: number; refinements?: readonly KnotInsertion[]; originalNet?: Net } = {}): void {
+    cylinderSession?: number; face?: number; refinements?: readonly KnotInsertion[]; originalNet?: Net; experimentalAdaptiveLocks?: boolean } = {}): void {
     this.ensureActive(true)
     const continuity = options.continuity ?? this.snapshot.continuity
     if (continuity !== 'G0' && continuity !== 'G1') throw new Error('Continuità non valida.')
@@ -172,6 +172,9 @@ export class SurfaceDraft {
     if (options.face !== undefined && (!Number.isSafeInteger(options.face) || options.face < 0 || cylinderSession !== null))
       throw new Error('Preparazione della faccia non valida.')
     if (options.refinements?.length && options.face === undefined) throw new Error('Faccia del raffinamento non disponibile.')
+    if (options.experimentalAdaptiveLocks !== undefined && typeof options.experimentalAdaptiveLocks !== 'boolean') throw new Error('Modalità blocchi adattivi non valida.')
+    if (options.experimentalAdaptiveLocks && (options.face === undefined || !options.refinements?.length || cylinderSession !== null))
+      throw new Error('I blocchi adattivi richiedono una faccia raffinata.')
     const base = freezeNet(structuredClone(options.originalNet ?? net))
     if (cylinderSession !== null) assertSmoothCylinderMove(base, net)
     else assertNet(base, net, continuity, true)
@@ -184,7 +187,8 @@ export class SurfaceDraft {
     this.runtime.history.reset()
     this.base = base
     this.queueNet = null
-    const frame = this.runtime.history.commit({ net, locks: [], continuity, freeBoundary: false, preparation })
+    const frame = this.runtime.history.commit({ net, locks: [], continuity, freeBoundary: false, preparation,
+      ...(options.experimentalAdaptiveLocks ? { lockSnapshots: [] } : {}) })
     freezeNet(frame.net)
     this.freezePreparation(frame.preparation)
     this.base = frame.preparation?.originalNet ?? base
@@ -422,6 +426,7 @@ export class SurfaceDraft {
     this.ensureNoPlaneTangency()
     const before = this.snapshot, previous = this.runtime.history.current, preparation = previous?.preparation
     if (!preparation || before.cylinderSession !== null) throw new Error('Preparazione della faccia non disponibile.')
+    if (previous.lockSnapshots !== undefined) throw new Error('Raffinamento adattivo non disponibile senza rimappare i blocchi.')
     if (!insertions.length) return
     if (before.locks.length) throw new Error('Rimuovi i blocchi manuali prima di raffinare il reticolo.')
     if (before.net !== before.committedNet || before.validNet !== before.net || before.calculating)

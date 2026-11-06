@@ -11,6 +11,37 @@ function frame(z = 0): EditFrame {
 }
 
 describe('surface geometry and protection history', () => {
+  it('retains adaptive lock positions through undo, unlock, relock and redo', () => {
+    const h=new SurfaceHistory()
+    h.commit({...frame(),lockSnapshots:[]})
+    h.commit(frame(1))
+    h.commit({...frame(1),locks:[0]})
+    expect(h.current?.lockSnapshots).toEqual([{index:0,point:[0,0,1]}])
+    expect(()=>h.commit({...frame(2),locks:[0]})).toThrow(/bloccato/)
+    expect(h.current?.net.poles[0][2]).toBe(1)
+    h.commit({...frame(1),locks:[]});h.commit(frame(2));h.commit({...frame(2),locks:[0]})
+    expect(h.current?.lockSnapshots).toEqual([{index:0,point:[0,0,2]}])
+    expect(h.step(-1)?.lockSnapshots).toEqual([])
+    expect(h.step(-1)?.lockSnapshots).toEqual([])
+    expect(h.step(-1)?.lockSnapshots).toEqual([{index:0,point:[0,0,1]}])
+    expect(h.step(1)?.lockSnapshots).toEqual([])
+    expect(h.step(1)?.net.poles[0][2]).toBe(2)
+    expect(h.step(1)?.lockSnapshots).toEqual([{index:0,point:[0,0,2]}])
+  })
+  it('rejects inconsistent adaptive snapshots without changing the current frame',()=>{
+    const h=new SurfaceHistory();h.commit({...frame(),lockSnapshots:[]})
+    expect(()=>h.commit({...frame(1),locks:[0],lockSnapshots:[{index:0,point:[0,0,2]}]})).toThrow()
+    expect(h.current?.net.poles[0][2]).toBe(0)
+  })
+  it('does not silently drop adaptive locks when preparation changes or disappears',()=>{
+    const h=new SurfaceHistory(),initial=frame()
+    const preparation={face:2,refinements:[],originalNet:structuredClone(initial.net),trimLocks:[],hiddenPoles:[]}
+    h.commit({...initial,preparation,lockSnapshots:[]})
+    h.commit({...frame(),preparation,locks:[0]})
+    expect(()=>h.commit({...frame(),locks:[0]})).toThrow(/rimappare/)
+    expect(()=>h.commit({...frame(),preparation:{...preparation,face:3},locks:[0]})).toThrow(/rimappare/)
+    expect(h.current?.lockSnapshots).toEqual([{index:0,point:[0,0,0]}])
+  })
   it('stores independent geometry and does not add a duplicate step', () => {
     const h = new SurfaceHistory(), original = frame()
     const first = h.commit(original)

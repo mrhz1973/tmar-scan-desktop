@@ -3,6 +3,7 @@ import type { Net } from './brep'
 import type { KnotInsertion } from './refineClampedNet'
 import type { G1SupportCandidate } from './g1SupportTopology'
 import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupportTopology'
+import { updateAdaptiveLocks, validateAdaptiveLocks, type AdaptiveLocks } from './adaptiveLockSnapshot'
 
 export interface SurfaceCurvedTangency {
   kind: 'compatible-bspline'
@@ -50,6 +51,8 @@ export interface SurfacePreparation {
 export interface EditFrame {
   net: Net
   locks: number[]
+  /** Present only for the opt-in adaptive lock-at-position contract. */
+  lockSnapshots?: AdaptiveLocks
   continuity: 'G0' | 'G1'
   freeBoundary: boolean
   preparation?: SurfacePreparation
@@ -82,6 +85,17 @@ export class SurfaceHistory {
     const samePlaneTangency = previous?.planeTangency === frame.planeTangency ||
       JSON.stringify(previous?.planeTangency) === JSON.stringify(frame.planeTangency)
     const sameCurvedTangency = sameExact(previous?.curvedTangency, frame.curvedTangency)
+    if (previous?.lockSnapshots !== undefined && !samePreparation)
+      throw new Error('La preparazione adattiva non può cambiare senza rimappare esplicitamente i blocchi.')
+    const priorLocks = samePreparation ? previous?.lockSnapshots : undefined
+    let lockSnapshots: AdaptiveLocks | undefined
+    if (frame.lockSnapshots !== undefined || priorLocks !== undefined) {
+      lockSnapshots = updateAdaptiveLocks(net, priorLocks ?? [], frame.locks)
+      if (frame.lockSnapshots !== undefined) {
+        validateAdaptiveLocks(net, frame.lockSnapshots)
+        if (!sameExact(lockSnapshots, frame.lockSnapshots)) throw new Error('Riferimenti dei punti bloccati non coerenti.')
+      }
+    }
     const next: EditFrame = {
       net, locks: [...new Set(frame.locks)].sort((a, b) => a - b),
       continuity: frame.continuity, freeBoundary: frame.freeBoundary,
@@ -91,10 +105,11 @@ export class SurfaceHistory {
         ? previous.curvedTangency : structuredClone(frame.curvedTangency) } : {}),
       ...(frame.preparation ? { preparation: previous?.preparation && samePreparation
         ? previous.preparation : structuredClone(frame.preparation) } : {}),
+      ...(lockSnapshots !== undefined ? { lockSnapshots } : {}),
     }
     if (!previous || previous.net !== next.net || JSON.stringify(previous.locks) !== JSON.stringify(next.locks) ||
         previous.continuity !== next.continuity || previous.freeBoundary !== next.freeBoundary ||
-        !samePreparation || !samePlaneTangency || !sameCurvedTangency) {
+        !samePreparation || !samePlaneTangency || !sameCurvedTangency || !sameExact(previous.lockSnapshots,next.lockSnapshots)) {
       this.frames = this.frames.slice(0, this.cursor + 1)
       this.frames.push(next)
       if (this.frames.length > this.limit) this.frames.shift()
