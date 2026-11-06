@@ -508,23 +508,32 @@ it('recovers scan snapping after a transient reference lookup failure without a 
 })
 
 it('recovers snapping to a nearby CAD face after its temporary lookup failure', () => {
+  let now = 1000
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
   const second = { ...mesh, positions: new Float32Array([0,-2,-2, 0,2,-2, 0,2,2, 0,-2,2]) }
-  const f = fixture({ reference: 'scan', preview: { ...validPreview, faceMeshes: [mesh, second] } })
+  const third = { ...mesh, positions: new Float32Array([2,-2,-2, 2,2,-2, 2,2,2, 2,-2,2]) }
+  const f = fixture({ reference: 'scan', preview: { ...validPreview, faceMeshes: [mesh, second, third] } })
   vi.spyOn(f.view, 'references').mockReturnValue([])
   const layer = createWorkspaceLayer(f.view, f.owner)
   f.set({ snap: false })
   const previewGroup = f.group.getObjectByName('tmar-edit-surface-preview')!
   const geometry = (previewGroup.children[1] as THREE.Mesh).geometry as THREE.BufferGeometry
+  const validGeometry = (previewGroup.children[2] as THREE.Mesh).geometry as THREE.BufferGeometry
+  const readValid = vi.spyOn(validGeometry, 'getAttribute')
   const original = geometry.getAttribute.bind(geometry)
   const getAttribute = vi.spyOn(geometry, 'getAttribute').mockImplementationOnce(() => { throw new Error('faccia temporaneamente non disponibile') })
     .mockImplementation(original)
   f.set({ snap: true })
+  const initialReads = readValid.mock.calls.length
+  expect(initialReads).toBeGreaterThan(0)
   expect(f.reportViewError).toHaveBeenCalledWith('Magnete non disponibile: faccia temporaneamente non disponibile')
   expect(f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))).toBe(true)
+  now += 1100
   f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
+  expect(readValid).toHaveBeenCalledTimes(initialReads)
   expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(0)
   expect(f.overlay.children[0].textContent).toContain('Faccia CAD 2')
-  getAttribute.mockRestore(); layer.dispose()
+  getAttribute.mockRestore(); readValid.mockRestore(); layer.dispose(); clock.mockRestore()
 })
 
 it('cleans the layer without propagating when state and reporting are both revoked during notification', () => {

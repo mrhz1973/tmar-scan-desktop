@@ -26,7 +26,8 @@ const zebraModules = import.meta.glob<ZebraConstructor>('../tmar-zebra/ZebraLaye
 const ZebraRenderer = Object.values(zebraModules)[0]
 
 type Target = { mesh: THREE.Mesh; geometry: THREE.BufferGeometry; ownsGeometry: boolean; current: () => boolean;
-  reference?: { id: unknown; revision: unknown; source: THREE.BufferGeometry; matrix: THREE.Matrix4; kind: string; bodyId: unknown } }
+  reference?: { id: unknown; revision: unknown; source: THREE.BufferGeometry; matrix: THREE.Matrix4; kind: string; bodyId: unknown };
+  neighbour?: { mesh: THREE.Mesh; source: THREE.BufferGeometry; face: number } }
 type Capture = {
   kind: 'pole' | 'strip'
   pointerId: number
@@ -119,6 +120,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   let referencesDirty = true
   let retryReferencesAt = 0
   let neighboursDirty = true
+  let retryNeighboursAt = 0
   let faceRequest = false
   let lastError = ''
   let hoverKey = ''
@@ -273,27 +275,37 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   }
   const refreshNeighbours = () => {
     if (!neighboursDirty || disposed || !owner.getViewState().snap) return
+    if (Date.now() < retryNeighboursAt) return
+    const partialRetry = retryNeighboursAt > 0
     neighboursDirty = false
     const next: Target[] = []
+    let failed = false, failure: unknown
     try {
       for (const item of preview.group.children) {
         const mesh = item as THREE.Mesh<THREE.BufferGeometry>
         const face = mesh.userData.face as number
         if (face === owner.getViewState().face) continue
-        next.push(targetFor(mesh.geometry, new THREE.Matrix4(), 'cad', `Faccia CAD ${face + 1}`,
-          () => mesh.parent === preview.group && mesh.visible))
+        try {
+          const target = (partialRetry ? neighbourTargets.find(old => !next.includes(old) && old.neighbour?.mesh === mesh &&
+            old.neighbour.source === mesh.geometry && old.neighbour.face === face) : undefined) ??
+            targetFor(mesh.geometry, new THREE.Matrix4(), 'cad', `Faccia CAD ${face + 1}`,
+              () => mesh.parent === preview.group && mesh.visible)
+          target.neighbour = { mesh, source: mesh.geometry, face }
+          next.push(target)
+        } catch (error) { failed = true; failure = error }
       }
     } catch (error) {
-      try { disposeTargets(next) } catch { /* Preserve the reference error. */ }
-      try { disposeTargets(neighbourTargets) } catch { /* Preserve the reference error. */ }
+      try { disposeTargets([...new Set([...next, ...neighbourTargets])]) } catch { /* Preserve the reference error. */ }
       neighbourTargets = []
-      // A transient failure must neither retain old faces nor permanently
-      // disable snapping when the same preview becomes readable again.
       neighboursDirty = true
+      retryNeighboursAt = 0
       report(`Magnete non disponibile: ${errorText(error)}`); return
     }
-    disposeTargets(neighbourTargets)
+    disposeTargets(neighbourTargets.filter(target => !next.includes(target)))
     neighbourTargets = next
+    retryNeighboursAt = failed ? Date.now() + 1000 : 0
+    neighboursDirty = !!failed
+    if (failed) report(`Magnete non disponibile: ${errorText(failure)}`)
   }
 
   const stopZebra = () => { zebra?.dispose(); zebra = null; zebraKey = '' }
@@ -430,7 +442,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       const nextPreview = state.provisionalPreview?.kind === 'provisional' ? state.provisionalPreview : state.preview?.valid === true ? state.preview : null
       if (nextPreview !== displayed) {
         stopZebra()
-        disposeTargets(neighbourTargets); neighbourTargets = []; neighboursDirty = true
+        disposeTargets(neighbourTargets); neighbourTargets = []; neighboursDirty = true; retryNeighboursAt = 0
         preview.setPreview(nextPreview, state.face)
         displayed = nextPreview
         selectedFace = state.face
@@ -442,7 +454,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         }
         radius = box.isEmpty() ? 1 : Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.1)
       } else if (selectedFace !== state.face) {
-        preview.setActiveFace(state.face); selectedFace = state.face; neighboursDirty = true
+        preview.setActiveFace(state.face); selectedFace = state.face; neighboursDirty = true; retryNeighboursAt = 0
       }
       const previous = cageState
       if (!previous || previous.net !== state.net || previous.selected !== state.selected || previous.locked !== state.locked ||
@@ -473,7 +485,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       if (disposed || layerDisposed || revision !== syncRevision) return
       positionStripHandle()
       if (state.snap && !state.strip) { refreshReferences(); refreshNeighbours() }
-      else { disposeTargets(referenceTargets); referenceTargets = []; disposeTargets(neighbourTargets); neighbourTargets = []; referencesDirty = neighboursDirty = true; hideFeedback() }
+      else { disposeTargets(referenceTargets); referenceTargets = []; disposeTargets(neighbourTargets); neighbourTargets = []; referencesDirty = neighboursDirty = true; retryNeighboursAt = 0; hideFeedback() }
       syncZebra(state)
       syncOpacity(state)
       view.invalidate()
