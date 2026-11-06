@@ -84,7 +84,7 @@ when that same restored net has a valid CAD preview; it rejects on draft or
 source change, abort, session disposal, invalid preview, or a 60-second
 timeout. It does not itself prevent edits, publish a feature, or replace the
 host's source and transaction checks. Session tests cover a real OCCT restore,
-an already-aborted signal and a changed draft while waiting; installed-app and
+an already-aborted signal, session disposal and a changed draft while waiting; installed-app and
 host history reopening remain unqualified.
 
 After the restored draft has a fresh valid preview,

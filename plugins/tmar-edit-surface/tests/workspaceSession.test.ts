@@ -468,6 +468,18 @@ describe('WorkspaceSurfaceSession',()=>{
         changed.selectPoints([12],false)
         await rejection
       } finally { if(changed)await changed.dispose('cancelled');changedEditor.dispose() }
+      const closedEditor=new SurfaceEditorKernel(k),closedWorker=new KernelWorker(closedEditor)
+      const closedRuntime=new SurfaceRuntime(()=>closedWorker as unknown as Worker)
+      let closed:WorkspaceSurfaceSession | undefined
+      try {
+        closed=await createWorkspaceSurfaceSession({...context,sessionId:'closed-restore'} as never,vi.fn() as never,
+          {runtime:closedRuntime,sha256:async bytes=>sha(bytes)})
+        await closed.restoreHistoryRecipe(JSON.parse(JSON.stringify(recipe.recipe)))
+        const waiting=closed.waitRestoredHistoryReady()
+        const rejection=expect(waiting).rejects.toMatchObject({name:'AbortError'})
+        await closed.dispose('cancelled')
+        await rejection
+      } finally { if(closed)await closed.dispose('cancelled');closedEditor.dispose() }
       const failedEditor=new SurfaceEditorKernel(k), failedWorker=new KernelWorker(failedEditor)
       const failedRuntime=new SurfaceRuntime(()=>failedWorker as unknown as Worker), fatal=vi.fn()
       const failedContext={...context,sessionId:'failed-restore',reportFatal:fatal}
