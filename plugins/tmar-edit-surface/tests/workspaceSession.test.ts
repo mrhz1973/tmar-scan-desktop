@@ -444,6 +444,14 @@ describe('WorkspaceSurfaceSession',()=>{
         if(revision===undefined)throw Error('restored preview missing revision')
         const picked=restoredEditor.anchorFromPick(seed,revision)
         const savedNote={id:'note-1',text:'Controlla la faccia',faceIndex:index,u:picked.anchor.u,v:picked.anchor.v}
+        const noteAbort=new AbortController(), originalPost=restoredWorker.postMessage.bind(restoredWorker)
+        restoredWorker.postMessage=(message:Msg)=>{
+          if(message.action==='finalFaceWitness')noteAbort.abort()
+          originalPost(message)
+        }
+        await expect(restored.restoreHistoryNotes([savedNote],noteAbort.signal)).rejects.toMatchObject({name:'AbortError'})
+        expect(restored.getPanelState().notes).toHaveLength(0)
+        restoredWorker.postMessage=originalPost;await flush()
         await expect(restored.restoreHistoryNotes([savedNote,{...savedNote,id:'bad',u:1e9}])).rejects.toThrow()
         expect(restored.getPanelState().notes).toHaveLength(0)
         await restored.restoreHistoryNotes([savedNote])

@@ -1113,7 +1113,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       adopted = true
       await this.waitRestoredHistoryReady(signal)
       if (signal) abortIf(signal)
-      await this.restoreHistoryNotes(bundle.notes)
+      await this.restoreHistoryNotes(bundle.notes, signal)
       if (signal) abortIf(signal)
       this.assertLive()
     } catch (error) {
@@ -1128,8 +1128,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
 
   /** Rebind notes only after this session restored and validated its recipe.
    * UVs are checked by OCCT on the trimmed face; publish all or none. */
-  async restoreHistoryNotes(value: unknown): Promise<void> {
+  async restoreHistoryNotes(value: unknown, signal?: AbortSignal): Promise<void> {
     this.assertMutable()
+    if (signal) abortIf(signal)
     const base=this.restoredHistory, draft=this.draft.getSnapshot(), revision=draft.preview?.previewRevision
     if (!base || base.selectionEpoch!==this.selectionEpoch || base.draftEpoch!==this.draftEpoch ||
         base.net!==draft.net || draft.validNet!==draft.net || draft.calculating || revision===undefined ||
@@ -1142,31 +1143,40 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         !Number.isFinite(n.u) || !Number.isFinite(n.v)) || new Set(input.map(n=>n.id)).size!==input.length)
       throw new Error('Una nota salvata non è valida o appartiene a un’altra faccia.')
     if (!input.length) return
+    const linked=new AbortController()
+    const cancel=()=>linked.abort()
+    this.context.signal.addEventListener('abort',cancel,{once:true})
+    signal?.addEventListener('abort',cancel,{once:true})
+    if(this.context.signal.aborted || signal?.aborted) cancel()
     const unchanged=()=>{
+      abortIf(linked.signal)
       this.assertLive()
       const now=this.draft.getSnapshot()
       if (this.restoredHistory!==base || this.selectionEpoch!==base.selectionEpoch || this.draftEpoch!==base.draftEpoch ||
           now.net!==base.net || now.validNet!==base.net || now.calculating || now.preview?.previewRevision!==revision || this.notes.length)
         throw new Error('La superficie è cambiata durante il ripristino delle note.')
     }
-    this.busy=true;this.refresh()
     try {
+      this.busy=true;this.refresh()
       const witness=await this.runtime.worker.ask<{face:number;selectionRevision:number;previewRevision:number}>(
-        {action:'finalFaceWitness',previewRevision:revision},this.context.signal)
+        {action:'finalFaceWitness',previewRevision:revision},linked.signal)
       unchanged()
       if (!witness || witness.face!==this.face || witness.previewRevision!==revision || !Number.isSafeInteger(witness.selectionRevision))
         throw new Error('Identità della faccia non valida.')
       const restored:Note[]=[]
       for (const item of input) {
         const anchor={face:this.face,selectionRevision:witness.selectionRevision,u:item.u,v:item.v}
-        const point=await this.runtime.worker.ask<{at:Point;normal:Point}>({action:'noteResolve',anchor,previewRevision:revision},this.context.signal)
+        const point=await this.runtime.worker.ask<{at:Point;normal:Point}>({action:'noteResolve',anchor,previewRevision:revision},linked.signal)
         unchanged()
         if (!finitePoint(point?.at) || !finitePoint(point?.normal) || Math.abs(Math.hypot(...point.normal)-1)>1e-6)
           throw new Error('Posizione della nota non valida.')
         restored.push(Object.freeze({id:item.id,text:item.text,anchor:Object.freeze(anchor),at:freezePoint(point.at),normal:freezePoint(point.normal),revision}))
       }
       this.advanceNotesRevision();this.notes=Object.freeze(restored);this.draftEpoch++;this.restoredHistory=null
-    } finally { if(!this.disposed){this.busy=false;this.refresh();this.resolveNotes()} }
+    } finally {
+      this.context.signal.removeEventListener('abort',cancel);signal?.removeEventListener('abort',cancel)
+      if(!this.disposed){this.busy=false;this.refresh();this.resolveNotes()}
+    }
   }
 
   /** Explicit, slower CAD check. A provisional rendering alone cannot Apply. */

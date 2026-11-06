@@ -113,6 +113,9 @@ UV through OCCT, including trimmed-face classification, and installs all notes
 only if every one resolves and the source/draft remains current. It does not
 produce or persist the host's note records: an atomic host recipe-and-note
 transaction and an authenticated association with the recipe are required.
+An optional abort signal is linked to the session lifetime during rebinding;
+an aborted worker request discards its late reply and adopts no partial notes.
+The active OCCT computation itself cannot be interrupted until its worker ends.
 
 `replaySurfaceHistory()` in `historyReplay.ts` provides independent worker
 replay for a host transaction. It snapshots the recipe and STEP, verifies the
