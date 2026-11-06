@@ -7,6 +7,8 @@ import { ExperimentalSharedPlane, verifyOtherFacesSampled } from '../experimenta
 import type { Net } from '../brep'
 import type { SurfaceWorkerPayload } from '../workerClient'
 import type { ExperimentalSharedPlaneIdentity } from '../editor.worker'
+import type { SurfaceWorkerClient } from '../workerClient'
+import { ExperimentalSharedPlaneSession } from '../experimentalSharedPlaneSession'
 
 it('characterizes a STEP solid whose top is split into coplanar faces', async () => {
   const editor=await SurfaceEditorKernel.load(), k=editor.kernel, owned:ShapeHandle[]=[]
@@ -111,6 +113,15 @@ it('characterizes a STEP solid whose top is split into coplanar faces', async ()
       await expect(ask({...request,identity:{...prepared.identity,baseHash:'0'.repeat(64)}})).rejects.toThrow(/scaduta/)
       await expect(ask({...request,step:step+'\n'})).rejects.toThrow(/scaduta/)
       expect(await ask({action:'finalFaceWitness',previewRevision:beforePreview.previewRevision})).toEqual(witness)
+      const session=new ExperimentalSharedPlaneSession({ask} as unknown as SurfaceWorkerClient)
+      try {
+        const sessionNet=await session.prepare(step,target)
+        sessionNet.poles[pole][2]+=.02
+        const sessionOutput=await session.evaluate(sessionNet)
+        const sessionSolid=own(k.importStep(sessionOutput.step))
+        expect(k.isValid(sessionSolid)).toBe(true)
+        expect(await ask({action:'finalFaceWitness',previewRevision:beforePreview.previewRevision})).toEqual(witness)
+      } finally {session.dispose()}
       expect(()=>editor.select(target)).toThrow(/ambigua|condivisa/i)
     } finally {vi.unstubAllGlobals();load.mockRestore()}
   } finally {owned.reverse().forEach(shape=>k.release(shape));editor.dispose()}
