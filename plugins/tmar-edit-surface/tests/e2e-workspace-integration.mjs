@@ -169,6 +169,34 @@ try {
     const s = window.surfaceQa.useWorkspaceEditor.getState()
     return s.snapshot?.validation.kind === 'valid' && !s.controller?.getPanelState().calculating
   }, { timeout: 120000 })
+  if (process.env.TEST_NAV_ONLY === '1') {
+    await page.evaluate(async () => {
+      const {useStore}=await import('/src/state/store.ts');useStore.getState().setNavScheme('cnckitchen')
+      const c=window.surfaceQa.useWorkspaceEditor.getState().controller
+      c.setSelectionMode('points');const s=c.getViewState();const i=s.net.poles.findIndex((_,i)=>!s.hiddenPoles.includes(i))
+      if(i<0)throw Error('No visible control point');c.selectPoints([i],false);window.navQaPole=i
+    })
+    await page.waitForSelector('[data-test=surface-navigation-only]')
+    await page.click('[data-test=surface-navigation-only]')
+    const before=await page.evaluate(()=>{
+      const q=window.surfaceQa,h=q.scene.layerHost(),c=q.useWorkspaceEditor.getState().controller,cam=h.camera(),p=c.getViewState().net.poles[window.navQaPole]
+      h.partGroup.updateMatrixWorld(true);cam.updateMatrixWorld(true)
+      const projected=cam.position.clone().set(...p).applyMatrix4(h.partGroup.matrixWorld).project(cam),r=h.canvas.getBoundingClientRect()
+      return {x:r.left+(projected.x+1)*r.width/2,y:r.top+(1-projected.y)*r.height/2,rotation:cam.quaternion.toArray(),position:cam.position.toArray(),net:JSON.stringify(c.getViewState().net)}
+    })
+    await page.mouse.move(before.x,before.y);await page.mouse.down({button:'left'});await page.mouse.move(before.x+90,before.y+50,{steps:8});await page.mouse.up({button:'left'});await new Promise(r=>setTimeout(r,200))
+    const after=await page.evaluate(()=>{const q=window.surfaceQa,c=q.useWorkspaceEditor.getState().controller,cam=q.scene.layerHost().camera();return {rotation:cam.quaternion.toArray(),position:cam.position.toArray(),net:JSON.stringify(c.getViewState().net)}})
+    check(after.rotation.some((v,i)=>Math.abs(v-before.rotation[i])>1e-7),'navigation mode rotates the host camera over a selected point')
+    check(after.net===before.net,'navigation does not alter the selected CAD draft')
+    await page.mouse.move(before.x,before.y);await page.mouse.down({button:'right'});await page.mouse.move(before.x+60,before.y+30,{steps:8});await page.mouse.up({button:'right'});await new Promise(r=>setTimeout(r,200))
+    const pan=await page.evaluate(()=>{const cam=window.surfaceQa.scene.layerHost().camera();return {position:cam.position.toArray(),rotation:cam.quaternion.toArray()}})
+    check(pan.position.some((v,i)=>Math.abs(v-after.position[i])>1e-7) && !pan.rotation.some((v,i)=>Math.abs(v-after.rotation[i])>1e-7),'navigation mode pans the host camera')
+    await page.click('[data-test=surface-navigation-only]')
+    check(await page.$eval('[data-test=surface-navigation-only]',e=>!e.checked),'navigation toggle can be turned off')
+    await page.screenshot({path:join(out,'navigation-mode.png')})
+    check(report.consoleErrors.length===0,'no browser console errors')
+    report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
+  }
   if (process.env.TEST_FUSION_NAVIGATION === '1') {
     // Test the actual shared camera, with a CAD face and its control net active.
     // Use Fusion's configured chords, not the standalone prototype's controls.
