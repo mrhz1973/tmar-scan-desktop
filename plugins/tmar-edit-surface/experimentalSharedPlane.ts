@@ -10,7 +10,6 @@ export class ExperimentalSharedPlane {
   private isolated: SurfaceEditorKernel | null = null
   private target = -1
   private sourceBefore = ''
-  private sourceStep = ''
   constructor(private readonly kernel: OcctKernel) {}
 
   open(step: string, target: number): Net {
@@ -19,7 +18,6 @@ export class ExperimentalSharedPlane {
     try {
       this.source=k.importStep(step)
       if(!k.isValid(this.source)) throw new Error('Solido sorgente non valido.')
-      this.sourceStep=step
       const solids=k.getSubShapes(this.source,'solid')
       try {if(solids.length!==1) throw new Error('Serve un solo solido.')}
       finally {solids.forEach(s=>k.release(s))}
@@ -48,8 +46,11 @@ export class ExperimentalSharedPlane {
       const modified=own(k.importStep(edit.step!)), modifiedFaces=k.getSubShapes(modified,'face');owned.push(...modifiedFaces)
       if(!k.isValid(modified) || modifiedFaces.length!==1) throw new Error('Faccia modificata non valida.')
       // OCCT sewing may update input subshapes. Never pass the retained source.
-      const working=own(k.importStep(this.sourceStep)), workingFaces=k.getSubShapes(working,'face');owned.push(...workingFaces)
+      const working=own(k.fromBREP(this.sourceBefore)), workingFaces=k.getSubShapes(working,'face');owned.push(...workingFaces)
       if(!k.isValid(working) || workingFaces.length!==this.faces.length) throw new Error('Copia CAD non verificabile.')
+      // An index is only usable when reimport preserved each serialized face.
+      for(let i=0;i<workingFaces.length;i++) if(k.toBREP(workingFaces[i])!==k.toBREP(this.faces[i]))
+        throw new Error('Identità delle facce non verificabile nella copia CAD.')
       // Reject intersections away from the original shared boundary before sewing.
       const boundary=k.getSubShapes(workingFaces[this.target],'wire');owned.push(...boundary)
       const check=(p:{x:number;y:number;z:number})=>{
@@ -84,7 +85,7 @@ export class ExperimentalSharedPlane {
       owned.reverse().forEach(s=>k.release(s))
       let changed=false
       try {changed=this.source===null || k.toBREP(this.source)!==this.sourceBefore} catch {changed=true}
-      if(changed) this.dispose()
+      if(changed) {this.dispose();throw new Error('Sorgente CAD non verificabile: esperimento chiuso.')}
     }
   }
 
@@ -92,6 +93,6 @@ export class ExperimentalSharedPlane {
     this.isolated?.dispose();this.isolated=null
     this.faces.forEach(face=>this.kernel.release(face));this.faces=[]
     if(this.source!==null) this.kernel.release(this.source)
-    this.source=null;this.target=-1;this.sourceBefore='';this.sourceStep=''
+    this.source=null;this.target=-1;this.sourceBefore=''
   }
 }

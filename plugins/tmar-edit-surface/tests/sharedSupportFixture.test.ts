@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Isolated CAD fixture; no workspace, scan, or host project is changed.
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { ShapeHandle } from 'occt-wasm'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { ExperimentalSharedPlane } from '../experimentalSharedPlane'
@@ -60,6 +60,10 @@ it('characterizes a STEP solid whose top is split into coplanar faces', async ()
         expect(Math.min(...roundFaces.map(candidate=>k.distanceBetween(witness,candidate)))).toBeLessThan(1e-6)
       }
       expect(k.toBREP(imported)).toBe(before)
+      const readBREP=k.toBREP.bind(k), altered=vi.spyOn(k,'toBREP').mockImplementation(h=>readBREP(h)+'\n')
+      try {expect(()=>isolated.evaluate(changed)).toThrow(/sorgente CAD/i)}
+      finally {altered.mockRestore()}
+      expect(()=>isolated.evaluate(changed)).toThrow(/apri prima/i)
     } finally {isolated.dispose()}
   } finally {owned.reverse().forEach(shape=>k.release(shape));editor.dispose()}
 },60000)
