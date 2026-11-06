@@ -207,9 +207,10 @@ export class SurfaceEditorKernel {
   private count(s: ShapeHandle, type: 'solid' | 'shell' | 'face') { const a = this.kernel.getSubShapes(s, type); const n = a.length; a.forEach(h => this.kernel.release(h)); return n }
   /** Experimental cylinder path. Only the worker retains the returned BREP. */
   prepareCylinderForPreview(face:number) {
-    this.invalidateG1Selection()
     if(!this.source) throw new Error('Apri prima un corpo CAD.')
-    return prepareCylinder(this.kernel,this.source,face)
+    const prepared=prepareCylinder(this.kernel,this.source,face)
+    this.invalidateG1Selection()
+    return prepared
   }
   open(step: string) {
     this.clear()

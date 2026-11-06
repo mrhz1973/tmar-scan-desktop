@@ -9,9 +9,15 @@ import { previewPreparedCylinder } from './cylinderPreview'
 import { evaluatePreparedCylinder } from './cylinderEvaluation'
 import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
 import { readRecipe, readCurvedRecipe } from './recipe'
+import type { AdaptiveLocks } from './adaptiveLockSnapshot'
+type AdaptiveSelection = { face:number; refinements:KnotInsertion[]; trimPolicy:'circular-fine-v1'; generation:number }
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectDenseTrimmedPlane'; face: number }
+  | { action: 'selectAdaptiveExperimental'; face: number }
+  | { action: 'evaluateAdaptiveExperimental'; net: Net; continuity:'G0'|'G1'; exportStep?:boolean; selection:AdaptiveSelection }
+  | { action: 'createAdaptiveLockedRecipe'; net:Net; continuity:'G0'|'G1'; locks:AdaptiveLocks; bodyId:string; selection:AdaptiveSelection }
+  | { action: 'replayAdaptiveLockedRecipe'; step:string; recipe:unknown; bodyId:string }
   | { action: 'selectRefined'; face: number; refinements: KnotInsertion[] }
   | { action: 'g1SupportCandidates' }
   | ({ action: 'proposeG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneProposalRequest)
@@ -46,6 +52,8 @@ let cylinderSerial=0
 let cylinder:{session:number;prepared:{brep:string;net:Net};face:number;noteFace?:string;noteRevision?:number}|null=null
 let cylinderNoteSerial=0
 let selectionKey:string|null=null
+let adaptiveSelectionKey:string|null=null
+let adaptiveSelectionSerial=0
 const resetCylinder=()=>{cylinder=null;cylinderSerial++}
 self.onmessage = (event: MessageEvent<Request>) => {
   const req = event.data
@@ -54,16 +62,33 @@ self.onmessage = (event: MessageEvent<Request>) => {
       editor ??= await SurfaceEditorKernel.load(wasmUrl)
       let result: unknown
       switch (req.action) {
-        case 'open': resetCylinder(); selectionKey=null; result = editor.open(req.step); break
-        case 'select': resetCylinder(); selectionKey=null; result = editor.select(req.face); selectionKey=JSON.stringify({face:req.face,refinements:[]}); break
+        case 'open': resetCylinder(); selectionKey=null; adaptiveSelectionKey=null; result = editor.open(req.step); break
+        case 'select': result = editor.select(req.face); resetCylinder(); adaptiveSelectionKey=null; selectionKey=JSON.stringify({face:req.face,refinements:[]}); break
         case 'selectDenseTrimmedPlane': {
           const prepared=editor.selectDenseTrimmedPlane(req.face)
-          resetCylinder(); selectionKey=JSON.stringify({face:req.face,refinements:prepared.refinements})
+          resetCylinder(); adaptiveSelectionKey=null; selectionKey=JSON.stringify({face:req.face,refinements:prepared.refinements})
           result=prepared; break
         }
-        case 'selectRefined': {
+        case 'selectAdaptiveExperimental': {
+          if(adaptiveSelectionSerial>=Number.MAX_SAFE_INTEGER) throw new Error('Limite selezioni adattive raggiunto.')
+          const prepared=editor.selectAdaptiveExperimental(req.face)
           resetCylinder(); selectionKey=null
+          const selection:AdaptiveSelection={face:req.face,refinements:prepared.refinements,trimPolicy:'circular-fine-v1',generation:++adaptiveSelectionSerial}
+          adaptiveSelectionKey=JSON.stringify(selection)
+          result={...prepared,selection};break
+        }
+        case 'evaluateAdaptiveExperimental': case 'createAdaptiveLockedRecipe': {
+          if(cylinder || !req.selection || adaptiveSelectionKey===null || adaptiveSelectionKey!==JSON.stringify(req.selection))
+            throw new Error('Preparazione adattiva scaduta: seleziona di nuovo la faccia.')
+          result=req.action==='evaluateAdaptiveExperimental'
+            ? editor.evaluate(req.net,req.continuity,req.exportStep,false)
+            : await editor.createAdaptiveLockedRecipe(req.net,req.continuity,req.locks,req.bodyId)
+          break
+        }
+        case 'replayAdaptiveLockedRecipe': result=await editor.replayAdaptiveLockedRecipe(req.step,req.recipe,req.bodyId);break
+        case 'selectRefined': {
           const net=editor.selectRefined(req.face,req.refinements), info=editor.infos[req.face]
+          resetCylinder(); adaptiveSelectionKey=null
           selectionKey=JSON.stringify({face:req.face,refinements:req.refinements})
           result={net,trimLocks:info.trimLocks,hiddenPoles:info.hiddenPoles}
           break
@@ -110,14 +135,15 @@ self.onmessage = (event: MessageEvent<Request>) => {
         case 'notePick': result = editor.anchorFromPick(req.point,req.previewRevision); break
         case 'noteResolve': result = editor.resolveAnchor(req.anchor,req.previewRevision); break
         case 'evaluate': {
+          if(adaptiveSelectionKey!==null) throw new Error('La preparazione adattiva richiede una valutazione esplicita.')
           if(req.selection && selectionKey!==JSON.stringify(req.selection)) {
             selectionKey=null; editor.selectRefined(req.selection.face,req.selection.refinements); selectionKey=JSON.stringify(req.selection)
           }
           result = editor.evaluate(req.net, req.continuity, req.exportStep, req.freeBoundary); break
         }
         case 'prepareCylinder': {
-          resetCylinder(); selectionKey=null
           const prepared=editor.prepareCylinderForPreview(req.face)
+          resetCylinder(); selectionKey=null; adaptiveSelectionKey=null
           cylinder={session:cylinderSerial,prepared,face:req.face}
           result={session:cylinder.session,net:structuredClone(prepared.net)}
           break
@@ -142,6 +168,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
           break
         }
         case 'createRecipe': {
+          if(adaptiveSelectionKey!==null) throw new Error('La preparazione adattiva richiede una ricetta esplicita.')
           if (req.constraintId !== undefined && (cylinder || !req.selection || selectionKey === null || selectionKey !== JSON.stringify(req.selection)))
             throw new Error('Selezione della ricetta G1 scaduta.')
           if(req.constraintId === undefined && req.selection && selectionKey!==JSON.stringify(req.selection)) {
@@ -161,6 +188,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
           const restored = await editor.restoreCurvedRecipe(req.step, recipe, req.bodyId)
           // Commit worker metadata only after the isolated kernel restore wins.
           resetCylinder()
+          adaptiveSelectionKey=null
           selectionKey = JSON.stringify({ face: recipe.faceIndex, refinements: recipe.refinements })
           result = restored
           break
@@ -171,6 +199,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
           const recipe = readRecipe(req.recipe)
           const restored = await editor.restoreRecipe(req.step, recipe, req.bodyId)
           resetCylinder()
+          adaptiveSelectionKey=null
           selectionKey=JSON.stringify({face:recipe.faceIndex,refinements:recipe.version===4||recipe.version===5?recipe.refinements:[]})
           result = restored
           break
