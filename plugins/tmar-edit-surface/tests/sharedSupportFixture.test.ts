@@ -3,7 +3,7 @@
 import { expect, it, vi } from 'vitest'
 import type { ShapeHandle } from 'occt-wasm'
 import { SurfaceEditorKernel } from '../editorKernel'
-import { ExperimentalSharedPlane } from '../experimentalSharedPlane'
+import { ExperimentalSharedPlane, verifyOtherFacesSampled } from '../experimentalSharedPlane'
 
 it('characterizes a STEP solid whose top is split into coplanar faces', async () => {
   const editor=await SurfaceEditorKernel.load(), k=editor.kernel, owned:ShapeHandle[]=[]
@@ -47,6 +47,17 @@ it('characterizes a STEP solid whose top is split into coplanar faces', async ()
       expect(()=>isolated.evaluate(through)).toThrow(/interse[cz]/i)
       const output=isolated.evaluate(changed)
       const round=own(k.importStep(output.step)), roundFaces=k.getSubShapes(round,'face');owned.push(...roundFaces)
+      expect(()=>verifyOtherFacesSampled(k,importedFaces,roundFaces,target)).not.toThrow()
+      const neighbor=importedFaces.findIndex((_,index)=>index!==target)
+      const shifted=own(k.translate(importedFaces[neighbor],0,0,1))
+      const alteredFaces=[...importedFaces];alteredFaces[neighbor]=shifted
+      expect(()=>verifyOtherFacesSampled(k,importedFaces,alteredFaces,target)).toThrow(/alterata|ambigua/)
+      const reversed=own(k.reverseShape(importedFaces[neighbor])), reversedFaces=[...importedFaces]
+      reversedFaces[neighbor]=reversed
+      expect(()=>verifyOtherFacesSampled(k,importedFaces,reversedFaces,target)).toThrow(/alterata|ambigua/)
+      const invalidDistance=vi.spyOn(k,'distanceBetween').mockReturnValue(NaN)
+      try {expect(()=>verifyOtherFacesSampled(k,importedFaces,roundFaces,target)).toThrow(/alterata|ambigua/)}
+      finally {invalidDistance.mockRestore()}
       const bounds=k.uvBounds(importedFaces[target]), center=k.pointOnSurface(importedFaces[target],(bounds.uMin+bounds.uMax)/2,(bounds.vMin+bounds.vMax)/2)
       const centerVertex=own(k.makeVertex(center.x,center.y,center.z))
       expect(Math.min(...roundFaces.map(face=>k.distanceBetween(centerVertex,face)))).toBeGreaterThan(1e-4)
