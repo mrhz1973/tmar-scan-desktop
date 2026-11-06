@@ -247,6 +247,9 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       try { disposeTargets(next) } catch { /* Preserve the reference error. */ }
       try { disposeTargets(referenceTargets) } catch { /* Preserve the reference error. */ }
       referenceTargets = []
+      // A transient host lookup failure must not disable snapping until the
+      // next reference-change notification. Retry on the next interaction.
+      referencesDirty = true
       report(`Magnete non disponibile: ${errorText(error)}`); return
     }
     disposeTargets(referenceTargets)

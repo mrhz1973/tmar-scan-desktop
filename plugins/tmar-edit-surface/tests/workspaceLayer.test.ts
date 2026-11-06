@@ -445,6 +445,20 @@ it('does not propagate a revoked source or frozen error reporter through a host 
   materialDispose.mockRestore(); hostGeometryDispose.mockRestore()
 })
 
+it('recovers scan snapping after a transient reference lookup failure without a second notification', () => {
+  const f = fixture({ reference: 'scan' }), layer = createWorkspaceLayer(f.view, f.owner)
+  const refs = f.view.references()
+  const lookup = vi.spyOn(f.view, 'references').mockImplementationOnce(() => { throw new Error('temporaneamente non disponibile') })
+    .mockReturnValue(refs)
+  f.notifyReferences()
+  expect(f.reportViewError).toHaveBeenCalledWith('Magnete non disponibile: temporaneamente non disponibile')
+  expect(f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))).toBe(true)
+  f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
+  expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(0)
+  expect(f.overlay.children[0].textContent).toContain('Agganciato')
+  lookup.mockRestore(); layer.dispose()
+})
+
 it('cleans the layer without propagating when state and reporting are both revoked during notification', () => {
   const f = fixture({ reference: 'scan' }), layer = createWorkspaceLayer(f.view, f.owner)
   vi.spyOn(f.owner, 'getViewState').mockImplementationOnce(() => { throw new Error('Sorgente revocata') })
