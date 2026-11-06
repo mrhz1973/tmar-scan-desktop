@@ -91,3 +91,18 @@ it('clears an old display error after a successful direct update and clears disp
     expect(preview.displayedRevision).toBe(0)
   } finally {preview.dispose();vi.useRealTimers()}
 })
+
+it('reports both the CAD failure and failure to restore the original during direct update',async()=>{
+  const cad=new Error('CAD failure'),restore=new Error('restore failure')
+  const session={prepare:async()=>({} as Net),evaluate:async()=>{throw cad},dispose:vi.fn()}
+  const view={clear:vi.fn(),setVisible:vi.fn(()=>{throw restore}),dispose:vi.fn()}
+  const preview=new ExperimentalSharedPlanePreview(session as unknown as ExperimentalSharedPlaneSession,view as unknown as WorkspacePreview)
+  await preview.prepare('step',0)
+  let failure:unknown
+  try {await preview.update({} as Net)} catch(error) {failure=error}
+  expect(failure).toBeInstanceOf(AggregateError)
+  expect((failure as AggregateError).errors).toEqual([cad,restore])
+  expect(preview.displayError).toBe(failure)
+  expect(preview.displayedRevision).toBe(0)
+  preview.dispose()
+})

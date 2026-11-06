@@ -73,7 +73,7 @@ export class ExperimentalSharedPlanePreview {
     let result:Awaited<ReturnType<ExperimentalSharedPlaneSession['evaluate']>>
     try {result=await this.session.evaluate(net,true)}
     catch(error) {
-      if(!this.closed && generation===this.generation) try {this.preview.setVisible(false)} catch { /* Preserve the CAD failure. */ }
+      if(!this.closed && generation===this.generation) throw this.hideAfterFailure(error)
       throw error
     }
     if(this.closed || generation!==this.generation) throw new Error('Anteprima superata.')
@@ -83,9 +83,17 @@ export class ExperimentalSharedPlanePreview {
       this.preview.setVisible(true)
       this.presentationFailure=null
     } catch(error) {
-      try {this.preview.setVisible(false)} catch { /* Preserve the display failure. */ }
-      throw error
+      throw this.hideAfterFailure(error)
     }
+  }
+
+  private hideAfterFailure(error:unknown):unknown {
+    this.presented=0
+    this.presentationFailure=error
+    try {this.preview.setVisible(false)} catch (cleanup) {
+      this.presentationFailure=new AggregateError([error,cleanup],'Anteprima e ripristino non riusciti.')
+    }
+    return this.presentationFailure
   }
 
   dispose():void {
