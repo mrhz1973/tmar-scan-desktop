@@ -8,17 +8,18 @@ import type { StripMove } from './sheetExtension'
 import { previewPreparedCylinder } from './cylinderPreview'
 import { evaluatePreparedCylinder } from './cylinderEvaluation'
 import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
-import { readRecipe, readCurvedRecipe } from './recipe'
+import { readRecipe, readCurvedRecipe, sha256 } from './recipe'
 import type { AdaptiveLocks } from './adaptiveLockSnapshot'
 import { readAdaptiveLockedRecipe } from './adaptiveLockedRecipe'
 import { ExperimentalSharedPlane } from './experimentalSharedPlane'
 export type AdaptiveSelection = { face:number; refinements:KnotInsertion[]; trimPolicy:'circular-fine-v1'; generation:number; trimLocks:number[]; hiddenPoles:number[] }
+export type ExperimentalSharedPlaneIdentity = { version:1; face:number; sourceHash:string; baseHash:string }
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectDenseTrimmedPlane'; face: number }
   | { action: 'selectAdaptiveExperimental'; face: number }
   | { action: 'prepareSharedPlaneExperimental'; step:string; face:number }
-  | { action: 'evaluateSharedPlaneExperimental'; step:string; face:number; net:Net }
+  | { action: 'evaluateSharedPlaneExperimental'; step:string; face:number; net:Net; identity:ExperimentalSharedPlaneIdentity }
   | { action: 'refineAdaptiveExperimental'; net:Net; additions:KnotInsertion[]; continuity:'G0'|'G1'; manualLocks:number[]; selection:AdaptiveSelection }
   | { action: 'reactivateAdaptiveExperimental'; refinements:KnotInsertion[]; expectedNet:Net; expectedTrimLocks:number[]; expectedHiddenPoles:number[]; selection:AdaptiveSelection }
   | { action: 'evaluateAdaptiveExperimental'; net: Net; continuity:'G0'|'G1'; exportStep?:boolean; selection:AdaptiveSelection }
@@ -75,7 +76,14 @@ self.onmessage = (event: MessageEvent<Request>) => {
           const isolated=new ExperimentalSharedPlane(editor.kernel)
           try {
             const net=isolated.open(req.step,req.face)
-            result=req.action==='prepareSharedPlaneExperimental' ? {net} : isolated.evaluate(req.net)
+            const identity:ExperimentalSharedPlaneIdentity={version:1,face:req.face,sourceHash:await sha256(req.step),baseHash:await sha256(JSON.stringify(net))}
+            if(req.action==='prepareSharedPlaneExperimental') result={net,identity}
+            else {
+              const key=req.identity
+              if(!key || key.version!==1 || key.face!==identity.face || key.sourceHash!==identity.sourceHash || key.baseHash!==identity.baseHash)
+                throw new Error('Preparazione scaduta: riapri la faccia sulla sorgente corrente.')
+              result=isolated.evaluate(req.net)
+            }
           } finally {isolated.dispose()}
           break
         }

@@ -6,6 +6,7 @@ import { SurfaceEditorKernel } from '../editorKernel'
 import { ExperimentalSharedPlane, verifyOtherFacesSampled } from '../experimentalSharedPlane'
 import type { Net } from '../brep'
 import type { SurfaceWorkerPayload } from '../workerClient'
+import type { ExperimentalSharedPlaneIdentity } from '../editor.worker'
 
 it('characterizes a STEP solid whose top is split into coplanar faces', async () => {
   const editor=await SurfaceEditorKernel.load(), k=editor.kernel, owned:ShapeHandle[]=[]
@@ -98,14 +99,17 @@ it('characterizes a STEP solid whose top is split into coplanar faces', async ()
       const selection={face:activeFace,refinements:[]}
       const beforePreview=await ask<{previewRevision:number}>({action:'evaluate',net:activeNet,continuity:'G1',selection})
       const witness=await ask({action:'finalFaceWitness',previewRevision:beforePreview.previewRevision})
-      const prepared=await ask<{net:Net}>({action:'prepareSharedPlaneExperimental',step,face:target})
+      const prepared=await ask<{net:Net;identity:ExperimentalSharedPlaneIdentity}>({action:'prepareSharedPlaneExperimental',step,face:target})
       const changed=structuredClone(prepared.net),pole=Math.floor(changed.nu/2)*changed.nv+Math.floor(changed.nv/2)
       changed.poles[pole][2]+=.02
-      const exported=await ask<{step:string}>({action:'evaluateSharedPlaneExperimental',step,face:target,net:changed})
+      const request={action:'evaluateSharedPlaneExperimental' as const,step,face:target,net:changed,identity:prepared.identity}
+      const exported=await ask<{step:string}>(request)
       const workerResult=own(k.importStep(exported.step))
       expect(k.isValid(workerResult)).toBe(true)
       const invalid=structuredClone(changed);invalid.poles[0][2]+=.1
-      await expect(ask({action:'evaluateSharedPlaneExperimental',step,face:target,net:invalid})).rejects.toThrow()
+      await expect(ask({...request,net:invalid})).rejects.toThrow()
+      await expect(ask({...request,identity:{...prepared.identity,baseHash:'0'.repeat(64)}})).rejects.toThrow(/scaduta/)
+      await expect(ask({...request,step:step+'\n'})).rejects.toThrow(/scaduta/)
       expect(await ask({action:'finalFaceWitness',previewRevision:beforePreview.previewRevision})).toEqual(witness)
       expect(()=>editor.select(target)).toThrow(/ambigua|condivisa/i)
     } finally {vi.unstubAllGlobals();load.mockRestore()}
