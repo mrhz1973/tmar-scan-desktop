@@ -76,6 +76,14 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
     expect((await worker.ask<{valid:boolean}>({action:'evaluateAdaptiveExperimental',net:refined.net,continuity:'G1',selection:refined.selection})).valid).toBe(true)
     const refinedRecipe=await worker.ask<{version:number}>({action:'createAdaptiveLockedRecipe',net:refined.net,continuity:'G1',locks:[],bodyId:'worker-qa',selection:refined.selection})
     expect((await worker.ask<{valid:boolean}>({action:'replayAdaptiveLockedRecipe',step,recipe:refinedRecipe,bodyId:'worker-qa'})).valid).toBe(true)
+    const request={action:'reactivateAdaptiveExperimental' as const,refinements:again.selection.refinements,expectedNet:again.net,
+      expectedTrimLocks:again.selection.trimLocks,expectedHiddenPoles:again.selection.hiddenPoles,selection:refined.selection}
+    await expect(worker.ask({...request,expectedTrimLocks:[...request.expectedTrimLocks,-1]})).rejects.toThrow(/storica/)
+    expect((await worker.ask<{valid:boolean}>({action:'evaluateAdaptiveExperimental',net:refined.net,continuity:'G1',selection:refined.selection})).valid).toBe(true)
+    const prior=await worker.ask<typeof picked>(request)
+    expect(prior.selection.generation).not.toBe(again.selection.generation)
+    await expect(worker.ask({action:'evaluateAdaptiveExperimental',net:refined.net,continuity:'G1',selection:refined.selection})).rejects.toThrow(/scaduta/)
+    expect((await worker.ask<{valid:boolean}>({action:'evaluateAdaptiveExperimental',net:again.net,continuity:'G1',selection:prior.selection})).valid).toBe(true)
     await worker.ask({action:'open',step})
     again=await worker.ask<typeof picked>({action:'selectAdaptiveExperimental',face:7})
     const draft=new SurfaceDraft(runtime)

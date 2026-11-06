@@ -475,6 +475,23 @@ export class SurfaceEditorKernel {
     this.prepareSelection(this.chosen,plan,true,true)
     return {net:refined,originalNet:base,refinements:plan,trimLocks:candidate.trimLocks,hiddenPoles:candidate.hiddenPoles,witnessPole:witness}
   }
+  /** Reactivate a historical adaptive basis only if its source-derived net and
+   * protection map still match. Does not adopt or evaluate the edited net. */
+  reactivateAdaptiveExperimental(refinements: readonly KnotInsertion[], expectedNet: Net,
+    expectedTrimLocks: readonly number[], expectedHiddenPoles: readonly number[]) {
+    if (!this.adaptiveSelection || this.chosen < 0) throw new Error('Seleziona prima una faccia adattiva.')
+    const candidate=this.netFor(this.chosen,refinements,true)
+    if (JSON.stringify(candidate.net)!==JSON.stringify(expectedNet) ||
+        JSON.stringify(candidate.trimLocks)!==JSON.stringify(expectedTrimLocks) ||
+        JSON.stringify(candidate.hiddenPoles)!==JSON.stringify(expectedHiddenPoles))
+      throw new Error('La base adattiva storica non corrisponde alla sorgente.')
+    const locks=new Set([...candidate.trimLocks,...candidate.hiddenPoles]),face=this.faces[this.chosen]
+    const witness=candidate.net.poles.findIndex((_,i)=>!locks.has(i)&&!boundaryLocked(candidate.net,i,'G1') &&
+      visiblePoleWitness(candidate.net,i,(u,v)=>this.kernel.classifyPointOnFace(face,u,v),.01)!==null)
+    if(witness<0) throw new Error('Nessun punto libero con influenza interna verificata.')
+    const net=this.prepareSelection(this.chosen,refinements,true,true)
+    return {net,refinements:structuredClone([...refinements]),trimLocks:candidate.trimLocks,hiddenPoles:candidate.hiddenPoles,witnessPole:witness}
+  }
   /** Reprepare the active face without invalidating its UV anchors. Switching
    * face still starts a new logical selection; failed preparation commits neither. */
   selectRefined(index: number, refinements: readonly KnotInsertion[] = []) {
