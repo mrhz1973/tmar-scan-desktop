@@ -926,7 +926,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       return !!prepared && this.historyGuards.has(prepared) && this.historyGuards.get(prepared)===JSON.stringify(prepared.recipe) &&
         prepared.sessionId === this.context.sessionId && prepared.sourceKey === this.sourceId &&
         prepared.selectionEpoch === this.selectionEpoch && prepared.draftEpoch === this.draftEpoch &&
-        !this.busy && this.frozen === allowedFrozen && this.gesture === 'idle' && !this.placingNote && !this.notes.length &&
+        !this.busy && !this.mutating && this.frozen === allowedFrozen && this.gesture === 'idle' && !this.placingNote && !this.notes.length &&
         !this.strip && !this.stripPending && this.snapshot.validation.kind === 'valid'
     } catch { return false }
   }
@@ -969,7 +969,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       return !!prepared && prepared.sessionId===this.context.sessionId && prepared.sourceKey===this.sourceId &&
         !!guard && JSON.stringify(prepared.recipe)===guard.recipe && prepared.selectionEpoch===this.selectionEpoch && d.net===guard.net &&
         JSON.stringify(content)===guard.notes && !!this.notes.length &&
-        revision!==undefined && this.notes.every(note=>note.revision===revision) && !this.busy && this.frozen===allowedFrozen &&
+        revision!==undefined && this.notes.every(note=>note.revision===revision) && !this.busy && !this.mutating && this.frozen===allowedFrozen &&
         this.gesture==='idle' && !this.placingNote && !this.strip && !this.stripPending && this.snapshot.validation.kind==='valid'
     } catch { return false }
   }
@@ -989,7 +989,14 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       stamp:Object.freeze({ ...validation.stamp }), stripResult:null,
       ...(annotated ? {notes:this.notes, notesRevision:this.notesRevision} : {}), preparing:false }
     this.frozen = lock
-    this.refresh()
+    try { this.refresh() }
+    catch (error) {
+      // A subscriber must not leave an unreleasable lock when notification
+      // fails before the host has received the release handle.
+      if (this.frozen===lock) this.frozen=null
+      if (!this.disposed) { try { this.refresh() } catch { /* Preserve the original error. */ } }
+      throw error
+    }
     let released = false
     return Object.freeze({
       isCurrent: () => !released && this.frozen===lock && current(lock) &&

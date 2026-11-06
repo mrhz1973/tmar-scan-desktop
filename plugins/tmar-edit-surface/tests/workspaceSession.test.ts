@@ -177,6 +177,22 @@ describe('WorkspaceSurfaceSession',()=>{
     create.mockRestore()
     await t.session.dispose('cancelled')
   })
+
+  it('releases a history lock if a listener throws before the host receives it', async()=>{
+    const t=await setup(); await selectFace(t)
+    const create=vi.spyOn(SurfaceDraft.prototype,'createRecipe').mockResolvedValueOnce({version:2} as never)
+    const prepared=await t.session.prepareHistoryRecipe()
+    const unsubscribe=t.session.subscribe(()=>{
+      if(t.session.getPanelState().busy) throw Error('subscriber failure')
+    })
+    expect(()=>t.session.freezeHistory(prepared)).toThrow('subscriber failure')
+    unsubscribe()
+    expect(t.session.getPanelState().busy).toBe(false)
+    expect(t.session.isHistoryRecipeStampCurrent(prepared)).toBe(true)
+    expect(()=>t.session.selectPoints([12],false)).not.toThrow()
+    create.mockRestore()
+    await t.session.dispose('cancelled')
+  })
   it('starts by moving a point along the normal of a rotated surface', async()=>{
     const t=await setup(), net=plane()
     net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
