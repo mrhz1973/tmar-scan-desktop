@@ -11,7 +11,7 @@ import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
 import { readRecipe, readCurvedRecipe } from './recipe'
 import type { AdaptiveLocks } from './adaptiveLockSnapshot'
 import { readAdaptiveLockedRecipe } from './adaptiveLockedRecipe'
-type AdaptiveSelection = { face:number; refinements:KnotInsertion[]; trimPolicy:'circular-fine-v1'; generation:number }
+export type AdaptiveSelection = { face:number; refinements:KnotInsertion[]; trimPolicy:'circular-fine-v1'; generation:number }
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectDenseTrimmedPlane'; face: number }

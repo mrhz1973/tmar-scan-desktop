@@ -10,6 +10,7 @@ import type { Mesh } from 'occt-wasm'
 import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
 import type { G1SupportCandidate } from './g1SupportTopology'
 import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupportTopology'
+import type { AdaptiveSelection } from './editor.worker'
 import { validatePlaneTangencyResult, validatePlaneTangencyConstraint, type PlaneTangencyRequest, type NaturalEdge } from './planeTangency'
 
 export interface CylinderProvisionalPreview { kind: 'provisional'; mesh: Mesh; faceMeshes?: Mesh[] }
@@ -157,7 +158,7 @@ export class SurfaceDraft {
 
   /** Install a worker-selected CAD net. No project or worker selection is performed. */
   install(net: Net, options: { continuity?: 'G0' | 'G1'; trimLocks?: readonly number[]; hiddenPoles?: readonly number[];
-    cylinderSession?: number; face?: number; refinements?: readonly KnotInsertion[]; originalNet?: Net; experimentalAdaptiveLocks?: boolean } = {}): void {
+    cylinderSession?: number; face?: number; refinements?: readonly KnotInsertion[]; originalNet?: Net; experimentalAdaptiveLocks?: boolean; adaptiveSelection?: AdaptiveSelection } = {}): void {
     this.ensureActive(true)
     const continuity = options.continuity ?? this.snapshot.continuity
     if (continuity !== 'G0' && continuity !== 'G1') throw new Error('Continuità non valida.')
@@ -175,12 +176,19 @@ export class SurfaceDraft {
     if (options.experimentalAdaptiveLocks !== undefined && typeof options.experimentalAdaptiveLocks !== 'boolean') throw new Error('Modalità blocchi adattivi non valida.')
     if (options.experimentalAdaptiveLocks && (options.face === undefined || !options.refinements?.length || cylinderSession !== null))
       throw new Error('I blocchi adattivi richiedono una faccia raffinata.')
+    const adaptive = options.adaptiveSelection
+    if (Boolean(options.experimentalAdaptiveLocks) !== Boolean(adaptive) || (adaptive &&
+      (adaptive.face !== options.face || adaptive.trimPolicy !== 'circular-fine-v1' ||
+       !Number.isSafeInteger(adaptive.generation) || adaptive.generation < 1 ||
+       JSON.stringify(adaptive.refinements) !== JSON.stringify(options.refinements))))
+      throw new Error('Selezione adattiva del worker non valida.')
     const base = freezeNet(structuredClone(options.originalNet ?? net))
     if (cylinderSession !== null) assertSmoothCylinderMove(base, net)
     else assertNet(base, net, continuity, true)
     const preparation: SurfacePreparation | undefined = options.face === undefined ? undefined : {
       face: options.face, refinements: structuredClone(options.refinements ?? []) as KnotInsertion[],
       originalNet: base, trimLocks: [...trimLocks], hiddenPoles: [...hiddenPoles],
+      ...(adaptive ? { adaptiveSelection: structuredClone(adaptive) } : {}),
     }
     this.invalidate()
     this.restoreUnverified = false
@@ -207,6 +215,7 @@ export class SurfaceDraft {
   /** Serialize the actual committed draft; a plane constraint always uses v5. */
   async createRecipe(bodyId: string): Promise<SurfaceEditRecipe> {
     this.ensureActive()
+    if (this.runtime.history.current?.preparation?.adaptiveSelection) throw new Error('Usa il salvataggio adattivo dedicato.')
     const before = this.snapshot, preparation = this.runtime.history.current?.preparation
     if (before.curvedTangency) throw new Error('La ricetta del vincolo G1 curvo non è ancora supportata.')
     if (!preparation || !before.net || before.cylinderSession !== null || before.net !== before.committedNet ||
@@ -481,6 +490,7 @@ export class SurfaceDraft {
   /** Propose read-only, then publish the verified CAD face and its real note witness.
    * While publishing, mutations wait so the accepted reply cannot overwrite a newer draft. */
   async applyPlaneTangency(choice: G1SupportCandidate, options: { distanceTolerance?: number } = {}): Promise<void> {
+    if (this.runtime.history.current?.preparation?.adaptiveSelection) throw new Error('Tangenza non disponibile per la selezione adattiva.')
     this.ensureActive()
     this.ensureNoPlaneTangency()
     const before = this.snapshot, previous = this.runtime.history.current
@@ -538,6 +548,7 @@ export class SurfaceDraft {
   async applyCurvedTangency(choice: CompatibleCurvedSupportCandidate,
     options: { scale?: number; distanceTolerance?: number; derivativeTolerance?: number } = {}): Promise<void> {
     this.ensureActive()
+    if (this.runtime.history.current?.preparation?.adaptiveSelection) throw new Error('Tangenza non disponibile per la selezione adattiva.')
     this.ensureNoPlaneTangency()
     const before = this.snapshot, previous = this.runtime.history.current, preparation = previous?.preparation
     if (this.proposingPlaneTangency || this.proposingCurvedTangency) throw new Error('Attendi la verifica della tangenza.')
@@ -724,15 +735,16 @@ export class SurfaceDraft {
     if (snapshot.validNet !== net || snapshot.calculating || !current)
       throw new Error('Attendi la verifica CAD della bozza corrente.')
     const epoch = this.epoch
-    const result = await this.runtime.worker.ask<Preview & { step: string; previewRevision: number }>({
-      action: 'evaluate', net, continuity: snapshot.continuity, freeBoundary: snapshot.freeBoundary, exportStep: true,
-      ...this.selectionPayload(),
-    })
+    const adaptive = this.runtime.history.current?.preparation?.adaptiveSelection
+    const result = await this.runtime.worker.ask<Preview & { step: string; previewRevision: number }>(adaptive
+      ? { action: 'evaluateAdaptiveExperimental', net, continuity: snapshot.continuity, exportStep: true, selection: adaptive }
+      : { action: 'evaluate', net, continuity: snapshot.continuity, freeBoundary: snapshot.freeBoundary, exportStep: true, ...this.selectionPayload() })
     this.ensureActive()
     const next = this.snapshot, queue = this.runtime.previews.getSnapshot()
     if (epoch !== this.epoch || next.net !== net || next.validNet !== net || next.calculating ||
         next.continuity !== snapshot.continuity || next.freeBoundary !== snapshot.freeBoundary ||
         queue.current?.revision !== current.revision || queue.validRevision !== current.revision ||
+        this.runtime.history.current?.preparation?.adaptiveSelection !== adaptive ||
         result.valid !== true || !Number.isInteger(result.previewRevision) || typeof result.step !== 'string')
       throw new Error('La bozza è cambiata durante la valutazione STEP.')
     this.exported = { epoch, queueRevision: current.revision, value: result }
@@ -805,6 +817,7 @@ export class SurfaceDraft {
   /** The host must check FaceInfo.freeBoundary before enabling this option. */
   setFreeBoundary(freeBoundary: boolean): void {
     this.ensureActive()
+    if (freeBoundary && this.runtime.history.current?.preparation?.adaptiveSelection) throw new Error('I bordi adattivi devono restare protetti.')
     this.ensureNoPlaneTangency()
     const net = this.requireNet()
     if (this.snapshot.cylinderSession !== null) {
@@ -971,7 +984,9 @@ export class SurfaceDraft {
       ? this.cylinderPreviews.schedule({ ...payload, session: cylinderSession })
       : this.runtime.previews.schedule({
       net, continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, epoch: this.epoch,
-      ...this.selectionPayload(),
+      ...(this.runtime.history.current?.preparation?.adaptiveSelection
+        ? { adaptiveSelection: this.runtime.history.current.preparation.adaptiveSelection }
+        : this.selectionPayload()),
     })
     if (revision === null) this.update({ validNet: null, calculating: false, error: 'Anteprima CAD non disponibile.' })
   }
@@ -1037,7 +1052,8 @@ export class SurfaceDraft {
     }
     const queue = this.runtime.previews.getSnapshot(), current = queue.current
     const matches = (job: PreviewDraft) => job.epoch === this.epoch &&
-      job.continuity === this.snapshot.continuity && job.freeBoundary === this.snapshot.freeBoundary
+      job.continuity === this.snapshot.continuity && job.freeBoundary === this.snapshot.freeBoundary &&
+      job.adaptiveSelection === this.runtime.history.current?.preparation?.adaptiveSelection
     const currentMatches = !!current && matches(current.draft) && current.draft.net === this.queueNet
     const visible = queue.preview && matches(queue.preview.identity) ? queue.preview : null
     const valid = this.runtime.active && currentMatches && queue.validRevision === current?.revision &&
@@ -1185,6 +1201,11 @@ export class SurfaceDraft {
   private freezePreparation(preparation?: SurfacePreparation): void {
     if (!preparation) return
     freezeNet(preparation.originalNet)
+    if (preparation.adaptiveSelection) {
+      for (const insertion of preparation.adaptiveSelection.refinements) Object.freeze(insertion)
+      Object.freeze(preparation.adaptiveSelection.refinements)
+      Object.freeze(preparation.adaptiveSelection)
+    }
     for (const insertion of preparation.refinements) Object.freeze(insertion)
     Object.freeze(preparation.refinements)
     Object.freeze(preparation.trimLocks)

@@ -4,6 +4,7 @@ import type { KnotInsertion } from './refineClampedNet'
 import type { G1SupportCandidate } from './g1SupportTopology'
 import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupportTopology'
 import { updateAdaptiveLocks, validateAdaptiveLocks, type AdaptiveLocks } from './adaptiveLockSnapshot'
+import type { AdaptiveSelection } from './editor.worker'
 
 export interface SurfaceCurvedTangency {
   kind: 'compatible-bspline'
@@ -45,6 +46,7 @@ export interface SurfacePreparation {
   originalNet: Net
   trimLocks: number[]
   hiddenPoles: number[]
+  adaptiveSelection?: AdaptiveSelection
 }
 
 /** One committed state of the editable surface, independent of its panel. */

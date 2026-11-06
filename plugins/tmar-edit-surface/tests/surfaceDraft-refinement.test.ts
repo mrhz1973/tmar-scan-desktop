@@ -40,11 +40,29 @@ async function evaluate(worker: FakeWorker) {
 afterEach(() => vi.useRealTimers())
 
 describe('atomic refinement history', () => {
+  it('requires the matching worker identity and routes adaptive previews to the adaptive action',async()=>{
+    vi.useFakeTimers()
+    const worker=new FakeWorker(),runtime=new SurfaceRuntime(()=>worker as unknown as Worker),draft=new SurfaceDraft(runtime)
+    const net=refineClampedNet(plane(),insertion)
+    const token={face:2,refinements:insertion,trimPolicy:'circular-fine-v1' as const,generation:1}
+    try {
+      expect(()=>draft.install(net,{face:2,refinements:insertion,experimentalAdaptiveLocks:true})).toThrow(/worker/)
+      expect(()=>draft.install(net,{face:2,refinements:insertion,experimentalAdaptiveLocks:true,adaptiveSelection:{...token,face:3}})).toThrow(/worker/)
+      draft.install(net,{face:2,refinements:insertion,experimentalAdaptiveLocks:true,adaptiveSelection:token})
+      await evaluate(worker)
+      expect(worker.sent.at(-1)?.action).toBe('evaluateAdaptiveExperimental')
+      expect(worker.sent.at(-1)?.selection).toEqual(token)
+      expect(draft.getSnapshot().validNet).toBe(draft.getSnapshot().net)
+      expect(()=>draft.setFreeBoundary(true)).toThrow(/protetti/)
+      await expect(draft.createRecipe('body')).rejects.toThrow(/adattivo/)
+    } finally {draft.dispose();runtime.dispose()}
+  })
   it('retains adaptive lock-at-position history when editing the draft',async()=>{
     vi.useFakeTimers()
     const worker=new FakeWorker(),runtime=new SurfaceRuntime(()=>worker as unknown as Worker),draft=new SurfaceDraft(runtime)
     try {
-      draft.install(refineClampedNet(plane(),insertion),{face:2,refinements:insertion,experimentalAdaptiveLocks:true})
+      draft.install(refineClampedNet(plane(),insertion),{face:2,refinements:insertion,experimentalAdaptiveLocks:true,
+        adaptiveSelection:{face:2,refinements:insertion,trimPolicy:'circular-fine-v1',generation:1}})
       const moved=structuredClone(draft.getSnapshot().net!);moved.poles[12][2]=.2;draft.commit(moved)
       draft.setLocks([12])
       expect(runtime.history.current?.lockSnapshots).toEqual([{index:12,point:moved.poles[12]}])

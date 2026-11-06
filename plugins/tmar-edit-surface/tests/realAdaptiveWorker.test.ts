@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { expect, it, vi } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { SurfaceRuntime } from '../surfaceRuntime'
+import { SurfaceDraft } from '../surfaceDraft'
 import { updateAdaptiveLocks } from '../adaptiveLockSnapshot'
 import type { Net } from '../brep'
 import type { Request } from '../editor.worker'
@@ -55,5 +56,23 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
     expect(again.selection.generation).not.toBe(picked.selection.generation)
     await expect(worker.ask({action:'evaluateAdaptiveExperimental',net,continuity:'G1',selection:picked.selection})).rejects.toThrow(/scaduta/)
     expect((await worker.ask<{valid:boolean}>({action:'evaluateAdaptiveExperimental',net:again.net,continuity:'G1',selection:again.selection})).valid).toBe(true)
+    const draft=new SurfaceDraft(runtime)
+    try {
+      draft.install(again.net,{face:again.selection.face,refinements:again.selection.refinements,
+        adaptiveSelection:again.selection,experimentalAdaptiveLocks:true})
+      await new Promise<void>((resolve,reject)=>{
+        const timeout=setTimeout(()=>{unsubscribe();reject(new Error('Anteprima adattiva scaduta'))},30000)
+        const unsubscribe=draft.subscribe(()=>{
+          const state=draft.getSnapshot()
+          if (!state.calculating && (state.validNet || state.error)) {
+            clearTimeout(timeout);unsubscribe();state.error ? reject(new Error(state.error)) : resolve()
+          }
+        })
+      })
+      expect(draft.getSnapshot().validNet).toBe(draft.getSnapshot().net)
+      const exported=await draft.evaluateForExport()
+      expect(exported.valid).toBe(true);expect(exported.step).toBeTruthy()
+      expect(()=>draft.setFreeBoundary(true)).toThrow(/protetti/)
+    } finally {draft.dispose()}
   } finally {runtime?.dispose();vi.unstubAllGlobals();load.mockRestore();solids.forEach(s=>k.release(s));k.release(imported);editor.dispose()}
 },120000)
