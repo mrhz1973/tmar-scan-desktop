@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Research-only adapter. Not a worker, UI, persistence or production API.
-import type { OcctKernel, ShapeHandle } from 'occt-wasm'
+import type { Mesh, OcctKernel, ShapeHandle } from 'occt-wasm'
 import type { Net } from './brep'
 import { SurfaceEditorKernel } from './editorKernel'
 
@@ -73,7 +73,7 @@ export class ExperimentalSharedPlane {
     } catch(error) {this.dispose();throw error}
   }
 
-  evaluate(net: Net): {step:string; volume:number} {
+  evaluate(net: Net, includeMesh=false): {step:string; volume:number; mesh?:Mesh; faceMeshes?:Mesh[]} {
     if(this.source===null || !this.isolated || this.target<0) throw new Error('Apri prima una faccia.')
     const k=this.kernel, owned:ShapeHandle[]=[]
     const own=(shape:ShapeHandle)=>{owned.push(shape);return shape}
@@ -117,7 +117,10 @@ export class ExperimentalSharedPlane {
       const volume=k.getVolume(joined)
       if(!Number.isFinite(volume)||volume<=0) throw new Error('Volume non valido.')
       if(k.toBREP(this.source)!==this.sourceBefore) throw new Error('La sorgente CAD è cambiata durante la ricomposizione.')
-      return {step:k.exportStep(joined),volume}
+      const step=k.exportStep(joined)
+      const display=includeMesh?{mesh:k.tessellate(joined,{linearDeflection:.08,angularDeflection:.15}),
+        faceMeshes:joinedFaces.map(face=>k.tessellate(face,{linearDeflection:.08,angularDeflection:.15}))}:{}
+      return {step,volume,...display}
     } finally {
       owned.reverse().forEach(s=>k.release(s))
       let changed=false

@@ -117,7 +117,9 @@ it('characterizes a STEP solid whose top is split into coplanar faces', async ()
       try {
         const sessionNet=await session.prepare(step,target)
         sessionNet.poles[pole][2]+=.02
-        const sessionOutput=await session.evaluate(sessionNet)
+        const sessionOutput=await session.evaluate(sessionNet,true)
+        expect(sessionOutput.mesh!.triangleCount).toBeGreaterThan(0)
+        expect(sessionOutput.faceMeshes).toHaveLength(7)
         const sessionSolid=own(k.importStep(sessionOutput.step))
         expect(k.isValid(sessionSolid)).toBe(true)
         expect(await ask({action:'finalFaceWitness',previewRevision:beforePreview.previewRevision})).toEqual(witness)

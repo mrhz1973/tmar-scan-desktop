@@ -42,3 +42,11 @@ it('marks an obsolete worker error as superseded',async()=>{
   requests[3].resolve({step:'valid',volume:1});await second
   session.dispose()
 })
+
+it('refuses an incomplete display result when a mesh was requested',async()=>{
+  const {requests,session}=fixture()
+  const ready=session.prepare('source',0);requests[0].resolve({net,identity:identity(0)});await ready
+  const pending=session.evaluate(net,true),checked=expect(pending).rejects.toThrow(/anteprima/i)
+  requests[1].resolve({step:'valid',volume:1});await checked
+  session.dispose()
+})

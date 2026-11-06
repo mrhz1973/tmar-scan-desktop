@@ -19,7 +19,7 @@ export type Request = { id: number } & (
   | { action: 'selectDenseTrimmedPlane'; face: number }
   | { action: 'selectAdaptiveExperimental'; face: number }
   | { action: 'prepareSharedPlaneExperimental'; step:string; face:number }
-  | { action: 'evaluateSharedPlaneExperimental'; step:string; face:number; net:Net; identity:ExperimentalSharedPlaneIdentity }
+  | { action: 'evaluateSharedPlaneExperimental'; step:string; face:number; net:Net; identity:ExperimentalSharedPlaneIdentity; includeMesh?:boolean }
   | { action: 'refineAdaptiveExperimental'; net:Net; additions:KnotInsertion[]; continuity:'G0'|'G1'; manualLocks:number[]; selection:AdaptiveSelection }
   | { action: 'reactivateAdaptiveExperimental'; refinements:KnotInsertion[]; expectedNet:Net; expectedTrimLocks:number[]; expectedHiddenPoles:number[]; selection:AdaptiveSelection }
   | { action: 'evaluateAdaptiveExperimental'; net: Net; continuity:'G0'|'G1'; exportStep?:boolean; selection:AdaptiveSelection }
@@ -82,7 +82,8 @@ self.onmessage = (event: MessageEvent<Request>) => {
               const key=req.identity
               if(!key || key.version!==1 || key.face!==identity.face || key.sourceHash!==identity.sourceHash || key.baseHash!==identity.baseHash)
                 throw new Error('Preparazione scaduta: riapri la faccia sulla sorgente corrente.')
-              result=isolated.evaluate(req.net)
+              if(req.includeMesh!==undefined && typeof req.includeMesh!=='boolean') throw new Error('Opzione anteprima non valida.')
+              result=isolated.evaluate(req.net,req.includeMesh===true)
             }
           } finally {isolated.dispose()}
           break
