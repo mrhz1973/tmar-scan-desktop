@@ -43,6 +43,15 @@ independent CAD/annotation validation, recheck `isCurrent()` immediately at
 the atomic commit boundary, and handle invalidation or cancellation without
 publishing. This is a plugin-side primitive, not a host history integration.
 
+On 2026-11-06, `TEST_HISTORY_FREEZE=1` passed in the isolated source host on
+the owner's `lego mod qs.stp` with a visible-face mouse note and Zebra. The
+prepared annotated recipe was locked; competing note edits and altered recipe
+contents were rejected, and release restored editing. The subsequent ordinary
+annotated-copy Apply and save/reopen passed, with the original STEP SHA-256
+unchanged. Evidence: `%TEMP%/scanruler-history-freeze-lego-qa/run-v5wAqD/result.json`.
+This does not prove a host history transaction, editable feature persistence,
+the exact coordinator host, or installed-app behavior.
+
 `WorkspaceSurfaceSession.restoreHistoryRecipe(value)` restores a validated
 recipe into a fresh, empty workspace session only. It rejects another body or
 changed STEP bytes; a failed worker restore reports a fatal error to the host

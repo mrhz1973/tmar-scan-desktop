@@ -18,6 +18,8 @@ if(annotatedApply && (process.env.TEST_ZEBRA_NOTES!=='1' || process.env.TEST_PRO
   throw Error('TEST_ANNOTATED_APPLY requires Zebra notes and project roundtrip.')
 if(process.env.TEST_HISTORY_RECIPE==='1' && !annotatedApply)
   throw Error('TEST_HISTORY_RECIPE requires annotated Apply.')
+if(process.env.TEST_HISTORY_FREEZE==='1' && process.env.TEST_HISTORY_RECIPE!=='1')
+  throw Error('TEST_HISTORY_FREEZE requires TEST_HISTORY_RECIPE.')
 if (sourceFile && (!isAbsolute(sourceFile) || !['.step','.stp'].includes(extname(sourceFile).toLowerCase())))
   throw Error('STEP_FILE must be an absolute STEP path.')
 if (sourceFile && process.env.TEST_FACE_SWITCH === '1')
@@ -621,6 +623,24 @@ try {
       check(prepared.face===faceIndex&&prepared.notes===1&&prepared.text==='Nota durante Zebra',
         'the real edited face and its note prepare a current history recipe together')
       report.historyPreparation=prepared
+      if(process.env.TEST_HISTORY_FREEZE==='1') {
+        const held=await page.evaluate(()=>{
+          const q=window.surfaceQa,c=q.useWorkspaceEditor.getState().controller,p=q.historyPreparation
+          const lock=c.freezeHistory(p),note=c.getPanelState().notes[0]
+          let refused=false
+          try { c.setNoteText(note.id,'Modifica concorrente') } catch { refused=true }
+          const stillCurrent=lock.isCurrent(), busy=c.getPanelState().busy
+          const before=p.recipe.faceIndex; p.recipe.faceIndex=before+1
+          const rejectsAltered=!lock.isCurrent(); p.recipe.faceIndex=before
+          const acceptsRestored=lock.isCurrent()
+          lock.release();lock.release()
+          return {refused,stillCurrent,busy,rejectsAltered,acceptsRestored,released:!lock.isCurrent(),
+            editable:!c.getPanelState().busy, text:c.getPanelState().notes[0]?.text}
+        })
+        check(held.refused&&held.stillCurrent&&held.busy&&held.rejectsAltered&&held.acceptsRestored&&held.released&&
+          held.editable&&held.text==='Nota durante Zebra',
+          'history lock protects the real CAD draft and its note, then releases cleanly')
+      }
     }
     if(!annotatedApply){
       const removeNote = await page.evaluateHandle(() => [...document.querySelectorAll('[data-test=workspace-surface-parameters] button')].find(e => e.textContent === 'Rimuovi nota'))
