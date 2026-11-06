@@ -61,10 +61,23 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
     const savedAgain=await worker.ask<{version:number}>({action:'createAdaptiveLockedRecipe',net:restored.net,continuity:'G1',locks:restored.lockSnapshots,bodyId:'worker-qa',selection:restored.selection})
     expect(savedAgain.version).toBe(8)
     await worker.ask({action:'open',step})
-    const again=await worker.ask<typeof picked>({action:'selectAdaptiveExperimental',face:7})
+    let again=await worker.ask<typeof picked>({action:'selectAdaptiveExperimental',face:7})
     expect(again.selection.generation).not.toBe(picked.selection.generation)
     await expect(worker.ask({action:'evaluateAdaptiveExperimental',net,continuity:'G1',selection:picked.selection})).rejects.toThrow(/scaduta/)
     expect((await worker.ask<{valid:boolean}>({action:'evaluateAdaptiveExperimental',net:again.net,continuity:'G1',selection:again.selection})).valid).toBe(true)
+    const insertion={axis:'U' as const,value:(again.net.ku[0]+again.net.ku[1])/2,count:1}
+    const changed=structuredClone(again.net);changed.poles[again.witnessPole][0]+=.02
+    await expect(worker.ask({action:'refineAdaptiveExperimental',net:changed,additions:[insertion],continuity:'G1',
+      manualLocks:[again.witnessPole],selection:again.selection})).rejects.toThrow(/Sblocca/)
+    expect((await worker.ask<{valid:boolean}>({action:'evaluateAdaptiveExperimental',net:again.net,continuity:'G1',selection:again.selection})).valid).toBe(true)
+    const refined=await worker.ask<typeof again>({action:'refineAdaptiveExperimental',net:changed,additions:[insertion],continuity:'G1',manualLocks:[],selection:again.selection})
+    expect(refined.net.nu).toBe(again.net.nu+1)
+    await expect(worker.ask({action:'evaluateAdaptiveExperimental',net:again.net,continuity:'G1',selection:again.selection})).rejects.toThrow(/scaduta/)
+    expect((await worker.ask<{valid:boolean}>({action:'evaluateAdaptiveExperimental',net:refined.net,continuity:'G1',selection:refined.selection})).valid).toBe(true)
+    const refinedRecipe=await worker.ask<{version:number}>({action:'createAdaptiveLockedRecipe',net:refined.net,continuity:'G1',locks:[],bodyId:'worker-qa',selection:refined.selection})
+    expect((await worker.ask<{valid:boolean}>({action:'replayAdaptiveLockedRecipe',step,recipe:refinedRecipe,bodyId:'worker-qa'})).valid).toBe(true)
+    await worker.ask({action:'open',step})
+    again=await worker.ask<typeof picked>({action:'selectAdaptiveExperimental',face:7})
     const draft=new SurfaceDraft(runtime)
     try {
       draft.install(again.net,{face:again.selection.face,refinements:again.selection.refinements,

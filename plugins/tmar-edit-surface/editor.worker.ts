@@ -16,6 +16,7 @@ export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectDenseTrimmedPlane'; face: number }
   | { action: 'selectAdaptiveExperimental'; face: number }
+  | { action: 'refineAdaptiveExperimental'; net:Net; additions:KnotInsertion[]; continuity:'G0'|'G1'; manualLocks:number[]; selection:AdaptiveSelection }
   | { action: 'evaluateAdaptiveExperimental'; net: Net; continuity:'G0'|'G1'; exportStep?:boolean; selection:AdaptiveSelection }
   | { action: 'createAdaptiveLockedRecipe'; net:Net; continuity:'G0'|'G1'; locks:AdaptiveLocks; bodyId:string; selection:AdaptiveSelection }
   | { action: 'replayAdaptiveLockedRecipe'; step:string; recipe:unknown; bodyId:string }
@@ -76,6 +77,17 @@ self.onmessage = (event: MessageEvent<Request>) => {
           const prepared=editor.selectAdaptiveExperimental(req.face)
           resetCylinder(); selectionKey=null
           const selection:AdaptiveSelection={face:req.face,refinements:prepared.refinements,trimPolicy:'circular-fine-v1',generation:++adaptiveSelectionSerial,trimLocks:prepared.trimLocks,hiddenPoles:prepared.hiddenPoles}
+          adaptiveSelectionKey=JSON.stringify(selection)
+          result={...prepared,selection};break
+        }
+        case 'refineAdaptiveExperimental': {
+          if(cylinder || !req.selection || adaptiveSelectionKey===null || adaptiveSelectionKey!==JSON.stringify(req.selection))
+            throw new Error('Preparazione adattiva scaduta: seleziona di nuovo la faccia.')
+          if(adaptiveSelectionSerial>=Number.MAX_SAFE_INTEGER) throw new Error('Limite selezioni adattive raggiunto.')
+          const prepared=editor.refineAdaptiveExperimental(req.net,req.additions,req.continuity,req.manualLocks)
+          adaptiveSelectionKey=null
+          const selection:AdaptiveSelection={face:req.selection.face,refinements:prepared.refinements,trimPolicy:'circular-fine-v1',
+            generation:++adaptiveSelectionSerial,trimLocks:prepared.trimLocks,hiddenPoles:prepared.hiddenPoles}
           adaptiveSelectionKey=JSON.stringify(selection)
           result={...prepared,selection};break
         }
