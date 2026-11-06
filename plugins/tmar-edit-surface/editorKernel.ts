@@ -443,6 +443,38 @@ export class SurfaceEditorKernel {
     const net=this.prepareSelection(index,plan,false,true),selected=this.infos[index]
     return {net,refinements:plan,trimLocks:selected.trimLocks,hiddenPoles:selected.hiddenPoles,witnessPole:witness}
   }
+  /** Experimental exact insertion for an adaptive face without manual locks.
+   * Validate the refined, deformed net before committing a new selection. */
+  refineAdaptiveExperimental(net: Net, additions: readonly KnotInsertion[], continuity: 'G0' | 'G1', manualLocks: readonly number[]) {
+    if (!this.adaptiveSelection || !this.originalNet || this.chosen < 0) throw new Error('Seleziona prima una faccia adattiva.')
+    if (manualLocks.length) throw new Error('Sblocca i punti manuali prima del raffinamento adattivo.')
+    if (!additions.length) throw new Error('Inserisci almeno un nodo.')
+    assertNet(this.originalNet,net,continuity,false)
+    const oldInfo=this.infos[this.chosen]
+    for (const i of [...oldInfo.trimLocks,...oldInfo.hiddenPoles])
+      if (net.poles[i].some((x,d)=>x!==this.originalNet!.poles[i][d])) throw new Error('Un punto protetto è stato modificato.')
+    const plan=[...this.refinements,...structuredClone(additions)]
+    const base=refineClampedNet(this.originalNet,additions), refined=refineClampedNet(net,additions)
+    const candidate=this.netFor(this.chosen,plan,true)
+    if (JSON.stringify(candidate.net)!==JSON.stringify(base)) throw new Error('Base adattiva raffinata non corrispondente.')
+    assertNet(base,refined,continuity,false)
+    for (const i of [...candidate.trimLocks,...candidate.hiddenPoles])
+      if (refined.poles[i].some((x,d)=>x!==base.poles[i][d])) throw new Error('Il raffinamento sposterebbe un punto protetto.')
+    const locks=new Set([...candidate.trimLocks,...candidate.hiddenPoles]),face=this.faces[this.chosen]
+    const witness=refined.poles.findIndex((_,i)=>!locks.has(i)&&!boundaryLocked(refined,i,'G1') &&
+      visiblePoleWitness(refined,i,(u,v)=>this.kernel.classifyPointOnFace(face,u,v),0.01)!==null)
+    if (witness<0) throw new Error('Nessun punto libero con influenza interna verificata.')
+    if (!this.source) throw new Error('Sorgente CAD non disponibile.')
+    const isolated=new SurfaceEditorKernel(this.kernel)
+    try {
+      isolated.open(this.kernel.exportStep(this.source))
+      const verifiedBase=isolated.prepareSelection(this.chosen,plan,false,true)
+      if (JSON.stringify(verifiedBase)!==JSON.stringify(base) || !isolated.evaluate(refined,continuity,false,false).valid)
+        throw new Error('La geometria raffinata non supera la verifica CAD.')
+    } finally {isolated.dispose()}
+    this.prepareSelection(this.chosen,plan,true,true)
+    return {net:refined,originalNet:base,refinements:plan,trimLocks:candidate.trimLocks,hiddenPoles:candidate.hiddenPoles,witnessPole:witness}
+  }
   /** Reprepare the active face without invalidating its UV anchors. Switching
    * face still starts a new logical selection; failed preparation commits neither. */
   selectRefined(index: number, refinements: readonly KnotInsertion[] = []) {

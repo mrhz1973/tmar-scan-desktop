@@ -8,6 +8,37 @@ import { visiblePoleWitness } from '../visiblePoleWitness'
 import { updateAdaptiveLocks } from '../adaptiveLockSnapshot'
 
 const path=process.env.SURFACE_QA_STEP
+it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('refines an adaptive LEGO face without changing its CAD surface',async()=>{
+  const input=readFileSync(path!),editor=await SurfaceEditorKernel.load(),k=editor.kernel,source=k.importStep(input.toString('utf8')),solids=k.getSubShapes(source,'solid')
+  try {
+    const step=k.exportStep(solids[0]);editor.open(step)
+    const picked=editor.selectAdaptiveExperimental(7),net=picked.net,faces=k.getSubShapes(solids[0],'face')
+    let sample:{u:number;v:number},originalPoint:{x:number;y:number;z:number}
+    try {
+      const witness=visiblePoleWitness(net,picked.witnessPole,(u,v)=>k.classifyPointOnFace(faces[7],u,v),.01)!
+      sample={u:witness.u,v:witness.v}
+      originalPoint=k.pointOnSurface(faces[7],witness.u,witness.v)
+      const normal=k.surfaceNormal(faces[7],witness.u,witness.v),point=net.poles[picked.witnessPole]
+      net.poles[picked.witnessPole]=[point[0]+normal.x*.02,point[1]+normal.y*.02,point[2]+normal.z*.02]
+    } finally {faces.forEach(f=>k.release(f))}
+    const before=editor.evaluate(net,'G1',true),value=(net.ku[0]+net.ku[1])/2
+    expect(()=>editor.refineAdaptiveExperimental(net,[{axis:'U',value,count:1}],'G1',[picked.witnessPole])).toThrow(/Sblocca/)
+    expect(editor.evaluate(net,'G1',false).valid).toBe(true)
+    const refined=editor.refineAdaptiveExperimental(net,[{axis:'U',value,count:1}],'G1',[])
+    expect(refined.net.nu).toBe(net.nu+1)
+    const after=editor.evaluate(refined.net,'G1',true)
+    const a=k.importStep(before.step!),b=k.importStep(after.step!),af=k.getSubShapes(a,'face'),bf=k.getSubShapes(b,'face')
+    try {
+      expect(k.isValid(b)).toBe(true)
+      // The annular strip is narrower than the coarse grid; the witness was
+      // explicitly classified inside the original trimmed face above.
+      const p=k.pointOnSurface(af[7],sample!.u,sample!.v),q=k.pointOnSurface(bf[7],sample!.u,sample!.v)
+      expect(Math.hypot(p.x-originalPoint!.x,p.y-originalPoint!.y,p.z-originalPoint!.z)).toBeGreaterThan(.00019)
+      expect(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)).toBeLessThan(1e-6)
+      expect(k.getVolume(b)).toBeCloseTo(k.getVolume(a),6)
+    } finally {af.forEach(f=>k.release(f));bf.forEach(f=>k.release(f));k.release(a);k.release(b)}
+  } finally {solids.forEach(s=>k.release(s));k.release(source);editor.dispose()}
+},120000)
 it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1').each([3,7])
 ('creates and replays a v7 adaptive edit on real STEP face %i',async index=>{
   const input=readFileSync(path!),digest=(x:Uint8Array)=>createHash('sha256').update(x).digest('hex')
