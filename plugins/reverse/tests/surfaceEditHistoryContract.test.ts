@@ -5,7 +5,7 @@ import { editorSha256 } from '../../../src/plugins/editorLifetime'
 import type { ImportFeature } from '../core/features'
 import { stepFileKey } from '../core/features'
 import {
-  canonicalHistoryJson, claimQualifiedSurfaceHistory, qualifySurfaceHistory, bindIndependentPluginReplay,
+  canonicalHistoryJson, claimQualifiedSurfaceHistory, qualifySurfaceHistory, bindIndependentPluginReplay, withFrozenHistoryTransaction,
   readStoredSurfaceHistory, reopenSurfaceHistory,
 } from '../app/surfaceEditHistory'
 import type { SourceBinding } from '../../../src/plugins/workspaceEditorTypes'
@@ -90,6 +90,21 @@ describe('opt-in host surface-edit history envelope',()=>{
     current=false
     await expect(adapter(step,{version:2},'body-qa',new AbortController().signal)).rejects.toThrow('source changed')
     expect(called).toBe(1)
+  })
+  it('releases the plugin history lease on failure and never hides the original error',async()=>{
+    let released=0,valid=true
+    const prepared={recipe:{version:2},sessionId:'s',sourceKey:'key',selectionEpoch:1,draftEpoch:1}
+    await expect(withFrozenHistoryTransaction({
+      freezeHistory: (value)=>{
+        expect(value).toBe(prepared)
+        return {isCurrent:()=>valid,release:()=>{released++;valid=false}}
+      },
+    },prepared,async gate=>{
+      gate.assertCurrent()
+      throw new Error('injected candidate CAD failure')
+    })).rejects.toThrow('injected candidate CAD failure')
+    expect(released).toBe(1)
+    expect(valid).toBe(false)
   })
   it('canonicalizes JSON independently of key order and refuses invalid payload',()=>{
     expect(canonicalHistoryJson({b:2,a:{z:'-0',x:[3,2,1]}}))

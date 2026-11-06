@@ -35,6 +35,10 @@ export interface ProjectSection<J = unknown> {
   key: string
   /** The part as the file is to hold it — plain JSON — or undefined for none. */
   collect(ctx: CollectContext): J | undefined
+  /** Optional asynchronous host gate before Save Project captures all parts.
+   * Complete pending CAD/annotation validation first; collection itself stays
+   * synchronous and produces a consistent snapshot. */
+  beforeSave?(): Promise<void>
   /** The archive's files a part as read from a file names, which the section
    *  reads itself. */
   members?(value: J): string[]

@@ -120,6 +120,49 @@ export interface QualifySurfaceHistory {
 // A result must come from the replay-qualified path, not from copied JSON.
 const qualifiedTokens = new WeakSet<object>()
 const verifiedHistoryTokens = new WeakSet<object>()
+const frozenHistoryTokens = new WeakMap<object, HistoryFreezeLease>()
+
+/** The plugin owns the controller and its synchronous edit lock. A host
+ * transaction keeps this lease through all asynchronous CAD operations and
+ * checks isCurrent at the synchronous mutation boundary. */
+export interface HistoryFreezeLease {
+  isCurrent(): boolean
+  release(): void
+}
+export interface HistoryFreezeOwner<P extends PluginHistoryPreparation> {
+  freezeHistory(prepared:P): HistoryFreezeLease
+}
+export function assertFrozenHistoryCurrent(qualified:QualifiedSurfaceHistory):void {
+  const lease=frozenHistoryTokens.get(qualified)
+  if (!lease || !lease.isCurrent()) throw new Error('Freeze Edit Surface non attivo o scaduto: nessuna pubblicazione.')
+}
+export async function withFrozenHistoryTransaction<P extends PluginHistoryPreparation,R>(
+  owner:HistoryFreezeOwner<P>, prepared:P,
+  operation:(gate:{
+    assertCurrent():void
+    bindQualified<T extends QualifiedSurfaceHistory>(qualified:T):T
+  })=>Promise<R>,
+):Promise<R> {
+  const lease=owner.freezeHistory(prepared)
+  const assertCurrent=()=>{
+    if (!lease.isCurrent()) throw new Error('Freeze Edit Surface revocato o non corrente.')
+  }
+  try {
+    assertCurrent()
+    return await operation({
+      assertCurrent,
+      bindQualified:<T extends QualifiedSurfaceHistory>(qualified:T):T=>{
+        assertCurrent()
+        if (!qualifiedTokens.has(qualified)) throw new Error('Ricetta non qualificata dal replay host.')
+        frozenHistoryTokens.set(qualified,lease)
+        return qualified
+      },
+    })
+  } finally {
+    // This also runs when staging, replay, note validation or publication fails.
+    lease.release()
+  }
+}
 export function claimQualifiedSurfaceHistory(input: QualifiedSurfaceHistory): QualifiedSurfaceHistory {
   if (!input || typeof input !== 'object' || !qualifiedTokens.delete(input))
     throw new Error('History payload senza replay indipendente verificato.')

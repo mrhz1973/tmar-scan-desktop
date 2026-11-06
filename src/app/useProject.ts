@@ -79,14 +79,20 @@ export function useProject({
     store.setError(null)
     useStore.setState({ busy: true, statusText: 'Saving project…' })
     try {
+      // A just-published annotated copy may still be in the temporary
+      // unresolved state while its OCCT witness is rechecked. Wait before
+      // collecting project.json so the saved status reflects validation.
+      for (const section of projectSections()) await section.beforeSave?.()
+      if (workspaceEditors.active()) throw new Error('Concludi Edit Surface prima di salvare.')
       const snapshot = capture()
+      const warning=projectSections().flatMap(section=>section.saveSays?.() ?? [])
       const { manifest, members } = snapshot
       const bytes = await client().pack(manifest, members)
       const stem = projectStem(store.projectName, store.fileName, useFlat.getState().imageName)
       recovery.markSaved(snapshot)
       useStore.setState({
         busy: false,
-        statusText: `Project saved — ${(bytes.byteLength / 1e6).toFixed(1)} MB.`,
+        statusText: `Project saved — ${(bytes.byteLength / 1e6).toFixed(1)} MB.${warning.length?` ${warning.join(' ')}`:''}`,
       })
       return { name: `${stem}.${PROJECT_EXTENSION}`, bytes }
     } catch (e) {

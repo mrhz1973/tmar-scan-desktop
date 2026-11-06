@@ -16,7 +16,7 @@ import {createReverseSession,installReverseSession,type ReverseSession} from '..
 import {createReverseEditorHost} from '../app/workspaceEditorHost'
 import {collectReversePart,applyReversePart} from '../app/projectSection'
 import {revalidateAnnotations} from '../app/annotationPersistence'
-import {qualifyAnnotatedSurfaceHistory,reopenSurfaceHistory,restoreVerifiedSurfaceHistory,type SurfaceHistoryReplay} from '../app/surfaceEditHistory'
+import {qualifyAnnotatedSurfaceHistory,reopenSurfaceHistory,restoreVerifiedSurfaceHistory,withFrozenHistoryTransaction,type SurfaceHistoryReplay} from '../app/surfaceEditHistory'
 import {ReClient} from '../core/reClient'
 import {localKernel} from './reLocal'
 import {resetReverse} from './reReset'
@@ -82,15 +82,29 @@ describe('independently replay-qualified, atomic annotated history sidecar',()=>
     await expect(qualifyAnnotatedSurfaceHistory({source,prepared:{...prepared,
       notes:[{...prepared.notes[0],text:'forged text'}]},annotationPlan:plan,
       isStampCurrent:()=>true,resultStep:enc(finalStep),replay,signal:controller.signal})).rejects.toThrow('non coincidono')
-    const qualified=await qualifyAnnotatedSurfaceHistory({source,prepared,annotationPlan:plan,
-      isStampCurrent:()=>true,resultStep:enc(finalStep),replay,signal:controller.signal})
-    expect(qualified.record.notePolicy).toBe('annotated-v1')
     const initialHistory=useHistory.getState().past.length
     const initialStore=useReverse.getState()
-    const staging=await session.stageEditorCopy(finalStep,'annotated-history.step',source.assertCurrent,
-      controller.signal,undefined,plan,qualified)
-    expect(useReverse.getState()).toBe(initialStore)
-    const receipt=staging.publish(ticket.operationId,plan.artifactSha256);staging.dispose()
+    let frozen=true,releaseCount=0
+    const receipt=await withFrozenHistoryTransaction({
+      freezeHistory:(value)=>{
+        expect(value).toBe(prepared)
+        return {isCurrent:()=>frozen,release:()=>{releaseCount++;frozen=false}}
+      },
+    },prepared,async gate=>{
+      const qualified=await qualifyAnnotatedSurfaceHistory({source,prepared,annotationPlan:plan,
+        isStampCurrent:()=>{gate.assertCurrent();return true},
+        resultStep:enc(finalStep),replay,signal:controller.signal})
+      expect(qualified.record.notePolicy).toBe('annotated-v1')
+      const staging=await session.stageEditorCopy(finalStep,'annotated-history.step',
+        source.assertCurrent,controller.signal,undefined,plan,gate.bindQualified(qualified))
+      try {
+        expect(useReverse.getState()).toBe(initialStore)
+        gate.assertCurrent()
+        return staging.publish(ticket.operationId,plan.artifactSha256)
+      }finally {staging.dispose()}
+    })
+    expect(releaseCount).toBe(1)
+    expect(frozen).toBe(false)
     expect(receipt.mode).toBe('annotated-cad-copy')
     expect(useHistory.getState().past.length).toBe(initialHistory+1)
     expect(useNotes.getState().notes).toHaveLength(1)
