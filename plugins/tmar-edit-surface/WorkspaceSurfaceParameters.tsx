@@ -80,8 +80,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <select data-test="surface-face" value={state.face < 0 ? '' : String(state.face)} disabled={disabled || !!strip}
         onChange={e => { if (e.target.value !== '') chooseFace(Number(e.target.value)) }}>
         <option value="">Scegli una faccia…</option>
-        {state.faces.map(face => <option key={face.index} value={face.index} disabled={!!face.reason && !face.experimentalCylinder}>
-          {face.index + 1} · {face.kind}{face.experimentalCylinder ? ' · anteprima sperimentale' : face.reason ? ` · ${face.reason}` : ''}
+        {state.faces.map(face => <option key={face.index} value={face.index} disabled={!!face.reason && !face.experimentalCylinder && !(face.kind==='plane' && face.reason==='Tutti i poli influenzano un contorno ritagliato.')}>
+          {face.index + 1} · {face.kind}{face.experimentalCylinder ? ' · anteprima sperimentale' : face.kind==='plane' && face.reason==='Tutti i poli influenzano un contorno ritagliato.' ? ' · tenta raffinamento protetto' : face.reason ? ` · ${face.reason}` : ''}
         </option>)}
       </select>
     </label>

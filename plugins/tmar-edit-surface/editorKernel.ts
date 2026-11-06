@@ -390,13 +390,32 @@ export class SurfaceEditorKernel {
   select(index: number, refinements: readonly KnotInsertion[] = []) {
     return this.prepareSelection(index, refinements, false)
   }
+  /** Prepare a protected trimmed plane without moving its boundary. The
+   * fallback is deliberately limited to the all-trim-locked plane case. */
+  selectDenseTrimmedPlane(index: number) {
+    const face=this.faces[index], info=this.infos[index]
+    if (!face || info?.kind !== 'plane' || info.reason !== 'Tutti i poli influenzano un contorno ritagliato.')
+      throw new Error('Raffinamento automatico non disponibile per questa faccia.')
+    const b=this.kernel.uvBounds(face), plan:KnotInsertion[]=[]
+    for (const axis of ['U','V'] as const) {
+      const min=axis==='U'?b.uMin:b.vMin, max=axis==='U'?b.uMax:b.vMax
+      if (!Number.isFinite(min)||!Number.isFinite(max)||!(max>min)) throw new Error('Dominio della faccia non valido.')
+      for(let i=1;i<32;i++) if(i%4!==0) plan.push({axis,value:min+(max-min)*i/32,count:1})
+    }
+    // Refuse before changing the active selection if no editable point is
+    // available under the stricter G1 boundary and trim protections.
+    const candidate=this.netFor(index,plan), locks=new Set([...candidate.trimLocks,...candidate.hiddenPoles])
+    if(!candidate.net.poles.some((_,i)=>!locks.has(i)&&!boundaryLocked(candidate.net,i,'G1')))
+      throw new Error('Nessun punto libero dopo il raffinamento: i contorni restano protetti.')
+    const net=this.select(index,plan), selected=this.infos[index]
+    return {net,refinements:plan,trimLocks:selected.trimLocks,hiddenPoles:selected.hiddenPoles}
+  }
   /** Reprepare the active face without invalidating its UV anchors. Switching
    * face still starts a new logical selection; failed preparation commits neither. */
   selectRefined(index: number, refinements: readonly KnotInsertion[] = []) {
     return this.prepareSelection(index, refinements, true)
   }
   private prepareSelection(index: number, refinements: readonly KnotInsertion[], preserveAnchors: boolean) {
-    this.invalidateG1Selection()
     const info = this.netFor(index, refinements), net = info.net, record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
     if (record.kind === 1) {
@@ -404,8 +423,9 @@ export class SurfaceEditorKernel {
       // Materialize them on the EXACT, still planar NURBS before any edit.
       // Never heal a deformed result. Reject any geometric/topological change.
       const converted = k.fromBREP(replaceSurface(this.brep, record, net))
-      const prepared = k.fixShape(converted), fs = k.getSubShapes(prepared, 'face')
+      let prepared: ShapeHandle | undefined, fs: ShapeHandle[] = []
       try {
+        prepared = k.fixShape(converted); fs = k.getSubShapes(prepared, 'face')
         if (!k.isValid(prepared) || fs.length !== this.faces.length || this.count(prepared, 'solid') !== this.solids) throw new Error('Conversione piana esatta non qualificabile per questa faccia.')
         for (let f = 0; f < fs.length; f++) {
           const b = k.uvBounds(this.faces[f])
@@ -422,8 +442,11 @@ export class SurfaceEditorKernel {
         const found = target?.net ? surfaceTable(text).filter(r => signature(r) === signature(target)) : []
         if (found.length !== 1) throw new Error('Impossibile identificare il reticolo convertito.')
         editRecord = found[0]
-      } finally { fs.forEach(f => k.release(f)); k.release(prepared); k.release(converted) }
+      } finally { fs.forEach(f => k.release(f)); if (prepared) k.release(prepared); k.release(converted) }
     }
+    // Keep the existing selection and its G1 witnesses if preparation fails.
+    // The worker serializes requests, so invalidate only at successful commit.
+    this.invalidateG1Selection()
     this.releasePreviewFace()
     this.revision++
     if (!preserveAnchors || this.chosen !== index) this.anchorSelectionRevision++

@@ -1,0 +1,7 @@
+# Protected refinement for a trimmed plane
+
+A plane refused because all poles influence a trim can now be selected for an attempted exact knot refinement. The 32-span-per-direction plan is limited to 1,225 poles and preserves the trim and G1 locks. If it still leaves no G1-editable pole, preparation refuses the operation before replacing the active selection. This does not unlock shared/ambiguous surfaces, cylinders or general trims. The plan is retained in the existing version-4 parametric recipe.
+
+On the owner's imported `lego mod qs.stp`, the first solid's annular plane was prepared, one free pole moved 0.02 mm along its normal, and edited/replayed STEP results reopened as valid with equal volumes. Samples on the other nine faces stayed within 1e-6 mm. An independent in-memory probe sampled both trim wires, reporting max deviation 6.92e-13 mm; this is not a continuous-boundary proof. The original STEP hash remained unchanged. A second annular plane on this solid still has no free G1 pole and remains unavailable.
+
+The actual worker dispatcher accepted the refined selection and its 48-insertion identity. A controlled workspace-session test verified installation of the locks and preparation. A separate OCCT regression verifies that failing a later face conversion preserves the prior G1 witness. The plugin test suite and TypeScript checks passed as reported in the session. No real browser, integrated host, packaged release, physical input or complete QuickSurface comparison has yet qualified this fallback.

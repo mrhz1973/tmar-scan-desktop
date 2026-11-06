@@ -13,6 +13,7 @@ import { SurfaceDraft, type SurfaceDraftSnapshot } from './surfaceDraft'
 import { SurfaceRuntime } from './surfaceRuntime'
 import { mirrorEdit, mirrorPartners } from './symmetry'
 import type { StripMove } from './sheetExtension'
+import type { KnotInsertion } from './refineClampedNet'
 import { readRecipe, readCurvedRecipe, type SurfaceEditRecipe, type SurfaceEditRecipeV6 } from './recipe'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
 
@@ -327,7 +328,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.assertMutable()
     const face = this.faces[index]
     if (!face || !Number.isInteger(index)) throw new Error('Faccia non disponibile.')
-    if (face.reason && !face.experimentalCylinder) throw new Error(face.reason)
+    if (face.reason && !face.experimentalCylinder && !(face.kind==='plane' && face.reason==='Tutti i poli influenzano un contorno ritagliato.')) throw new Error(face.reason)
     if (index === this.face && this.draft.getSnapshot().net) return
     if (this.draft.getSnapshot().calculating) throw new Error('Attendi la verifica CAD prima di cambiare faccia.')
     const dirty = this.snapshot.dirty
@@ -343,7 +344,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (this.strip || this.stripPending) throw new Error('Chiudi prima la modifica del bordo.')
     const face = this.faces[index]
     if (!face || !Number.isInteger(index)) throw new Error('Faccia non disponibile.')
-    if (face.reason && !face.experimentalCylinder) throw new Error(face.reason)
+    const densePlane=face.kind==='plane' && face.reason==='Tutti i poli influenzano un contorno ritagliato.'
+    if (face.reason && !face.experimentalCylinder && !densePlane) throw new Error(face.reason)
     if (this.gesture !== 'idle') throw new Error('Termina prima il trascinamento.')
     if (index === this.face && this.draft.getSnapshot().net) return
     if (this.notes.length && !discardChanges) throw new Error('La bozza contiene note: conferma prima di cambiare faccia.')
@@ -362,16 +364,22 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     try {
       const picked = face.experimentalCylinder
         ? await this.runtime.worker.ask<{net:Net;session:number}>({ action:'prepareCylinder', face:index }, this.context.signal)
-        : {net:await this.runtime.worker.ask<Net>({ action:'select', face:index }, this.context.signal),session:null}
+        : densePlane
+          ? {...await this.runtime.worker.ask<{net:Net;refinements:KnotInsertion[];trimLocks:number[];hiddenPoles:number[]}>({action:'selectDenseTrimmedPlane',face:index},this.context.signal),session:null}
+          : {net:await this.runtime.worker.ask<Net>({ action:'select', face:index }, this.context.signal),session:null}
       this.assertLive()
       if (epoch !== this.selectionEpoch) throw new Error('Selezione faccia superata.')
       this.change(() => {
         if (picked.session !== null) this.draft.installCylinder(picked.net,picked.session)
-        else this.draft.install(picked.net, { continuity: previousContinuity, trimLocks: face.trimLocks, hiddenPoles: face.hiddenPoles, face:index })
+        else this.draft.install(picked.net, { continuity: previousContinuity,
+          trimLocks: 'trimLocks' in picked ? picked.trimLocks : face.trimLocks,
+          hiddenPoles: 'hiddenPoles' in picked ? picked.hiddenPoles : face.hiddenPoles,
+          refinements: 'refinements' in picked ? picked.refinements : [], face:index })
         if (this.notes.length) { this.advanceNotesRevision(); this.notes = Object.freeze([]) }
         this.selectionEpoch++; this.face = index; this.busy = false
         this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
         if(picked.session !== null) this.message = 'Cilindro sperimentale: trascina i punti disponibili, poi verifica la geometria CAD prima di aggiungere note o applicare.'
+        else if(densePlane) this.message = 'Piano ritagliato preparato con reticolo più fitto; i contorni restano protetti.'
       }, true)
     } catch (error) {
       if (!this.disposed && epoch === this.selectionEpoch) {

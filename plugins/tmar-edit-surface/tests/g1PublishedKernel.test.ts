@@ -31,6 +31,20 @@ const change=(net:Net,id:number,z=.12)=>{
 }
 
 describe('atomic published plane G1, real OCCT synthetic shell',()=>{
+  it('keeps the active G1 witness when preparation of another plane fails',async()=>{
+    const {editor,k,net,baseNet,choice}=await fixture()
+    try {
+      const published=await editor.publishG1PlaneTangency({baseNet,net,choice})
+      const witness=editor.finalFaceWitness(published.preview.previewRevision)
+      const fail=vi.spyOn(k,'fixShape').mockImplementation(()=>{throw Error('conversione non disponibile')})
+      expect(()=>editor.select(choice.supportFaceIndex)).toThrow('conversione non disponibile')
+      fail.mockRestore()
+      expect(editor.finalFaceWitness(published.preview.previewRevision)).toEqual(witness)
+      const resumed=await editor.evaluateG1PlaneTangency({constraintId:published.constraintId,net})
+      expect(resumed.constraintId).toBe(published.constraintId)
+      expect(resumed.preview.valid).toBe(true)
+    } finally {editor.dispose()}
+  },60000)
   it('publishes a host revision and final-face witness, preserves UV identity and evaluates later interior edits',async()=>{
     const {editor,k,net,baseNet,choice,choices,inner}=await fixture()
     try {

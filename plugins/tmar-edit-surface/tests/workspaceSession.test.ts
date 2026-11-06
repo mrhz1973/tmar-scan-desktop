@@ -31,7 +31,7 @@ const preview = (revision: number) => ({ valid:true, previewRevision:revision, m
 const info = { index:0,kind:'plane',reason:null,converted:true,enriched:false,
   openSheet:false,freeBoundary:false,trimLocks:[],hiddenPoles:[] }
 async function flush() { for (let i=0;i<8;i++) await Promise.resolve() }
-async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number} = {}) {
+async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number;blockedPlane?:boolean} = {}) {
   vi.useFakeTimers()
   const worker = new FakeWorker(), runtime = new SurfaceRuntime(() => worker as unknown as Worker)
   const abort = new AbortController(), hash = 'a'.repeat(64)
@@ -53,7 +53,8 @@ async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number}
     bytes.length===3 && bytes[0]===1 && bytes[1]===2 && bytes[2]===3 ? hash : createHash('sha256').update(bytes).digest('hex')})
   await flush()
   expect(worker.sent[0]?.action).toBe('open')
-  const faces = options.sheet ? [{...info,openSheet:true,freeBoundary:true}] : [info,{...info,index:1}]
+  const first = options.blockedPlane ? {...info,reason:'Tutti i poli influenzano un contorno ritagliato.'} : info
+  const faces = options.sheet ? [{...first,openSheet:true,freeBoundary:true}] : [first,{...info,index:1}]
   worker.reply(worker.sent[0].id,{faces,preview:{...preview(0),faceMeshes:faces.map(()=>({}))}})
   const session = await creating
   return { worker, runtime, abort, binding, context, session, layer, owned, invalidate:()=>{sourceCurrent=false} }
@@ -113,6 +114,19 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 afterEach(()=>vi.useRealTimers())
 
 describe('WorkspaceSurfaceSession',()=>{
+  it('installs a protected refined plane with its trim locks and recipe preparation',async()=>{
+    const t=await setup({blockedPlane:true}), selecting=t.session.chooseFace(0)
+    const request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('selectDenseTrimmedPlane')
+    const refinements=[{axis:'U',value:.25,count:1}]
+    t.worker.reply(request.id,{net:plane(),refinements,trimLocks:[6],hiddenPoles:[]})
+    await selecting
+    expect(t.session.getPanelState().net).toEqual(plane())
+    expect(t.session.getViewState().locked).toContain(6)
+    expect(t.session.getPanelState().message).toMatch(/contorni restano protetti/)
+    expect(t.runtime.history.current?.preparation?.refinements).toEqual(refinements)
+    await t.session.dispose('cancelled')
+  })
   it('accepts the fractional body IDs used by multi-part STEP imports',async()=>{
     const t=await setup({bodyId:1.0009765625})
     await selectFace(t)

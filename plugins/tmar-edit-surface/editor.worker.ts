@@ -11,6 +11,7 @@ import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
 import { readRecipe, readCurvedRecipe } from './recipe'
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
+  | { action: 'selectDenseTrimmedPlane'; face: number }
   | { action: 'selectRefined'; face: number; refinements: KnotInsertion[] }
   | { action: 'g1SupportCandidates' }
   | ({ action: 'proposeG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneProposalRequest)
@@ -55,6 +56,11 @@ self.onmessage = (event: MessageEvent<Request>) => {
       switch (req.action) {
         case 'open': resetCylinder(); selectionKey=null; result = editor.open(req.step); break
         case 'select': resetCylinder(); selectionKey=null; result = editor.select(req.face); selectionKey=JSON.stringify({face:req.face,refinements:[]}); break
+        case 'selectDenseTrimmedPlane': {
+          const prepared=editor.selectDenseTrimmedPlane(req.face)
+          resetCylinder(); selectionKey=JSON.stringify({face:req.face,refinements:prepared.refinements})
+          result=prepared; break
+        }
         case 'selectRefined': {
           resetCylinder(); selectionKey=null
           const net=editor.selectRefined(req.face,req.refinements), info=editor.infos[req.face]
