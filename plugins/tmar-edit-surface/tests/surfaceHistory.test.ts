@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Net } from '../brep'
 import { SurfaceHistory, type EditFrame } from '../surfaceHistory'
+import { refineClampedNet, type KnotInsertion } from '../refineClampedNet'
 
 function frame(z = 0): EditFrame {
   const net: Net = { nu: 2, nv: 2, du: 1, dv: 1,
@@ -11,6 +12,32 @@ function frame(z = 0): EditFrame {
 }
 
 describe('surface geometry and protection history', () => {
+  it('records an exact adaptive refinement and requires fresh identities across bases',()=>{
+    const h=new SurfaceHistory(),initial=frame(1),base=frame().net,additions:KnotInsertion[]=[{axis:'U',value:.5,count:1}]
+    const first={face:2,refinements:[] as KnotInsertion[],trimPolicy:'circular-fine-v1' as const,generation:1,trimLocks:[] as number[],hiddenPoles:[] as number[]}
+    const second={...first,refinements:additions,generation:2}
+    const prep={face:2,refinements:[] as KnotInsertion[],originalNet:base,trimLocks:[] as number[],hiddenPoles:[] as number[],adaptiveSelection:first}
+    h.commit({...initial,preparation:prep,lockSnapshots:[]})
+    const next={...initial,net:refineClampedNet(initial.net,additions),lockSnapshots:[],
+      preparation:{...prep,refinements:additions,originalNet:refineClampedNet(base,additions),adaptiveSelection:second}}
+    expect(()=>h.commit(next)).toThrow(/rimappare/)
+    const bad=structuredClone(next);bad.net.poles[0][2]+=.1
+    expect(()=>h.commitAdaptiveRefinement(bad,additions)).toThrow(/coerente/)
+    const protectedMove=structuredClone(next);protectedMove.preparation.trimLocks=[0];protectedMove.preparation.adaptiveSelection.trimLocks=[0]
+    expect(()=>h.commitAdaptiveRefinement(protectedMove,additions)).toThrow(/Protezione/)
+    h.commitAdaptiveRefinement(next,additions)
+    h.commit({...next,locks:[0],lockSnapshots:undefined})
+    expect(h.step(-1)?.locks).toEqual([])
+    expect(h.peek(-1)?.net).toEqual(initial.net)
+    expect(()=>h.step(-1)).toThrow(/Riattiva/)
+    expect(()=>h.stepAdaptive(-1,{...first,generation:2})).toThrow(/coerente/)
+    expect(h.stepAdaptive(-1,{...first,generation:3}).net).toEqual(initial.net)
+    expect(h.stepAdaptive(1,{...second,generation:4}).net).toEqual(next.net)
+    expect(h.current?.lockSnapshots).toEqual([])
+    const currentToken=h.current?.preparation?.adaptiveSelection
+    expect(h.step(1)?.locks).toEqual([0])
+    expect(h.current?.preparation?.adaptiveSelection).toBe(currentToken)
+  })
   it('retains adaptive lock positions through undo, unlock, relock and redo', () => {
     const h=new SurfaceHistory()
     h.commit({...frame(),lockSnapshots:[]})
