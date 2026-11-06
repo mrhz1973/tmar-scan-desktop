@@ -22,6 +22,8 @@ if(process.env.TEST_HISTORY_FREEZE==='1' && process.env.TEST_HISTORY_RECIPE!=='1
   throw Error('TEST_HISTORY_FREEZE requires TEST_HISTORY_RECIPE.')
 if(process.env.TEST_HISTORY_REPLAY==='1' && process.env.TEST_HISTORY_FREEZE!=='1')
   throw Error('TEST_HISTORY_REPLAY requires TEST_HISTORY_FREEZE.')
+if(process.env.TEST_HISTORY_RESTORE==='1' && process.env.TEST_HISTORY_REPLAY!=='1')
+  throw Error('TEST_HISTORY_RESTORE requires TEST_HISTORY_REPLAY.')
 if (sourceFile && (!isAbsolute(sourceFile) || !['.step','.stp'].includes(extname(sourceFile).toLowerCase())))
   throw Error('STEP_FILE must be an absolute STEP path.')
 if (sourceFile && process.env.TEST_FACE_SWITCH === '1')
@@ -673,6 +675,28 @@ try {
           replay.matchingTopology&&replay.vertexCount>0&&replay.maxVertexDistance<1e-5,
           'independent history replay reproduces the real STEP draft tessellation and volume')
         report.historyReplay=replay
+      }
+      if(process.env.TEST_HISTORY_RESTORE==='1') {
+        const restored=await page.evaluate(async()=>{
+          const q=window.surfaceQa,original=q.useWorkspaceEditor.getState().controller,base=original.context
+          const {createWorkspaceSurfaceSession}=await import('/plugins/tmar-edit-surface/workspaceSession.ts')
+          const abort=new AbortController(),fatals=[]
+          const context={...base,sessionId:'independent-history-restore',step:base.step.slice(),signal:abort.signal,
+            own:fn=>{let active=true;return ()=>{if(active){active=false;fn()}}},reportFatal:message=>fatals.push(message)}
+          const restored=await createWorkspaceSurfaceSession(context,()=>{throw Error('No viewport required')})
+          try {
+            await restored.restoreHistoryBundle(JSON.parse(JSON.stringify({recipe:q.historyPreparation.recipe,notes:q.historyPreparation.notes})))
+            const a=original.getPanelState(),b=restored.getPanelState()
+            return {valid:restored.getSnapshot().validation.kind,face:b.face,
+              samePoles:JSON.stringify(a.net.poles)===JSON.stringify(b.net.poles),
+              noteId:b.notes[0]?.id,noteText:b.notes[0]?.text,
+              noteDistance:Math.hypot(...b.notes[0].at.map((v,i)=>v-a.notes[0].at[i])),fatals}
+          } finally {await restored.dispose('cancelled');abort.abort()}
+        })
+        check(restored.valid==='valid'&&restored.face===faceIndex&&restored.samePoles&&
+          restored.noteText==='Nota durante Zebra'&&restored.noteDistance<1e-5&&restored.fatals.length===0,
+          'a fresh independent session restores real STEP control points and the CAD note')
+        report.historyRestore=restored
       }
     }
     if(!annotatedApply){

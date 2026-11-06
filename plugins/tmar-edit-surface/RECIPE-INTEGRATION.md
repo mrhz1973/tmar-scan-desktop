@@ -97,6 +97,15 @@ timed out because its simulated timer did not advance after asynchronous work;
 the corrected bounded timer-driving test passed. The host must still bind the
 bundle to its persisted feature and preserve the saved CAD copy on failure.
 
+`TEST_HISTORY_RESTORE=1` additionally passed in an isolated source UI on the
+owner's LEGO STEP: a fresh independent session restored the serialized recipe,
+the same control-point coordinates, and the note at the same measured position.
+The ordinary annotated-copy Apply and saved-project reopen then passed; the
+original STEP hash was unchanged. Evidence:
+`%TEMP%/scanruler-history-restore-lego-qa/run-6tcV01/result.json`. The fresh
+session was opened by the test, not by a host history feature, and the saved
+project held a CAD copy rather than a re-editable parametric history feature.
+
 After the restored draft has a fresh valid preview,
 `WorkspaceSurfaceSession.restoreHistoryNotes()` can rebind a host-provided
 array of `{id, text, faceIndex, u, v}` on that restored face. It resolves each
