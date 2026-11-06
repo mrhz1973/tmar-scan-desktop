@@ -92,6 +92,9 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <button type="button" data-test="surface-export-step" disabled={disabled || !state.canExportStep}
         title={state.notes.length || state.placingNote ? 'Le note non vengono incluse nello STEP: rimuovile prima di esportare.' : 'Scarica la geometria CAD convalidata come STEP.'}
         onClick={() => { void exportStep() }}>Esporta STEP</button>
+      <label className="inline"><input data-test="surface-navigation-only" type="checkbox" checked={state.navigationOnly} disabled={disabled}
+        onChange={e => attempt(() => controller.setNavigationOnly(e.target.checked))} />
+        Naviga nella vista (sospendi modifica del reticolo)</label>
       {strip ? <fieldset data-test="surface-strip-panel"><legend>Duplica bordo libero</legend>
         <p>Scegli un bordo e trascina D lungo l’asse scelto, oppure indica lo spostamento in millimetri.</p>
         <label>Bordo libero<select data-test="surface-strip-edge" value={strip.selectedEdge < 0 ? '' : String(strip.selectedEdge)}
@@ -183,9 +186,6 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       {state.canFreeBoundary && <label className="inline"><input data-test="surface-free-boundary" type="checkbox"
         checked={state.freeBoundary} disabled={disabled} onChange={e => attempt(() => controller.setFreeBoundary(e.target.checked))} />
         Consenti movimento dei bordi liberi</label>}
-      <label className="inline"><input data-test="surface-navigation-only" type="checkbox" checked={state.navigationOnly} disabled={disabled}
-        onChange={e => attempt(() => controller.setNavigationOnly(e.target.checked))} />
-        Naviga nella vista (sospendi modifica del reticolo)</label>
       <label>Selezione del reticolo
         <select data-test="surface-selection-mode" value={state.selectionMode} disabled={disabled}
           onChange={e => attempt(() => controller.setSelectionMode(e.target.value as NetSelectionMode))}>

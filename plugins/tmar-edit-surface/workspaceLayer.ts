@@ -437,6 +437,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     const revision = ++syncRevision
     try {
       const state = owner.getViewState()
+      if (state.navigationOnly && capture) { cancelGesture(); if (revision !== syncRevision) return }
       if (directSelection && (state.strip || state.placingNote || !state.directStrip ||
           state.directStrip.paths !== directSelection.paths || state.directStrip.revision !== directSelection.revision)) directSelection = null
       const nextPreview = state.provisionalPreview?.kind === 'provisional' ? state.provisionalPreview : state.preview?.valid === true ? state.preview : null
@@ -782,7 +783,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const click = (x: number, y: number, additive: boolean): boolean => {
     if (disposed || layerDisposed) return false
     const state = owner.getViewState()
-    if (state.navigationOnly) return false
+    if (state.navigationOnly && !state.placingNote) return false
     if (state.busy || faceRequest) return true
     if (state.strip) return true
     try {

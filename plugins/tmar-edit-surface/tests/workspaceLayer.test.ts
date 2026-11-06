@@ -885,3 +885,27 @@ it('leaves the selected net and cell to camera navigation when navigation mode i
   f.getHandlers().up(f.event(3,[0,0,0]))
   layer.dispose()
 })
+
+it('cancels a deferred edge drag when navigation mode is enabled',()=>{
+  const f=fixture(),layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({directStrip:{paths:stripFixture().paths,revision:1,axis:0},selectionMode:'auto'})
+  const down=f.event(1,[0,-1,0])
+  expect(f.getLayer().pointerDown?.(down)).toBe(true)
+  expect(f.counts().captured).toBe(1)
+  f.set({navigationOnly:true})
+  expect(f.counts().captured).toBeNull()
+  expect(f.claimEditDrag).toHaveBeenLastCalledWith(false)
+  f.getHandlers().move({...down,clientX:down.clientX+20} as PointerEvent)
+  f.getHandlers().up({...down,clientX:down.clientX+20} as PointerEvent)
+  expect(f.beginPoleGesture).not.toHaveBeenCalled()
+  expect(f.finishPoleGesture).not.toHaveBeenCalled()
+  layer.dispose()
+})
+
+it('still places a note when navigation mode is enabled',()=>{
+  const f=fixture(),layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({navigationOnly:true,placingNote:true})
+  expect(f.getLayer().click?.(300,300,false)).toBe(true)
+  expect(f.placeNote).toHaveBeenCalledWith([0,0,0])
+  layer.dispose()
+})
