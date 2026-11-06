@@ -78,6 +78,15 @@ and closes the session. A real OCCT
 test restores an edited reversed STEP face and validates the resulting solid.
 This API does not by itself restore notes or implement host project persistence.
 
+After `restoreHistoryRecipe`, the host may await
+`waitRestoredHistoryReady(signal?)` before rebinding notes. It resolves only
+when that same restored net has a valid CAD preview; it rejects on draft or
+source change, abort, session disposal, invalid preview, or a 60-second
+timeout. It does not itself prevent edits, publish a feature, or replace the
+host's source and transaction checks. Session tests cover a real OCCT restore,
+an already-aborted signal and a changed draft while waiting; installed-app and
+host history reopening remain unqualified.
+
 After the restored draft has a fresh valid preview,
 `WorkspaceSurfaceSession.restoreHistoryNotes()` can rebind a host-provided
 array of `{id, text, faceIndex, u, v}` on that restored face. It resolves each

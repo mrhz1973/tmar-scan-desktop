@@ -162,6 +162,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private readonly runtime: SurfaceRuntime
   private readonly draft: SurfaceDraft
   private readonly listeners = new Set<() => void>()
+  private readonly disposedSignal = new AbortController()
   private readonly source: SourceBinding
   private readonly sourceId: string
   private readonly digest: (bytes: Uint8Array) => Promise<string>
@@ -1055,6 +1056,49 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }
   }
 
+  /** Wait for the fresh CAD preview produced by a restored recipe. The host
+   * must still recheck its own source and commit atomically after this wait. */
+  waitRestoredHistoryReady(signal?: AbortSignal): Promise<void> {
+    this.assertLive()
+    const base = this.restoredHistory
+    if (!base) return Promise.reject(new Error('Nessuna ricetta ripristinata da verificare.'))
+    return new Promise((resolve, reject) => {
+      let finished = false, unsubscribe: (() => void) | undefined
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const cleanup = () => {
+        unsubscribe?.(); if (timer !== undefined) clearTimeout(timer)
+        signal?.removeEventListener('abort', cancelled)
+        this.context.signal.removeEventListener('abort', cancelled)
+        this.disposedSignal.signal.removeEventListener('abort', cancelled)
+      }
+      const finish = (error?: unknown) => {
+        if (finished) return
+        finished = true; cleanup()
+        if (error !== undefined) reject(error); else resolve()
+      }
+      const cancelled = () => finish(new DOMException('Operazione annullata.', 'AbortError'))
+      const check = () => {
+        try {
+          abortIf(this.context.signal); if (signal) abortIf(signal)
+          this.assertLive()
+          const draft = this.draft.getSnapshot()
+          if (this.restoredHistory!==base || this.selectionEpoch!==base.selectionEpoch ||
+              this.draftEpoch!==base.draftEpoch || draft.net!==base.net)
+            throw new Error('La superficie è cambiata durante il ripristino.')
+          if (this.snapshot.validation.kind==='invalid') throw new Error(this.snapshot.validation.message)
+          if (!this.busy && !draft.calculating && draft.validNet===base.net &&
+              draft.preview?.previewRevision!==undefined && this.snapshot.validation.kind==='valid') finish()
+        } catch (error) { finish(error) }
+      }
+      unsubscribe = this.subscribe(check)
+      signal?.addEventListener('abort', cancelled, { once:true })
+      this.context.signal.addEventListener('abort', cancelled, { once:true })
+      this.disposedSignal.signal.addEventListener('abort', cancelled, { once:true })
+      timer = setTimeout(() => finish(new Error('Tempo di verifica della superficie ripristinata esaurito.')), 60000)
+      check()
+    })
+  }
+
   /** Rebind notes only after this session restored and validated its recipe.
    * UVs are checked by OCCT on the trimmed face; publish all or none. */
   async restoreHistoryNotes(value: unknown): Promise<void> {
@@ -1608,7 +1652,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   private cleanup(): void {
     if (this.disposed) return
-    this.disposed = true; this.exportGeneration++; this.frozen = null; this.stripGeneration++; this.stripAbort?.abort()
+    this.disposed = true; this.disposedSignal.abort(); this.exportGeneration++; this.frozen = null; this.stripGeneration++; this.stripAbort?.abort()
     this.restoredHistory = null
     this.clearDirectCache(); this.directGestureOrigin = false
     this.strip = null; this.stripPending = false; this.stripAbort = null

@@ -425,12 +425,17 @@ describe('WorkspaceSurfaceSession',()=>{
       let restored:WorkspaceSurfaceSession | undefined
       try {
         restored=await createWorkspaceSurfaceSession(restoredContext as never,vi.fn() as never,{runtime:restoredRuntime,sha256:async bytes=>sha(bytes)})
+        await expect(restored.waitRestoredHistoryReady()).rejects.toThrow('Nessuna ricetta')
         const wrongBody=JSON.parse(JSON.stringify(recipe.recipe))
         wrongBody.source.bodyId='another-body'
         await expect(restored.restoreHistoryRecipe(wrongBody)).rejects.toThrow('altro corpo CAD')
         expect(restored.getPanelState().face).toBe(-1)
         await restored.restoreHistoryRecipe(JSON.parse(JSON.stringify(recipe.recipe)))
+        const cancelled=new AbortController();cancelled.abort()
+        await expect(restored.waitRestoredHistoryReady(cancelled.signal)).rejects.toMatchObject({name:'AbortError'})
+        const ready=restored.waitRestoredHistoryReady()
         await vi.advanceTimersByTimeAsync(90);await flush()
+        await expect(ready).resolves.toBeUndefined()
         expect(restored.getPanelState().face).toBe(index)
         expect(restored.getPanelState().net?.poles).toEqual(session.getPanelState().net?.poles)
         expect(restored.getSnapshot().validation.kind).toBe('valid')
@@ -451,6 +456,18 @@ describe('WorkspaceSurfaceSession',()=>{
         expect(restored.getPanelState().notes[0].text).toBe('Controlla la faccia')
         expect(restored.getPanelState().notes[0].at).not.toEqual(picked.at)
       } finally { if(restored)await restored.dispose('cancelled');restoredEditor.dispose() }
+      const changedEditor=new SurfaceEditorKernel(k),changedWorker=new KernelWorker(changedEditor)
+      const changedRuntime=new SurfaceRuntime(()=>changedWorker as unknown as Worker)
+      let changed:WorkspaceSurfaceSession | undefined
+      try {
+        changed=await createWorkspaceSurfaceSession({...context,sessionId:'changed-restore'} as never,vi.fn() as never,
+          {runtime:changedRuntime,sha256:async bytes=>sha(bytes)})
+        await changed.restoreHistoryRecipe(JSON.parse(JSON.stringify(recipe.recipe)))
+        const waiting=changed.waitRestoredHistoryReady()
+        const rejection=expect(waiting).rejects.toThrow('superficie è cambiata')
+        changed.selectPoints([12],false)
+        await rejection
+      } finally { if(changed)await changed.dispose('cancelled');changedEditor.dispose() }
       const failedEditor=new SurfaceEditorKernel(k), failedWorker=new KernelWorker(failedEditor)
       const failedRuntime=new SurfaceRuntime(()=>failedWorker as unknown as Worker), fatal=vi.fn()
       const failedContext={...context,sessionId:'failed-restore',reportFatal:fatal}
