@@ -40,6 +40,37 @@ async function evaluate(worker: FakeWorker) {
 afterEach(() => vi.useRealTimers())
 
 describe('atomic refinement history', () => {
+  it.each(['reactivation', 'evaluation'])('blocks edits when adaptive undo fails during %s', async stage => {
+    vi.useFakeTimers()
+    const worker=new FakeWorker(),runtime=new SurfaceRuntime(()=>worker as unknown as Worker),draft=new SurfaceDraft(runtime)
+    const base=refineClampedNet(plane(),insertion)
+    const token={face:2,refinements:insertion,trimPolicy:'circular-fine-v1' as const,generation:1,trimLocks:[],hiddenPoles:[]}
+    const addition:KnotInsertion[]=[{axis:'V',value:.75,count:1}]
+    try {
+      draft.install(base,{face:2,refinements:insertion,experimentalAdaptiveLocks:true,adaptiveSelection:token})
+      await evaluate(worker)
+      const refined=refineClampedNet(base,addition),refinements=[...insertion,...addition]
+      const next={...token,refinements,generation:2}
+      const pending=draft.refine(addition)
+      worker.reply({net:refined,originalNet:refined,refinements,trimLocks:[],hiddenPoles:[],selection:next})
+      await pending;await evaluate(worker)
+      const prior=runtime.history.current
+      expect(draft.undo()).toBe(true)
+      expect(draft.adaptiveHistoryPending).toBe(true)
+      expect(()=>draft.undo()).toThrow(/raffinamento/)
+      expect(worker.sent.at(-1)?.action).toBe('reactivateAdaptiveExperimental')
+      if(stage==='evaluation') {
+        worker.reply({net:base,selection:{...token,generation:3}});await flush()
+        expect(worker.sent.at(-1)?.action).toBe('evaluateAdaptiveExperimental')
+      }
+      worker.reject('Risposta non verificabile');await flush()
+      expect(draft.adaptiveHistoryPending).toBe(false)
+      expect(runtime.history.current).toBe(prior)
+      expect(draft.getSnapshot().validNet).toBeNull()
+      expect(draft.getSnapshot().error).toMatch(/seleziona di nuovo/)
+      expect(()=>draft.commit()).toThrow()
+    } finally {draft.dispose();runtime.dispose()}
+  })
   it('requires the matching worker identity and routes adaptive previews to the adaptive action',async()=>{
     vi.useFakeTimers()
     const worker=new FakeWorker(),runtime=new SurfaceRuntime(()=>worker as unknown as Worker),draft=new SurfaceDraft(runtime)
