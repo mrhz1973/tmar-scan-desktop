@@ -33,7 +33,7 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
     await expect(worker.ask({action:'evaluate',net,continuity:'G1'})).rejects.toThrow(/esplicita/)
     const stale={...picked.selection,trimPolicy:'legacy'}
     await expect(worker.ask({action:'evaluateAdaptiveExperimental',net,continuity:'G1',selection:stale} as never)).rejects.toThrow(/scaduta/)
-    const changedProtection={...picked.selection,trimLocks:[]}
+    const changedProtection={...picked.selection,trimLocks:[] as number[]}
     if (picked.selection.trimLocks.length) {
       await expect(worker.ask({action:'evaluateAdaptiveExperimental',net,continuity:'G1',selection:changedProtection})).rejects.toThrow(/scaduta/)
     } else {
@@ -68,7 +68,7 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
       draft.install(again.net,{face:again.selection.face,refinements:again.selection.refinements,
         trimLocks:again.selection.trimLocks,hiddenPoles:again.selection.hiddenPoles,
         adaptiveSelection:again.selection,experimentalAdaptiveLocks:true})
-      await new Promise<void>((resolve,reject)=>{
+      const waitDraft=()=>new Promise<void>((resolve,reject)=>{
         const timeout=setTimeout(()=>{unsubscribe();reject(new Error('Anteprima adattiva scaduta'))},30000)
         const unsubscribe=draft.subscribe(()=>{
           const state=draft.getSnapshot()
@@ -77,6 +77,7 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
           }
         })
       })
+      await waitDraft()
       expect(draft.getSnapshot().validNet).toBe(draft.getSnapshot().net)
       const exported=await draft.evaluateForExport()
       expect(exported.valid).toBe(true);expect(exported.step).toBeTruthy()
@@ -84,6 +85,20 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
       const draftRecipe=await draft.createAdaptiveLockedRecipe('worker-qa')
       expect(draftRecipe.version).toBe(8)
       expect(draftRecipe.lockedValues).toEqual([{index:again.witnessPole,point:again.net.poles[again.witnessPole]}])
+      await waitDraft()
+      const draftRestored=await draft.restoreAdaptiveLockedRecipe(step,draftRecipe,'worker-qa')
+      expect(draftRestored.lockSnapshots).toEqual(draftRecipe.lockedValues)
+      expect(runtime.history.current?.lockSnapshots).toEqual(draftRecipe.lockedValues)
+      expect(runtime.history.current?.preparation?.adaptiveSelection?.generation).not.toBe(again.selection.generation)
+      await waitDraft()
+      expect((await draft.createAdaptiveLockedRecipe('worker-qa')).lockedValues).toEqual(draftRecipe.lockedValues)
+      await waitDraft()
+      await expect(draft.restoreAdaptiveLockedRecipe('invalid STEP',draftRecipe,'worker-qa')).rejects.toThrow()
+      expect(draft.getSnapshot().validNet).toBeNull()
+      expect(()=>draft.setLocks([])).toThrow(/non verificabile/)
+      await draft.restoreAdaptiveLockedRecipe(step,draftRecipe,'worker-qa')
+      await waitDraft()
+      expect(runtime.history.current?.lockSnapshots).toEqual(draftRecipe.lockedValues)
       expect(()=>draft.setFreeBoundary(true)).toThrow(/protetti/)
     } finally {draft.dispose()}
   } finally {runtime?.dispose();vi.unstubAllGlobals();load.mockRestore();solids.forEach(s=>k.release(s));k.release(imported);editor.dispose()}

@@ -331,6 +331,57 @@ export class SurfaceDraft {
   async restoreCurvedRecipe(step: string, value: unknown, bodyId: string): Promise<CurvedRecipeRestoreResult> {
     return this.restoreRecipeCurrent(step, value, bodyId, true) as Promise<CurvedRecipeRestoreResult>
   }
+  /** Experimental v8 restore; a rejected post-dispatch reply invalidates the old witness. */
+  async restoreAdaptiveLockedRecipe(step: string, value: unknown, bodyId: string): Promise<RecipeRestoreResult> {
+    this.ensureActive(true)
+    const recipe = readAdaptiveLockedRecipe(value), before = this.snapshot
+    if (recipe.source.bodyId !== bodyId) throw new Error('Corpo della ricetta non corrispondente.')
+    if (before.calculating || before.net !== before.committedNet || this.proposingPlaneTangency || this.proposingCurvedTangency || this.exportRequests)
+      throw new Error('Termina le operazioni prima di ripristinare la ricetta CAD.')
+    const { trimPolicy: _policy, lockedValues: _values, ...common } = recipe
+    const legacy = readRecipe({ ...common, version: 4 })
+    this.recipeBusy = true
+    this.update({ validNet: null, calculating: true, error: '' })
+    try {
+      const result = structuredClone(await this.runtime.worker.ask<RecipeRestoreResult & { selection: AdaptiveSelection }>({
+        action: 'restoreAdaptiveLockedRecipe', step, recipe, bodyId }))
+      if (this.disposed || !this.runtime.active) throw new Error('Editor chiuso.')
+      await this.checkRestoredRecipe(result, legacy, bodyId)
+      const p = result.preparation, selection = result.selection
+      if (!selection || selection.face !== p.face || selection.trimPolicy !== recipe.trimPolicy ||
+          !Number.isSafeInteger(selection.generation) || selection.generation < 1 ||
+          !sameExact(selection.refinements, p.refinements) || !sameExact(selection.trimLocks, p.trimLocks) ||
+          !sameExact(selection.hiddenPoles, p.hiddenPoles) || !sameExact(result.lockSnapshots, recipe.lockedValues))
+        throw new Error('Protezione adattiva ripristinata non verificabile.')
+      // Confirm that the returned identity is the one actually active in the worker.
+      const confirmed = await this.runtime.worker.ask<Preview>({ action: 'evaluateAdaptiveExperimental',
+        net: result.net, continuity: result.continuity, selection })
+      if (this.disposed || !this.runtime.active || confirmed.valid !== true) throw new Error('Anteprima adattiva ripristinata non valida.')
+      const callerResult = structuredClone(result)
+      this.invalidate()
+      this.runtime.history.reset()
+      const frame = this.runtime.history.commit({ net: result.net, locks: result.lockedPoles,
+        lockSnapshots: result.lockSnapshots, continuity: result.continuity, freeBoundary: false,
+        preparation: { ...p, adaptiveSelection: selection } })
+      freezeNet(frame.net); this.freezePreparation(frame.preparation)
+      this.base = frame.preparation!.originalNet; this.queueNet = frame.net; this.restoreUnverified = false
+      this.update({ cylinderSession: null, cylinderPreview: null, net: frame.net, committedNet: frame.net, originalNet: this.base,
+        selected: EMPTY, locks: Object.freeze([...frame.locks]), trimLocks: frame.preparation!.trimLocks,
+        hiddenPoles: frame.preparation!.hiddenPoles, refinements: frame.preparation!.refinements,
+        planeTangency: null, curvedTangency: null, continuity: frame.continuity, freeBoundary: false,
+        preview: null, previewStale: false, validNet: null, calculating: true, error: '', canUndo: false, canRedo: false })
+      this.schedule(frame.net)
+      return callerResult
+    } catch (error) {
+      if (!this.disposed && this.runtime.active) {
+        this.restoreUnverified = true
+        this.invalidate()
+        this.update({ preview: null, validNet: null, previewStale: false, calculating: false,
+          error: 'Ripristino adattivo non verificabile: seleziona di nuovo la faccia o ripristina una ricetta valida.' })
+      }
+      throw error
+    } finally { this.recipeBusy = false }
+  }
   private async restoreRecipeCurrent(step: string, value: unknown, bodyId: string, curved: boolean): Promise<RecipeRestoreResult> {
     this.ensureActive(true)
     const recipe = curved ? readCurvedRecipe(value) : readRecipe(value), before = this.snapshot
