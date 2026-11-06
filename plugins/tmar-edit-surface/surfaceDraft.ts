@@ -181,7 +181,8 @@ export class SurfaceDraft {
     if (Boolean(options.experimentalAdaptiveLocks) !== Boolean(adaptive) || (adaptive &&
       (adaptive.face !== options.face || adaptive.trimPolicy !== 'circular-fine-v1' ||
        !Number.isSafeInteger(adaptive.generation) || adaptive.generation < 1 ||
-       JSON.stringify(adaptive.refinements) !== JSON.stringify(options.refinements))))
+       JSON.stringify(adaptive.refinements) !== JSON.stringify(options.refinements) ||
+       !sameExact(adaptive.trimLocks, trimLocks) || !sameExact(adaptive.hiddenPoles, hiddenPoles))))
       throw new Error('Selezione adattiva del worker non valida.')
     const base = freezeNet(structuredClone(options.originalNet ?? net))
     if (cylinderSession !== null) assertSmoothCylinderMove(base, net)
@@ -1242,6 +1243,8 @@ export class SurfaceDraft {
     if (preparation.adaptiveSelection) {
       for (const insertion of preparation.adaptiveSelection.refinements) Object.freeze(insertion)
       Object.freeze(preparation.adaptiveSelection.refinements)
+      Object.freeze(preparation.adaptiveSelection.trimLocks)
+      Object.freeze(preparation.adaptiveSelection.hiddenPoles)
       Object.freeze(preparation.adaptiveSelection)
     }
     for (const insertion of preparation.refinements) Object.freeze(insertion)

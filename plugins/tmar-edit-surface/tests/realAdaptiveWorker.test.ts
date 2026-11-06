@@ -25,7 +25,7 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
     runtime=new SurfaceRuntime(()=>client as unknown as Worker)
     const worker=runtime.worker
     await worker.ask({action:'open',step})
-    const picked=await worker.ask<{net:Net;witnessPole:number;selection:{face:number;refinements:KnotInsertion[];trimPolicy:'circular-fine-v1';generation:number}}>({action:'selectAdaptiveExperimental',face:7})
+    const picked=await worker.ask<{net:Net;witnessPole:number;selection:{face:number;refinements:KnotInsertion[];trimPolicy:'circular-fine-v1';generation:number;trimLocks:number[];hiddenPoles:number[]}}>({action:'selectAdaptiveExperimental',face:7})
     const net=picked.net,p=net.poles[picked.witnessPole]
     // Exercise a nonzero pole edit; geometric influence is tested separately.
     net.poles[picked.witnessPole]=[p[0]+.02,p[1],p[2]]
@@ -33,6 +33,13 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
     await expect(worker.ask({action:'evaluate',net,continuity:'G1'})).rejects.toThrow(/esplicita/)
     const stale={...picked.selection,trimPolicy:'legacy'}
     await expect(worker.ask({action:'evaluateAdaptiveExperimental',net,continuity:'G1',selection:stale} as never)).rejects.toThrow(/scaduta/)
+    const changedProtection={...picked.selection,trimLocks:[]}
+    if (picked.selection.trimLocks.length) {
+      await expect(worker.ask({action:'evaluateAdaptiveExperimental',net,continuity:'G1',selection:changedProtection})).rejects.toThrow(/scaduta/)
+    } else {
+      changedProtection.trimLocks=[0]
+      await expect(worker.ask({action:'evaluateAdaptiveExperimental',net,continuity:'G1',selection:changedProtection})).rejects.toThrow(/scaduta/)
+    }
     const preview=await worker.ask<{valid:boolean}>({action:'evaluateAdaptiveExperimental',net,continuity:'G1',selection:picked.selection})
     expect(preview.valid).toBe(true)
     const recipe=await worker.ask<{version:number}>({action:'createAdaptiveLockedRecipe',net,continuity:'G1',locks,bodyId:'worker-qa',selection:picked.selection})
@@ -59,6 +66,7 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
     const draft=new SurfaceDraft(runtime)
     try {
       draft.install(again.net,{face:again.selection.face,refinements:again.selection.refinements,
+        trimLocks:again.selection.trimLocks,hiddenPoles:again.selection.hiddenPoles,
         adaptiveSelection:again.selection,experimentalAdaptiveLocks:true})
       await new Promise<void>((resolve,reject)=>{
         const timeout=setTimeout(()=>{unsubscribe();reject(new Error('Anteprima adattiva scaduta'))},30000)

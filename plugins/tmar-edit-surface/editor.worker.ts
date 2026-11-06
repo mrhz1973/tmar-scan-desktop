@@ -11,7 +11,7 @@ import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
 import { readRecipe, readCurvedRecipe } from './recipe'
 import type { AdaptiveLocks } from './adaptiveLockSnapshot'
 import { readAdaptiveLockedRecipe } from './adaptiveLockedRecipe'
-export type AdaptiveSelection = { face:number; refinements:KnotInsertion[]; trimPolicy:'circular-fine-v1'; generation:number }
+export type AdaptiveSelection = { face:number; refinements:KnotInsertion[]; trimPolicy:'circular-fine-v1'; generation:number; trimLocks:number[]; hiddenPoles:number[] }
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectDenseTrimmedPlane'; face: number }
@@ -75,7 +75,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
           if(adaptiveSelectionSerial>=Number.MAX_SAFE_INTEGER) throw new Error('Limite selezioni adattive raggiunto.')
           const prepared=editor.selectAdaptiveExperimental(req.face)
           resetCylinder(); selectionKey=null
-          const selection:AdaptiveSelection={face:req.face,refinements:prepared.refinements,trimPolicy:'circular-fine-v1',generation:++adaptiveSelectionSerial}
+          const selection:AdaptiveSelection={face:req.face,refinements:prepared.refinements,trimPolicy:'circular-fine-v1',generation:++adaptiveSelectionSerial,trimLocks:prepared.trimLocks,hiddenPoles:prepared.hiddenPoles}
           adaptiveSelectionKey=JSON.stringify(selection)
           result={...prepared,selection};break
         }
@@ -92,8 +92,11 @@ self.onmessage = (event: MessageEvent<Request>) => {
           if(adaptiveSelectionSerial>=Number.MAX_SAFE_INTEGER) throw new Error('Limite selezioni adattive raggiunto.')
           const recipe=readAdaptiveLockedRecipe(req.recipe)
           const restored=await editor.restoreAdaptiveLockedRecipe(req.step,recipe,req.bodyId)
-          resetCylinder();selectionKey=null
-          const selection:AdaptiveSelection={face:recipe.faceIndex,refinements:recipe.refinements,trimPolicy:recipe.trimPolicy,generation:++adaptiveSelectionSerial}
+          // The kernel has committed the restore. If the response contract is
+          // violated, no prior selection identity may remain usable.
+          resetCylinder();selectionKey=null;adaptiveSelectionKey=null
+          if (!restored.preparation) throw new Error('Preparazione adattiva ripristinata non disponibile.')
+          const selection:AdaptiveSelection={face:recipe.faceIndex,refinements:recipe.refinements,trimPolicy:recipe.trimPolicy,generation:++adaptiveSelectionSerial,trimLocks:restored.preparation.trimLocks,hiddenPoles:restored.preparation.hiddenPoles}
           adaptiveSelectionKey=JSON.stringify(selection)
           result={...restored,selection};break
         }

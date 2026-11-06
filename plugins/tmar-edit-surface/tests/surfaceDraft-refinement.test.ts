@@ -44,10 +44,11 @@ describe('atomic refinement history', () => {
     vi.useFakeTimers()
     const worker=new FakeWorker(),runtime=new SurfaceRuntime(()=>worker as unknown as Worker),draft=new SurfaceDraft(runtime)
     const net=refineClampedNet(plane(),insertion)
-    const token={face:2,refinements:insertion,trimPolicy:'circular-fine-v1' as const,generation:1}
+    const token={face:2,refinements:insertion,trimPolicy:'circular-fine-v1' as const,generation:1,trimLocks:[],hiddenPoles:[]}
     try {
       expect(()=>draft.install(net,{face:2,refinements:insertion,experimentalAdaptiveLocks:true})).toThrow(/worker/)
       expect(()=>draft.install(net,{face:2,refinements:insertion,experimentalAdaptiveLocks:true,adaptiveSelection:{...token,face:3}})).toThrow(/worker/)
+      expect(()=>draft.install(net,{face:2,refinements:insertion,trimLocks:[0],experimentalAdaptiveLocks:true,adaptiveSelection:token})).toThrow(/worker/)
       draft.install(net,{face:2,refinements:insertion,experimentalAdaptiveLocks:true,adaptiveSelection:token})
       await evaluate(worker)
       expect(worker.sent.at(-1)?.action).toBe('evaluateAdaptiveExperimental')
@@ -71,7 +72,7 @@ describe('atomic refinement history', () => {
     const worker=new FakeWorker(),runtime=new SurfaceRuntime(()=>worker as unknown as Worker),draft=new SurfaceDraft(runtime)
     try {
       draft.install(refineClampedNet(plane(),insertion),{face:2,refinements:insertion,experimentalAdaptiveLocks:true,
-        adaptiveSelection:{face:2,refinements:insertion,trimPolicy:'circular-fine-v1',generation:1}})
+        adaptiveSelection:{face:2,refinements:insertion,trimPolicy:'circular-fine-v1',generation:1,trimLocks:[],hiddenPoles:[]}})
       const moved=structuredClone(draft.getSnapshot().net!);moved.poles[12][2]=.2;draft.commit(moved)
       draft.setLocks([12])
       expect(runtime.history.current?.lockSnapshots).toEqual([{index:12,point:moved.poles[12]}])
