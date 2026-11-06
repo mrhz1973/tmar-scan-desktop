@@ -10,7 +10,7 @@ import {useNotes} from '../state/noteStore'
 import {createReverseSession,installReverseSession,type ReverseSession} from '../app/reSession'
 import {createReverseEditorHost} from '../app/workspaceEditorHost'
 import {collectReversePart,applyReversePart,STEP_MEMBER} from '../app/projectSection'
-import {qualifySurfaceHistory,reopenSurfaceHistory,type SurfaceHistoryReplay} from '../app/surfaceEditHistory'
+import {qualifySurfaceHistory,reopenSurfaceHistory,withFrozenHistoryTransaction,type SurfaceHistoryReplay} from '../app/surfaceEditHistory'
 import {editorSha256} from '../../../src/plugins/editorLifetime'
 import {ReClient} from '../core/reClient'
 import {localKernel} from './reLocal'
@@ -57,12 +57,43 @@ describe('opt-in host history publication and project restoration',()=>{
     const qualified=await qualifySurfaceHistory({source,prepared,isStampCurrent:()=>true,
       resultStep:enc(finalStep),noteCount:0,replay,signal:ctrl.signal})
     const previous=useReverse.getState(),past=useHistory.getState().past.length
-    const stage=await session.stageEditorCopy(finalStep,'qualified-param.step',
-      source.assertCurrent,ctrl.signal,undefined,undefined,qualified)
+    // Simulate revocation AFTER an isolated CAD candidate was built but
+    // BEFORE the host historyAtomic commit; no body or history may publish.
+    const staleQualified=await qualifySurfaceHistory({source,prepared,isStampCurrent:()=>true,
+      resultStep:enc(finalStep),noteCount:0,replay,signal:ctrl.signal})
+    let revoked=false,revokedReleased=0
+    await withFrozenHistoryTransaction({
+      freezeHistory:()=>({isCurrent:()=>!revoked,release:()=>{revokedReleased++}}),
+    },prepared,async gate=>{
+      const staged=await session.stageEditorCopy(finalStep,'revoked-param.step',
+        source.assertCurrent,ctrl.signal,undefined,undefined,gate.bindQualified(staleQualified))
+      try{
+        const sha=await hash(finalStep)
+        revoked=true
+        expect(()=>staged.publish('revoked-history',sha)).toThrow('Freeze')
+      }finally{staged.dispose()}
+    })
+    expect(revokedReleased).toBe(1)
     expect(useReverse.getState()).toBe(previous)
     expect(useHistory.getState().past).toHaveLength(past)
-    const receipt=stage.publish('parametric-qa',await hash(finalStep))
-    stage.dispose()
+    let lockActive=true, released=0
+    const receipt=await withFrozenHistoryTransaction({
+      freezeHistory: (value)=> {
+        expect(value).toBe(prepared)
+        return {isCurrent:()=>lockActive,release:()=>{released++;lockActive=false}}
+      },
+    },prepared,async gate=>{
+      const stage=await session.stageEditorCopy(finalStep,'qualified-param.step',
+        source.assertCurrent,ctrl.signal,undefined,undefined,gate.bindQualified(qualified))
+      try {
+        expect(useReverse.getState()).toBe(previous)
+        expect(useHistory.getState().past).toHaveLength(past)
+        gate.assertCurrent()
+        return stage.publish('parametric-qa',await hash(finalStep))
+      } finally {stage.dispose()}
+    })
+    expect(released).toBe(1)
+    expect(lockActive).toBe(false)
     expect(receipt.createdBodyIds).toHaveLength(1)
     expect(useHistory.getState().past).toHaveLength(past+1)
     const stored=useReverse.getState().features.at(-1) as ImportFeature

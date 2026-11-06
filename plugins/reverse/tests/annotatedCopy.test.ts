@@ -8,6 +8,7 @@ import { editorSha256 } from '../../../src/plugins/editorLifetime'
 import { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
 import type { AnnotatedTicketV1,PreparedAnnotatedCopyV1 } from '../../../src/plugins/annotatedCopyTypes'
 import { revalidateAnnotations } from '../app/annotationPersistence'
+import { notesSection } from '../app/notesSection'
 import { noteOut } from '../app/reNoteCommands'
 import { useStore } from '../../../src/state/store'
 import { useShell } from '../../../src/state/shellStore'
@@ -51,6 +52,17 @@ async function prepared(text='Nota sulla copia'){
   return {abort,source,ticket,payload,plan,stage:()=>session.stageEditorCopy(result,'annotated.step',source.assertCurrent,abort.signal,undefined,plan)}
 }
 describe('real annotated CAD-copy publication',()=>{
+ it('revalidates a pending unresolved attachment before the Save Project snapshot',async()=>{
+   const x=await prepared(), stage=await x.stage()
+   stage.publish(x.ticket.operationId,x.plan.artifactSha256);stage.dispose()
+   expect(useNotes.getState().notes).toHaveLength(1)
+   useNotes.setState(state=>({notes:state.notes.map(note=>note.attachment
+     ? {...note,attachment:{...note.attachment,status:'unresolved'}}:note)}))
+   expect(useNotes.getState().notes[0].attachment?.status).toBe('unresolved')
+   await notesSection.beforeSave?.()
+   const saved=notesSection.collect({sources:{} as never,scanSaved:false,addMember:()=>{}})
+   expect(saved?.notes[0].attachment?.status).toBe('verified')
+ },120000)
  it('blocks unsafe Undo with unowned dependent notes before any mutation',async()=>{
    const x=await prepared(),s=await x.stage(),receipt=s.publish(x.ticket.operationId,x.plan.artifactSha256);s.dispose()
    const own=useNotes.getState().notes[0]
@@ -84,6 +96,10 @@ describe('real annotated CAD-copy publication',()=>{
    await run('reverse.feature.add',{feature:{kind:'moveBody',bodies:receipt.createdBodyIds,translate:[1,0,0]}})
    await revalidateAnnotations()
    const note=useNotes.getState().notes[0];expect(note.attachment?.status).toBe('unresolved')
+   await notesSection.beforeSave?.()
+   const savedUnresolved=notesSection.collect({sources:{} as never,scanSaved:false,addMember:()=>{}})
+   expect(savedUnresolved?.notes[0].attachment?.status).toBe('unresolved')
+   expect(notesSection.saveSays?.().join(' ')).toMatch(/need revalidation/)
    const out=noteOut(note);expect(out).not.toHaveProperty('nearest');expect(out.attachment).toMatchObject({status:'unresolved'})
  },120_000)
 

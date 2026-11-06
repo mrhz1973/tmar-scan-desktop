@@ -25,6 +25,26 @@ export interface NotesPart {
 
 export const notesSection: ProjectSection<NotesPart> = {
   key: 'reverseNotes',
+  beforeSave: async () => {
+    // Let the queued watcher invalidate its temporary status first, then
+    // independently recheck the current CAD attachment before serializing.
+    if (!useNotes.getState().notes.some(note => note.attachment)) return
+    await Promise.resolve()
+    try {
+      await revalidateAnnotations()
+    } catch {
+      // A failed CAD kernel must not prevent rescuing a project with notes.
+      // Preserve the anchors, but do not claim they are verified at save.
+      useNotes.setState(state=>({
+        notes:state.notes.map(note=>note.attachment?.status==='verified'
+          ? {...note,attachment:{...note.attachment,status:'unresolved' as const}}:note),
+      }))
+    }
+  },
+  saveSays: () => {
+    const count=useNotes.getState().notes.filter(n=>n.attachment?.status==='unresolved').length
+    return count>0 ? [`${count} CAD note attachment(s) need revalidation.`] : []
+  },
   collect: () => {
     const { notes } = useNotes.getState()
     return notes.length > 0 ? { notes: notesForFile(notes) } : undefined

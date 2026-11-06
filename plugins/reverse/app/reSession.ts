@@ -12,7 +12,7 @@
 // stands without a viewport, its kernel in the test's own thread.
 
 import { annotationNoteDelta } from './annotatedNoteDelta'
-import { claimQualifiedSurfaceHistory, readStoredSurfaceHistory, canonicalReplayStep, verifyAnnotatedHistoryPlan, type QualifiedSurfaceHistory } from './surfaceEditHistory'
+import { claimQualifiedSurfaceHistory, assertFrozenHistoryCurrent, readStoredSurfaceHistory, canonicalReplayStep, verifyAnnotatedHistoryPlan, type QualifiedSurfaceHistory } from './surfaceEditHistory'
 import type { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
 import { historyAtomic } from '../../../src/state/historyStore'
 import { abortIfNeeded, editorSha256 } from '../../../src/plugins/editorLifetime'
@@ -768,6 +768,7 @@ export function createReverseSession({
     // The ordinary CAD-copy path is untouched. History provenance may only
     // enter via a one-use, independently replay-qualified host token.
     const qualified = history ? claimQualifiedSurfaceHistory(history) : null
+    if (qualified) assertFrozenHistoryCurrent(qualified)
     const record = qualified ? readStoredSurfaceHistory(qualified.record) : null
     if (record && (record.notePolicy==='annotated-v1') !== !!annotation)
       throw new Error('La ricetta e il tipo di copia CAD non coincidono.')
@@ -812,7 +813,7 @@ export function createReverseSession({
     let adopted = false, disposed = false, receipt: CommitReceipt | null = null
     const dispose = () => { if (!adopted && !disposed) { disposed = true; candidate.dispose() } }
     const deadline = setTimeout(dispose, 120_000)
-    const alive = () => { assertCurrent(); abortIfNeeded(signal); if (disposed) throw new Error('Staged CAD was disposed.') }
+    const alive = () => { assertCurrent(); if (qualified) assertFrozenHistoryCurrent(qualified); abortIfNeeded(signal); if (disposed) throw new Error('Staged CAD was disposed.') }
     signal.addEventListener('abort', dispose, { once: true })
     try {
       await candidate.init(); alive()
@@ -871,6 +872,7 @@ export function createReverseSession({
           try {
             historyAtomic('Edit Surface: copia CAD', () => {
               assertCurrent()
+              if (qualified) assertFrozenHistoryCurrent(qualified)
               client = candidate; landed = nextVersion
               meshes.clear(); topologies.clear()
               for (const body of answer.bodies) { meshes.set(body.id, body.mesh); topologies.set(body.id, body.topology) }
