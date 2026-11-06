@@ -169,6 +169,30 @@ try {
     const s = window.surfaceQa.useWorkspaceEditor.getState()
     return s.snapshot?.validation.kind === 'valid' && !s.controller?.getPanelState().calculating
   }, { timeout: 120000 })
+  if (process.env.TEST_ADAPTIVE_WITNESS === '1') {
+    if (!sourceFile || Number(requestedBody)!==0) throw Error('Adaptive witness QA requires LEGO body 0')
+    const witness=await page.evaluate(async()=>{
+      const c=window.surfaceQa.useWorkspaceEditor.getState().controller,worker=c.runtime.worker,original=worker.ask.bind(worker)
+      let captured=null;worker.ask=async function(req,...rest){const result=await original(req,...rest);if(req.action==='selectAdaptiveExperimental')captured=result.witnessPole;return result}
+      try {await c.chooseFace(7,false,true)} finally {worker.ask=original}
+      return captured
+    })
+    assert(Number.isInteger(witness) && witness>=0,'Adaptive witness not returned')
+    await page.waitForFunction(()=>{const s=window.surfaceQa.useWorkspaceEditor.getState();return s.snapshot?.validation.kind==='valid'&&!s.controller?.getPanelState().calculating},{timeout:120000})
+    const before=await page.evaluate(i=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller,s=c.getViewState();c.setDragMode('local');c.setAxis(2);c.selectPoints([i],false);return [...s.net.poles[i]]},witness)
+    await page.click('[data-test=surface-move]')
+    await page.waitForFunction(({i,before})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[i];return s.snapshot?.validation.kind==='valid'&&!s.controller?.getPanelState().calculating&&p?.some((x,j)=>Math.abs(x-before[j])>1e-6)}, {timeout:120000},{i:witness,before})
+    const edited=await page.evaluate(async()=> (await window.surfaceQa.useWorkspaceEditor.getState().controller.exportStep()).step)
+    const source=kernel.importStep(input.toString('utf8')),solids=kernel.getSubShapes(source,'solid'),faces=kernel.getSubShapes(solids[0],'face'),result=kernel.importStep(edited),resultFaces=kernel.getSubShapes(result,'face')
+    let samples=0,maximum=0
+    try {check(kernel.isValid(result),'adaptive edited STEP is valid');assert(resultFaces.length===faces.length,'Face count changed');const a=faces[7],b=resultFaces[7],u=kernel.uvBounds(a)
+      for(let i=0;i<=128;i++)for(let j=0;j<=128;j++){const x=u.uMin+(u.uMax-u.uMin)*i/128,y=u.vMin+(u.vMax-u.vMin)*j/128;if(kernel.classifyPointOnFace(a,x,y)!=='in')continue;const p=kernel.pointOnSurface(a,x,y),q=kernel.pointOnSurface(b,x,y);const d=Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z);if(!Number.isFinite(d))throw Error('Invalid witness distance');maximum=Math.max(maximum,d);samples++}
+      check(samples>0&&maximum>0.001,'adaptive edit changes sampled interior of the original face')
+    } finally {faces.forEach(x=>kernel.release(x));resultFaces.forEach(x=>kernel.release(x));solids.forEach(x=>kernel.release(x));kernel.release(source);kernel.release(result)}
+    report.adaptive={faceIndex:7,witnessPole:witness,interiorSamples:samples,maximumDisplacementMm:maximum}
+    check(report.consoleErrors.length===0,'no browser console errors');report.inputHashAfter=sha(readFileSync(sourceFile));report.sourceUnchanged=report.inputHashAfter===inputHash;check(report.sourceUnchanged,'original STEP unchanged')
+    report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
+  }
   if (process.env.TEST_NAV_ONLY === '1') {
     await page.evaluate(async () => {
       const {useStore}=await import('/src/state/store.ts');useStore.getState().setNavScheme('cnckitchen')
