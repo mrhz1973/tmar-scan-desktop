@@ -7,6 +7,8 @@ import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
 import { readAdaptiveTrimRecipe, type AdaptiveTrimRecipe } from './adaptiveTrimRecipe'
 import { adaptiveTrimPlan } from './adaptiveTrimPlan'
 import { visiblePoleWitness } from './visiblePoleWitness'
+import { readAdaptiveLockedRecipe, type AdaptiveLockedRecipe } from './adaptiveLockedRecipe'
+import { validateAdaptiveLocks, type AdaptiveLocks } from './adaptiveLockSnapshot'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
@@ -912,6 +914,15 @@ export class SurfaceEditorKernel {
     if (recipe.version!==4) throw new Error('Raffinamento adattivo non disponibile.')
     return readAdaptiveTrimRecipe({...recipe,version:7,trimPolicy:'circular-fine-v1'})
   }
+  /** Explicit lock-at-current-position contract; no worker/UI exposure yet. */
+  async createAdaptiveLockedRecipe(net: Net, continuity: 'G0' | 'G1', locks: AdaptiveLocks, bodyId: string): Promise<AdaptiveLockedRecipe> {
+    if (!this.adaptiveSelection || !this.originalNet) throw new Error('Seleziona prima una preparazione adattiva.')
+    const next=structuredClone(net), snapshot=structuredClone(locks)
+    validateAdaptiveLocks(next,snapshot)
+    const recipe=await this.createRecipeCommon(next,continuity,snapshot.map(lock=>lock.index),bodyId,false)
+    if(recipe.version!==4) throw new Error('Raffinamento adattivo non disponibile.')
+    return readAdaptiveLockedRecipe({...recipe,version:8,trimPolicy:'circular-fine-v1',lockedValues:snapshot})
+  }
   private async createRecipeCommon(net: Net, continuity: 'G0' | 'G1', lockedPoles: number[], bodyId: string, freeBoundary = false, constraintId?: number): Promise<SurfaceEditRecipe> {
     if (!this.originalNet || !this.source) throw new Error('Seleziona prima una faccia.')
     if (typeof freeBoundary !== 'boolean' || !['G0', 'G1'].includes(continuity)) throw new Error('Modalità bordo non valida.')
@@ -1022,16 +1033,17 @@ export class SurfaceEditorKernel {
         this.g1CurvedConstraints.get(constraintId) !== registered) throw new Error('Sessione cambiata durante il salvataggio della ricetta G1 B-spline.')
     return readCurvedRecipe(recipe)
   }
-  private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false, curved = false, adaptive = false): Promise<RecipeRestoreResult> {
+  private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false, curved = false, adaptive = false, adaptiveLocked = false): Promise<RecipeRestoreResult> {
+    if (adaptiveLocked && (adaptive || curved)) throw new Error('Politiche di ripristino incompatibili.')
     if (curved && adaptive) throw new Error('Politiche di ripristino incompatibili.')
-    const recipe = adaptive ? readAdaptiveTrimRecipe(value) : curved ? readCurvedRecipe(value) : readRecipe(value)
+    const recipe = adaptiveLocked ? readAdaptiveLockedRecipe(value) : adaptive ? readAdaptiveTrimRecipe(value) : curved ? readCurvedRecipe(value) : readRecipe(value)
     if (recipe.source.bodyId !== bodyId) throw new Error('Corpo sorgente diverso dalla ricetta.')
     const opened = this.open(step), rev = this.revision
     const fingerprint = await sha256(this.brep)
     if (this.revision !== rev) throw new Error('Sorgente cambiata durante il ripristino.')
     if (fingerprint !== recipe.source.brepSha256 || this.faces.length !== recipe.source.faceCount || this.solids !== recipe.source.solidCount) throw new Error('Geometria sorgente cambiata: ricollegare esplicitamente la modifica della superficie.')
-    const ops = recipe.version === 4 || recipe.version === 5 || recipe.version === 6 || recipe.version === 7 ? recipe.refinements : []
-    const net = adaptive ? this.prepareSelection(recipe.faceIndex,ops,false,true) : this.select(recipe.faceIndex,ops), selectedRevision = this.revision
+    const ops = recipe.version === 4 || recipe.version === 5 || recipe.version === 6 || recipe.version === 7 || recipe.version === 8 ? recipe.refinements : []
+    const net = adaptive || adaptiveLocked ? this.prepareSelection(recipe.faceIndex,ops,false,true) : this.select(recipe.faceIndex,ops), selectedRevision = this.revision
     const baseFingerprint = await sha256(JSON.stringify(net))
     if (this.revision !== selectedRevision) throw new Error('Faccia cambiata durante il ripristino.')
     if (baseFingerprint !== recipe.baseNetSha256 || this.preparation() !== recipe.preparation) throw new Error('Base NURBS o raffinamento diverso dalla ricetta.')
@@ -1099,6 +1111,7 @@ export class SurfaceEditorKernel {
     if (recipe.version === 7 && recipe.edits.some(e => recipe.lockedPoles.includes(e.index) && e.point.some((x,d)=>x!==net.poles[e.index][d])))
       throw new Error('La ricetta modifica un punto bloccato.')
     for (const edit of recipe.edits) net.poles[edit.index] = [...edit.point]
+    if (recipe.version === 8) validateAdaptiveLocks(net,recipe.lockedValues)
     const freeBoundary = recipe.version === 3 || (recipe.version === 4 && recipe.boundaryMode === 'free-natural')
     const preview = this.evaluate(net, recipe.continuity, exportStep, freeBoundary)
     return { faces: opened.faces, net, preview, continuity: recipe.continuity, freeBoundary, lockedPoles: recipe.lockedPoles, preparation }
@@ -1194,6 +1207,12 @@ export class SurfaceEditorKernel {
   async replayAdaptiveRecipe(step: string, recipe: unknown, bodyId: string) {
     const temporary = new SurfaceEditorKernel(this.kernel)
     try { return (await temporary.prepareRecipe(step, recipe, bodyId, true, false, true)).preview }
+    finally { temporary.clear() }
+  }
+  /** Isolated v8 replay preserves the positions at which points were locked. */
+  async replayAdaptiveLockedRecipe(step: string, recipe: unknown, bodyId: string) {
+    const temporary = new SurfaceEditorKernel(this.kernel)
+    try { return (await temporary.prepareRecipe(step, recipe, bodyId, true, false, false, true)).preview }
     finally { temporary.clear() }
   }
   private releasePreviewFace() {
