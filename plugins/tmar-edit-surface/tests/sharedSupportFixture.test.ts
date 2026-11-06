@@ -3,6 +3,7 @@
 import { expect, it } from 'vitest'
 import type { ShapeHandle } from 'occt-wasm'
 import { SurfaceEditorKernel } from '../editorKernel'
+import { ExperimentalSharedPlane } from '../experimentalSharedPlane'
 
 it('characterizes a STEP solid whose top is split into coplanar faces', async () => {
   const editor=await SurfaceEditorKernel.load(), k=editor.kernel, owned:ShapeHandle[]=[]
@@ -35,22 +36,20 @@ it('characterizes a STEP solid whose top is split into coplanar faces', async ()
     expect(k.toBREP(imported)).toBe(before)
     // Research only: edit an isolated STEP face, then attempt to sew a copy.
     // The production path still refuses this case until all topology checks exist.
-    const isolated=new SurfaceEditorKernel(k)
+    const isolated=new ExperimentalSharedPlane(k)
     try {
-      const one=isolated.open(k.exportStep(importedFaces[target]))
-      expect(one.faces).toHaveLength(1)
-      const net=isolated.select(0), changed=structuredClone(net)
+      const net=isolated.open(step,target), changed=structuredClone(net)
       const pole=Math.floor(net.nu/2)*net.nv+Math.floor(net.nv/2)
       changed.poles[pole][2]+=.02
-      const output=isolated.evaluate(changed,'G1',true)
-      const edited=own(k.importStep(output.step!)), editedFaces=k.getSubShapes(edited,'face');owned.push(...editedFaces)
-      expect(editedFaces).toHaveLength(1)
+      const bad=structuredClone(net);bad.poles[0][2]+=.1
+      expect(()=>isolated.evaluate(bad)).toThrow()
+      const through=structuredClone(net);through.poles[pole][2]-=100
+      expect(()=>isolated.evaluate(through)).toThrow(/interse[cz]/i)
+      const output=isolated.evaluate(changed)
+      const round=own(k.importStep(output.step)), roundFaces=k.getSubShapes(round,'face');owned.push(...roundFaces)
       const bounds=k.uvBounds(importedFaces[target]), center=k.pointOnSurface(importedFaces[target],(bounds.uMin+bounds.uMax)/2,(bounds.vMin+bounds.vMax)/2)
       const centerVertex=own(k.makeVertex(center.x,center.y,center.z))
-      expect(k.distanceBetween(centerVertex,editedFaces[0])).toBeGreaterThan(1e-4)
-      const combined=own(k.sewAndSolidify([...importedFaces.filter((_,index)=>index!==target),editedFaces[0]],1e-7))
-      expect(k.isValid(combined)).toBe(true)
-      const round=own(k.importStep(k.exportStep(combined))), roundFaces=k.getSubShapes(round,'face');owned.push(...roundFaces)
+      expect(Math.min(...roundFaces.map(face=>k.distanceBetween(centerVertex,face)))).toBeGreaterThan(1e-4)
       expect(k.isValid(round)).toBe(true)
       expect(roundFaces).toHaveLength(7)
       const solids=k.getSubShapes(round,'solid');owned.push(...solids)
