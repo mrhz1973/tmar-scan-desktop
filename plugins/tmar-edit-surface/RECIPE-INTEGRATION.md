@@ -52,6 +52,16 @@ unchanged. Evidence: `%TEMP%/scanruler-history-freeze-lego-qa/run-v5wAqD/result.
 This does not prove a host history transaction, editable feature persistence,
 the exact coordinator host, or installed-app behavior.
 
+The follow-up `TEST_HISTORY_REPLAY=1` replayed the locked annotated LEGO
+draft in an independent worker using the host-exported source STEP. OCCT
+reported a valid result with the same volume as the live draft
+(1084.2683646894266 mm³); the lock remained current and the original file
+hash was unchanged. The ordinary annotated-copy flow also saved and reopened.
+Evidence: `%TEMP%/scanruler-history-replay-lego-qa/run-waxJ5O/result.json`.
+Equal volume alone is not proof of geometric identity. This test does not
+publish a parametric history feature or restore an editable feature from the
+saved project; note persistence was exercised through ordinary copy Apply.
+
 `WorkspaceSurfaceSession.restoreHistoryRecipe(value)` restores a validated
 recipe into a fresh, empty workspace session only. It rejects another body or
 changed STEP bytes; a failed worker restore reports a fatal error to the host

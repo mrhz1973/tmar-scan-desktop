@@ -20,6 +20,8 @@ if(process.env.TEST_HISTORY_RECIPE==='1' && !annotatedApply)
   throw Error('TEST_HISTORY_RECIPE requires annotated Apply.')
 if(process.env.TEST_HISTORY_FREEZE==='1' && process.env.TEST_HISTORY_RECIPE!=='1')
   throw Error('TEST_HISTORY_FREEZE requires TEST_HISTORY_RECIPE.')
+if(process.env.TEST_HISTORY_REPLAY==='1' && process.env.TEST_HISTORY_FREEZE!=='1')
+  throw Error('TEST_HISTORY_REPLAY requires TEST_HISTORY_FREEZE.')
 if (sourceFile && (!isAbsolute(sourceFile) || !['.step','.stp'].includes(extname(sourceFile).toLowerCase())))
   throw Error('STEP_FILE must be an absolute STEP path.')
 if (sourceFile && process.env.TEST_FACE_SWITCH === '1')
@@ -640,6 +642,24 @@ try {
         check(held.refused&&held.stillCurrent&&held.busy&&held.rejectsAltered&&held.acceptsRestored&&held.released&&
           held.editable&&held.text==='Nota durante Zebra',
           'history lock protects the real CAD draft and its note, then releases cleanly')
+      }
+      if(process.env.TEST_HISTORY_REPLAY==='1') {
+        const replay=await page.evaluate(async()=>{
+          const q=window.surfaceQa,c=q.useWorkspaceEditor.getState().controller,p=q.historyPreparation
+          const answer=await q.runCommand('reverse.body.edit_source',{body:q.id})
+          const step=new Uint8Array(answer.file.bytes)
+          const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',step)),x=>x.toString(16).padStart(2,'0')).join('')
+          const {replaySurfaceHistory}=await import('/plugins/tmar-edit-surface/historyReplay.ts')
+          const expected=c.getViewState().preview.volume,lock=c.freezeHistory(p)
+          try {
+            const value=await replaySurfaceHistory({bodyKey:p.recipe.source.bodyId,stepSha256:digest,step,
+              assertCurrent:()=>{if(!lock.isCurrent())throw Error('Locked draft or source changed')}},p.recipe)
+            return {valid:value.valid,volume:value.volume,expected,current:lock.isCurrent(),step:!!value.step}
+          } finally {lock.release()}
+        })
+        check(replay.valid&&replay.step&&replay.current&&Math.abs(replay.volume-replay.expected)<1e-5,
+          'independent history replay reproduces the locked real STEP draft')
+        report.historyReplay=replay
       }
     }
     if(!annotatedApply){
