@@ -3,8 +3,27 @@
 // The ordinary import/copy remains authoritative until independent recipe replay passes.
 import { abortIfNeeded, editorSha256 } from '../../../src/plugins/editorLifetime'
 import type { SourceBinding } from '../../../src/plugins/workspaceEditorTypes'
+import type { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
+import type { Note } from '../core/notes'
 import { stepFileKey, type ImportFeature, type StepFileRef } from '../core/features'
 
+/** Immutable plugin UV association; the host's normal Note store remains authoritative
+ * for note text, deletion and actual validated face attachments after Apply. */
+export interface StoredSurfaceHistoryNote {
+  readonly id: string
+  readonly text: string
+  readonly faceIndex: number
+  readonly u: number
+  readonly v: number
+}
+export interface StoredSurfaceHistoryAnnotationV1 {
+  readonly version: 1
+  readonly featureUuid: string
+  readonly envelopeSha256: string
+  readonly witnessSha256: string
+  readonly noteDigestSha256: string
+  readonly notes: readonly StoredSurfaceHistoryNote[]
+}
 export interface StoredSurfaceEditHistoryV1 {
   readonly schema: 'tmar.host.surface-edit-history'
   readonly version: 1
@@ -20,7 +39,8 @@ export interface StoredSurfaceEditHistoryV1 {
   readonly resultStepSha256: string
   /** Stable replay fingerprint: only known Open CASCADE export label serials are normalized. */
   readonly replayStepSha256: string
-  readonly notePolicy: 'none'
+  readonly notePolicy: 'none' | 'annotated-v1'
+  readonly annotation?: StoredSurfaceHistoryAnnotationV1
 }
 
 export interface QualifiedSurfaceHistory {
@@ -42,10 +62,47 @@ export type SurfaceHistoryReplay = (
   sourceStep: string, recipe: unknown, sourceBodyKey: string, signal: AbortSignal
 ) => Promise<string>
 
+/** Optional plugin replay callback injected at the feature boundary.
+ * The host remains independent from the named Edit Surface plugin. */
+export type PluginIndependentReplay = (
+  source: {readonly bodyKey:string;readonly stepSha256:string;
+    readonly step:Uint8Array;assertCurrent():void},
+  recipe: unknown, signal?: AbortSignal,
+) => Promise<{valid:boolean;step:string}>
+export function bindIndependentPluginReplay(
+  replay:PluginIndependentReplay,assertCurrent:()=>void,
+):SurfaceHistoryReplay {
+  return async (sourceStep,recipe,sourceBodyKey,signal) => {
+    abortIfNeeded(signal);assertCurrent()
+    assertStep(sourceStep)
+    const bytes=utf8(sourceStep)
+    const stepSha256=await editorSha256(bytes)
+    abortIfNeeded(signal);assertCurrent()
+    const result=await replay({bodyKey:sourceBodyKey,stepSha256,
+      step:bytes.slice(),assertCurrent},structuredClone(recipe),signal)
+    abortIfNeeded(signal);assertCurrent()
+    if (!result || result.valid!==true || typeof result.step!=='string')
+      throw new Error('Il replay OCCT indipendente non ha fornito un CAD valido.')
+    assertStep(result.step)
+    return result.step
+  }
+}
+
 export interface SurfaceHistorySource {
   readonly binding: SourceBinding
   readonly step: Uint8Array
   assertCurrent(): void
+}
+
+export interface PluginAnnotatedHistoryPreparation extends PluginHistoryPreparation {
+  readonly notesRevision: number
+  readonly notes: readonly StoredSurfaceHistoryNote[]
+}
+export type ValidatedAnnotatedHistoryCopy = Awaited<ReturnType<typeof validateAnnotatedCopy>>
+export interface QualifyAnnotatedSurfaceHistory extends Omit<QualifySurfaceHistory, 'prepared' | 'noteCount'> {
+  readonly prepared: PluginAnnotatedHistoryPreparation
+  /** Result of the existing host validateAnnotatedCopy, NOT untrusted plugin metadata. */
+  readonly annotationPlan: ValidatedAnnotatedHistoryCopy
 }
 
 export interface QualifySurfaceHistory {
@@ -62,6 +119,7 @@ export interface QualifySurfaceHistory {
 
 // A result must come from the replay-qualified path, not from copied JSON.
 const qualifiedTokens = new WeakSet<object>()
+const verifiedHistoryTokens = new WeakSet<object>()
 export function claimQualifiedSurfaceHistory(input: QualifiedSurfaceHistory): QualifiedSurfaceHistory {
   if (!input || typeof input !== 'object' || !qualifiedTokens.delete(input))
     throw new Error('History payload senza replay indipendente verificato.')
@@ -136,8 +194,11 @@ export function canonicalHistoryJson(value: unknown): string {
 /** Host schema and source binding only. The recipe still MUST pass CAD replay. */
 export function readStoredSurfaceHistory(value: unknown): StoredSurfaceEditHistoryV1 {
   const raw: unknown = structuredClone(value)
-  if (!object(raw) || !hasKeys(raw, ['schema','version','source','recipe','recipeSha256','resultStepSha256','replayStepSha256','notePolicy']) ||
-      raw.schema !== 'tmar.host.surface-edit-history' || raw.version !== 1 || raw.notePolicy !== 'none' ||
+  if (!object(raw) || !['none','annotated-v1'].includes(raw.notePolicy as string) ||
+      !hasKeys(raw, raw.notePolicy === 'none'
+        ? ['schema','version','source','recipe','recipeSha256','resultStepSha256','replayStepSha256','notePolicy']
+        : ['schema','version','source','recipe','recipeSha256','resultStepSha256','replayStepSha256','notePolicy','annotation']) ||
+      raw.schema !== 'tmar.host.surface-edit-history' || raw.version !== 1 ||
       !validHash(raw.recipeSha256) || !validHash(raw.resultStepSha256) || !validHash(raw.replayStepSha256) ||
       !object(raw.source) || !hasKeys(raw.source,['bodyId','bodyKey','file','stepSha256','sourceReplaySha256']))
     throw new Error('Metadati history Edit Surface non supportati.')
@@ -161,6 +222,29 @@ export function readStoredSurfaceHistory(value: unknown): StoredSurfaceEditHisto
       !object(recipe.source) || recipe.source.bodyId !== source.bodyKey ||
       !validHash(recipe.source.brepSha256))
     throw new Error('Ricetta CAD incompatibile con il corpo sorgente.')
+  if (raw.notePolicy === 'annotated-v1') {
+    const ann=raw.annotation
+    if (!object(ann) || !hasKeys(ann,['version','featureUuid','envelopeSha256','witnessSha256','noteDigestSha256','notes']) ||
+        ann.version!==1 || typeof ann.featureUuid!=='string' ||
+        !/^[a-f0-9-]{36}$/i.test(ann.featureUuid) ||
+        !validHash(ann.envelopeSha256) || !validHash(ann.witnessSha256) ||
+        !validHash(ann.noteDigestSha256) ||
+        !Array.isArray(ann.notes) || ann.notes.length<1 || ann.notes.length>200)
+      throw new Error('Associazione history e note non valida.')
+    const notes=ann.notes as unknown[]
+    const ids=new Set<string>()
+    for(const item of notes) {
+      if (!object(item) || !hasKeys(item,['id','text','faceIndex','u','v']) ||
+          typeof item.id!=='string' || !item.id.trim() || item.id.length>200 ||
+          ids.has(item.id) || typeof item.text!=='string' ||
+          !item.text.trim() || item.text.length>2000 ||
+          item.faceIndex!==recipe.faceIndex ||
+          typeof item.u!=='number' || !Number.isFinite(item.u) ||
+          typeof item.v!=='number' || !Number.isFinite(item.v))
+        throw new Error('Ancora UV della history non valida.')
+      ids.add(item.id)
+    }
+  }
   // The digest check is asynchronous, in the qualification/reopen paths.
   canonicalHistoryJson(recipe)
   return raw as unknown as StoredSurfaceEditHistoryV1
@@ -223,12 +307,15 @@ export async function qualifySurfaceHistory(input: QualifySurfaceHistory): Promi
 
 export type SurfaceHistoryReopen =
   | {status:'copy-only';reason:string}
-  | {status:'verified';record:StoredSurfaceEditHistoryV1;replayedStep:string}
+  | {status:'verified';record:StoredSurfaceEditHistoryV1;replayedStep:string;sourceStep:string;
+      /** Only a verified, unchanged host note store may be passed to plugin restoreHistoryNotes. */
+      notesToRestore?:readonly StoredSurfaceHistoryNote[]}
 
 /** Fail closed: never change or discard the saved imported CAD copy on error. */
 export async function reopenSurfaceHistory(
   feature: ImportFeature, stepFiles:Readonly<Record<string,string>>,
   replay:SurfaceHistoryReplay | undefined, signal:AbortSignal,
+  persistedNotes?:readonly Note[],
 ):Promise<SurfaceHistoryReopen> {
   if (feature.surfaceEditHistory === undefined) return {status:'copy-only',reason:'Nessuna ricetta associata.'}
   try {
@@ -249,13 +336,199 @@ export async function reopenSurfaceHistory(
       throw new Error('Ricetta salvata alterata.')
     abortIfNeeded(signal)
     if (!replay) throw new Error('Replay CAD indipendente non collegato: copia preservata.')
-    if (feature.annotationSource) throw new Error('Note annotate: re-ancoraggio parametrico non ancora qualificato.')
+    if (record.notePolicy==='annotated-v1') {
+      if (!record.annotation || await associationDigest(record)!==record.annotation.noteDigestSha256)
+        throw new Error('Associazione ricetta/annotazione alterata.')
+    } else if (feature.annotationSource) throw new Error('Copia annotata senza associazione parametrica.')
     const step=await replay(sourceText,structuredClone(record.recipe),record.source.bodyKey,signal)
     abortIfNeeded(signal);assertStep(step)
     if (await editorSha256(utf8(canonicalReplayStep(step)))!==record.replayStepSha256)
       throw new Error('Replay differente dalla copia CAD salvata.')
-    return {status:'verified',record,replayedStep:step}
+    const notesToRestore=record.notePolicy==='annotated-v1'
+      ? persistedHistoryNotes(record,feature,persistedNotes) : undefined
+    const verified=Object.freeze({status:'verified' as const,record:freezeHistoryValue(record),
+      sourceStep:sourceText,replayedStep:step,
+      ...(notesToRestore?{notesToRestore:freezeHistoryValue(notesToRestore)}:{})})
+    verifiedHistoryTokens.add(verified)
+    return verified
   }catch(error){
     return {status:'copy-only',reason:error instanceof Error?error.message:String(error)}
+  }
+}
+
+
+/** The versioned, host-owned link binds notes to a recipe, the OCCT face
+ * witness and the annotated-copy envelope. It is inert until a provider
+ * independently replays and restores both CAD and notes in a new session. */
+const associationContent = (record: StoredSurfaceEditHistoryV1,
+  link: Omit<StoredSurfaceHistoryAnnotationV1,'noteDigestSha256'>) =>
+  ({recipeSha256:record.recipeSha256, sourceStepSha256:record.source.stepSha256,
+    resultStepSha256:record.resultStepSha256,featureUuid:link.featureUuid,
+    envelopeSha256:link.envelopeSha256,witnessSha256:link.witnessSha256,notes:link.notes})
+
+const associationDigest = async (record: StoredSurfaceEditHistoryV1): Promise<string> => {
+  if (!record.annotation) throw new Error('Bundle di note history assente.')
+  const {noteDigestSha256:_digest,...rest} = record.annotation
+  return editorSha256(utf8(canonicalHistoryJson(associationContent(record,rest))))
+}
+
+/** Host must use validateAnnotatedCopy before passing a plan here. Its result
+ * verifies STEP bytes + note witness. The recipe still requires independent
+ * replay, while note UVs must match the immutable, frozen annotated payload. */
+export async function qualifyAnnotatedSurfaceHistory(input: QualifyAnnotatedSurfaceHistory): Promise<QualifiedSurfaceHistory> {
+  const {prepared,annotationPlan:plan,signal}=input
+  abortIfNeeded(signal)
+  input.source.assertCurrent()
+  if (!input.isStampCurrent() || !prepared || !Number.isSafeInteger(prepared.notesRevision) ||
+      !Array.isArray(prepared.notes) || !prepared.notes.length || prepared.notes.length>200)
+    throw new Error('Le note o la ricetta non sono più correnti.')
+  const recipe = prepared.recipe as {faceIndex?:unknown}
+  const witness=plan?.prepared?.witnesses?.[0]
+  if (!witness || !Number.isSafeInteger(witness.diagnosticFaceIndex) ||
+      witness.diagnosticFaceIndex !== recipe?.faceIndex ||
+      plan.prepared.notes.length !== prepared.notes.length ||
+      !validHash(plan.artifactSha256) || !validHash(plan.witnessSha256) ||
+      !validHash(plan.envelopeSha256))
+    throw new Error('Testimone CAD o note non associabili alla ricetta.')
+  const seen=new Set<string>()
+  const preparedById=new Map<string,StoredSurfaceHistoryNote>()
+  for(const note of prepared.notes) {
+    if (!note || typeof note.id!=='string' || !note.id.trim() || seen.has(note.id) ||
+        typeof note.text!=='string' || !note.text.trim() ||
+        note.faceIndex!==recipe.faceIndex || !Number.isFinite(note.u) || !Number.isFinite(note.v))
+      throw new Error('Ancora UV parametrica non valida.')
+    seen.add(note.id)
+    preparedById.set(note.id,{id:note.id,text:note.text,faceIndex:note.faceIndex,u:note.u,v:note.v})
+  }
+  for(const note of plan.prepared.notes){
+    const match=preparedById.get(note.draftId)
+    if (!match || note.text!==match.text ||
+        note.target.sourceUV[0]!==match.u || note.target.sourceUV[1]!==match.v)
+      throw new Error('Le note del ticket annotato non coincidono con la ricetta.')
+  }
+  const replayChecked=await qualifySurfaceHistory({
+    source:input.source,prepared,isStampCurrent:input.isStampCurrent,
+    resultStep:input.resultStep,noteCount:0,replay:input.replay,signal,
+  })
+  claimQualifiedSurfaceHistory(replayChecked) // never leave a second usable token
+  if (plan.artifactSha256!==replayChecked.record.resultStepSha256 ||
+      !input.isStampCurrent()) throw new Error('CAD o note modificati prima della qualificazione.')
+  const notes=[...preparedById.values()]
+  const baseLink={version:1 as const,featureUuid:crypto.randomUUID(),
+    envelopeSha256:plan.envelopeSha256,witnessSha256:plan.witnessSha256,notes}
+  const draft={...replayChecked.record,notePolicy:'annotated-v1' as const,
+    annotation:{...baseLink,noteDigestSha256:''}}
+  const digest=await editorSha256(utf8(canonicalHistoryJson(associationContent(draft,baseLink))))
+  input.source.assertCurrent()
+  if (!input.isStampCurrent()) throw new Error('Note o sorgente mutate dopo replay CAD.')
+  const record=readStoredSurfaceHistory({...draft,annotation:{...baseLink,noteDigestSha256:digest}})
+  const qualified:QualifiedSurfaceHistory=Object.freeze({
+    record:freezeHistoryValue(record),sourceStep:replayChecked.sourceStep,
+  })
+  qualifiedTokens.add(qualified)
+  return qualified
+}
+
+/** Validate the exact note payload that the host would stage with this recipe.
+ * No edit is committed here; this check precedes an ordinary candidate CAD
+ * stage, which remains the only transaction publisher. */
+export async function verifyAnnotatedHistoryPlan(
+  record:StoredSurfaceEditHistoryV1,plan:ValidatedAnnotatedHistoryCopy,
+):Promise<void> {
+  if (record.notePolicy!=='annotated-v1' || !record.annotation)
+    throw new Error('History annotata assente.')
+  const ann=record.annotation
+  if (!plan || plan.artifactSha256!==record.resultStepSha256 ||
+      plan.envelopeSha256!==ann.envelopeSha256 || plan.witnessSha256!==ann.witnessSha256 ||
+      plan.prepared.witnesses.length!==1 ||
+      plan.prepared.witnesses[0].diagnosticFaceIndex!==(record.recipe as {faceIndex:number}).faceIndex ||
+      plan.prepared.notes.length!==ann.notes.length)
+    throw new Error('Ticket annotato estraneo alla ricetta.')
+  const refs=new Map(ann.notes.map(n=>[n.id,n]))
+  for(const n of plan.prepared.notes){
+    const match=refs.get(n.draftId)
+    if (!match || match.text!==n.text || match.u!==n.target.sourceUV[0] || match.v!==n.target.sourceUV[1])
+      throw new Error('Ancora di nota estranea alla ricetta.')
+  }
+  if (await associationDigest(record)!==ann.noteDigestSha256)
+    throw new Error('Associazione history-note modificata.')
+}
+
+export function persistedHistoryNotes(record:StoredSurfaceEditHistoryV1,feature:ImportFeature,
+  saved:readonly Note[]|undefined):readonly StoredSurfaceHistoryNote[] {
+  const ann=record.annotation
+  if (!ann || !saved || !feature.annotationSource ||
+      feature.annotationSource.featureUuid!==ann.featureUuid ||
+      feature.annotationSource.witnessSha256!==ann.witnessSha256)
+    throw new Error('Associazione nota/feature non ripristinabile.')
+  const result:StoredSurfaceHistoryNote[]=[]
+  const unique=new Set<string>()
+  for(const expected of ann.notes) {
+    const matches=saved.filter(n=>n.attachment?.draftId===expected.id &&
+      n.attachment.featureUuid===ann.featureUuid)
+    if (matches.length!==1) throw new Error('Nota di history mancante o duplicata.')
+    const note=matches[0],attached=note.attachment!
+    if (attached.status!=='verified'|| !attached.noteUuid || unique.has(attached.noteUuid) ||
+        attached.witnessSha256!==ann.witnessSha256 ||
+        attached.witnessUV[0]!==expected.u || attached.witnessUV[1]!==expected.v ||
+        !note.on.some(t=>t.kind==='face'&&t.body===feature.id) ||
+        !note.text.trim())
+      throw new Error('Ancora history/UV non verificata.')
+    unique.add(attached.noteUuid)
+    // Text is mutable through the normal Note UI; do not resurrect deleted
+    // notes or revert legitimate edits to the original recipe snapshot.
+    result.push({id:expected.id,text:note.text,faceIndex:expected.faceIndex,u:expected.u,v:expected.v})
+  }
+  return result
+}
+
+
+/** A freshly opened editor must be supplied by a host factory using the
+ * archived upstream STEP, not the already-edited result body. This adapter
+ * is opt-in and never installs a controller in the live UI by itself. */
+export interface SurfaceHistoryRestoreController {
+  restoreHistoryRecipe(recipe:unknown):Promise<void>
+  restoreHistoryNotes(notes:unknown):Promise<void>
+  getSnapshot():{validation:{kind:string}}
+  dispose(reason:'host-error'|'cancelled'):Promise<void>
+}
+
+/** Replay authentication is held by an ephemeral, one-use token returned
+ * from reopenSurfaceHistory. No caller-supplied "verified" JSON is accepted.
+ * The host's actual session handoff must still coordinate viewport leases
+ * and validate the document and source before installing this controller. */
+export async function restoreVerifiedSurfaceHistory<T extends SurfaceHistoryRestoreController>(
+  checked:Extract<SurfaceHistoryReopen,{status:'verified'}>,
+  makeFreshSession:(source:Uint8Array,bodyKey:string,signal:AbortSignal)=>Promise<T>,
+  awaitValidated:(session:T,signal:AbortSignal)=>Promise<void>,
+  assertCurrent:()=>void,
+  signal:AbortSignal,
+):Promise<T> {
+  if (!checked || checked.status!=='verified' || !verifiedHistoryTokens.delete(checked))
+    throw new Error('Ripristino Edit Surface non verificato o già utilizzato.')
+  if (checked.record.notePolicy==='annotated-v1' && !checked.notesToRestore?.length)
+    throw new Error('Ripristino parametrico bloccato: mancano note con UV verificati.')
+  let session:T|undefined
+  const alive=()=>{abortIfNeeded(signal);assertCurrent()}
+  try {
+    alive()
+    session=await makeFreshSession(utf8(checked.sourceStep),checked.record.source.bodyKey,signal)
+    alive()
+    await session.restoreHistoryRecipe(structuredClone(checked.record.recipe))
+    alive()
+    await awaitValidated(session,signal)
+    alive()
+    if (session.getSnapshot().validation.kind!=='valid')
+      throw new Error('Il CAD ripristinato non dispone di una preview validata.')
+    if (checked.notesToRestore?.length) {
+      await session.restoreHistoryNotes(structuredClone(checked.notesToRestore))
+      alive()
+      if (session.getSnapshot().validation.kind!=='valid')
+        throw new Error('Le note ripristinate non conservano il CAD valido.')
+    }
+    return session
+  } catch(error) {
+    if(session)try{await session.dispose('host-error')}catch{/* Preserve the original failure. */}
+    throw error
   }
 }
