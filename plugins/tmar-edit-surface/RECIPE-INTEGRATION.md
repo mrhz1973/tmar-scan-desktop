@@ -87,6 +87,16 @@ host's source and transaction checks. Session tests cover a real OCCT restore,
 an already-aborted signal, session disposal and a changed draft while waiting; installed-app and
 host history reopening remain unqualified.
 
+`restoreHistoryBundle({recipe, notes}, signal?)` composes fresh-session recipe
+restore, preview validation and note rebinding. It snapshots its inputs. If
+rebinding or waiting fails after adoption, it reports a fatal error and closes
+that fresh session rather than leaving a partially restored draft. Session tests
+using OCCT cover both successful restoration and an invalid UV that closes the
+new session while leaving the original session valid. The first test attempt
+timed out because its simulated timer did not advance after asynchronous work;
+the corrected bounded timer-driving test passed. The host must still bind the
+bundle to its persisted feature and preserve the saved CAD copy on failure.
+
 After the restored draft has a fresh valid preview,
 `WorkspaceSurfaceSession.restoreHistoryNotes()` can rebind a host-provided
 array of `{id, text, faceIndex, u, v}` on that restored face. It resolves each

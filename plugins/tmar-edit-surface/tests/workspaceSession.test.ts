@@ -530,6 +530,35 @@ describe('WorkspaceSurfaceSession',()=>{
         expect(reopened.getPanelState().notes[0]).toMatchObject({id:note.id,text:'Controlla la faccia inversa'})
         expect(reopened.getPanelState().notes[0].at).toEqual(note.at)
       } finally { if(reopened)await reopened.dispose('cancelled');annotatedEditor.dispose() }
+      const bundleEditor=new SurfaceEditorKernel(k),bundleWorker=new KernelWorker(bundleEditor)
+      const bundleRuntime=new SurfaceRuntime(()=>bundleWorker as unknown as Worker),bundleFatal=vi.fn()
+      let bundleSession:WorkspaceSurfaceSession | undefined
+      try {
+        bundleSession=await createWorkspaceSurfaceSession({...context,sessionId:'bundle-reopen',reportFatal:bundleFatal} as never,
+          vi.fn() as never,{runtime:bundleRuntime,sha256:async bytes=>sha(bytes)})
+        const operation=bundleSession.restoreHistoryBundle({recipe:annotated.recipe,notes:annotated.notes})
+        let settled=false;void operation.then(()=>{settled=true},()=>{settled=true})
+        for(let i=0;i<20&&!settled;i++){await flush();await vi.advanceTimersByTimeAsync(90)}
+        expect(settled).toBe(true);await operation
+        expect(bundleSession.getSnapshot().validation.kind).toBe('valid')
+        expect(bundleSession.getPanelState().notes[0]).toMatchObject({id:note.id,text:'Controlla la faccia inversa'})
+        expect(bundleFatal).not.toHaveBeenCalled()
+      } finally { if(bundleSession)await bundleSession.dispose('cancelled');bundleEditor.dispose() }
+      const rejectedEditor=new SurfaceEditorKernel(k),rejectedWorker=new KernelWorker(rejectedEditor)
+      const rejectedRuntime=new SurfaceRuntime(()=>rejectedWorker as unknown as Worker),rejectedFatal=vi.fn()
+      let rejectedSession:WorkspaceSurfaceSession | undefined
+      try {
+        rejectedSession=await createWorkspaceSurfaceSession({...context,sessionId:'bundle-reject',reportFatal:rejectedFatal} as never,
+          vi.fn() as never,{runtime:rejectedRuntime,sha256:async bytes=>sha(bytes)})
+        const operation=rejectedSession.restoreHistoryBundle({recipe:annotated.recipe,notes:[{...annotated.notes[0],u:1e9}]})
+        const rejection=expect(operation).rejects.toThrow()
+        let settled=false;void operation.then(()=>{settled=true},()=>{settled=true})
+        for(let i=0;i<20&&!settled;i++){await flush();await vi.advanceTimersByTimeAsync(90)}
+        expect(settled).toBe(true);await rejection
+        expect(rejectedFatal).toHaveBeenCalledOnce()
+        expect(rejectedRuntime.active).toBe(false)
+        expect(session.getSnapshot().validation.kind).toBe('valid')
+      } finally { if(rejectedSession)await rejectedSession.dispose('cancelled');rejectedEditor.dispose() }
       await vi.advanceTimersByTimeAsync(90);await flush()
       session.setNoteText(note.id,'Testo cambiato')
       expect(session.isAnnotatedHistoryStampCurrent(annotated)).toBe(false)

@@ -1047,7 +1047,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (workerRestoreStarted) {
         const message = `Impossibile ripristinare Edit Surface: ${String((error as Error)?.message ?? error)}`
         try { this.context.reportFatal(message) } catch { /* Preserve the original restore error. */ }
-        this.releaseOwned()
+        try { this.releaseOwned() } catch { /* Preserve the original restore error. */ }
       }
       throw error
     } finally {
@@ -1097,6 +1097,33 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       timer = setTimeout(() => finish(new Error('Tempo di verifica della superficie ripristinata esaurito.')), 60000)
       check()
     })
+  }
+
+  /** Restore a host-supplied recipe and its notes as one editor operation.
+   * Failure after adopting the recipe closes this fresh session so a partial
+   * draft cannot masquerade as the complete saved feature. */
+  async restoreHistoryBundle(value: { readonly recipe: unknown; readonly notes: unknown }, signal?: AbortSignal): Promise<void> {
+    this.assertLive()
+    if (signal) abortIf(signal)
+    if (!value || typeof value !== 'object' || !Array.isArray(value.notes)) throw new Error('Pacchetto cronologia non valido.')
+    const bundle = structuredClone(value)
+    let adopted = false
+    try {
+      await this.restoreHistoryRecipe(bundle.recipe)
+      adopted = true
+      await this.waitRestoredHistoryReady(signal)
+      if (signal) abortIf(signal)
+      await this.restoreHistoryNotes(bundle.notes)
+      if (signal) abortIf(signal)
+      this.assertLive()
+    } catch (error) {
+      if (adopted && !this.disposed) {
+        try { this.context.reportFatal(`Impossibile ripristinare la superficie e le note: ${String((error as Error)?.message ?? error)}`) }
+        catch { /* Preserve the original restore error. */ }
+        try { this.releaseOwned() } catch { /* Preserve the original restore error. */ }
+      }
+      throw error
+    }
   }
 
   /** Rebind notes only after this session restored and validated its recipe.
