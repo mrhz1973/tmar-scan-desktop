@@ -11,11 +11,14 @@ import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
 import { readRecipe, readCurvedRecipe } from './recipe'
 import type { AdaptiveLocks } from './adaptiveLockSnapshot'
 import { readAdaptiveLockedRecipe } from './adaptiveLockedRecipe'
+import { ExperimentalSharedPlane } from './experimentalSharedPlane'
 export type AdaptiveSelection = { face:number; refinements:KnotInsertion[]; trimPolicy:'circular-fine-v1'; generation:number; trimLocks:number[]; hiddenPoles:number[] }
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
   | { action: 'selectDenseTrimmedPlane'; face: number }
   | { action: 'selectAdaptiveExperimental'; face: number }
+  | { action: 'prepareSharedPlaneExperimental'; step:string; face:number }
+  | { action: 'evaluateSharedPlaneExperimental'; step:string; face:number; net:Net }
   | { action: 'refineAdaptiveExperimental'; net:Net; additions:KnotInsertion[]; continuity:'G0'|'G1'; manualLocks:number[]; selection:AdaptiveSelection }
   | { action: 'reactivateAdaptiveExperimental'; refinements:KnotInsertion[]; expectedNet:Net; expectedTrimLocks:number[]; expectedHiddenPoles:number[]; selection:AdaptiveSelection }
   | { action: 'evaluateAdaptiveExperimental'; net: Net; continuity:'G0'|'G1'; exportStep?:boolean; selection:AdaptiveSelection }
@@ -66,6 +69,16 @@ self.onmessage = (event: MessageEvent<Request>) => {
       editor ??= await SurfaceEditorKernel.load(wasmUrl)
       let result: unknown
       switch (req.action) {
+        case 'prepareSharedPlaneExperimental': case 'evaluateSharedPlaneExperimental': {
+          // A fresh borrowed-kernel editor per request: no active editor selection,
+          // preview identity or annotation state is transferred to this prototype.
+          const isolated=new ExperimentalSharedPlane(editor.kernel)
+          try {
+            const net=isolated.open(req.step,req.face)
+            result=req.action==='prepareSharedPlaneExperimental' ? {net} : isolated.evaluate(req.net)
+          } finally {isolated.dispose()}
+          break
+        }
         case 'open': resetCylinder(); selectionKey=null; adaptiveSelectionKey=null; result = editor.open(req.step); break
         case 'select': result = editor.select(req.face); resetCylinder(); adaptiveSelectionKey=null; selectionKey=JSON.stringify({face:req.face,refinements:[]}); break
         case 'selectDenseTrimmedPlane': {

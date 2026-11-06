@@ -4,6 +4,8 @@ import { expect, it, vi } from 'vitest'
 import type { ShapeHandle } from 'occt-wasm'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { ExperimentalSharedPlane, verifyOtherFacesSampled } from '../experimentalSharedPlane'
+import type { Net } from '../brep'
+import type { SurfaceWorkerPayload } from '../workerClient'
 
 it('characterizes a STEP solid whose top is split into coplanar faces', async () => {
   const editor=await SurfaceEditorKernel.load(), k=editor.kernel, owned:ShapeHandle[]=[]
@@ -76,5 +78,36 @@ it('characterizes a STEP solid whose top is split into coplanar faces', async ()
       finally {altered.mockRestore()}
       expect(()=>isolated.evaluate(changed)).toThrow(/apri prima/i)
     } finally {isolated.dispose()}
+    // Real dispatcher and OCCT; transport is simulated and no browser is used.
+    const load=vi.spyOn(SurfaceEditorKernel,'load').mockResolvedValue(editor)
+    const pending=new Map<number,{resolve:(v:unknown)=>void;reject:(e:Error)=>void}>()
+    const host:{onmessage:((e:MessageEvent)=>void)|null;postMessage:(r:{id:number;result?:unknown;error?:string})=>void}={
+      onmessage:null,postMessage(reply){const waiter=pending.get(reply.id)!;pending.delete(reply.id)
+        if(reply.error)waiter.reject(new Error(reply.error));else waiter.resolve(reply.result)} }
+    let id=0
+    const ask=<T>(request:SurfaceWorkerPayload)=>new Promise<T>((resolve,reject)=>{
+      const next=++id;pending.set(next,{resolve:resolve as (v:unknown)=>void,reject});host.onmessage!({data:{...request,id:next}} as MessageEvent)
+    })
+    vi.stubGlobal('self',host)
+    try {
+      await import('../editor.worker')
+      const active=await ask<{faces:{reason:string|null}[]}>({action:'open',step})
+      const activeFace=active.faces.findIndex((face,index)=>index!==target&&!face.reason)
+      expect(activeFace).toBeGreaterThanOrEqual(0)
+      const activeNet=await ask<Net>({action:'select',face:activeFace})
+      const selection={face:activeFace,refinements:[]}
+      const beforePreview=await ask<{previewRevision:number}>({action:'evaluate',net:activeNet,continuity:'G1',selection})
+      const witness=await ask({action:'finalFaceWitness',previewRevision:beforePreview.previewRevision})
+      const prepared=await ask<{net:Net}>({action:'prepareSharedPlaneExperimental',step,face:target})
+      const changed=structuredClone(prepared.net),pole=Math.floor(changed.nu/2)*changed.nv+Math.floor(changed.nv/2)
+      changed.poles[pole][2]+=.02
+      const exported=await ask<{step:string}>({action:'evaluateSharedPlaneExperimental',step,face:target,net:changed})
+      const workerResult=own(k.importStep(exported.step))
+      expect(k.isValid(workerResult)).toBe(true)
+      const invalid=structuredClone(changed);invalid.poles[0][2]+=.1
+      await expect(ask({action:'evaluateSharedPlaneExperimental',step,face:target,net:invalid})).rejects.toThrow()
+      expect(await ask({action:'finalFaceWitness',previewRevision:beforePreview.previewRevision})).toEqual(witness)
+      expect(()=>editor.select(target)).toThrow(/ambigua|condivisa/i)
+    } finally {vi.unstubAllGlobals();load.mockRestore()}
   } finally {owned.reverse().forEach(shape=>k.release(shape));editor.dispose()}
 },60000)
