@@ -268,7 +268,15 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         next.push(targetFor(mesh.geometry, new THREE.Matrix4(), 'cad', `Faccia CAD ${face + 1}`,
           () => mesh.parent === preview.group && mesh.visible))
       }
-    } catch (error) { disposeTargets(next); report(`Magnete non disponibile: ${errorText(error)}`); return }
+    } catch (error) {
+      try { disposeTargets(next) } catch { /* Preserve the reference error. */ }
+      try { disposeTargets(neighbourTargets) } catch { /* Preserve the reference error. */ }
+      neighbourTargets = []
+      // A transient failure must neither retain old faces nor permanently
+      // disable snapping when the same preview becomes readable again.
+      neighboursDirty = true
+      report(`Magnete non disponibile: ${errorText(error)}`); return
+    }
     disposeTargets(neighbourTargets)
     neighbourTargets = next
   }

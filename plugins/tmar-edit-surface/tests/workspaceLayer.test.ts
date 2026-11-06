@@ -459,6 +459,26 @@ it('recovers scan snapping after a transient reference lookup failure without a 
   lookup.mockRestore(); layer.dispose()
 })
 
+it('recovers snapping to a nearby CAD face after its temporary lookup failure', () => {
+  const second = { ...mesh, positions: new Float32Array([0,-2,-2, 0,2,-2, 0,2,2, 0,-2,2]) }
+  const f = fixture({ reference: 'scan', preview: { ...validPreview, faceMeshes: [mesh, second] } })
+  vi.spyOn(f.view, 'references').mockReturnValue([])
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  f.set({ snap: false })
+  const previewGroup = f.group.getObjectByName('tmar-edit-surface-preview')!
+  const geometry = (previewGroup.children[1] as THREE.Mesh).geometry as THREE.BufferGeometry
+  const original = geometry.getAttribute.bind(geometry)
+  const getAttribute = vi.spyOn(geometry, 'getAttribute').mockImplementationOnce(() => { throw new Error('faccia temporaneamente non disponibile') })
+    .mockImplementation(original)
+  f.set({ snap: true })
+  expect(f.reportViewError).toHaveBeenCalledWith('Magnete non disponibile: faccia temporaneamente non disponibile')
+  expect(f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))).toBe(true)
+  f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
+  expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(0)
+  expect(f.overlay.children[0].textContent).toContain('Faccia CAD 2')
+  getAttribute.mockRestore(); layer.dispose()
+})
+
 it('cleans the layer without propagating when state and reporting are both revoked during notification', () => {
   const f = fixture({ reference: 'scan' }), layer = createWorkspaceLayer(f.view, f.owner)
   vi.spyOn(f.owner, 'getViewState').mockImplementationOnce(() => { throw new Error('Sorgente revocata') })
