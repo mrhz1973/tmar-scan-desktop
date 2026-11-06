@@ -180,7 +180,17 @@ try {
     assert(Number.isInteger(witness) && witness>=0,'Adaptive witness not returned')
     await page.waitForFunction(()=>{const s=window.surfaceQa.useWorkspaceEditor.getState();return s.snapshot?.validation.kind==='valid'&&!s.controller?.getPanelState().calculating},{timeout:120000})
     const before=await page.evaluate(i=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller,s=c.getViewState();c.setDragMode('local');c.setAxis(2);c.selectPoints([i],false);return [...s.net.poles[i]]},witness)
-    await page.click('[data-test=surface-move]')
+    if(process.env.TEST_ADAPTIVE_DRAG==='1') {
+      await page.evaluate(()=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller;c.setSelectionMode('points');c.setSnap(false);const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Inquadra reticolo');if(b&&!b.disabled)b.click()})
+      await new Promise(r=>setTimeout(r,300))
+      const projection=()=>page.evaluate(i=>{const q=window.surfaceQa,h=q.scene.layerHost(),c=q.useWorkspaceEditor.getState().controller,cam=h.camera(),p=c.getViewState().net.poles[i],r=h.canvas.getBoundingClientRect();h.partGroup.updateWorldMatrix(true,true);cam.updateMatrixWorld(true);const v=cam.position.clone().set(...p).applyMatrix4(h.partGroup.matrixWorld).project(cam);return {x:r.left+(v.x+1)*r.width/2,y:r.top+(1-v.y)*r.height/2,visible:Math.abs(v.z)<1}},witness)
+      let pt=await projection();assert(pt.visible,'Adaptive witness offscreen before zoom')
+      await page.mouse.move(pt.x,pt.y);await page.mouse.wheel(0,-1000);await new Promise(r=>setTimeout(r,350));pt=await projection()
+      check(await page.evaluate(p=>document.elementFromPoint(p.x,p.y)===window.surfaceQa.scene.layerHost().canvas,pt),'adaptive witness is reachable in the viewport')
+      await page.mouse.move(pt.x,pt.y);await page.mouse.down({button:'left'})
+      await page.waitForFunction(()=>window.surfaceQa.useWorkspaceEditor.getState().snapshot?.gesture==='pole',{timeout:10000})
+      await page.mouse.move(pt.x,pt.y-15,{steps:5});await page.mouse.up({button:'left'})
+    } else await page.click('[data-test=surface-move]')
     await page.waitForFunction(({i,before})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[i];return s.snapshot?.validation.kind==='valid'&&!s.controller?.getPanelState().calculating&&p?.some((x,j)=>Math.abs(x-before[j])>1e-6)}, {timeout:120000},{i:witness,before})
     const edited=await page.evaluate(async()=> (await window.surfaceQa.useWorkspaceEditor.getState().controller.exportStep()).step)
     const source=kernel.importStep(input.toString('utf8')),solids=kernel.getSubShapes(source,'solid'),faces=kernel.getSubShapes(solids[0],'face'),result=kernel.importStep(edited),resultFaces=kernel.getSubShapes(result,'face')
@@ -189,7 +199,12 @@ try {
       for(let i=0;i<=128;i++)for(let j=0;j<=128;j++){const x=u.uMin+(u.uMax-u.uMin)*i/128,y=u.vMin+(u.vMax-u.vMin)*j/128;if(kernel.classifyPointOnFace(a,x,y)!=='in')continue;const p=kernel.pointOnSurface(a,x,y),q=kernel.pointOnSurface(b,x,y);const d=Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z);if(!Number.isFinite(d))throw Error('Invalid witness distance');maximum=Math.max(maximum,d);samples++}
       check(samples>0&&maximum>0.001,'adaptive edit changes sampled interior of the original face')
     } finally {faces.forEach(x=>kernel.release(x));resultFaces.forEach(x=>kernel.release(x));solids.forEach(x=>kernel.release(x));kernel.release(source);kernel.release(result)}
-    report.adaptive={faceIndex:7,witnessPole:witness,interiorSamples:samples,maximumDisplacementMm:maximum}
+    if(process.env.TEST_ADAPTIVE_DRAG==='1') {
+      await page.click('[data-test=surface-undo]')
+      await page.waitForFunction(({i,before})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[i];return s.snapshot?.validation.kind==='valid'&&p&&p.every((v,j)=>Math.abs(v-before[j])<1e-8)}, {timeout:120000},{i:witness,before})
+      check(true,'Undo restores the adaptive pole after a mouse drag')
+    }
+    report.adaptive={faceIndex:7,witnessPole:witness,interiorSamples:samples,maximumDisplacementMm:maximum,method:process.env.TEST_ADAPTIVE_DRAG==='1'?'mouse':'numeric'}
     check(report.consoleErrors.length===0,'no browser console errors');report.inputHashAfter=sha(readFileSync(sourceFile));report.sourceUnchanged=report.inputHashAfter===inputHash;check(report.sourceUnchanged,'original STEP unchanged')
     report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
   }
