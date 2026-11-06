@@ -135,6 +135,11 @@ applied the annotated CAD copy and reopened the saved project with the verified
 note still attached. Note placement used the controller with a mesh-derived
 point; it was not a physical pointer placement test. The source STEP hash was
 unchanged. Evidence: `scanruler-owner-lego-qa/run-ZNM9El/result.json`.
+An additional real-file UI run (`TEST_HISTORY_RECIPE=1`) prepared a current
+v2 recipe together with the resolved note on face 19; Apply still published
+an annotated CAD copy, not that recipe as parametric history. The project
+reopened with the copy and note. Evidence: `run-i7IkaX/result.json` in the
+same local QA folder. The source STEP hash was unchanged.
 
 - Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Periodic cylinders, arbitrary trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
 - One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.

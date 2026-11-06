@@ -16,6 +16,8 @@ const testAlignedDepth = process.env.TEST_ALIGNED_DEPTH === '1'
 const annotatedApply = process.env.TEST_ANNOTATED_APPLY === '1'
 if(annotatedApply && (process.env.TEST_ZEBRA_NOTES!=='1' || process.env.TEST_PROJECT_ROUNDTRIP!=='1'))
   throw Error('TEST_ANNOTATED_APPLY requires Zebra notes and project roundtrip.')
+if(process.env.TEST_HISTORY_RECIPE==='1' && !annotatedApply)
+  throw Error('TEST_HISTORY_RECIPE requires annotated Apply.')
 if (sourceFile && (!isAbsolute(sourceFile) || !['.step','.stp'].includes(extname(sourceFile).toLowerCase())))
   throw Error('STEP_FILE must be an absolute STEP path.')
 if (sourceFile && process.env.TEST_FACE_SWITCH === '1')
@@ -537,6 +539,21 @@ try {
         note.revision === view.preview?.previewRevision && view.notePins.length === 1 && !!view.stripes
     }, { timeout: 120000 })
     check(true, 'draft note is resolved again after CAD deformation with Zebra still active')
+    if(process.env.TEST_HISTORY_RECIPE==='1') {
+      const prepared=await page.evaluate(async()=>{
+        const controller=window.surfaceQa.useWorkspaceEditor.getState().controller
+        const value=await controller.prepareAnnotatedHistory()
+        window.surfaceQa.historyPreparation=value
+        return {version:value.recipe.version,face:value.recipe.faceIndex,notes:value.notes.length,text:value.notes[0]?.text}
+      })
+      await page.waitForFunction(()=>{
+        const q=window.surfaceQa,s=q.useWorkspaceEditor.getState()
+        return s.controller?.isAnnotatedHistoryStampCurrent(q.historyPreparation)
+      },{timeout:120000})
+      check(prepared.face===faceIndex&&prepared.notes===1&&prepared.text==='Nota durante Zebra',
+        'the real edited face and its note prepare a current history recipe together')
+      report.historyPreparation=prepared
+    }
     if(!annotatedApply){
       const removeNote = await page.evaluateHandle(() => [...document.querySelectorAll('[data-test=workspace-surface-parameters] button')].find(e => e.textContent === 'Rimuovi nota'))
       await removeNote.asElement().click()
