@@ -650,15 +650,28 @@ try {
           const step=new Uint8Array(answer.file.bytes)
           const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',step)),x=>x.toString(16).padStart(2,'0')).join('')
           const {replaySurfaceHistory}=await import('/plugins/tmar-edit-surface/historyReplay.ts')
-          const expected=c.getViewState().preview.volume,lock=c.freezeHistory(p)
+          const live=c.getViewState().preview,expected=live.volume,lock=c.freezeHistory(p)
           try {
             const value=await replaySurfaceHistory({bodyKey:p.recipe.source.bodyId,stepSha256:digest,step,
               assertCurrent:()=>{if(!lock.isCurrent())throw Error('Locked draft or source changed')}},p.recipe)
-            return {valid:value.valid,volume:value.volume,expected,current:lock.isCurrent(),step:!!value.step}
+            let matchingTopology=value.faceMeshes.length===live.faceMeshes.length,maxVertexDistance=0,vertexCount=0
+            if(matchingTopology) for(let f=0;f<live.faceMeshes.length;f++) {
+              const a=live.faceMeshes[f],b=value.faceMeshes[f]
+              if(a.positions.length!==b.positions.length || a.indices.length!==b.indices.length ||
+                 a.indices.some((index,i)=>index!==b.indices[i])) {matchingTopology=false;break}
+              for(let i=0;i<a.positions.length;i+=3) {
+                const distance=Math.hypot(a.positions[i]-b.positions[i],a.positions[i+1]-b.positions[i+1],a.positions[i+2]-b.positions[i+2])
+                if(!Number.isFinite(distance))throw Error('Non-finite tessellation coordinate')
+                maxVertexDistance=Math.max(maxVertexDistance,distance);vertexCount++
+              }
+            }
+            return {valid:value.valid,volume:value.volume,expected,current:lock.isCurrent(),step:!!value.step,
+              matchingTopology,maxVertexDistance,vertexCount}
           } finally {lock.release()}
         })
-        check(replay.valid&&replay.step&&replay.current&&Math.abs(replay.volume-replay.expected)<1e-5,
-          'independent history replay reproduces the locked real STEP draft')
+        check(replay.valid&&replay.step&&replay.current&&Math.abs(replay.volume-replay.expected)<1e-5&&
+          replay.matchingTopology&&replay.vertexCount>0&&replay.maxVertexDistance<1e-5,
+          'independent history replay reproduces the real STEP draft tessellation and volume')
         report.historyReplay=replay
       }
     }

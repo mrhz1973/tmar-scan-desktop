@@ -62,6 +62,15 @@ Equal volume alone is not proof of geometric identity. This test does not
 publish a parametric history feature or restore an editable feature from the
 saved project; note persistence was exercised through ordinary copy Apply.
 
+An additional `TEST_HISTORY_REPLAY=1` run compared the live and replayed
+tessellations face by face on the same real LEGO STEP: all 81 face index lists
+matched, and the maximum distance of 20,776 corresponding tessellation vertices
+was 0 mm. The volume also matched and the original file hash was unchanged.
+Evidence: `%TEMP%/scanruler-history-geometry-lego-qa/run-ZPRSHX/result.json`.
+This compares one tessellation of one result, not exact B-rep equivalence or
+every point of the continuous surfaces. Parametric project reopen remains a
+separate host integration and qualification task.
+
 `WorkspaceSurfaceSession.restoreHistoryRecipe(value)` restores a validated
 recipe into a fresh, empty workspace session only. It rejects another body or
 changed STEP bytes; a failed worker restore reports a fatal error to the host
