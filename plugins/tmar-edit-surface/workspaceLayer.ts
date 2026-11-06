@@ -25,7 +25,8 @@ type ZebraConstructor = new (sources: { bodies(): Map<number, THREE.Mesh>; scan(
 const zebraModules = import.meta.glob<ZebraConstructor>('../tmar-zebra/ZebraLayer.ts', { eager: true, import: 'ZebraLayer' })
 const ZebraRenderer = Object.values(zebraModules)[0]
 
-type Target = { mesh: THREE.Mesh; geometry: THREE.BufferGeometry; ownsGeometry: boolean; current: () => boolean }
+type Target = { mesh: THREE.Mesh; geometry: THREE.BufferGeometry; ownsGeometry: boolean; current: () => boolean;
+  reference?: { id: unknown; revision: unknown; source: THREE.BufferGeometry; matrix: THREE.Matrix4; kind: string; bodyId: unknown } }
 type Capture = {
   kind: 'pole' | 'strip'
   pointerId: number
@@ -230,6 +231,9 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const refreshReferences = () => {
     if (!referencesDirty || disposed || !owner.getViewState().snap) return
     if (Date.now() < retryReferencesAt) return
+    // Only an automatic partial retry may reuse existing wrappers. A host
+    // notification resets retryReferencesAt and forces a fresh enumeration.
+    const partialRetry = retryReferencesAt > 0
     referencesDirty = false
     const next: Target[] = []
     let skipped = 0
@@ -239,15 +243,21 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
           if (!ref.visible || !ref.isCurrent()) continue
           const matrix = new THREE.Matrix4().fromArray([...ref.partFromGeometry])
           if (!matrix.elements.every(Number.isFinite)) throw new Error('Trasformazione del riferimento non valida.')
-          next.push(targetFor(ref.geometry, matrix, ref.kind === 'scan' ? 'scan' : 'cad',
-            ref.kind === 'scan' ? 'Scansione' : `Corpo CAD ${ref.bodyId ?? ''}`, () => ref.isCurrent()))
+          const kind = ref.kind === 'scan' ? 'scan' : 'cad'
+          const old = partialRetry ? referenceTargets.find(target => !next.includes(target) && target.reference &&
+            target.reference.id === ref.id && target.reference.revision === ref.revision && target.reference.source === ref.geometry &&
+            target.reference.kind === kind && target.reference.bodyId === ref.bodyId && target.reference.matrix.equals(matrix)) : undefined
+          const target = old ?? targetFor(ref.geometry, matrix, kind,
+            kind === 'scan' ? 'Scansione' : `Corpo CAD ${ref.bodyId ?? ''}`, () => ref.isCurrent())
+          target.current = () => ref.isCurrent()
+          target.reference = { id: ref.id, revision: ref.revision, source: ref.geometry, matrix, kind, bodyId: ref.bodyId }
+          next.push(target)
         } catch { skipped++ }
       }
     } catch (error) {
       // Never retain stale targets after a failed reference refresh. Both the
       // new wrappers and the previous pick-only wrappers belong to this layer.
-      try { disposeTargets(next) } catch { /* Preserve the reference error. */ }
-      try { disposeTargets(referenceTargets) } catch { /* Preserve the reference error. */ }
+      try { disposeTargets([...new Set([...next, ...referenceTargets])]) } catch { /* Preserve the reference error. */ }
       referenceTargets = []
       // A transient host lookup failure must not disable snapping until the
       // next reference-change notification. Retry on the next interaction.
@@ -255,7 +265,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       retryReferencesAt = 0
       report(`Magnete non disponibile: ${errorText(error)}`); return
     }
-    disposeTargets(referenceTargets)
+    disposeTargets(referenceTargets.filter(target => !next.includes(target)))
     referenceTargets = next
     retryReferencesAt = skipped ? Date.now() + 1000 : 0
     referencesDirty = skipped > 0

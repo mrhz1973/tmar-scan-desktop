@@ -398,11 +398,15 @@ it('recovers one temporarily unreadable reference while keeping the others usabl
   let now = 1000, unavailable = true
   const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
   const f = fixture({ reference: 'scan' }), existing = f.view.references()[0]
+  const temporaryGeometry = existing.geometry.clone()
+  const readValidGeometry = vi.spyOn(existing.geometry, 'getAttribute')
   vi.spyOn(f.view, 'references').mockReturnValue([
-    { ...existing, id: 'temporary', isCurrent: () => { if (unavailable) throw new Error('temporary'); return true } },
+    { ...existing, id: 'temporary', geometry: temporaryGeometry, isCurrent: () => { if (unavailable) throw new Error('temporary'); return true } },
     { ...existing, id: 'far', partFromGeometry: new THREE.Matrix4().makeTranslation(2, 0, 0).multiply(new THREE.Matrix4().fromArray(existing.partFromGeometry)).toArray() },
   ])
   const layer = createWorkspaceLayer(f.view, f.owner)
+  const initialReads = readValidGeometry.mock.calls.length
+  expect(initialReads).toBeGreaterThan(0)
   expect(f.reportViewError).toHaveBeenCalledWith('Magnete: 1 riferimento non disponibile; gli altri restano utilizzabili.')
   expect(f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))).toBe(true)
   f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
@@ -414,6 +418,26 @@ it('recovers one temporarily unreadable reference while keeping the others usabl
   now += 600
   f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
   expect(f.view.references).toHaveBeenCalledTimes(2)
+  expect(readValidGeometry).toHaveBeenCalledTimes(initialReads)
+  expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(0)
+  layer.dispose(); readValidGeometry.mockRestore(); temporaryGeometry.dispose(); clock.mockRestore()
+})
+
+it('rebuilds a changed reference instead of reusing its stale transform during retry', () => {
+  let now = 1000, moved = false
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+  const f = fixture({ reference: 'scan' }), existing = f.view.references()[0]
+  vi.spyOn(f.view, 'references').mockImplementation(() => [
+    { ...existing, id: 'temporary', isCurrent: () => { throw new Error('temporary') } },
+    { ...existing, id: 'moving', revision: moved ? 2 : 1, partFromGeometry: moved ? existing.partFromGeometry :
+      new THREE.Matrix4().makeTranslation(2, 0, 0).multiply(new THREE.Matrix4().fromArray(existing.partFromGeometry)).toArray() },
+  ])
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  expect(f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))).toBe(true)
+  f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
+  expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(-0.1)
+  moved = true; now += 1100
+  f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
   expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(0)
   layer.dispose(); clock.mockRestore()
 })
