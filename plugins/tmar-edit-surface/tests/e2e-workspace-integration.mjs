@@ -13,6 +13,9 @@ if (url.protocol !== 'http:' || !['localhost','127.0.0.1','[::1]'].includes(url.
   throw Error('APP_URL must be an isolated local HTTP origin with an explicit port.')
 const sourceFile = process.env.STEP_FILE
 const testAlignedDepth = process.env.TEST_ALIGNED_DEPTH === '1'
+const annotatedApply = process.env.TEST_ANNOTATED_APPLY === '1'
+if(annotatedApply && (process.env.TEST_ZEBRA_NOTES!=='1' || process.env.TEST_PROJECT_ROUNDTRIP!=='1'))
+  throw Error('TEST_ANNOTATED_APPLY requires Zebra notes and project roundtrip.')
 if (sourceFile && (!isAbsolute(sourceFile) || !['.step','.stp'].includes(extname(sourceFile).toLowerCase())))
   throw Error('STEP_FILE must be an absolute STEP path.')
 if (sourceFile && process.env.TEST_FACE_SWITCH === '1')
@@ -534,10 +537,12 @@ try {
         note.revision === view.preview?.previewRevision && view.notePins.length === 1 && !!view.stripes
     }, { timeout: 120000 })
     check(true, 'draft note is resolved again after CAD deformation with Zebra still active')
-    const removeNote = await page.evaluateHandle(() => [...document.querySelectorAll('[data-test=workspace-surface-parameters] button')].find(e => e.textContent === 'Rimuovi nota'))
-    await removeNote.asElement().click()
-    await page.waitForFunction(() => window.surfaceQa.useWorkspaceEditor.getState().snapshot?.draftNoteCount === 0)
-    check(true, 'removing the draft note restores the possibility of a plain CAD copy')
+    if(!annotatedApply){
+      const removeNote = await page.evaluateHandle(() => [...document.querySelectorAll('[data-test=workspace-surface-parameters] button')].find(e => e.textContent === 'Rimuovi nota'))
+      await removeNote.asElement().click()
+      await page.waitForFunction(() => window.surfaceQa.useWorkspaceEditor.getState().snapshot?.draftNoteCount === 0)
+      check(true, 'removing the draft note restores the possibility of a plain CAD copy')
+    }
   }
   await page.waitForSelector('[data-test=workspace-editor-apply]:enabled', { timeout: 120000 })
   const hideSource=await page.$eval('[data-test=workspace-editor-hide-source]',e=>e.checked)
@@ -559,6 +564,12 @@ try {
   check(after.steps.length === (await page.evaluate(()=>window.surfaceQa.before.bodyCount)) + 1 && !!original && !!copy && after.receipt?.createdBodyIds?.length === 1 && after.historyDelta === 1,
     'Apply publishes one CAD copy and one project history step')
   check(after.originalVisible === !hideSource && after.noOverlay, 'source visibility follows Apply option and editor overlay is released')
+  if(annotatedApply){
+    const savedNote=await page.evaluate(async body=>{const {useNotes}=await import('/plugins/reverse/state/noteStore.ts')
+      return useNotes.getState().notes.find(n=>n.text==='Nota durante Zebra'&&n.on[0]?.body===body)},createdId)
+    check(!!savedNote && savedNote.attachment?.status==='verified','Apply preserves the note on the modified CAD copy')
+    report.note={text:savedNote.text,at:savedNote.at,noteUuid:savedNote.attachment.noteUuid}
+  }
   report.geometry = []
   for (const step of after.steps) {
     const shape = kernel.importStep(step.text), solids = kernel.getSubShapes(shape, 'solid'), faces = kernel.getSubShapes(shape, 'face')
@@ -596,6 +607,12 @@ try {
       const {reverseSession}=await import('/plugins/reverse/app/reSession.ts')
       return (await reverseSession().client().bodyEditSource(id)).text
     },createdId)
+    if(annotatedApply){
+      await reopened.waitForFunction(async({body,uuid})=>{const {useNotes}=await import('/plugins/reverse/state/noteStore.ts')
+        return useNotes.getState().notes.some(n=>n.on[0]?.body===body&&n.text==='Nota durante Zebra'&&n.attachment?.noteUuid===uuid&&n.attachment?.status==='verified')},
+        {timeout:120000},{body:createdId,uuid:report.note.noteUuid})
+      check(true,'saved project reopens with the verified surface note')
+    }
     const shape=kernel.importStep(reopenedStep), solids=kernel.getSubShapes(shape,'solid')
     try {check(kernel.isValid(shape)&&solids.length===1&&Math.abs(kernel.getVolume(shape)-copyGeometry.volume)<1e-6,
       'saved project reopens with the valid edited body, expected volume and source visibility')}

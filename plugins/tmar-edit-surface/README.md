@@ -129,6 +129,12 @@ Lego project in a fresh browser page. The edited solid remained valid with
 the expected volume, and the source visibility persisted. Evidence:
 `scanruler-owner-lego-qa/run-5UFK36/result.json`. This remains a CAD-copy
 feature, not editable parametric history, and uses the provisional QA host fix.
+An annotated follow-up (`TEST_ZEBRA_NOTES=1`, `TEST_ANNOTATED_APPLY=1`)
+resolved a note on the real Lego face with Zebra active, changed the surface,
+applied the annotated CAD copy and reopened the saved project with the verified
+note still attached. Note placement used the controller with a mesh-derived
+point; it was not a physical pointer placement test. The source STEP hash was
+unchanged. Evidence: `scanruler-owner-lego-qa/run-ZNM9El/result.json`.
 
 - Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Periodic cylinders, arbitrary trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
 - One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.
