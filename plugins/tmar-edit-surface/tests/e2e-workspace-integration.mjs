@@ -163,6 +163,47 @@ try {
     const s = window.surfaceQa.useWorkspaceEditor.getState()
     return s.snapshot?.validation.kind === 'valid' && !s.controller?.getPanelState().calculating
   }, { timeout: 120000 })
+  if (process.env.TEST_FUSION_NAVIGATION === '1') {
+    // Test the actual shared camera, with a CAD face and its control net active.
+    // Use Fusion's configured chords, not the standalone prototype's controls.
+    await page.evaluate(async () => {
+      const { useStore } = await import('/src/state/store.ts')
+      useStore.getState().setNavScheme('fusion')
+    })
+    await new Promise(resolve => setTimeout(resolve, 250))
+    const bounds = await page.evaluate(() => {
+      const r = window.surfaceQa.scene.layerHost().canvas.getBoundingClientRect()
+      return { x: r.left + r.width * 0.7, y: r.top + r.height * 0.3 }
+    })
+    const camera = () => page.evaluate(() => {
+      const c = window.surfaceQa.scene.layerHost().camera()
+      return { position: c.position.toArray(), rotation: c.quaternion.toArray(), zoom: c.zoom }
+    })
+    const changed = (a, b) => a.some((v, i) => Math.abs(v - b[i]) > 1e-7)
+    const beforeOrbit = await camera()
+    await page.mouse.move(bounds.x, bounds.y)
+    await page.keyboard.down('Shift')
+    await page.mouse.down({ button: 'middle' })
+    await page.mouse.move(bounds.x + 90, bounds.y + 50, { steps: 8 })
+    await page.mouse.up({ button: 'middle' })
+    await page.keyboard.up('Shift')
+    await new Promise(resolve => setTimeout(resolve, 200))
+    const afterOrbit = await camera()
+    check(changed(beforeOrbit.rotation, afterOrbit.rotation), 'Fusion Shift+middle rotates the shared view with the control net active')
+    await page.mouse.move(bounds.x, bounds.y)
+    await page.mouse.down({ button: 'middle' })
+    await page.mouse.move(bounds.x + 70, bounds.y + 35, { steps: 8 })
+    await page.mouse.up({ button: 'middle' })
+    await new Promise(resolve => setTimeout(resolve, 200))
+    const afterPan = await camera()
+    check(changed(afterOrbit.position, afterPan.position) && !changed(afterOrbit.rotation, afterPan.rotation),
+      'Fusion middle drag pans without rotating the shared view')
+    await page.mouse.wheel(0, -250)
+    await new Promise(resolve => setTimeout(resolve, 200))
+    const afterZoom = await camera()
+    check(Math.abs(afterPan.zoom - afterZoom.zoom) > 1e-7 || changed(afterPan.position, afterZoom.position),
+      'Fusion wheel changes the shared view zoom')
+  }
   if (process.env.TEST_REFINE === '1') {
     const net = () => page.evaluate(() => structuredClone(window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().net))
     const ready = () => page.waitForFunction(() => {
