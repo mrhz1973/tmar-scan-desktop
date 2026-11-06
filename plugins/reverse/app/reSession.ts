@@ -12,7 +12,7 @@
 // stands without a viewport, its kernel in the test's own thread.
 
 import { annotationNoteDelta } from './annotatedNoteDelta'
-import { claimQualifiedSurfaceHistory, readStoredSurfaceHistory, canonicalReplayStep, type QualifiedSurfaceHistory } from './surfaceEditHistory'
+import { claimQualifiedSurfaceHistory, readStoredSurfaceHistory, canonicalReplayStep, verifyAnnotatedHistoryPlan, type QualifiedSurfaceHistory } from './surfaceEditHistory'
 import type { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
 import { historyAtomic } from '../../../src/state/historyStore'
 import { abortIfNeeded, editorSha256 } from '../../../src/plugins/editorLifetime'
@@ -765,11 +765,19 @@ export function createReverseSession({
         before.sketchDraft || before.featureDraft || before.extrudeDraft || before.revolveDraft)
       throw new Error('Concludi la costruzione o la bozza CAD corrente.')
     if (!/^\s*ISO-10303-21\s*;/.test(text.slice(0, 256))) throw new Error('Il risultato non è un file STEP.')
-    // Replay qualification is an ephemeral in-memory capability, not a JSON
-    // assertion supplied by an editor. Reject before touching project history.
-    if (history && annotation) throw new Error('History con note: contratto atomico non ancora qualificato.')
+    // The ordinary CAD-copy path is untouched. History provenance may only
+    // enter via a one-use, independently replay-qualified host token.
     const qualified = history ? claimQualifiedSurfaceHistory(history) : null
     const record = qualified ? readStoredSurfaceHistory(qualified.record) : null
+    if (record && (record.notePolicy==='annotated-v1') !== !!annotation)
+      throw new Error('La ricetta e il tipo di copia CAD non coincidono.')
+    if (record?.notePolicy==='annotated-v1' && annotation) {
+      await verifyAnnotatedHistoryPlan(record,annotation)
+      // Own the fully validated note ticket across async candidate builds.
+      // A caller mutating its prepared note array after this boundary cannot
+      // change the staged witness, persisted association or atomic commit.
+      annotation=structuredClone(annotation)
+    }
     if (record) {
       const originalText = qualified!.sourceStep
       if (!before.bodies.some(b => b.id === record.source.bodyId) ||
@@ -786,7 +794,7 @@ export function createReverseSession({
           await editorSha256(new TextEncoder().encode(canonicalReplayStep(actual.text))) !== record.source.sourceReplaySha256)
         throw new Error('Corpo CAD sorgente diverso da quello qualificato per il replay.')
     }
-    const feature: ImportFeature = { ...(record ? {surfaceEditHistory:record} : {}), ...(annotation?{annotationSource:{version:1 as const,featureUuid:crypto.randomUUID(),stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256,faceBrep:annotation.prepared.witnesses[0].brep}}:{}), id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
+    const feature: ImportFeature = { ...(record ? {surfaceEditHistory:record} : {}), ...(annotation?{annotationSource:{version:1 as const,featureUuid:record?.annotation?.featureUuid ?? crypto.randomUUID(),stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256,faceBrep:annotation.prepared.witnesses[0].brep}}:{}), id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
       file: { key: stepFileKey(text), name, size: text.length } }
     if (record && record.source.file.key === feature.file.key)
       throw new Error('La sorgente e il risultato condividono la stessa chiave STEP: history rifiutata.')

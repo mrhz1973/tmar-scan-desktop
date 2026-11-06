@@ -5,7 +5,7 @@ import { editorSha256 } from '../../../src/plugins/editorLifetime'
 import type { ImportFeature } from '../core/features'
 import { stepFileKey } from '../core/features'
 import {
-  canonicalHistoryJson, claimQualifiedSurfaceHistory, qualifySurfaceHistory,
+  canonicalHistoryJson, claimQualifiedSurfaceHistory, qualifySurfaceHistory, bindIndependentPluginReplay,
   readStoredSurfaceHistory, reopenSurfaceHistory,
 } from '../app/surfaceEditHistory'
 import type { SourceBinding } from '../../../src/plugins/workspaceEditorTypes'
@@ -73,6 +73,24 @@ describe('opt-in host surface-edit history envelope',()=>{
       await expect(qualifySurfaceHistory({...args,replay:async()=>{sourceCurrent=false;return resultText}})).rejects.toThrow('source changed')
     }finally{editor.dispose()}
   },120_000)
+  it('adapts a separately supplied plugin worker replay and checks source freshness',async()=>{
+    const step='ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;'
+    const bytes=new TextEncoder().encode(step)
+    let current=true,called=0
+    const adapter=bindIndependentPluginReplay(async(source,recipe)=>{
+      called++
+      expect(source.bodyKey).toBe('body-qa')
+      expect(source.stepSha256).toBe(await editorSha256(bytes))
+      expect(new TextDecoder().decode(source.step)).toBe(step)
+      expect(recipe).toEqual({version:2})
+      source.assertCurrent()
+      return {valid:true,step}
+    },()=>{if(!current)throw Error('source changed')})
+    expect(await adapter(step,{version:2},'body-qa',new AbortController().signal)).toBe(step)
+    current=false
+    await expect(adapter(step,{version:2},'body-qa',new AbortController().signal)).rejects.toThrow('source changed')
+    expect(called).toBe(1)
+  })
   it('canonicalizes JSON independently of key order and refuses invalid payload',()=>{
     expect(canonicalHistoryJson({b:2,a:{z:'-0',x:[3,2,1]}}))
       .toBe(canonicalHistoryJson({a:{x:[3,2,1],z:'-0'},b:2}))
