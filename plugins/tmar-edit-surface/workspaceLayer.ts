@@ -116,6 +116,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   let referenceTargets: Target[] = []
   let neighbourTargets: Target[] = []
   let referencesDirty = true
+  let retryReferencesAt = 0
   let neighboursDirty = true
   let faceRequest = false
   let lastError = ''
@@ -228,6 +229,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
 
   const refreshReferences = () => {
     if (!referencesDirty || disposed || !owner.getViewState().snap) return
+    if (Date.now() < retryReferencesAt) return
     referencesDirty = false
     const next: Target[] = []
     let skipped = 0
@@ -250,10 +252,13 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // A transient host lookup failure must not disable snapping until the
       // next reference-change notification. Retry on the next interaction.
       referencesDirty = true
+      retryReferencesAt = 0
       report(`Magnete non disponibile: ${errorText(error)}`); return
     }
     disposeTargets(referenceTargets)
     referenceTargets = next
+    retryReferencesAt = skipped ? Date.now() + 1000 : 0
+    referencesDirty = skipped > 0
     if (skipped) report(`Magnete: ${skipped} ${skipped === 1 ? 'riferimento non disponibile' : 'riferimenti non disponibili'}; ${next.length ? 'gli altri restano utilizzabili' : 'nessun riferimento esterno disponibile'}.`)
   }
   const refreshNeighbours = () => {
@@ -853,7 +858,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     cleanups.push(view.onCapturedPointer({ move, up, cancel: pointerCancel, lostCapture: pointerCancel }))
     cleanups.push(view.onInterruption(() => { cancelGesture(); clearDirect() }))
     cleanups.push(view.onFrame(positionStripHandle))
-    cleanups.push(view.subscribeReferences(() => { referencesDirty = true; if (!capture) sync() }))
+    cleanups.push(view.subscribeReferences(() => { referencesDirty = true; retryReferencesAt = 0; if (!capture) sync() }))
     cleanups.push(owner.subscribe(sync))
     sync()
   } catch (error) {

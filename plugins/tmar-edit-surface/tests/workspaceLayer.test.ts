@@ -394,6 +394,27 @@ it('keeps valid snap references when another reference cannot be read', () => {
   layer.dispose()
 })
 
+it('recovers one temporarily unreadable reference while keeping the others usable', () => {
+  let now = 1000, unavailable = true
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+  const f = fixture({ reference: 'scan' }), existing = f.view.references()[0]
+  vi.spyOn(f.view, 'references').mockReturnValue([
+    { ...existing, id: 'temporary', isCurrent: () => { if (unavailable) throw new Error('temporary'); return true } },
+    { ...existing, id: 'far', partFromGeometry: new THREE.Matrix4().makeTranslation(2, 0, 0).multiply(new THREE.Matrix4().fromArray(existing.partFromGeometry)).toArray() },
+  ])
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  expect(f.reportViewError).toHaveBeenCalledWith('Magnete: 1 riferimento non disponibile; gli altri restano utilizzabili.')
+  expect(f.getLayer().pointerDown?.(f.event(1, [-1, -1, 0]))).toBe(true)
+  f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
+  expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(-0.1)
+  unavailable = false
+  now += 1100
+  f.getHandlers().move(f.event(1, [-0.1, -1, 0]))
+  expect(f.view.references).toHaveBeenCalledTimes(2)
+  expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(0)
+  layer.dispose(); clock.mockRestore()
+})
+
 it('keeps snapping to valid references if one becomes unreadable during a drag', () => {
   const f = fixture({ reference: 'scan' })
   const existing = f.view.references()
