@@ -4,6 +4,7 @@ import { assertNet, boundaryLocked, enrichBicubic, perforatedPlaneNet, planeNet,
 import { readRecipe, readCurvedRecipe, sha256, encodeRecipePoint, decodeRecipePoint, type SurfaceEditRecipe, type SurfaceEditRecipeV5, type SurfaceEditRecipeV6, type SerializedPoleEdit } from './recipe'
 import type { SurfacePlaneTangency, SurfaceCurvedTangency, SurfacePreparation } from './surfaceHistory'
 import { refineClampedNet, type KnotInsertion } from './refineClampedNet'
+import { readAdaptiveTrimRecipe } from './adaptiveTrimRecipe'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
@@ -154,10 +155,10 @@ function lockCurvedTrim(net: Net, box: BoundingBox, locked: Set<number>) {
 }
 // On a circular arc shorter than pi, sagitta bounds the displacement from
 // its chord. These enclosing boxes protect the rim without locking the disk.
-function outerEdgeBoxes(k: OcctKernel, edge: ShapeHandle): BoundingBox[] {
+function outerEdgeBoxes(k: OcctKernel, edge: ShapeHandle, fine = false): BoundingBox[] {
   if (k.curveType(edge) !== 'circle') return [k.getBoundingBox(edge,{useTriangulation:false})]
   const {first,last} = k.curveParameters(edge)
-  const count = Math.max(1,Math.ceil(Math.abs(last-first)/(Math.PI/12)))
+  const count = Math.max(1,Math.ceil(Math.abs(last-first)/(fine ? Math.PI/48 : Math.PI/12)))
   return Array.from({length:count}, (_,i) => {
     const t0 = first+(last-first)*i/count, t1 = first+(last-first)*(i+1)/count
     const a = k.curvePointAtParam(edge,t0), b = k.curvePointAtParam(edge,t1)
@@ -245,7 +246,7 @@ export class SurfaceEditorKernel {
     this.g1SourceReady = true
     return { faces: this.infos, preview }
   }
-  private netFor(index: number, refinements: readonly KnotInsertion[] = []) {
+  private netFor(index: number, refinements: readonly KnotInsertion[] = [], fineTrim = false) {
     const face = this.faces[index], id = this.recordsByFace[index], r = this.records[id], k = this.kernel
     if (!face || !r) throw new Error('Superficie ambigua o condivisa: non modificabile.')
     if (this.recordsByFace.filter(n => n === id).length !== 1) throw new Error('Superficie condivisa da più facce.')
@@ -254,6 +255,8 @@ export class SurfaceEditorKernel {
     try {
       const inner = wires.filter(w => !k.isSame(w, outer))
       if (!edges.length) throw new Error('Contorno esterno privo di bordi.')
+      if (fineTrim && (r.kind !== 1 || inner.length !== 1 || edges.some(edge => k.curveType(edge) !== 'circle')))
+        throw new Error('Politica adattiva disponibile solo per piani con un foro e contorno esterno circolare.')
       const b = k.uvBounds(face), bounds: [number, number, number, number] = [b.uMin, b.uMax, b.vMin, b.vMax]
       if (bounds.some(x => !Number.isFinite(x)) || b.uMax <= b.uMin || b.vMax <= b.vMin) throw new Error('Dominio della faccia non valido.')
       const epsU = 1e-7 * Math.max(1, b.uMax - b.uMin), epsV = 1e-7 * Math.max(1, b.vMax - b.vMin)
@@ -280,7 +283,7 @@ export class SurfaceEditorKernel {
       })
       const rectangular = sides.length === 4 && !sides.includes(-1) && new Set(sides).size === 4
       const trimBoxes = inner.map(w => k.getBoundingBox(w,{useTriangulation:false}))
-      if (!rectangular || partial) for (const edge of edges) trimBoxes.push(...outerEdgeBoxes(k,edge))
+      if (!rectangular || partial) for (const edge of edges) trimBoxes.push(...outerEdgeBoxes(k,edge,fineTrim))
 
       const initialNet = r.kind === 1
         ? (trimBoxes.length ? perforatedPlaneNet(r, bounds) : planeNet(r, bounds))
@@ -415,8 +418,8 @@ export class SurfaceEditorKernel {
   selectRefined(index: number, refinements: readonly KnotInsertion[] = []) {
     return this.prepareSelection(index, refinements, true)
   }
-  private prepareSelection(index: number, refinements: readonly KnotInsertion[], preserveAnchors: boolean) {
-    const info = this.netFor(index, refinements), net = info.net, record = this.records[this.recordsByFace[index]], k = this.kernel
+  private prepareSelection(index: number, refinements: readonly KnotInsertion[], preserveAnchors: boolean, fineTrim = false) {
+    const info = this.netFor(index, refinements, fineTrim), net = info.net, record = this.records[this.recordsByFace[index]], k = this.kernel
     let text = this.brep, editRecord = record
     if (record.kind === 1) {
       // STEP readers may omit planar pcurves (derived implicitly on a plane).
@@ -978,14 +981,16 @@ export class SurfaceEditorKernel {
         this.g1CurvedConstraints.get(constraintId) !== registered) throw new Error('Sessione cambiata durante il salvataggio della ricetta G1 B-spline.')
     return readCurvedRecipe(recipe)
   }
-  private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false, curved = false): Promise<RecipeRestoreResult> {
-    const recipe = curved ? readCurvedRecipe(value) : readRecipe(value)
+  private async prepareRecipe(step: string, value: unknown, bodyId: string, exportStep = false, curved = false, adaptive = false): Promise<RecipeRestoreResult> {
+    if (curved && adaptive) throw new Error('Politiche di ripristino incompatibili.')
+    const recipe = adaptive ? readAdaptiveTrimRecipe(value) : curved ? readCurvedRecipe(value) : readRecipe(value)
     if (recipe.source.bodyId !== bodyId) throw new Error('Corpo sorgente diverso dalla ricetta.')
     const opened = this.open(step), rev = this.revision
     const fingerprint = await sha256(this.brep)
     if (this.revision !== rev) throw new Error('Sorgente cambiata durante il ripristino.')
     if (fingerprint !== recipe.source.brepSha256 || this.faces.length !== recipe.source.faceCount || this.solids !== recipe.source.solidCount) throw new Error('Geometria sorgente cambiata: ricollegare esplicitamente la modifica della superficie.')
-    const net = this.select(recipe.faceIndex, recipe.version === 4 || recipe.version === 5 || recipe.version === 6 ? recipe.refinements : []), selectedRevision = this.revision
+    const ops = recipe.version === 4 || recipe.version === 5 || recipe.version === 6 || recipe.version === 7 ? recipe.refinements : []
+    const net = adaptive ? this.prepareSelection(recipe.faceIndex,ops,false,true) : this.select(recipe.faceIndex,ops), selectedRevision = this.revision
     const baseFingerprint = await sha256(JSON.stringify(net))
     if (this.revision !== selectedRevision) throw new Error('Faccia cambiata durante il ripristino.')
     if (baseFingerprint !== recipe.baseNetSha256 || this.preparation() !== recipe.preparation) throw new Error('Base NURBS o raffinamento diverso dalla ricetta.')
@@ -1140,6 +1145,12 @@ export class SurfaceEditorKernel {
   async replayCurvedRecipe(step: string, recipe: unknown, bodyId: string) {
     const temporary = new SurfaceEditorKernel(this.kernel)
     try { return (await temporary.prepareRecipe(step, recipe, bodyId, true, true)).preview }
+    finally { temporary.clear() }
+  }
+  /** Isolated v7 research replay. Not exposed to the worker or application. */
+  async replayAdaptiveRecipe(step: string, recipe: unknown, bodyId: string) {
+    const temporary = new SurfaceEditorKernel(this.kernel)
+    try { return (await temporary.prepareRecipe(step, recipe, bodyId, true, false, true)).preview }
     finally { temporary.clear() }
   }
   private releasePreviewFace() {
