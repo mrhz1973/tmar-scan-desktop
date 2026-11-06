@@ -48,5 +48,7 @@ it('refuses an incomplete display result when a mesh was requested',async()=>{
   const ready=session.prepare('source',0);requests[0].resolve({net,identity:identity(0)});await ready
   const pending=session.evaluate(net,true),checked=expect(pending).rejects.toThrow(/anteprima/i)
   requests[1].resolve({step:'valid',volume:1});await checked
+  const next=session.evaluate(net,true),badFace=expect(next).rejects.toThrow(/anteprima/i)
+  requests[2].resolve({step:'valid',volume:1,mesh:{},faceMeshes:[{}],previewFace:3});await badFace
   session.dispose()
 })

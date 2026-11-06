@@ -27,17 +27,18 @@ export class ExperimentalSharedPlaneSession {
     return structuredClone(result.net)
   }
 
-  async evaluate(net:Net,includeMesh=false):Promise<{step:string;volume:number;mesh?:Mesh;faceMeshes?:Mesh[]}> {
+  async evaluate(net:Net,includeMesh=false):Promise<{step:string;volume:number;mesh?:Mesh;faceMeshes?:Mesh[];previewFace?:number}> {
     if(this.closed || !this.source) throw new Error('Prepara prima la faccia.')
     const generation=++this.generation, source=this.source
-    let result:{step:string;volume:number;mesh?:Mesh;faceMeshes?:Mesh[]}
+    let result:{step:string;volume:number;mesh?:Mesh;faceMeshes?:Mesh[];previewFace?:number}
     try {result=await this.worker.ask<typeof result>({action:'evaluateSharedPlaneExperimental',
       step:source.step,face:source.face,identity:source.identity,net:structuredClone(net),includeMesh},this.abort.signal)}
     catch(error) {if(this.closed || generation!==this.generation || this.source!==source) throw new Error('Risultato superato.');throw error}
     if(this.closed || generation!==this.generation || this.source!==source) throw new Error('Risultato superato.')
     if(typeof result?.step!=='string' || !result.step || !Number.isFinite(result.volume) || result.volume<=0)
       throw new Error('Risultato CAD non verificabile.')
-    if(includeMesh && (!result.mesh || !Array.isArray(result.faceMeshes) || !result.faceMeshes.length))
+    if(includeMesh && (!result.mesh || !Array.isArray(result.faceMeshes) || !result.faceMeshes.length ||
+      !Number.isInteger(result.previewFace) || result.previewFace!<0 || result.previewFace!>=result.faceMeshes.length))
       throw new Error('Anteprima CAD non disponibile.')
     return result
   }

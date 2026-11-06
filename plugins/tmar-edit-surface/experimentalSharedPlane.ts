@@ -5,7 +5,7 @@ import type { Net } from './brep'
 import { SurfaceEditorKernel } from './editorKernel'
 
 // Sampled protection only: never a substitute for exact topology qualification.
-export function verifyOtherFacesSampled(k:OcctKernel, original:readonly ShapeHandle[], candidate:readonly ShapeHandle[], target:number):void {
+export function verifyOtherFacesSampled(k:OcctKernel, original:readonly ShapeHandle[], candidate:readonly ShapeHandle[], target:number):number {
   const samples=(face:ShapeHandle)=>{
     const b=k.uvBounds(face), out:{x:number;y:number;z:number}[]=[]
     for(let i=0;i<=6;i++) for(let j=0;j<=6;j++) {
@@ -38,6 +38,7 @@ export function verifyOtherFacesSampled(k:OcctKernel, original:readonly ShapeHan
     remaining.delete(matches[0])
   }
   if(remaining.size!==1) throw new Error('Topologia delle facce non verificabile.')
+  return [...remaining][0]
 }
 
 export class ExperimentalSharedPlane {
@@ -73,7 +74,7 @@ export class ExperimentalSharedPlane {
     } catch(error) {this.dispose();throw error}
   }
 
-  evaluate(net: Net, includeMesh=false): {step:string; volume:number; mesh?:Mesh; faceMeshes?:Mesh[]} {
+  evaluate(net: Net, includeMesh=false): {step:string; volume:number; mesh?:Mesh; faceMeshes?:Mesh[]; previewFace?:number} {
     if(this.source===null || !this.isolated || this.target<0) throw new Error('Apri prima una faccia.')
     const k=this.kernel, owned:ShapeHandle[]=[]
     const own=(shape:ShapeHandle)=>{owned.push(shape);return shape}
@@ -113,13 +114,13 @@ export class ExperimentalSharedPlane {
       const solids=k.getSubShapes(joined,'solid');owned.push(...solids)
       if(!k.isValid(joined) || solids.length!==1 || joinedFaces.length!==this.faces.length)
         throw new Error('Ricomposizione non valida o topologia alterata.')
-      verifyOtherFacesSampled(k,this.faces,joinedFaces,this.target)
+      const previewFace=verifyOtherFacesSampled(k,this.faces,joinedFaces,this.target)
       const volume=k.getVolume(joined)
       if(!Number.isFinite(volume)||volume<=0) throw new Error('Volume non valido.')
       if(k.toBREP(this.source)!==this.sourceBefore) throw new Error('La sorgente CAD è cambiata durante la ricomposizione.')
       const step=k.exportStep(joined)
       const display=includeMesh?{mesh:k.tessellate(joined,{linearDeflection:.08,angularDeflection:.15}),
-        faceMeshes:joinedFaces.map(face=>k.tessellate(face,{linearDeflection:.08,angularDeflection:.15}))}:{}
+        faceMeshes:joinedFaces.map(face=>k.tessellate(face,{linearDeflection:.08,angularDeflection:.15})),previewFace}:{}
       return {step,volume,...display}
     } finally {
       owned.reverse().forEach(s=>k.release(s))

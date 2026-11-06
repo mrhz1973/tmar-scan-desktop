@@ -2,6 +2,7 @@
 // Isolated CAD fixture; no workspace, scan, or host project is changed.
 import { expect, it, vi } from 'vitest'
 import type { ShapeHandle } from 'occt-wasm'
+import * as THREE from 'three'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { ExperimentalSharedPlane, verifyOtherFacesSampled } from '../experimentalSharedPlane'
 import type { Net } from '../brep'
@@ -120,6 +121,20 @@ it('characterizes a STEP solid whose top is split into coplanar faces', async ()
         const sessionOutput=await session.evaluate(sessionNet,true)
         expect(sessionOutput.mesh!.triangleCount).toBeGreaterThan(0)
         expect(sessionOutput.faceMeshes).toHaveLength(7)
+        expect(sessionOutput.previewFace).toBeGreaterThanOrEqual(0)
+        expect(sessionOutput.faceMeshes![sessionOutput.previewFace!].triangleCount).toBeGreaterThan(0)
+        const faceMesh=sessionOutput.faceMeshes![sessionOutput.previewFace!],geometry=new THREE.BufferGeometry()
+        geometry.setAttribute('position',new THREE.BufferAttribute(faceMesh.positions,3))
+        geometry.setIndex(new THREE.BufferAttribute(faceMesh.indices,1))
+        const material=new THREE.MeshBasicMaterial({side:THREE.DoubleSide}),mesh3d=new THREE.Mesh(geometry,material)
+        try {
+          mesh3d.updateMatrixWorld(true)
+          const b=k.uvBounds(importedFaces[target]),center=k.pointOnSurface(importedFaces[target],(b.uMin+b.uMax)/2,(b.vMin+b.vMax)/2)
+          const ray=new THREE.Raycaster(new THREE.Vector3(center.x,center.y,center.z+1),new THREE.Vector3(0,0,-1))
+          const hits=ray.intersectObject(mesh3d)
+          expect(hits.length).toBeGreaterThan(0)
+          expect(Math.abs(hits[0].point.z-center.z)).toBeGreaterThan(1e-4)
+        } finally {geometry.dispose();material.dispose()}
         const sessionSolid=own(k.importStep(sessionOutput.step))
         expect(k.isValid(sessionSolid)).toBe(true)
         expect(await ask({action:'finalFaceWitness',previewRevision:beforePreview.previewRevision})).toEqual(witness)
