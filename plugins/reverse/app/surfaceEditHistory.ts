@@ -6,6 +6,7 @@ import type { SourceBinding } from '../../../src/plugins/workspaceEditorTypes'
 import type { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
 import type { Note } from '../core/notes'
 import { stepFileKey, type ImportFeature, type StepFileRef } from '../core/features'
+import { assertHostAdaptiveLockedRecipeV8 } from './surfaceEditHistoryV8'
 
 /** Immutable plugin UV association; the host's normal Note store remains authoritative
  * for note text, deletion and actual validated face attachments after Apply. */
@@ -105,7 +106,11 @@ export interface QualifyAnnotatedSurfaceHistory extends Omit<QualifySurfaceHisto
   readonly annotationPlan: ValidatedAnnotatedHistoryCopy
 }
 
-export interface QualifySurfaceHistory {
+/** Must be opted into by a host QA caller. No UI production call supplies this capability. */
+export interface ExperimentalSurfaceHistoryOptions {
+  readonly experimentalAdaptiveV8?: true
+}
+export interface QualifySurfaceHistory extends ExperimentalSurfaceHistoryOptions {
   readonly source: SurfaceHistorySource
   readonly prepared: PluginHistoryPreparation
   /** Plugin's current draft/selection/preview gate, checked around every await. */
@@ -235,7 +240,7 @@ export function canonicalHistoryJson(value: unknown): string {
 }
 
 /** Host schema and source binding only. The recipe still MUST pass CAD replay. */
-export function readStoredSurfaceHistory(value: unknown): StoredSurfaceEditHistoryV1 {
+export function readStoredSurfaceHistory(value: unknown, options: ExperimentalSurfaceHistoryOptions = {}): StoredSurfaceEditHistoryV1 {
   const raw: unknown = structuredClone(value)
   if (!object(raw) || !['none','annotated-v1'].includes(raw.notePolicy as string) ||
       !hasKeys(raw, raw.notePolicy === 'none'
@@ -259,12 +264,14 @@ export function readStoredSurfaceHistory(value: unknown): StoredSurfaceEditHisto
     throw new Error('Sorgente STEP della ricetta non valida.')
   const recipe=raw.recipe
   if (!object(recipe) || recipe.schema !== 'tmar.surface-edit' ||
-      ![2,3,4,5,6].includes(recipe.version as number) ||
+      (![2,3,4,5,6].includes(recipe.version as number) &&
+         !(recipe.version === 8 && options.experimentalAdaptiveV8 === true)) ||
       recipe.engine !== 'occt-wasm-5.7.1/brep-v3' ||
       recipe.units !== 'mm' || recipe.coordinateFrame !== 'imported-step' ||
       !object(recipe.source) || recipe.source.bodyId !== source.bodyKey ||
       !validHash(recipe.source.brepSha256))
     throw new Error('Ricetta CAD incompatibile con il corpo sorgente.')
+  if (recipe.version === 8) assertHostAdaptiveLockedRecipeV8(recipe)
   if (raw.notePolicy === 'annotated-v1') {
     const ann=raw.annotation
     if (!object(ann) || !hasKeys(ann,['version','featureUuid','envelopeSha256','witnessSha256','noteDigestSha256','notes']) ||
@@ -333,7 +340,7 @@ export async function qualifySurfaceHistory(input: QualifySurfaceHistory): Promi
     notePolicy:'none' as const,
   }
   current()
-  const record = readStoredSurfaceHistory(draftRecord)
+  const record = readStoredSurfaceHistory(draftRecord, input)
   // Replay is not a hash or a preview flag: the injected provider MUST use
   // an independently validated CAD engine and reject unsupported recipes.
   const replayed = await input.replay(original, structuredClone(record.recipe), record.source.bodyKey, signal)
@@ -359,11 +366,12 @@ export async function reopenSurfaceHistory(
   feature: ImportFeature, stepFiles:Readonly<Record<string,string>>,
   replay:SurfaceHistoryReplay | undefined, signal:AbortSignal,
   persistedNotes?:readonly Note[],
+  options:ExperimentalSurfaceHistoryOptions = {},
 ):Promise<SurfaceHistoryReopen> {
   if (feature.surfaceEditHistory === undefined) return {status:'copy-only',reason:'Nessuna ricetta associata.'}
   try {
     abortIfNeeded(signal)
-    const record=readStoredSurfaceHistory(feature.surfaceEditHistory)
+    const record=readStoredSurfaceHistory(feature.surfaceEditHistory,options)
     const sourceText=stepFiles[record.source.file.key], outputText=stepFiles[feature.file.key]
     if (sourceText===undefined || outputText===undefined) throw new Error('Archivio sorgente o CAD salvato mancante.')
     assertStep(sourceText);assertStep(outputText)
@@ -452,6 +460,7 @@ export async function qualifyAnnotatedSurfaceHistory(input: QualifyAnnotatedSurf
   const replayChecked=await qualifySurfaceHistory({
     source:input.source,prepared,isStampCurrent:input.isStampCurrent,
     resultStep:input.resultStep,noteCount:0,replay:input.replay,signal,
+    experimentalAdaptiveV8:input.experimentalAdaptiveV8,
   })
   claimQualifiedSurfaceHistory(replayChecked) // never leave a second usable token
   if (plan.artifactSha256!==replayChecked.record.resultStepSha256 ||
@@ -464,7 +473,7 @@ export async function qualifyAnnotatedSurfaceHistory(input: QualifyAnnotatedSurf
   const digest=await editorSha256(utf8(canonicalHistoryJson(associationContent(draft,baseLink))))
   input.source.assertCurrent()
   if (!input.isStampCurrent()) throw new Error('Note o sorgente mutate dopo replay CAD.')
-  const record=readStoredSurfaceHistory({...draft,annotation:{...baseLink,noteDigestSha256:digest}})
+  const record=readStoredSurfaceHistory({...draft,annotation:{...baseLink,noteDigestSha256:digest}},input)
   const qualified:QualifiedSurfaceHistory=Object.freeze({
     record:freezeHistoryValue(record),sourceStep:replayChecked.sourceStep,
   })
@@ -602,10 +611,11 @@ export async function reopenAndRestoreSurfaceHistory<T extends SurfaceHistoryRes
   awaitValidated:(session:T,signal:AbortSignal)=>Promise<void>,
   assertCurrent:()=>void,
   signal:AbortSignal,
+  options:ExperimentalSurfaceHistoryOptions = {},
 ):Promise<OpenedEditableSurfaceHistory<T>> {
   try {
     abortIfNeeded(signal);assertCurrent()
-    const checked=await reopenSurfaceHistory(feature,savedFiles,replay,signal,savedNotes)
+    const checked=await reopenSurfaceHistory(feature,savedFiles,replay,signal,savedNotes,options)
     abortIfNeeded(signal);assertCurrent()
     if (checked.status==='copy-only') return checked
     const session=await restoreVerifiedSurfaceHistory(checked,makeFreshSession,
