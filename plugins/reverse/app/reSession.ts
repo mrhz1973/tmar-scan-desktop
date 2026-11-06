@@ -769,7 +769,9 @@ export function createReverseSession({
     // enter via a one-use, independently replay-qualified host token.
     const qualified = history ? claimQualifiedSurfaceHistory(history) : null
     if (qualified) assertFrozenHistoryCurrent(qualified)
-    const record = qualified ? readStoredSurfaceHistory(qualified.record) : null
+    // A one-use host-qualified token already passed the explicit v8 opt-in and independent replay.
+    // Re-read the exact record without enabling any UI or unqualified publication path.
+    const record = qualified ? readStoredSurfaceHistory(qualified.record,{experimentalAdaptiveV8:true}) : null
     if (record && (record.notePolicy==='annotated-v1') !== !!annotation)
       throw new Error('La ricetta e il tipo di copia CAD non coincidono.')
     if (record?.notePolicy==='annotated-v1' && annotation) {

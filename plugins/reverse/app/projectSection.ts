@@ -224,7 +224,9 @@ function importedKeys(features: readonly Feature[]): string[] {
     // ordinary saved copy nor causes project-open failure.
     let sourceKey: string | null = null
     if (f.surfaceEditHistory !== undefined) {
-      try { sourceKey = readStoredSurfaceHistory(f.surfaceEditHistory).source.file.key }
+      try { // Archival retention only: save upstream STEP for a structurally valid v8
+      // sidecar even while editing/reopen is disabled by the default host gate.
+      sourceKey = readStoredSurfaceHistory(f.surfaceEditHistory,{experimentalAdaptiveV8:true}).source.file.key }
       catch { /* Static CAD import remains usable. */ }
     }
     return sourceKey ? [f.file.key, sourceKey] : [f.file.key]
