@@ -109,7 +109,7 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
     const abort=new AbortController(), binding={documentEpoch:'qa',sourceEpoch:1,bodyId:1,bodyKey:'worker-qa',buildVersion:1,
       kernelGeneration:1,frameRevision:1,stepSha256:digest(bytes),units:'mm',coordinateFrame:'part'}
     const context={apiVersion:1,sessionId:'adaptive-session',source:binding,step:bytes,
-      capabilities:{apiVersion:1,enabled:true,commitKinds:['cad-copy']},signal:abort.signal,
+      capabilities:{apiVersion:1,enabled:true,annotationVersion:1,commitKinds:['cad-copy','annotated-cad-copy']},signal:abort.signal,
       assertSourceCurrent:()=>{},own:(fn:()=>void)=>fn,reportFatal:vi.fn()}
     const waitSession=(session:WorkspaceSurfaceSession)=>new Promise<void>((resolve,reject)=>{
       if(session.getSnapshot().validation.kind==='valid') return resolve()
@@ -133,15 +133,28 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
       session.lockSelected(true)
       const prepared=await session.prepareHistoryRecipe()
       expect(prepared.recipe.version).toBe(8)
-      const saved=structuredClone(prepared.recipe),poles=structuredClone(session.getPanelState().net!.poles)
+      await waitSession(session)
+      const faceMesh=session.getViewState().preview!.faceMeshes[7]
+      const ids=Array.from(faceMesh.indices.slice(0,3))
+      const point=[0,1,2].map(axis=>ids.reduce((sum,id)=>sum+faceMesh.positions[3*id+axis],0)/3) as [number,number,number]
+      session.setPlacingNote(true)
+      await session.placeNote(point)
+      const noteId=session.getPanelState().notes[0].id
+      session.setNoteText(noteId,'Controlla raccordo')
+      const annotated=await session.prepareAnnotatedHistory()
+      expect(annotated.recipe.version).toBe(8)
+      expect(annotated.notes).toHaveLength(1)
+      const notePosition=structuredClone(session.getPanelState().notes[0].at)
+      const saved=structuredClone(annotated),poles=structuredClone(session.getPanelState().net!.poles)
       await session.dispose('cancelled')
       runtime=new SurfaceRuntime(()=>client as unknown as Worker)
       const reopened=await createWorkspaceSurfaceSession({...context,sessionId:'adaptive-reopen'} as never,vi.fn() as never,{runtime,sha256:async data=>digest(data)})
       try {
-        await reopened.restoreHistoryRecipe(saved)
-        await reopened.waitRestoredHistoryReady()
+        await reopened.restoreHistoryBundle({recipe:saved.recipe,notes:saved.notes})
         expect(reopened.getPanelState().net?.poles).toEqual(poles)
         expect(reopened.getPanelState().manualLocks).toContain(again.witnessPole)
+        expect(reopened.getPanelState().notes[0].text).toBe('Controlla raccordo')
+        expect(Math.hypot(...reopened.getPanelState().notes[0].at.map((v,i)=>v-notePosition[i]))).toBeLessThan(1e-6)
         expect(reopened.getSnapshot().validation.kind).toBe('valid')
       } finally {await reopened.dispose('cancelled')}
     } finally {await session.dispose('cancelled')}
