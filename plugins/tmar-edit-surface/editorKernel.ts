@@ -102,6 +102,7 @@ export interface RecipeRestoreResult {
   continuity: 'G0' | 'G1'
   freeBoundary: boolean
   lockedPoles: number[]
+  lockSnapshots?: AdaptiveLocks
   preparation: SurfacePreparation
   planeTangency?: SurfacePlaneTangency
   curvedTangency?: SurfaceCurvedTangency
@@ -1115,7 +1116,8 @@ export class SurfaceEditorKernel {
     if (recipe.version === 8) validateAdaptiveLocks(net,recipe.lockedValues)
     const freeBoundary = recipe.version === 3 || (recipe.version === 4 && recipe.boundaryMode === 'free-natural')
     const preview = this.evaluate(net, recipe.continuity, exportStep, freeBoundary)
-    return { faces: opened.faces, net, preview, continuity: recipe.continuity, freeBoundary, lockedPoles: recipe.lockedPoles, preparation }
+    return { faces: opened.faces, net, preview, continuity: recipe.continuity, freeBoundary, lockedPoles: recipe.lockedPoles, preparation,
+      ...(recipe.version === 8 ? {lockSnapshots:structuredClone(recipe.lockedValues)} : {}) }
   }
   /** Validate in isolation; failed restores leave the current edit untouched. */
   async restoreRecipe(step: string, recipe: unknown, bodyId: string) {
@@ -1125,10 +1127,14 @@ export class SurfaceEditorKernel {
   async restoreCurvedRecipe(step: string, recipe: unknown, bodyId: string): Promise<CurvedRecipeRestoreResult> {
     return this.restoreRecipeIsolated(step, recipe, bodyId, true) as Promise<CurvedRecipeRestoreResult>
   }
-  private async restoreRecipeIsolated(step: string, recipe: unknown, bodyId: string, curved: boolean): Promise<RecipeRestoreResult> {
+  /** Experimental v8 restore; commits only after isolated CAD verification. */
+  async restoreAdaptiveLockedRecipe(step: string, recipe: unknown, bodyId: string): Promise<RecipeRestoreResult> {
+    return this.restoreRecipeIsolated(step, recipe, bodyId, false, true)
+  }
+  private async restoreRecipeIsolated(step: string, recipe: unknown, bodyId: string, curved: boolean, adaptiveLocked = false): Promise<RecipeRestoreResult> {
     const temporary = new SurfaceEditorKernel(this.kernel), rev = this.revision, preview = this.previewRevision, anchor = this.anchorSelectionRevision
     try {
-      const result = await temporary.prepareRecipe(step, recipe, bodyId, false, curved)
+      const result = await temporary.prepareRecipe(step, recipe, bodyId, false, curved, false, adaptiveLocked)
       // Prepare all response/registration allocations before replacing the
       // live session. Temporary stamps and IDs must never escape restoration.
       let restoredConstraint: { id: number; registered: RegisteredPlaneTangency } | undefined
@@ -1168,6 +1174,7 @@ export class SurfaceEditorKernel {
       this.source = temporary.source; this.faces = temporary.faces
       this.brep = temporary.brep; this.records = temporary.records; this.recordsByFace = temporary.recordsByFace
       this.chosen = temporary.chosen; this.originalNet = temporary.originalNet; this.refinements = temporary.refinements
+      this.adaptiveSelection = temporary.adaptiveSelection
       this.editBrep = temporary.editBrep; this.editRecord = temporary.editRecord
       this.solids = temporary.solids; this.infos = temporary.infos
       // clear() above creates a new host-owned generation. Transfer only the

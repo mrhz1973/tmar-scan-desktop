@@ -10,6 +10,7 @@ import { evaluatePreparedCylinder } from './cylinderEvaluation'
 import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
 import { readRecipe, readCurvedRecipe } from './recipe'
 import type { AdaptiveLocks } from './adaptiveLockSnapshot'
+import { readAdaptiveLockedRecipe } from './adaptiveLockedRecipe'
 type AdaptiveSelection = { face:number; refinements:KnotInsertion[]; trimPolicy:'circular-fine-v1'; generation:number }
 export type Request = { id: number } & (
   { action: 'open'; step: string } | { action: 'select'; face: number }
@@ -18,6 +19,7 @@ export type Request = { id: number } & (
   | { action: 'evaluateAdaptiveExperimental'; net: Net; continuity:'G0'|'G1'; exportStep?:boolean; selection:AdaptiveSelection }
   | { action: 'createAdaptiveLockedRecipe'; net:Net; continuity:'G0'|'G1'; locks:AdaptiveLocks; bodyId:string; selection:AdaptiveSelection }
   | { action: 'replayAdaptiveLockedRecipe'; step:string; recipe:unknown; bodyId:string }
+  | { action: 'restoreAdaptiveLockedRecipe'; step:string; recipe:unknown; bodyId:string }
   | { action: 'selectRefined'; face: number; refinements: KnotInsertion[] }
   | { action: 'g1SupportCandidates' }
   | ({ action: 'proposeG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneProposalRequest)
@@ -86,6 +88,15 @@ self.onmessage = (event: MessageEvent<Request>) => {
           break
         }
         case 'replayAdaptiveLockedRecipe': result=await editor.replayAdaptiveLockedRecipe(req.step,req.recipe,req.bodyId);break
+        case 'restoreAdaptiveLockedRecipe': {
+          if(adaptiveSelectionSerial>=Number.MAX_SAFE_INTEGER) throw new Error('Limite selezioni adattive raggiunto.')
+          const recipe=readAdaptiveLockedRecipe(req.recipe)
+          const restored=await editor.restoreAdaptiveLockedRecipe(req.step,recipe,req.bodyId)
+          resetCylinder();selectionKey=null
+          const selection:AdaptiveSelection={face:recipe.faceIndex,refinements:recipe.refinements,trimPolicy:recipe.trimPolicy,generation:++adaptiveSelectionSerial}
+          adaptiveSelectionKey=JSON.stringify(selection)
+          result={...restored,selection};break
+        }
         case 'selectRefined': {
           const net=editor.selectRefined(req.face,req.refinements), info=editor.infos[req.face]
           resetCylinder(); adaptiveSelectionKey=null
