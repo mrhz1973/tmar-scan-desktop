@@ -10,11 +10,12 @@ import {useNotes} from '../state/noteStore'
 import {createReverseSession,installReverseSession,type ReverseSession} from '../app/reSession'
 import {createReverseEditorHost} from '../app/workspaceEditorHost'
 import {collectReversePart,applyReversePart,STEP_MEMBER} from '../app/projectSection'
-import {qualifySurfaceHistory,reopenSurfaceHistory,withFrozenHistoryTransaction,type SurfaceHistoryReplay} from '../app/surfaceEditHistory'
+import {qualifySurfaceHistory,reopenSurfaceHistory,reopenAndRestoreSurfaceHistory,withFrozenHistoryTransaction,type SurfaceHistoryReplay} from '../app/surfaceEditHistory'
 import {editorSha256} from '../../../src/plugins/editorLifetime'
 import {ReClient} from '../core/reClient'
 import {localKernel} from './reLocal'
 import {resetReverse} from './reReset'
+
 import plugin from '../plugin'
 import type {ImportFeature} from '../core/features'
 
@@ -121,6 +122,24 @@ describe('opt-in host history publication and project restoration',()=>{
     const reopenedFeature=useReverse.getState().features.at(-1) as ImportFeature
     expect((await reopenSurfaceHistory(reopenedFeature,useReverse.getState().stepFiles,replay,new AbortController().signal)).status).toBe('verified')
     expect((await reopenSurfaceHistory(reopenedFeature,useReverse.getState().stepFiles,undefined,new AbortController().signal)).status).toBe('copy-only')
+
+    const savedState=useReverse.getState()
+    const restored=await reopenAndRestoreSurfaceHistory(reopenedFeature,savedState.stepFiles,
+      [],replay,async(bytes,key)=>({
+        restoreHistoryBundle:async(bundle:{recipe:unknown;notes:unknown})=>{
+          expect(new TextDecoder().decode(bytes)).toBe(upstream)
+          expect(key).toBe(source.binding.bodyKey)
+          expect(bundle.recipe).toEqual(recipe)
+          expect(bundle.notes).toEqual([])
+        },
+        getSnapshot:()=>({validation:{kind:'valid'}}),
+        getPanelState:()=>({notes:[]}),
+        dispose:async(_reason:'host-error'|'cancelled')=>{},
+      }),async()=>{},()=>{if(useReverse.getState()!==savedState)throw Error('stale host')},
+      new AbortController().signal)
+    expect(restored.status).toBe('restored')
+    if(restored.status==='restored')await restored.session.dispose('cancelled')
+    expect(useReverse.getState()).toBe(savedState)
     expect(useReverse.getState().stepFiles[reopenedFeature.file.key]).toBe(finalStep)
   },120000)
 })

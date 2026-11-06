@@ -16,10 +16,11 @@ import {createReverseSession,installReverseSession,type ReverseSession} from '..
 import {createReverseEditorHost} from '../app/workspaceEditorHost'
 import {collectReversePart,applyReversePart} from '../app/projectSection'
 import {revalidateAnnotations} from '../app/annotationPersistence'
-import {qualifyAnnotatedSurfaceHistory,reopenSurfaceHistory,restoreVerifiedSurfaceHistory,withFrozenHistoryTransaction,type SurfaceHistoryReplay} from '../app/surfaceEditHistory'
+import {qualifyAnnotatedSurfaceHistory,reopenSurfaceHistory,reopenAndRestoreSurfaceHistory,restoreVerifiedSurfaceHistory,withFrozenHistoryTransaction,type SurfaceHistoryReplay} from '../app/surfaceEditHistory'
 import {ReClient} from '../core/reClient'
 import {localKernel} from './reLocal'
 import {resetReverse} from './reReset'
+
 import plugin from '../plugin'
 import type {ImportFeature} from '../core/features'
 
@@ -147,16 +148,21 @@ describe('independently replay-qualified, atomic annotated history sidecar',()=>
       // the exact archived upstream bytes, recipe and verified note UVs.
       const calls:string[]=[]
       const fresh=()=>({
-        restoreHistoryRecipe:async(value:unknown)=>{calls.push('recipe');expect(value).toEqual(recipe)},
-        restoreHistoryNotes:async(value:unknown)=>{calls.push('notes');expect(value).toEqual(verified.notesToRestore)},
+        restoreHistoryBundle:async(value:{recipe:unknown;notes:unknown},signal?:AbortSignal)=>{
+          calls.push('bundle')
+          expect(value.recipe).toEqual(recipe)
+          expect(value.notes).toEqual(verified.notesToRestore)
+          expect(signal?.aborted).toBe(false)
+        },
         getSnapshot:()=>({validation:{kind:'valid'}}),
+        getPanelState:()=>({notes:[{id:'note-qa-1',text:'Updated note in project'}]}),
         dispose:async()=>{calls.push('disposed')},
       })
       await restoreVerifiedSurfaceHistory(verified,async(bytes,key)=>{
         calls.push('fresh');expect(new TextDecoder().decode(bytes)).toBe(verified.sourceStep)
         expect(key).toBe(source.binding.bodyKey);return fresh()
       },async()=>{calls.push('validated')},()=>{},new AbortController().signal)
-      expect(calls).toEqual(['fresh','recipe','validated','notes'])
+      expect(calls).toEqual(['fresh','bundle','validated'])
       await expect(restoreVerifiedSurfaceHistory(verified,async()=>fresh(),
         async()=>{},()=>{},new AbortController().signal)).rejects.toThrow('già utilizzato')
       const failVerified=await reopenSurfaceHistory(restored,useReverse.getState().stepFiles,
@@ -165,14 +171,53 @@ describe('independently replay-qualified, atomic annotated history sidecar',()=>
       if(failVerified.status==='verified'){
         const rejected:string[]=[]
         await expect(restoreVerifiedSurfaceHistory(failVerified,async()=>({
-          restoreHistoryRecipe:async()=>{rejected.push('recipe')},
-          restoreHistoryNotes:async()=>{throw Error('injected note reattachment failure')},
+          restoreHistoryBundle:async()=>{
+            rejected.push('bundle')
+            throw Error('injected note reattachment failure')
+          },
           getSnapshot:()=>({validation:{kind:'valid'}}),
+          getPanelState:()=>({notes:[]}),
           dispose:async()=>{rejected.push('disposed')},
         }),async()=>{},()=>{},new AbortController().signal)).rejects.toThrow('injected')
-        expect(rejected).toEqual(['recipe','disposed'])
+        expect(rejected).toEqual(['bundle','disposed'])
         expect(useReverse.getState().stepFiles[restored.file.key]).toBe(finalStep)
       }
+
+      // Host-only contract mock. Exact plugin f338 is qualified in the
+      // isolated QA worktree with a real OCCT worker and saved project data.
+      const prior=useReverse.getState(), priorNotes=useNotes.getState().notes
+      const called:string[]=[]
+      const opened=await reopenAndRestoreSurfaceHistory(restored,prior.stepFiles,priorNotes,replay,
+        async(bytes,key)=>{
+          called.push('fresh')
+          expect(new TextDecoder().decode(bytes)).toBe(verified.sourceStep)
+          expect(key).toBe(source.binding.bodyKey)
+          return {
+            restoreHistoryBundle:async(value:{recipe:unknown;notes:unknown})=>{
+              called.push('bundle')
+              expect(value.recipe).toEqual(recipe)
+              expect(value.notes).toEqual(verified.notesToRestore)
+            },
+            getSnapshot:()=>({validation:{kind:'valid'}}),
+            getPanelState:()=>({notes:[{id:'note-qa-1',text:'Updated note in project'}]}),
+            dispose:async(_reason:'host-error'|'cancelled')=>{called.push('disposed')},
+          }
+        },async()=>{called.push('validated')},()=>{},new AbortController().signal)
+      expect(opened.status).toBe('restored')
+      if(opened.status==='restored')await opened.session.dispose('cancelled')
+      expect(called).toEqual(['fresh','bundle','validated','disposed'])
+      let current=true,disposed=0
+      const revoked=await reopenAndRestoreSurfaceHistory(restored,prior.stepFiles,priorNotes,replay,
+        async()=>({
+          restoreHistoryBundle:async()=>{current=false},
+          getSnapshot:()=>({validation:{kind:'valid'}}),
+          getPanelState:()=>({notes:[]}),
+          dispose:async()=>{disposed++},
+        }),async()=>{},()=>{if(!current)throw Error('host source revoked')},new AbortController().signal)
+      expect(revoked.status).toBe('copy-only')
+      expect(disposed).toBe(1)
+      expect(useReverse.getState()).toBe(prior)
+      expect(useNotes.getState().notes).toBe(priorNotes)
     }
     expect(useReverse.getState().stepFiles[restored.file.key]).toBe(finalStep)
   },120000)
