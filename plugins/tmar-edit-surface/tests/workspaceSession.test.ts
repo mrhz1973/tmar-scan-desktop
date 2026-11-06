@@ -206,6 +206,22 @@ describe('WorkspaceSurfaceSession',()=>{
     await t.session.dispose('cancelled')
   })
 
+  it('stretches along the selected local direction on a rotated surface', async()=>{
+    const t=await setup(), net=plane()
+    net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
+    await selectFace(t,net)
+    t.session.setContinuity('G0');t.session.setAxis(0);t.session.selectPoints([6],false)
+    t.session.stretchSelected(1.2)
+    expect(t.session.getPanelState().net!.poles[6][0]).toBeCloseTo(0)
+    expect(t.session.getPanelState().net!.poles[6][1]).toBeCloseTo(.8)
+    expect(t.session.getPanelState().net!.poles[6][2]).toBeCloseTo(1)
+    t.session.undo()
+    expect(t.session.getPanelState().net!.poles[6]).toEqual([0,1,1])
+    t.session.redo()
+    expect(t.session.getPanelState().net!.poles[6][1]).toBeCloseTo(.8)
+    await t.session.dispose('cancelled')
+  })
+
   it('preserves a changed draft if switching faces is cancelled, and switches only after confirmation', async()=>{
     const t=await setup();await selectFace(t)
     t.session.selectPoints([12],false);t.session.moveSelected(.2)

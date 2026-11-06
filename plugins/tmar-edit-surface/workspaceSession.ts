@@ -779,9 +779,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   stretchSelected(factor: number): void {
     this.change(() => {
       if (!Number.isFinite(factor) || factor <= 0 || factor > 3) throw new Error('Fattore non valido.')
-      const net = this.requireNet(), ids = this.editable(), axis = this.axis
-      const center = net.poles.reduce((sum,p)=>sum+p[axis],0)/net.poles.length
-      this.transform(net, ids, p => p.map((x,i)=>i===axis?center+(x-center)*factor:x) as Point)
+      const net = this.requireNet(), ids = this.editable()
+      const direction = ids.length ? dragDirection(net, ids[0], this.dragMode, this.axis) : null
+      if (!direction) throw new Error('Seleziona un punto libero e una direzione valida.')
+      const projection = (p: Point) => p.reduce((sum,x,i)=>sum+x*direction[i],0)
+      const center = net.poles.reduce((sum,p)=>sum+projection(p),0)/net.poles.length
+      this.transform(net, ids, p => {
+        const delta=(projection(p)-center)*(factor-1)
+        return p.map((x,i)=>x+direction[i]*delta) as Point
+      })
     })
   }
 

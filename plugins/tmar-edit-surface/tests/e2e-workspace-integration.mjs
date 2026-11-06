@@ -318,6 +318,47 @@ try {
     return { poles: s.net.poles.map(p => [...p]), locked: s.locked, volume: c.getViewState().preview.volume }
   })
   check(first.poles.length > first.locked.length, 'selected imported CAD face has an editable control point')
+  if (process.env.TEST_LOCAL_STRETCH === '1') {
+    await page.select('[data-test=surface-continuity]', 'G0')
+    await page.waitForFunction(()=>window.surfaceQa.useWorkspaceEditor.getState().snapshot?.validation.kind==='valid',{timeout:120000})
+    await page.select('[data-test=surface-drag-mode]', 'local')
+    await page.click('[data-test=surface-axis-0]')
+    const target=await page.evaluate(async()=>{
+      const {dragDirection}=await import('/plugins/tmar-edit-surface/localFrame.ts')
+      const c=window.surfaceQa.useWorkspaceEditor.getState().controller,s=c.getPanelState(),net=s.net
+      let best=null
+      for(let i=0;i<net.poles.length;i++) {
+        if(s.locked.includes(i))continue
+        const d=dragDirection(net,i,'local',0);if(!d)continue
+        const dot=p=>p.reduce((sum,x,j)=>sum+x*d[j],0)
+        const delta=dot(net.poles[i])-net.poles.reduce((sum,p)=>sum+dot(p),0)/net.poles.length
+        if(!best||Math.abs(delta)>Math.abs(best.delta))best={i,d,delta,point:[...net.poles[i]]}
+      }
+      if(best)c.selectPoints([best.i],false)
+      return best
+    })
+    assert(target&&Math.abs(target.delta)>1e-5,'No eligible pole for local stretch')
+    await page.$eval('[data-test=surface-stretch-factor]', e=>{
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'1.1')
+      e.dispatchEvent(new Event('input',{bubbles:true}))
+    })
+    check((await page.$eval('[data-test=surface-stretch]',e=>e.textContent)).includes(' U'),
+      'local stretch button identifies the chosen U direction')
+    await page.click('[data-test=surface-stretch]')
+    await page.waitForFunction(({i,p})=>{
+      const s=window.surfaceQa.useWorkspaceEditor.getState(),v=s.controller?.getPanelState().net?.poles[i]
+      return s.snapshot?.validation.kind==='valid'&&v?.some((x,j)=>Math.abs(x-p[j])>1e-7)
+    },{timeout:120000},{i:target.i,p:target.point})
+    const after=await page.evaluate(i=>[...window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().net.poles[i]],target.i)
+    const expected=target.point.map((x,j)=>x+target.d[j]*target.delta*.1)
+    check(Math.hypot(...after.map((x,j)=>x-expected[j]))<1e-6,'local U stretch moves the real STEP pole in its local direction')
+    await page.click('[data-test=surface-undo]')
+    await page.waitForFunction(p=>{
+      const s=window.surfaceQa.useWorkspaceEditor.getState()
+      return s.snapshot?.validation.kind==='valid'&&JSON.stringify(s.controller?.getPanelState().net?.poles)===JSON.stringify(p)
+    },{timeout:120000},first.poles)
+    check(true,'Undo restores the real STEP surface after local stretch')
+  }
   if (testAlignedDepth) {
     // The QA helper places the real camera on the normal; the edit itself is
     // made with real pointer events in the shared viewport.

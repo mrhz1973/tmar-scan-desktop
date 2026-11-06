@@ -287,10 +287,11 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         disabled={disabled} onChange={e => setSmooth(Number(e.target.value))} /></label>
       <button type="button" data-test="surface-smooth" disabled={disabled || state.symmetryBlocked || !editable.length}
         onClick={() => attempt(() => controller.smoothSelected(smooth))}>Leviga i punti selezionati</button>
-      <label>Fattore di stiramento<input type="number" min="0.1" max="3" step="0.1" value={Number.isFinite(factor) ? factor : ''}
+      <label>Fattore di stiramento<input data-test="surface-stretch-factor" type="number" min="0.1" max="3" step="0.1" value={Number.isFinite(factor) ? factor : ''}
         disabled={disabled} onChange={e => setFactor(e.target.valueAsNumber)} /></label>
-      <button type="button" disabled={disabled || state.symmetryBlocked || !editable.length || !(factor > 0 && factor <= 3)}
-        onClick={() => attempt(() => controller.stretchSelected(factor))}>Stira lungo {['X', 'Y', 'Z'][state.axis]}</button>
+      <p>Lo stiramento usa il centro del reticolo. In modalità locale segue la direzione del primo punto selezionato.</p>
+      <button type="button" data-test="surface-stretch" disabled={disabled || state.symmetryBlocked || !editable.length || !(factor > 0 && factor <= 3)}
+        onClick={() => attempt(() => controller.stretchSelected(factor))}>Stira lungo {axisNames[state.axis]}</button>
       <div className="row"><button type="button" data-test="surface-undo" disabled={disabled || !state.canUndo} onClick={() => attempt(() => controller.undo())}>Annulla modifica</button>
         <button type="button" data-test="surface-redo" disabled={disabled || !state.canRedo} onClick={() => attempt(() => controller.redo())}>Ripeti</button>
         <button type="button" disabled={disabled || tangencyActive} onClick={() => attempt(() => controller.restoreOriginal())}>Ripristina</button></div>
