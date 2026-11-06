@@ -530,9 +530,12 @@ export function persistedHistoryNotes(record:StoredSurfaceEditHistoryV1,feature:
  * archived upstream STEP, not the already-edited result body. This adapter
  * is opt-in and never installs a controller in the live UI by itself. */
 export interface SurfaceHistoryRestoreController {
-  restoreHistoryRecipe(recipe:unknown):Promise<void>
-  restoreHistoryNotes(notes:unknown):Promise<void>
+  /** Plugin f338d34+: restores a full bundle in a NEW controller, waits for
+   * independent valid CAD preview and either rebinding all notes or closing
+   * itself on a post-adoption failure. Older split restores are insufficient. */
+  restoreHistoryBundle(bundle:{readonly recipe:unknown;readonly notes:unknown},signal?:AbortSignal):Promise<void>
   getSnapshot():{validation:{kind:string}}
+  getPanelState():{notes:readonly {id:string;text:string}[]}
   dispose(reason:'host-error'|'cancelled'):Promise<void>
 }
 
@@ -557,21 +560,60 @@ export async function restoreVerifiedSurfaceHistory<T extends SurfaceHistoryRest
     alive()
     session=await makeFreshSession(utf8(checked.sourceStep),checked.record.source.bodyKey,signal)
     alive()
-    await session.restoreHistoryRecipe(structuredClone(checked.record.recipe))
+    const expectedNotes=checked.notesToRestore ?? []
+    if (checked.record.notePolicy==='none' && expectedNotes.length)
+      throw new Error('Note estranee alla ricetta non annotata.')
+    // One plugin operation owns recipe adoption, the awaited CAD preview and
+    // all-or-nothing UV rebinding. Host never installs a half-restored session.
+    await session.restoreHistoryBundle({
+      recipe:structuredClone(checked.record.recipe),notes:structuredClone(expectedNotes),
+    },signal)
     alive()
     await awaitValidated(session,signal)
     alive()
     if (session.getSnapshot().validation.kind!=='valid')
       throw new Error('Il CAD ripristinato non dispone di una preview validata.')
-    if (checked.notesToRestore?.length) {
-      await session.restoreHistoryNotes(structuredClone(checked.notesToRestore))
-      alive()
-      if (session.getSnapshot().validation.kind!=='valid')
-        throw new Error('Le note ripristinate non conservano il CAD valido.')
-    }
+    const liveNotes=session.getPanelState().notes
+    if (liveNotes.length!==expectedNotes.length ||
+        expectedNotes.some(expected=>!liveNotes.some(n=>n.id===expected.id && n.text===expected.text)))
+      throw new Error('Le note della nuova sessione non coincidono con quelle verificate.')
     return session
   } catch(error) {
     if(session)try{await session.dispose('host-error')}catch{/* Preserve the original failure. */}
     throw error
+  }
+}
+
+
+/** A complete, opt-in entrypoint for reopening an archived Edit Surface recipe.
+ * The feature remains an ordinary CAD import until the host explicitly
+ * installs a successful NEW controller. On every failure the saved STEP
+ * and authoritative note store remain untouched and copy-only is returned. */
+export type OpenedEditableSurfaceHistory<T extends SurfaceHistoryRestoreController> =
+  | {readonly status:'copy-only';readonly reason:string}
+  | {readonly status:'restored';readonly session:T;readonly record:StoredSurfaceEditHistoryV1}
+
+export async function reopenAndRestoreSurfaceHistory<T extends SurfaceHistoryRestoreController>(
+  feature:ImportFeature,
+  savedFiles:Readonly<Record<string,string>>,
+  savedNotes:readonly Note[]|undefined,
+  replay:SurfaceHistoryReplay|undefined,
+  makeFreshSession:(source:Uint8Array,bodyKey:string,signal:AbortSignal)=>Promise<T>,
+  awaitValidated:(session:T,signal:AbortSignal)=>Promise<void>,
+  assertCurrent:()=>void,
+  signal:AbortSignal,
+):Promise<OpenedEditableSurfaceHistory<T>> {
+  try {
+    abortIfNeeded(signal);assertCurrent()
+    const checked=await reopenSurfaceHistory(feature,savedFiles,replay,signal,savedNotes)
+    abortIfNeeded(signal);assertCurrent()
+    if (checked.status==='copy-only') return checked
+    const session=await restoreVerifiedSurfaceHistory(checked,makeFreshSession,
+      awaitValidated,assertCurrent,signal)
+    // The caller decides when and whether to install the isolated controller
+    // in the viewport. This function does not mutate project state.
+    return {status:'restored',session,record:checked.record}
+  }catch(error) {
+    return {status:'copy-only',reason:error instanceof Error?error.message:String(error)}
   }
 }
