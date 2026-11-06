@@ -18,3 +18,15 @@ of the owner's running build, the exact host PR integration, packaged-app
 qualification, or camera behavior for other navigation schemes. The temporary
 QA host is not the authoritative host branch. The host coordinator must verify
 the fix against the exact host/plugin pair before delivery.
+
+The owner subsequently reported that rotation and panning both fail in the
+running app. This report is not disproved by the Fusion-only test above. In
+the source host, navigation bindings depend on the selected control scheme:
+`cnckitchen` assigns left-drag to orbit and right-drag to pan, whereas `fusion`
+assigns Shift+middle to orbit and middle to pan (`src/viewer/navSchemes.ts`).
+In the plugin's automatic selection mode, a left press on a pole or segment can
+be claimed for editing; an unselected cell press is left to host navigation.
+These code paths are possible contributors, not a diagnosed cause of the
+reported failure. Qualification must record the actual scheme and build and
+exercise both gestures on and away from the control net, including release
+and cancellation, before claiming the owner's issue fixed.
