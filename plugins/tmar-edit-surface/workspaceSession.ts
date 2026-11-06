@@ -42,6 +42,11 @@ export interface PreparedAnnotatedHistory extends PreparedHistoryRecipe {
   readonly notesRevision: number
   readonly notes: readonly HistorySurfaceNote[]
 }
+/** A synchronous edit lock. The host must still validate and atomically commit. */
+export interface HistoryFreeze {
+  isCurrent(): boolean
+  release(): void
+}
 interface Note extends WorkspaceSurfaceNote { readonly anchor: DraftAnchor }
 export type WorkspaceG1Candidate = (G1SupportCandidate & { readonly kind?: never }) | CompatibleCurvedSupportCandidate
 export interface WorkspaceSurfacePanelState {
@@ -913,12 +918,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
 
   /** Session-bound freshness and unchanged recipe; host must still replay it. */
   isHistoryRecipeStampCurrent(prepared: PreparedHistoryRecipe): boolean {
+    return this.historyRecipeCurrent(prepared, null)
+  }
+  private historyRecipeCurrent(prepared: PreparedHistoryRecipe, allowedFrozen: Frozen | null): boolean {
     try {
       this.assertLive()
       return !!prepared && this.historyGuards.has(prepared) && this.historyGuards.get(prepared)===JSON.stringify(prepared.recipe) &&
         prepared.sessionId === this.context.sessionId && prepared.sourceKey === this.sourceId &&
         prepared.selectionEpoch === this.selectionEpoch && prepared.draftEpoch === this.draftEpoch &&
-        !this.busy && !this.frozen && this.gesture === 'idle' && !this.placingNote && !this.notes.length &&
+        !this.busy && this.frozen === allowedFrozen && this.gesture === 'idle' && !this.placingNote && !this.notes.length &&
         !this.strip && !this.stripPending && this.snapshot.validation.kind === 'valid'
     } catch { return false }
   }
@@ -950,6 +958,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
 
   /** Freshness only; host must independently validate recipe/notes and commit atomically. */
   isAnnotatedHistoryStampCurrent(prepared: PreparedAnnotatedHistory): boolean {
+    return this.annotatedHistoryCurrent(prepared, null)
+  }
+  private annotatedHistoryCurrent(prepared: PreparedAnnotatedHistory, allowedFrozen: Frozen | null): boolean {
     try {
       this.assertLive()
       const d=this.draft.getSnapshot(), revision=d.preview?.previewRevision
@@ -958,9 +969,37 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       return !!prepared && prepared.sessionId===this.context.sessionId && prepared.sourceKey===this.sourceId &&
         !!guard && JSON.stringify(prepared.recipe)===guard.recipe && prepared.selectionEpoch===this.selectionEpoch && d.net===guard.net &&
         JSON.stringify(content)===guard.notes && !!this.notes.length &&
-        revision!==undefined && this.notes.every(note=>note.revision===revision) && !this.busy && !this.frozen &&
+        revision!==undefined && this.notes.every(note=>note.revision===revision) && !this.busy && this.frozen===allowedFrozen &&
         this.gesture==='idle' && !this.placingNote && !this.strip && !this.stripPending && this.snapshot.validation.kind==='valid'
     } catch { return false }
+  }
+
+  /** Freeze a prepared history bundle before the host starts its transaction.
+   * The same bundle identity and contents must remain valid at the host's
+   * commit boundary. The lock does not authorize or perform publication. */
+  freezeHistory(prepared: PreparedHistoryRecipe | PreparedAnnotatedHistory): HistoryFreeze {
+    const annotated = this.annotatedHistoryGuards.has(prepared as PreparedAnnotatedHistory)
+    const current = (lock: Frozen | null) => annotated
+      ? this.annotatedHistoryCurrent(prepared as PreparedAnnotatedHistory, lock)
+      : this.historyRecipeCurrent(prepared, lock)
+    if (!current(null)) throw new Error('La ricetta non corrisponde alla bozza verificata corrente.')
+    const validation = this.snapshot.validation
+    if (validation.kind !== 'valid') throw new Error('La bozza CAD non è verificata.')
+    const lock: Frozen = { ticketKey:'history-only', operationId:crypto.randomUUID(), source:Object.freeze({ ...this.source }),
+      stamp:Object.freeze({ ...validation.stamp }), stripResult:null,
+      ...(annotated ? {notes:this.notes, notesRevision:this.notesRevision} : {}), preparing:false }
+    this.frozen = lock
+    this.refresh()
+    let released = false
+    return Object.freeze({
+      isCurrent: () => !released && this.frozen===lock && current(lock) &&
+        this.snapshot.validation.kind==='valid' && stampKey(this.snapshot.validation.stamp)===stampKey(lock.stamp),
+      release: () => {
+        if (released) return
+        released = true
+        if (this.frozen===lock) { this.frozen=null; if (!this.disposed) { this.refresh(); this.resolveNotes() } }
+      },
+    })
   }
 
   /** Restore only into a new session, preserving any existing user draft. */

@@ -33,6 +33,16 @@ preview. Its local guard also detects changes to the prepared recipe, but it is
 not a transaction. The host must independently replay, validate, bind and
 atomically commit the bundle.
 
+`freezeHistory(prepared)` now provides a synchronous edit lock for either the
+original prepared recipe or annotated bundle. It rejects stale or copied
+preparations; while held, user edits and competing freezes are refused. Its
+`isCurrent()` checks the source, original prepared object and content, net,
+notes, and validated preview. `release()` is idempotent and must be called in
+the host transaction's `finally` path. The host must snapshot inputs, perform
+independent CAD/annotation validation, recheck `isCurrent()` immediately at
+the atomic commit boundary, and handle invalidation or cancellation without
+publishing. This is a plugin-side primitive, not a host history integration.
+
 `WorkspaceSurfaceSession.restoreHistoryRecipe(value)` restores a validated
 recipe into a fresh, empty workspace session only. It rejects another body or
 changed STEP bytes; a failed worker restore reports a fatal error to the host
