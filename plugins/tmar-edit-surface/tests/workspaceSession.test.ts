@@ -222,6 +222,25 @@ describe('WorkspaceSurfaceSession',()=>{
     await t.session.dispose('cancelled')
   })
 
+  it('stretches a curved surface along its local tangent and preserves locked poles', async()=>{
+    const t=await setup(), net=plane()
+    net.poles=net.poles.map(([u,v]):Point=>[u,v,.1*u*u])
+    await selectFace(t,net)
+    t.session.setContinuity('G0');t.session.selectPoints([7],false);t.session.lockSelected(true)
+    t.session.selectPoints([6],false);t.session.setAxis(0)
+    t.session.stretchSelected(1.2)
+    const result=t.session.getPanelState().net!
+    // Independent derivative of this cubic B-spline at pole 6's Greville
+    // parameter: dZ/dX = 12/65. The centre is the mean of all 25 poles.
+    const expectedX=1-(.2*71*65)/4369, expectedZ=.1-(.2*71*12)/4369
+    expect(result.poles[6][0]).toBeCloseTo(expectedX, 8)
+    expect(result.poles[6][1]).toBeCloseTo(1, 8)
+    expect(result.poles[6][2]).toBeCloseTo(expectedZ, 8)
+    expect(result.poles[7]).toEqual(net.poles[7])
+    t.session.undo();expect(t.session.getPanelState().net!.poles[6]).toEqual(net.poles[6])
+    await t.session.dispose('cancelled')
+  })
+
   it('preserves a changed draft if switching faces is cancelled, and switches only after confirmation', async()=>{
     const t=await setup();await selectFace(t)
     t.session.selectPoints([12],false);t.session.moveSelected(.2)
