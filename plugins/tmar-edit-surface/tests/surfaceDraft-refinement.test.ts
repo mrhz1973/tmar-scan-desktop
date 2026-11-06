@@ -83,7 +83,7 @@ describe('atomic refinement history', () => {
       draft.setLocks([]);draft.commit(illegal);draft.setLocks([12])
       expect(runtime.history.current?.lockSnapshots).toEqual([{index:12,point:illegal.poles[12]}])
       const sent=worker.sent.length
-      await expect(draft.refine(insertion)).rejects.toThrow(/rimappare/)
+      await expect(draft.refine(insertion)).rejects.toThrow(/blocchi manuali/)
       expect(worker.sent).toHaveLength(sent)
     } finally {draft.dispose();runtime.dispose()}
   })

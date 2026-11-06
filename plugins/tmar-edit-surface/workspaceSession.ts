@@ -411,9 +411,18 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.assertMutable()
     if (!['U','V','both'].includes(axis) || !this.panel.canRefineNet) throw new Error('Raffinamento non disponibile: termina le altre operazioni e sblocca i punti manuali.')
     const d=this.draft.getSnapshot(), net=this.requireNet()
+    const adaptive=!!this.runtime.history.current?.preparation?.adaptiveSelection
     const plan: {axis:'U'|'V';value:number;count:number}[]=[]
     for(const direction of (axis==='both'?['U','V']:[axis]) as ('U'|'V')[]) {
       const knots=direction==='U'?net.ku:net.kv
+      if (adaptive) {
+        let widest=0
+        for(let i=1;i<knots.length;i++) if(knots[i]-knots[i-1]>knots[widest+1]-knots[widest]) widest=i-1
+        const value=knots[widest]+(knots[widest+1]-knots[widest])/2
+        if(!(value>knots[widest] && value<knots[widest+1])) throw new Error('Intervallo nodale troppo piccolo da raffinare.')
+        plan.push({axis:direction,value,count:1})
+        continue
+      }
       for(let i=1;i<knots.length;i++) {
         const value=knots[i-1]+(knots[i]-knots[i-1])/2
         if(!(value>knots[i-1] && value<knots[i])) throw new Error('Intervallo nodale troppo piccolo da raffinare.')
@@ -422,7 +431,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }
     if(!plan.length || d.refinements.length+plan.length>128) throw new Error('Troppi nodi per il raffinamento.')
     this.busy=true; this.message=null; this.refresh()
-    try { await this.draft.refine(plan); this.assertLive() }
+    try {
+      await this.draft.refine(plan); this.assertLive()
+      if(this.draft.getSnapshot().committedNet!==d.committedNet) {this.draftEpoch++;this.historyRevision++}
+    }
     catch(error) { if(!this.disposed) this.message=String((error as Error)?.message ?? error); throw error }
     finally { if(!this.disposed) { this.busy=false; this.refresh() } }
   }
@@ -466,8 +478,21 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     else if (this.gesture === 'strip') this.cancelStripGesture()
     return hadGesture || layerCancelled
   }
-  undo(): void { this.change(() => { if (this.strip) { if (this.strip.at > 0) { this.strip.at--; this.strip.selectedEdge = -1; this.strip.delta = [0,0,0]; this.strip.error = null; this.message = null; this.historyRevision++ } } else this.draft.undo() }, false, false, true) }
-  redo(): void { this.change(() => { if (this.strip) { if (this.strip.at + 1 < this.strip.frames.length) { this.strip.at++; this.strip.selectedEdge = -1; this.strip.delta = [0,0,0]; this.strip.error = null; this.message = null; this.historyRevision++ } } else this.draft.redo() }, false, false, true) }
+  undo(): void { this.change(() => { if (this.strip) { if (this.strip.at > 0) { this.strip.at--; this.strip.selectedEdge = -1; this.strip.delta = [0,0,0]; this.strip.error = null; this.message = null; this.historyRevision++ } } else this.stepDraftHistory(-1) }, false, false, true) }
+  redo(): void { this.change(() => { if (this.strip) { if (this.strip.at + 1 < this.strip.frames.length) { this.strip.at++; this.strip.selectedEdge = -1; this.strip.delta = [0,0,0]; this.strip.error = null; this.message = null; this.historyRevision++ } } else this.stepDraftHistory(1) }, false, false, true) }
+
+  private stepDraftHistory(delta:-1|1): void {
+    const before=this.draft.getSnapshot(), accepted=delta===-1 ? this.draft.undo() : this.draft.redo()
+    if (!accepted || !this.draft.adaptiveHistoryPending) return
+    // A change of adaptive basis finishes after this synchronous command returns.
+    const unsubscribe=this.draft.subscribe(()=>{
+      const now=this.draft.getSnapshot()
+      if(this.disposed || now.committedNet!==before.committedNet || !now.calculating) {
+        unsubscribe()
+        if(!this.disposed && now.committedNet!==before.committedNet) {this.draftEpoch++;this.historyRevision++;this.refresh();this.resolveNotes()}
+      }
+    })
+  }
 
   /** Begin on a validated open face/shell. Strip history is independent of pole history. */
   async beginStrip(): Promise<void> {
@@ -1671,7 +1696,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       canApplyG1: canLoadG1 && !!this.g1Choice && this.g1Candidates.some(candidate => candidate.id === this.g1Choice),
       planeTangencyActive: !!d.planeTangency,
       curvedTangencyActive: !!d.curvedTangency,
-      canFreeBoundary: !adaptive && !!face?.freeBoundary && !tangency, canRefineNet: !adaptive && !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
+      canFreeBoundary: !adaptive && !!face?.freeBoundary && !tangency, canRefineNet: !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
         !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,

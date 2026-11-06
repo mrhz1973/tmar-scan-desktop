@@ -123,6 +123,18 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
       await waitDraft()
       expect(runtime.history.current?.lockSnapshots).toEqual(draftRecipe.lockedValues)
       expect(()=>draft.setFreeBoundary(true)).toThrow(/protetti/)
+      draft.setLocks([])
+      const unrefined=structuredClone(draft.getSnapshot().net!)
+      await draft.refine([{axis:'U',value:(unrefined.ku[0]+unrefined.ku[1])/2,count:1}])
+      await waitDraft()
+      const refinedNet=structuredClone(draft.getSnapshot().net!)
+      expect(refinedNet.nu).toBe(unrefined.nu+1)
+      expect(draft.undo()).toBe(true)
+      await waitDraft()
+      expect(draft.getSnapshot().net).toEqual(unrefined)
+      expect(draft.redo()).toBe(true)
+      await waitDraft()
+      expect(draft.getSnapshot().net).toEqual(refinedNet)
     } finally {draft.dispose()}
     // Exercise the session boundary with the same real dispatcher/kernel, but
     // a simulated host and no browser or project persistence.
@@ -151,6 +163,39 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
       expect(session.getPanelState().net!.poles[again.witnessPole]).not.toEqual(beforePoint)
       expect(session.getSnapshot().validation.kind).not.toBe('valid')
       await waitSession(session)
+      const firstMesh=session.getViewState().preview!.faceMeshes[7],firstIds=Array.from(firstMesh.indices.slice(0,3))
+      const firstPoint=[0,1,2].map(axis=>firstIds.reduce((sum,id)=>sum+firstMesh.positions[3*id+axis],0)/3) as [number,number,number]
+      session.setPlacingNote(true);await session.placeNote(firstPoint)
+      const persistentNote=session.getPanelState().notes[0].id
+      session.setNoteText(persistentNote,'Nota durante Undo')
+      const persistentPosition=structuredClone(session.getPanelState().notes[0].at)
+      const waitNote=()=>new Promise<void>((resolve,reject)=>{
+        const matches=()=>session.getPanelState().notes[0]?.revision===session.getViewState().preview?.previewRevision
+        if(matches())return resolve()
+        const timeout=setTimeout(()=>{unsubscribe();reject(new Error('Nota non aggiornata'))},30000)
+        const unsubscribe=session.subscribe(()=>{if(matches()){clearTimeout(timeout);unsubscribe();resolve()}})
+      })
+      const beforeRefine=structuredClone(session.getPanelState().net!),revision=session.getSnapshot().historyRevision
+      await session.refineNet('U')
+      await waitSession(session)
+      expect(session.getPanelState().net!.nu).toBe(beforeRefine.nu+1)
+      expect(session.getSnapshot().historyRevision).toBeGreaterThan(revision)
+      const revisionAfterRefine=session.getSnapshot().historyRevision
+      session.undo();await waitSession(session)
+      await waitNote()
+      expect(session.getPanelState().net).toEqual(beforeRefine)
+      expect(session.getPanelState().notes[0].text).toBe('Nota durante Undo')
+      expect(Math.hypot(...session.getPanelState().notes[0].at.map((v,i)=>v-persistentPosition[i]))).toBeLessThan(1e-6)
+      expect(session.getSnapshot().historyRevision).toBeGreaterThan(revisionAfterRefine)
+      session.redo();await waitSession(session)
+      await waitNote()
+      expect(session.getPanelState().net!.nu).toBe(beforeRefine.nu+1)
+      expect(Math.hypot(...session.getPanelState().notes[0].at.map((v,i)=>v-persistentPosition[i]))).toBeLessThan(1e-6)
+      session.undo();await waitSession(session)
+      await waitNote()
+      expect(session.getPanelState().notes[0].text).toBe('Nota durante Undo')
+      session.removeNote(persistentNote)
+      session.selectPoints([again.witnessPole],false)
       session.lockSelected(true)
       const prepared=await session.prepareHistoryRecipe()
       expect(prepared.recipe.version).toBe(8)
@@ -180,4 +225,4 @@ it.skipIf(!path || process.env.SURFACE_QA_ADAPTIVE_PROBE!=='1')('fences adaptive
       } finally {await reopened.dispose('cancelled')}
     } finally {await session.dispose('cancelled')}
   } finally {runtime?.dispose();vi.unstubAllGlobals();load.mockRestore();solids.forEach(s=>k.release(s));k.release(imported);editor.dispose()}
-},120000)
+},180000)

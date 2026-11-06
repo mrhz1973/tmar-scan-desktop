@@ -96,6 +96,7 @@ export class SurfaceDraft {
   private exported: { epoch: number; queueRevision: number; value: Preview } | null = null
   private disposed = false
   private refining = false
+  private historyTransition = false
   private recipeBusy = false
   private restoreUnverified = false
   private exportRequests = 0
@@ -150,6 +151,7 @@ export class SurfaceDraft {
   }
 
   getSnapshot = (): SurfaceDraftSnapshot => this.snapshot
+  get adaptiveHistoryPending(): boolean { return this.historyTransition }
 
   subscribe = (listener: () => void): (() => void) => {
     if (this.disposed) return () => undefined
@@ -525,11 +527,12 @@ export class SurfaceDraft {
     this.ensureNoPlaneTangency()
     const before = this.snapshot, previous = this.runtime.history.current, preparation = previous?.preparation
     if (!preparation || before.cylinderSession !== null) throw new Error('Preparazione della faccia non disponibile.')
-    if (previous.lockSnapshots !== undefined) throw new Error('Raffinamento adattivo non disponibile senza rimappare i blocchi.')
+    if (previous.lockSnapshots !== undefined && !preparation.adaptiveSelection) throw new Error('Raffinamento adattivo non disponibile senza rimappare i blocchi.')
     if (!insertions.length) return
     if (before.locks.length) throw new Error('Rimuovi i blocchi manuali prima di raffinare il reticolo.')
     if (before.net !== before.committedNet || before.validNet !== before.net || before.calculating)
       throw new Error('Attendi la verifica CAD e termina il trascinamento prima di raffinare.')
+    if (preparation.adaptiveSelection) return this.refineAdaptive(insertions, previous)
     // Validate and allocate everything possible before changing worker selection.
     const additions = structuredClone(insertions) as KnotInsertion[]
     const net = refineClampedNet(before.net!, additions)
@@ -575,6 +578,33 @@ export class SurfaceDraft {
       }
       throw error
     } finally { this.refining = false }
+  }
+
+  private async refineAdaptive(insertions: readonly KnotInsertion[], previous: EditFrame): Promise<void> {
+    const before=this.snapshot, p=previous.preparation!, selection=p.adaptiveSelection!, epoch=this.epoch
+    const additions=structuredClone([...insertions]), net=refineClampedNet(before.net!,additions)
+    const base=refineClampedNet(p.originalNet,additions), refinements=[...p.refinements,...additions]
+    this.refining=true
+    this.update({calculating:true,validNet:null,error:''})
+    try {
+      const result=await this.runtime.worker.ask<{net:Net;originalNet:Net;refinements:KnotInsertion[];trimLocks:number[];hiddenPoles:number[];selection:AdaptiveSelection}>({
+        action:'refineAdaptiveExperimental',net:before.net!,additions,continuity:before.continuity,manualLocks:[...before.locks],selection })
+      if (this.disposed || !this.runtime.active || this.epoch!==epoch || this.runtime.history.current!==previous ||
+          !sameExact(result.net,net) || !sameExact(result.originalNet,base) || !sameExact(result.refinements,refinements))
+        throw new Error('Raffinamento adattivo non verificabile.')
+      const frame=this.runtime.history.commitAdaptiveRefinement({net,locks:[],lockSnapshots:[],continuity:before.continuity,
+        freeBoundary:false,preparation:{face:p.face,refinements,originalNet:base,trimLocks:result.trimLocks,
+          hiddenPoles:result.hiddenPoles,adaptiveSelection:result.selection}},additions)
+      this.refining=false
+      this.applyFrame(frame,false)
+    } catch(error) {
+      if (!this.disposed && this.runtime.active) {
+        this.restoreUnverified=true;this.invalidate()
+        this.update({preview:null,validNet:null,previewStale:false,calculating:false,
+          error:'Raffinamento adattivo non verificabile: seleziona di nuovo la faccia.'})
+      }
+      throw error
+    } finally {this.refining=false}
   }
 
   /** Propose read-only, then publish the verified CAD face and its real note witness.
@@ -1004,10 +1034,40 @@ export class SurfaceDraft {
   }
   private step(delta: -1 | 1): boolean {
     this.ensureActive()
+    const previous=this.runtime.history.current, target=this.runtime.history.peek(delta)
+    const active=previous?.preparation?.adaptiveSelection, historical=target?.preparation?.adaptiveSelection
+    if (target && active && historical && !sameExact(active,historical)) {
+      void this.stepAdaptive(delta,previous!,target)
+      return true
+    }
     const frame = this.runtime.history.step(delta)
     if (!frame) return false
     this.applyFrame(frame, false)
     return true
+  }
+  private async stepAdaptive(delta: -1 | 1, previous: EditFrame, target: EditFrame): Promise<void> {
+    const p=target.preparation!, active=previous.preparation!.adaptiveSelection!, epoch=this.epoch
+    this.refining=true;this.historyTransition=true
+    this.update({calculating:true,validNet:null,canUndo:false,canRedo:false,error:''})
+    try {
+      const result=await this.runtime.worker.ask<{net:Net;selection:AdaptiveSelection}>({action:'reactivateAdaptiveExperimental',
+        refinements:p.refinements,expectedNet:p.originalNet,expectedTrimLocks:p.trimLocks,expectedHiddenPoles:p.hiddenPoles,selection:active})
+      if (this.disposed || !this.runtime.active || this.epoch!==epoch || this.runtime.history.current!==previous ||
+          this.runtime.history.peek(delta)!==target || !sameExact(result.net,p.originalNet)) throw new Error('Cronologia adattiva superata.')
+      const checked=await this.runtime.worker.ask<Preview>({action:'evaluateAdaptiveExperimental',net:target.net,
+        continuity:target.continuity,selection:result.selection})
+      if (this.disposed || !this.runtime.active || this.epoch!==epoch || this.runtime.history.current!==previous ||
+          this.runtime.history.peek(delta)!==target || checked.valid!==true) throw new Error('Cronologia adattiva non verificabile.')
+      const frame=this.runtime.history.stepAdaptive(delta,result.selection)
+      this.refining=false
+      this.applyFrame(frame,false)
+    } catch {
+      if (!this.disposed && this.runtime.active) {
+        this.restoreUnverified=true;this.invalidate()
+        this.update({preview:null,validNet:null,previewStale:false,calculating:false,canUndo:false,canRedo:false,
+          error:'Cronologia adattiva non verificabile: seleziona di nuovo la faccia.'})
+      }
+    } finally {this.refining=false;this.historyTransition=false}
   }
   private applyFrame(frame: EditFrame, equivalentToShown: boolean, published?: G1PublishedPlaneResult | G1PublishedCurvedResult): void {
     const previous = this.snapshot
