@@ -199,6 +199,26 @@ try {
       for(let i=0;i<=128;i++)for(let j=0;j<=128;j++){const x=u.uMin+(u.uMax-u.uMin)*i/128,y=u.vMin+(u.vMax-u.vMin)*j/128;if(kernel.classifyPointOnFace(a,x,y)!=='in')continue;const p=kernel.pointOnSurface(a,x,y),q=kernel.pointOnSurface(b,x,y);const d=Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z);if(!Number.isFinite(d))throw Error('Invalid witness distance');maximum=Math.max(maximum,d);samples++}
       check(samples>0&&maximum>0.001,'adaptive edit changes sampled interior of the original face')
     } finally {faces.forEach(x=>kernel.release(x));resultFaces.forEach(x=>kernel.release(x));solids.forEach(x=>kernel.release(x));kernel.release(source);kernel.release(result)}
+    if(process.env.TEST_ADAPTIVE_APPLY==='1') {
+      if(process.env.TEST_PROJECT_ROUNDTRIP!=='1')throw Error('Adaptive apply QA requires project roundtrip')
+      await page.waitForSelector('[data-test=workspace-editor-apply]:enabled',{timeout:120000})
+      await page.click('[data-test=workspace-editor-apply]')
+      await page.waitForFunction(()=>window.surfaceQa.useWorkspaceEditor.getState().phase==='closed',{timeout:120000})
+      const after=await page.evaluate(async()=>{const q=window.surfaceQa,s=q.useReverse.getState(),receipt=q.useWorkspaceEditor.getState().receipt,created=receipt?.createdBodyIds?.[0];if(!created)throw Error('No CAD copy');const answer=await q.runCommand('reverse.body.edit_source',{body:created});return {created,original:q.id,count:s.bodies.length,step:new TextDecoder().decode(answer.file.bytes)}})
+      const shape=kernel.importStep(after.step),solids=kernel.getSubShapes(shape,'solid');let volume
+      try {volume=kernel.getVolume(shape);check(kernel.isValid(shape)&&solids.length===1,'Apply publishes a valid adaptive CAD copy')} finally {solids.forEach(x=>kernel.release(x));kernel.release(shape)}
+      await page.waitForSelector('[data-test=save-project]:enabled');await page.click('[data-test=save-project]')
+      let saved;for(let i=0;i<400&&!saved;i++){const f=readdirSync(join(out,'downloads')).find(n=>n.endsWith('.scanruler'));if(f)saved=join(out,'downloads',f);else await new Promise(r=>setTimeout(r,100))}
+      assert(saved,'No saved project')
+      const reopened=await browser.newPage();reopened.on('dialog',d=>void d.accept());reopened.on('pageerror',e=>report.consoleErrors.push('reopen: '+e.message))
+      await reopened.goto(url.href,{waitUntil:'domcontentloaded'});await reopened.waitForSelector('[data-test=project-input]');await(await reopened.$('[data-test=project-input]')).uploadFile(saved);await reopened.click('[data-test=workspace-reverse]')
+      await reopened.waitForFunction(async({count,original,created})=>{const {useReverse}=await import('/plugins/reverse/state/reStore.ts');const s=useReverse.getState();return !s.building&&s.bodies.length===count&&s.bodies.some(b=>b.id===original)&&s.bodies.some(b=>b.id===created)}, {timeout:120000},{count:after.count,original:after.original,created:after.created})
+      const reopenedStep=await reopened.evaluate(async id=>{const {reverseSession}=await import('/plugins/reverse/app/reSession.ts');return (await reverseSession().client().bodyEditSource(id)).text},after.created)
+      const restored=kernel.importStep(reopenedStep),rs=kernel.getSubShapes(restored,'solid');try {check(kernel.isValid(restored)&&rs.length===1&&Math.abs(kernel.getVolume(restored)-volume)<1e-6,'saved project reopens the valid adaptive CAD copy')} finally {rs.forEach(x=>kernel.release(x));kernel.release(restored)}
+      await reopened.close();report.adaptiveApply={bodyIndex:0,faceIndex:7,witnessPole:witness,interiorSamples:samples,maximumDisplacementMm:maximum,volume,savedSha256:sha(readFileSync(saved))}
+      check(report.consoleErrors.length===0,'no browser console errors');report.inputHashAfter=sha(readFileSync(sourceFile));report.sourceUnchanged=report.inputHashAfter===inputHash;check(report.sourceUnchanged,'original STEP unchanged')
+      report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
+    }
     if(process.env.TEST_ADAPTIVE_DRAG==='1') {
       await page.click('[data-test=surface-undo]')
       await page.waitForFunction(({i,before})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[i];return s.snapshot?.validation.kind==='valid'&&p&&p.every((v,j)=>Math.abs(v-before[j])<1e-8)}, {timeout:120000},{i:witness,before})
