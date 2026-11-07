@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Net, Point } from './brep'
 import { binary64Units, boundExperimentalPeriodicSeamDerivativeGap } from './experimentalPeriodicSeamDerivativeGap'
+import { boundExperimentalPeriodicQuinticSeamChange, type ExperimentalPeriodicQuinticSeamChangeBudget } from './experimentalPeriodicQuinticSeamChange'
 import { boundExperimentalPeriodicQuinticSurfaceNormals } from './experimentalPeriodicQuinticSurfaceNormals'
 import { boundExperimentalPeriodicQuinticStoredSurfaceAndSeamDisplacement,
   type ExperimentalPeriodicQuinticDisplacementBudget } from './experimentalPeriodicQuinticStoredDisplacement'
@@ -32,6 +33,9 @@ export interface ExperimentalPeriodicQuinticCoordinatedSeamRequest extends Omit<
 export type ExperimentalPeriodicQuinticFullCoordinatedSeamRequest = QuinticSideRequest & CoordinatedSeamBudgets
 export type ExperimentalPeriodicQuinticSurfaceBoundSeamRequest = Omit<ExperimentalPeriodicQuinticFullCoordinatedSeamRequest, 'maximumDisplacement'> & {
   surfaceDisplacementBudget: ExperimentalPeriodicQuinticDisplacementBudget
+}
+export type ExperimentalPeriodicQuinticBoundedJumpSeamRequest = ExperimentalPeriodicQuinticSurfaceBoundSeamRequest & {
+  seamChangeBudget: ExperimentalPeriodicQuinticSeamChangeBudget
 }
 
 const fail = (reason: string): never => { throw new Error(`Fascia periodica quintica rifiutata: ${reason}`) }
@@ -118,7 +122,21 @@ export function proposeExperimentalPeriodicQuinticFullCoordinatedSeam(request: E
 
 /** Store precomputed targets and prove the surface and seam-curve budgets on the stored model. */
 export function proposeExperimentalPeriodicQuinticSurfaceBoundSeam(request: ExperimentalPeriodicQuinticSurfaceBoundSeamRequest) {
-  const staged = proposeCoordinatedSeam(request, 'surface-bound')
+  return certifyStoredDisplacement(request, proposeCoordinatedSeam(request, 'surface-bound'))
+}
+
+/** Prove the specified seam bounds on stored coefficients, alongside the existing storage checks. */
+export function proposeExperimentalPeriodicQuinticBoundedJumpSeam(request: ExperimentalPeriodicQuinticBoundedJumpSeamRequest) {
+  let seamChange: ReturnType<typeof boundExperimentalPeriodicQuinticSeamChange> | undefined
+  const staged = proposeCoordinatedSeam(request, 'surface-bound', (original, candidate) => {
+    seamChange = boundExperimentalPeriodicQuinticSeamChange(original, candidate, request.seamChangeBudget)
+    return seamChange.status === 'certified' ? undefined : seamChange.reason
+  })
+  const result = certifyStoredDisplacement(request, staged)
+  return { ...result, evidence: { ...result.evidence, seamChange } }
+}
+
+function certifyStoredDisplacement(request: ExperimentalPeriodicQuinticSurfaceBoundSeamRequest, staged: ReturnType<typeof proposeCoordinatedSeam>) {
   if (staged.status !== 'coefficient-proposal') return staged
   const displacement = boundExperimentalPeriodicQuinticStoredSurfaceAndSeamDisplacement(request.net, staged.proposal.net,
     request.surfaceDisplacementBudget, request.maximumSeamDisplacement)
@@ -130,6 +148,7 @@ export function proposeExperimentalPeriodicQuinticSurfaceBoundSeam(request: Expe
 
 function proposeCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedSeamRequest | ExperimentalPeriodicQuinticFullCoordinatedSeamRequest |
   ExperimentalPeriodicQuinticSurfaceBoundSeamRequest, mode: 'neighbors' | 'full' | 'surface-bound',
+  verifyBoundedJump?: (original: Net, candidate: Net) => string | undefined,
 ) {
   const evidenceScope = 'coordinated-mobile-periodic-seam-coefficient-model' as const
   const evidence: {
@@ -197,17 +216,23 @@ function proposeCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedS
     const delta = (i: number, axis: number) => binary64Units(candidate.poles[i][axis]) - binary64Units(net.poles[i][axis])
     let maxSeamDisplacementBound = 0
     for (let v = 0; v < net.nv; v++) {
-      for (let axis = 0; axis < 3; axis++) {
-        const at = delta(v, axis), next = delta(net.nv + v, axis), prev = delta(previous * net.nv + v, axis)
-        if ((next - at) * lastWidth !== (at - prev) * firstWidth) return stop('stored-seam-jump-changed')
+      if (!verifyBoundedJump) {
+        for (let axis = 0; axis < 3; axis++) {
+          const at = delta(v, axis), next = delta(net.nv + v, axis), prev = delta(previous * net.nv + v, axis)
+          if ((next - at) * lastWidth !== (at - prev) * firstWidth) return stop('stored-seam-jump-changed')
+        }
       }
       maxSeamDisplacementBound = Math.max(maxSeamDisplacementBound, norm(difference(candidate.poles[v], net.poles[v])))
     }
-    evidence.seamJumpPreserved = true
+    if (!verifyBoundedJump) evidence.seamJumpPreserved = true
     evidence.maxSeamDisplacementBound = maxSeamDisplacementBound
     if (mode !== 'surface-bound' && maxSeamDisplacementBound > maximumSeamDisplacement) return stop('seam-displacement-bound-exceeds-budget')
     const after = evidence.after = boundExperimentalPeriodicSeamDerivativeGap(candidate, seamDerivativeTolerance)
     if (after.status !== 'within-tolerance') return stop('candidate-seam-unverified')
+    if (verifyBoundedJump) {
+      const refusal = verifyBoundedJump(net, candidate)
+      if (refusal) return stop(refusal)
+    }
 
     phase = 'surface-normals'
     const normals = evidence.normals = boundExperimentalPeriodicQuinticSurfaceNormals(net, candidate, request.normalBudget)

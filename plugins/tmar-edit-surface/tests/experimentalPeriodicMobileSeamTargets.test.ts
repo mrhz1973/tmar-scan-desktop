@@ -6,6 +6,7 @@ import { solveExperimentalPeriodicMobileSeamPairTargets, solveExperimentalPeriod
   type ExperimentalPeriodicMobileSeamPairTargetsRequest } from '../experimentalPeriodicMobileSeamTargets'
 import { sampleExperimentalPeriodicGeometricSideTargets } from '../experimentalPeriodicGeometricSideTargets'
 import { solveAndStoreExperimentalPeriodicMobileSeamPair, storeExperimentalPeriodicMobileSeamSurfaceBoundPair,
+  storeExperimentalPeriodicMobileSeamBoundedJumpPair,
   type ExperimentalPeriodicMobileSeamStoredPairRequest } from '../experimentalPeriodicMobileSeamStoredPair'
 import { proposeExperimentalPeriodicQuinticFullCoordinatedSeam, proposeExperimentalPeriodicQuinticSurfaceBoundSeam } from '../experimentalPeriodicQuinticSide'
 import { prepareExperimentalPeriodicUBasis } from '../experimentalPeriodicUBasis'
@@ -320,7 +321,7 @@ it('certifies a 0.05 surface and seam cap even though a stored pole moves 0.1', 
   expect(stopped).not.toHaveProperty('proposal')
 })
 
-it('stores supplied targets and withholds both sides when the second seam bound fails', () => {
+function suppliedFixture() {
   const { central, atCentralV0, atCentralV1 } = storedFixture()
   const withTargets = (side: typeof atCentralV0) => {
     const { net, edge } = side.strip
@@ -332,7 +333,11 @@ it('stores supplied targets and withholds both sides when the second seam bound 
     return { ...side, targetInward, storage: { ...side.storage,
       surfaceDisplacementBudget: { maximumSurfaceDisplacement: 0.2, maxDepth: 6, maxPieces: 512 } } }
   }
-  const request = { central, atCentralV0: withTargets(atCentralV0), atCentralV1: withTargets(atCentralV1) }
+  return { central, atCentralV0: withTargets(atCentralV0), atCentralV1: withTargets(atCentralV1) }
+}
+
+it('stores supplied targets and withholds both sides when the second seam bound fails', () => {
+  const request = suppliedFixture()
   const before = structuredClone(request)
   const result = storeExperimentalPeriodicMobileSeamSurfaceBoundPair(request)
   if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
@@ -348,4 +353,49 @@ it('stores supplied targets and withholds both sides when the second seam bound 
   })
   expect(stopped).not.toHaveProperty('candidates')
   expect(stopped.receipts.V0).not.toHaveProperty('candidate')
+})
+
+it('stores a small nonzero jump change only through the explicit outward-bounded path', () => {
+  const supplied = suppliedFixture()
+  const withBudget = (side: typeof supplied.atCentralV0) => {
+    for (const pole of side.strip.net.poles) pole[2] /= 4
+    return { ...side, storage: { ...side.storage, maximumSeamDisplacement: 0.05,
+      surfaceDisplacementBudget: { ...side.storage.surfaceDisplacementBudget, maximumSurfaceDisplacement: 0.05 },
+      seamChangeBudget: { maximumAbsoluteJump: 1e-9, maximumJumpChange: 2 ** -30, maximumCandidateNormalChord: 1e-6,
+        maxPieces: 32, maxDepth: 4 },
+    } }
+  }
+  const request = { central: supplied.central, atCentralV0: withBudget(supplied.atCentralV0), atCentralV1: withBudget(supplied.atCentralV1) }
+  request.atCentralV1.targetInward[0][2] = 2 ** -34
+  const before = structuredClone(request)
+  expect(storeExperimentalPeriodicMobileSeamSurfaceBoundPair(request)).toMatchObject({ status: 'inconclusive',
+    stop: { side: 'V1', reasonCode: 'stored-seam-jump-changed' } })
+  const result = storeExperimentalPeriodicMobileSeamBoundedJumpPair(request)
+  if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
+  expect(result.receipts.V1).toMatchObject({ status: 'diagnostic-only', evidence: {
+    // The U jump coefficient in the second edited V row is twice the first.
+    checkedTraining: 33, checkedHoldout: 32, storage: { seamChange: { status: 'certified', evidence: { jumpChangeUpper: 12 * 2 ** -34 } },
+      normals: { status: 'certified-positive' }, displacement: { status: 'within-surface-budget' } },
+  } })
+  const right = result.receipts.V1
+  if (right.status !== 'diagnostic-only') throw new Error(JSON.stringify(right))
+  expect(right.evidence.storage).not.toHaveProperty('seamJumpPreserved')
+  expect(right.evidence.maxSecondDerivativeChangeBound).toBeLessThan(1e-10)
+  expect(request).toEqual(before)
+
+  request.atCentralV1.storage.seamChangeBudget.maximumJumpChange = 0
+  const stopped = storeExperimentalPeriodicMobileSeamBoundedJumpPair(request)
+  expect(stopped).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', reasonCode: 'jump-change-unverified' },
+    receipts: { V0: { status: 'diagnostic-only' }, V1: { status: 'inconclusive', evidence: { storagePhase: 'candidate-seam' } } } })
+  expect(stopped).not.toHaveProperty('candidates')
+  expect(stopped.receipts.V0).not.toHaveProperty('candidate')
+
+  request.atCentralV1.storage.seamChangeBudget.maximumJumpChange = 2 ** -30
+  request.atCentralV1.storage.seamChangeBudget.maximumCandidateNormalChord = 0
+  expect(storeExperimentalPeriodicMobileSeamBoundedJumpPair(request)).toMatchObject({ status: 'inconclusive',
+    stop: { side: 'V1', reasonCode: 'seam-normal-chord-unverified' } })
+  request.atCentralV1.storage.seamChangeBudget.maximumCandidateNormalChord = 1e-6
+  request.atCentralV1.storage.surfaceDisplacementBudget.maximumSurfaceDisplacement = 0.01
+  expect(storeExperimentalPeriodicMobileSeamBoundedJumpPair(request)).toMatchObject({ status: 'inconclusive',
+    stop: { side: 'V1', reasonCode: 'surface-displacement-unverified' } })
 })

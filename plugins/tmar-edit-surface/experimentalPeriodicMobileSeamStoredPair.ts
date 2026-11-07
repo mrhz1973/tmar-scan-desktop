@@ -5,7 +5,8 @@ import { experimentalCoefficientChangeWithinCap } from './experimentalPeriodicMo
 import { solveExperimentalPeriodicMobileSeamPairTargets, type ExperimentalPeriodicMobileSeamPairTargetsRequest } from './experimentalPeriodicMobileSeamTargets'
 import { prepareExperimentalPeriodicOneSidedSurfaceDerivatives } from './experimentalPeriodicOneSidedSurfaceDerivatives'
 import { proposeExperimentalPeriodicQuinticFullCoordinatedSeam, proposeExperimentalPeriodicQuinticSurfaceBoundSeam,
-  type ExperimentalPeriodicQuinticFullCoordinatedSeamRequest, type ExperimentalPeriodicQuinticSurfaceBoundSeamRequest } from './experimentalPeriodicQuinticSide'
+  proposeExperimentalPeriodicQuinticBoundedJumpSeam, type ExperimentalPeriodicQuinticFullCoordinatedSeamRequest,
+  type ExperimentalPeriodicQuinticSurfaceBoundSeamRequest, type ExperimentalPeriodicQuinticBoundedJumpSeamRequest } from './experimentalPeriodicQuinticSide'
 import { boundExperimentalPeriodicSeamDerivativeGap } from './experimentalPeriodicSeamDerivativeGap'
 import { validateExperimentalPeriodicSurfaceU } from './experimentalPeriodicSurfaceRefinement'
 import { sampleExperimentalPeriodicTransverseDerivatives } from './experimentalPeriodicTransverseSamples'
@@ -20,10 +21,11 @@ type JointSide = Pick<Side, 'strip' | 'centralUAtEdgeEnds' | 'edgePeriod' | 'tra
   budgets: Omit<Side['budgets'], 'regularization' | 'maxIterations' | 'relativeStationarityTolerance' | 'maxFreeColumns' |
     'augmentedQrMaxUpdates' | 'constrainedAdmm'>
 }
-type SurfaceBoundSide = JointSide & {
-  storage: Omit<ExperimentalPeriodicQuinticSurfaceBoundSeamRequest, keyof ProposalInput>
+type SuppliedSide<S> = JointSide & {
+  storage: S
   targetInward: readonly Point[]
 }
+type SuppliedPair<S> = { central: Net; atCentralV0: SuppliedSide<S>; atCentralV1: SuppliedSide<S> }
 type Proposal = Extract<ReturnType<typeof proposeExperimentalPeriodicQuinticFullCoordinatedSeam>, { status: 'coefficient-proposal' }>['proposal']
 type StorageResult<E> = { status: 'coefficient-proposal'; proposal: Proposal; evidence: E } |
   { status: 'inconclusive'; phase: string; reason: string; evidence: E }
@@ -148,7 +150,7 @@ export function solveAndStoreExperimentalPeriodicMobileSeamPair(request: Experim
   return { status: 'diagnostic-only' as const, candidates: { V0, V1 }, fitReceipts, receipts, evidenceScope }
 }
 
-function validateSurfaceBoundSide(central: Net, side: SurfaceBoundSide) {
+function validateSurfaceBoundSide(central: Net, side: JointSide & { targetInward: readonly Point[] }) {
   const { budgets, strip: { net, edge }, targetInward } = side
   validateExperimentalPeriodicSurfaceU(net)
   if (central.weights.some(w => w !== 1) || central.mu.slice(1, -1).some(m => m >= central.du) ||
@@ -170,12 +172,17 @@ function validateSurfaceBoundSide(central: Net, side: SurfaceBoundSide) {
 }
 
 /** Store externally supplied targets once and verify the stored coefficient models and sampled joint jets. */
-export function storeExperimentalPeriodicMobileSeamSurfaceBoundPair(request: {
-  central: Net; atCentralV0: SurfaceBoundSide; atCentralV1: SurfaceBoundSide
-}) {
-  const evidenceScope = 'two-lateral-surface-bound-storage-and-sampled-joints' as const
-  const store = (edge: Edge, side: SurfaceBoundSide) =>
-    storeSide(request.central, edge, side, side.targetInward, proposeExperimentalPeriodicQuinticSurfaceBoundSeam)
+export function storeExperimentalPeriodicMobileSeamSurfaceBoundPair(request: SuppliedPair<Omit<ExperimentalPeriodicQuinticSurfaceBoundSeamRequest, keyof ProposalInput>>) {
+  return storeSuppliedPair(request, proposeExperimentalPeriodicQuinticSurfaceBoundSeam, 'two-lateral-surface-bound-storage-and-sampled-joints')
+}
+
+/** Store supplied targets with an outward seam-change proof and the same independent storage and joint checks. */
+export function storeExperimentalPeriodicMobileSeamBoundedJumpPair(request: SuppliedPair<Omit<ExperimentalPeriodicQuinticBoundedJumpSeamRequest, keyof ProposalInput>>) {
+  return storeSuppliedPair(request, proposeExperimentalPeriodicQuinticBoundedJumpSeam, 'two-lateral-bounded-jump-storage-and-sampled-joints')
+}
+
+function storeSuppliedPair<S, E, Scope extends string>(request: SuppliedPair<S>, propose: (request: S & ProposalInput) => StorageResult<E>, evidenceScope: Scope) {
+  const store = (edge: Edge, side: SuppliedSide<S>) => storeSide(request.central, edge, side, side.targetInward, propose)
   type SideResult = ReturnType<typeof store>
   type Receipt = Omit<Extract<SideResult, { status: 'diagnostic-only' }>, 'candidate'> |
     Exclude<SideResult, { status: 'diagnostic-only' }> | { status: 'not-run' }
