@@ -1484,7 +1484,7 @@ it.each([
   const handle=f.overlay.children.find(item=>item.dataset.test==='surface-strip-handle')!
   expect(f.getLayer().pointerDown?.(f.event(1,[0,-1,.02]))).toBe(true)
   await flushBoundaryPick()
-  expect(prepare.mock.calls[0][1]).toEqual([{edge,path:selected,seed:[expect.closeTo(0,8),-1,.02]}])
+  expect(prepare.mock.calls[0][1]).toEqual([{edge,path:selected,seed:[expect.closeTo(0,8),-1,.02],segment:0}])
   if (kind==='front') {
     expect(handle.dataset.edge).toBe(String(edge))
     expect(handle.style.display).toBe('block')
@@ -1518,6 +1518,72 @@ it('keeps the existing direct D path for one curved edge even with native visibi
   expect(f.beginDirectStripGesture).toHaveBeenCalledWith(0,9)
   expect(f.owner.prepareDirectStripPick).not.toHaveBeenCalled()
   f.getHandlers().up(down)
+  layer.dispose()
+})
+
+
+it.each(['visible','refused','outside click','recertified outside click','released','section'] as const)(
+  'qualifies a sampled curved D edge using the picked segment (%s)',async scenario=>{
+  const f=fixture()
+  const path=Array.from({length:49},(_,i):Point=>{
+    const x=(i-24)*.05
+    return [x,-1+x*x/2,0]
+  })
+  const click:Point=[.025,-1+.05*.05/4,0]
+  const curve:Point=[click[0],-1+click[0]*click[0]/2,0]
+  const firstPoint:Point=[curve[0]+(scenario==='outside click'?.09:scenario==='recertified outside click'?.075:0),curve[1],curve[2]]
+  const winner={edge:0,point:firstPoint}
+  const prepare=vi.fn().mockResolvedValueOnce(scenario==='refused'?null:winner)
+  const begin=vi.fn((pick:{readonly edge:number})=>f.beginDirectStripGesture(pick.edge,9))
+  f.owner.prepareDirectStripPick=prepare
+  f.owner.beginVerifiedDirectStripGesture=begin
+  f.owner.cancelPreparedDirectStripPick=vi.fn()
+  f.set({directStrip:{paths:[path],revision:9,axis:0}})
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  const handle=f.overlay.children.find(item=>item.dataset.test==='surface-strip-handle')!
+  if (scenario==='section') {
+    f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,0,1),1)],false)
+    f.getLayer().pointerDown?.(f.event(1,click))
+    expect(prepare).not.toHaveBeenCalled()
+    expect(handle.style.display).toBe('block')
+    layer.dispose()
+    return
+  }
+  expect(f.getLayer().pointerDown?.(f.event(1,click))).toBe(true)
+  expect(handle.style.display).toBe('none')
+  await flushBoundaryPick()
+  expect(prepare.mock.calls[0][1]).toEqual([{edge:0,path,segment:24,
+    seed:click.map(coordinate=>expect.closeTo(coordinate,8))}])
+  if (scenario==='refused' || scenario==='outside click') {
+    expect(handle.style.display).toBe('none')
+    expect(begin).not.toHaveBeenCalled()
+    layer.dispose()
+    return
+  }
+  expect(handle.style.display).toBe('block')
+  let complete!:(pick:typeof winner)=>void
+  prepare.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve}))
+  const down={pointerId:7,button:0,clientX:parseFloat(handle.style.left),clientY:parseFloat(handle.style.top),
+    preventDefault:vi.fn(),stopPropagation:vi.fn()} as unknown as PointerEvent
+  handle.dispatch('pointerdown',down)
+  expect(prepare.mock.calls[1][1]).toEqual(prepare.mock.calls[0][1])
+  expect(begin).not.toHaveBeenCalled()
+  expect(f.counts().captured).toBe(7)
+  const moved={...down,clientX:down.clientX+50}
+  if (scenario==='released') f.getHandlers().up(down)
+  else f.getHandlers().move(moved)
+  complete(scenario==='recertified outside click'
+    ? {edge:0,point:[firstPoint[0]+.0075,firstPoint[1],firstPoint[2]]} : winner)
+  await flushBoundaryPick()
+  if (scenario==='visible') {
+    expect(begin).toHaveBeenCalledWith(winner)
+    f.getHandlers().up(moved)
+    expect(f.finishStripGesture.mock.lastCall?.[0]?.[0]).toBeCloseTo(.5)
+  } else {
+    expect(begin).not.toHaveBeenCalled()
+    expect(f.finishStripGesture).not.toHaveBeenCalled()
+  }
+  expect(f.counts().captured).toBeNull()
   layer.dispose()
 })
 
