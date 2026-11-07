@@ -35,4 +35,11 @@ The opt-in v8 host test previously expected *every* note on that face to fail me
 4. Verify compiled browser/worker and real app project roundtrip, then separately installed application and physical navigation/annotation if pursuing release.
 5. Preserve `experimentalAdaptiveV8` opt-in test gate, the unannotated CAD copy fallback and Draft/HOLD PR status.
 
+## CI status at 2026-11-07 00:07 UTC
+Draft PR #39 triggered GitHub Actions. The license job passed; the test-and-build job failed **before tests** at `node scripts/check-plugin-boundary.mjs` because `scripts/capture-tmar-gallery.mjs:11` imports `../plugins/tmar-mesh-review/scripts/fixture.mjs`. The immediate parent PR #38 has the identical failure on the identical path. This is an inherited boundary violation **outside this host patch's file ownership**, not evidence for or against the adaptive sampler. The CI safety guard has not been weakened, and no affected unrelated file was changed.
+
+The static thin-annulus fixture arithmetic was checked (9x9: 0, 17x17: 6, 33x33: 25), but Vitest, TypeScript and OCCT have **not yet executed for this PR head**. Desktop Commander reports the Windows targets offline and the isolated local container could not resolve github.com to clone the repository. Do not call this QA PASS or merge until the boundary issue is independently resolved and the requested tests run on the exact SHA.
+
+Latest external plugin notice: `codex/edit-surface` at `22bdfb5`, UV surface-point target controller prototype with locks/revision fence/one Undo. This is independent of the host change, has no activated host/UI integration, and requires a separate exact-pair qualification.
+
 **Disposition: implementation for isolated review. V8 annotated notes, UI, installed builds, full topology/G1 and release remain HOLD.**
