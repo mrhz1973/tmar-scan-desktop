@@ -285,3 +285,7 @@ An independent experimental interval diagnostic bounds the absolute seam derivat
 ### Storage with bounded seam change
 
 A separate opt-in experiment tests the stored seam absolute jump, signed jump change and normal chord with outward bounds instead of requiring bit-identical jump. Existing storage entry points retain their exact check. Surface and seam displacement, D1/D2, locks, full-domain source-to-candidate normal and sampled stored-joint checks remain independent. Synthetic evidence only; this does not validate pcurves, wall, topology or CAD.
+
+### Exact sampled normal chord
+
+An opt-in stored-joint path can evaluate the chord threshold exactly on binary64 jet values using integer arithmetic when the prior conservative upper bound is inconclusive. It preserves the same threshold and all independent geometry checks; diagnostics include failure category and ordinal. It proves only the relationship between evaluated sample vectors, not a continuous joint or CAD validity. Legacy behavior remains available.

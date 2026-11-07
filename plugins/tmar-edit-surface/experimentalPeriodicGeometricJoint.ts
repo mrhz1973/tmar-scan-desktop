@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Point } from './brep'
+import { experimentalBinary64NormalChordWithin } from './experimentalBinary64NormalChord'
 import { add as intervalAdd, cross as intervalCross, divide as intervalDivide,
   l1, mul as intervalMul, scalar, vector, type V } from './tangencyCoefficientIntervals'
 
@@ -88,10 +89,20 @@ export function diagnoseExperimentalPeriodicGeometricJoint(request: Experimental
   return result.status === 'sample-diagnostic' ? result.receipt : result
 }
 
-function analyzeGeometricJoint(request: ExperimentalPeriodicGeometricJointRequest) {
+/** Opt in to an exact chord proof when the conservative interval upper is too wide. */
+export function diagnoseExperimentalPeriodicGeometricJointExactChord(request: ExperimentalPeriodicGeometricJointRequest) {
+  const result = analyzeGeometricJoint(request, true)
+  return result.status === 'sample-diagnostic' ? result.receipt : result
+}
+
+type GeometricJointFailureReason = 'invalid-input' | 'degenerate-tangent' | 'incompatible-tangents' |
+  'degenerate-transverse' | 'unrepresentable-diagnostic'
+export type ExperimentalPeriodicGeometricJointFailureReason = GeometricJointFailureReason | 'normal-chord-proof'
+
+function analyzeGeometricJoint(request: ExperimentalPeriodicGeometricJointRequest, allowExactChord = false) {
   const evidenceScope = 'pointwise-floating-geometric-joint-diagnostic' as const
-  const stop = (reason: 'invalid-input' | 'degenerate-tangent' | 'incompatible-tangents' |
-    'degenerate-transverse' | 'unrepresentable-diagnostic') => ({ status: 'inconclusive' as const, reason, evidenceScope })
+  const stop = (reason: GeometricJointFailureReason, proofFailure?: 'normal-chord-proof') =>
+    ({ status: 'inconclusive' as const, reason, evidenceScope, ...(proofFailure ? { proofFailure } : {}) })
   if (!request) return stop('invalid-input')
   const { lateralTangent, supportTangent, lateralInward, supportInward, minimumTangentNorm,
     minimumTransverseNorm, maximumTangentChord, maximumNormalChord, minimumPositiveScale } = request
@@ -142,6 +153,7 @@ function analyzeGeometricJoint(request: ExperimentalPeriodicGeometricJointReques
   const normalDot = Math.max(-1, Math.min(1, dot(a, b)))
   const normalAngleRadians = Math.atan2(norm(cross(a, b)), normalDot)
   const normalChord = distance(a, b)
+  let normalChordProof: 'exact-binary64-jets' | undefined
   let classification: 'orientation-mismatch' | 'oriented-normal-mismatch' | 'within-sampled-normal-budget'
   try {
     const alignedSupport = dotEnclosure(lateralNormal.enclosure, supportNormal.enclosure)
@@ -157,13 +169,18 @@ function analyzeGeometricJoint(request: ExperimentalPeriodicGeometricJointReques
         const numerator = l1(intervalCross(lateralNormal.enclosure, supportNormal.enclosure))
         const denominator = intervalMul(scalar(lateralNormal.maxComponentLower), scalar(supportNormal.maxComponentLower))
         const upper = intervalMul(scalar(2), intervalDivide(scalar(numerator), denominator))[1]
-        if (!(upper <= maximumNormalChord)) return stop('unrepresentable-diagnostic')
+        if (!(upper <= maximumNormalChord)) {
+          if (!allowExactChord || !experimentalBinary64NormalChordWithin(lateralTangent, lateralInward,
+            supportTangent, reference, maximumNormalChord)) return stop('unrepresentable-diagnostic', 'normal-chord-proof')
+          normalChordProof = 'exact-binary64-jets'
+        }
         classification = 'within-sampled-normal-budget'
       }
     }
   } catch { return stop('unrepresentable-diagnostic') }
   const receipt = { status: 'sample-diagnostic' as const, classification, tangentChord, normalChord, normalDot, normalAngleRadians,
-    lambda, mu, signedNormalResidual, derivativeEqualityDistance, minimumDerivativeChange, evidenceScope }
+    lambda, mu, signedNormalResidual, derivativeEqualityDistance, minimumDerivativeChange, evidenceScope,
+    ...(normalChordProof ? { normalChordProof } : {}) }
   return { status: 'sample-diagnostic' as const, receipt, planeNormal, q, lateralPerpendicular, floor,
     lateralNormalEnclosure: lateralNormal.enclosure }
 }

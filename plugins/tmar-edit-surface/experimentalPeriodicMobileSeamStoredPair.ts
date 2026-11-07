@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Net, Point } from './brep'
-import { diagnoseExperimentalPeriodicGeometricJoint } from './experimentalPeriodicGeometricJoint'
+import { diagnoseExperimentalPeriodicGeometricJoint, diagnoseExperimentalPeriodicGeometricJointExactChord,
+  type ExperimentalPeriodicGeometricJointFailureReason } from './experimentalPeriodicGeometricJoint'
 import { experimentalCoefficientChangeWithinCap } from './experimentalPeriodicMobileSeamConstrained'
 import { solveExperimentalPeriodicMobileSeamPairTargets, type ExperimentalPeriodicMobileSeamPairTargetsRequest } from './experimentalPeriodicMobileSeamTargets'
 import { prepareExperimentalPeriodicOneSidedSurfaceDerivatives } from './experimentalPeriodicOneSidedSurfaceDerivatives'
@@ -43,7 +44,7 @@ const directed = (v: Point, scale: number) => v.map(value => value * scale) as P
 const nativeSide = (side: SeamSide | undefined, sign: number) => side === undefined || sign > 0 ? side : side === 'left' ? 'right' : 'left'
 
 function storeSide<S, E>(central: Net, edge: Edge, side: JointSide & { storage: S }, targetInward: readonly Point[],
-  propose: (request: S & ProposalInput) => StorageResult<E>,
+  propose: (request: S & ProposalInput) => StorageResult<E>, diagnose = diagnoseExperimentalPeriodicGeometricJoint,
 ) {
   const evidence: {
     storage?: E
@@ -55,6 +56,8 @@ function storeSide<S, E>(central: Net, edge: Edge, side: JointSide & { storage: 
     checkedHoldout?: number
     maxTrainingNormalResidual?: number
     maxHoldoutNormalResidual?: number
+    jointFailure?: { reason: ExperimentalPeriodicGeometricJointFailureReason; sampleOrdinal: number }
+    exactNormalChordProofs?: number
   } = {}
   let phase: 'storage' | 'stored-training' | 'stored-holdout' = 'storage'
   const stop = (reasonCode: string, at?: { edgeParameter: number; seamSide?: SeamSide }) =>
@@ -95,12 +98,20 @@ function storeSide<S, E>(central: Net, edge: Edge, side: JointSide & { storage: 
           const a = lateral.evaluate(sample.parameter, edgeV(candidate, strip.edge), { u: nativeSide(seamSide, lateralU) })
           const b = fixed.evaluate(sample.supportParameter, edgeV(central, support.edge), { u: nativeSide(seamSide, supportU) })
           const inward = directed(a.dv, lateralV)
-          const diagnostic = diagnoseExperimentalPeriodicGeometricJoint({ ...budgets,
+          const diagnostic = diagnose({ ...budgets,
             lateralTangent: directed(a.du, lateralU), supportTangent: directed(b.du, supportU),
             lateralInward: inward, supportInward: directed(b.dv, supportV),
           })
+          if (diagnostic.status !== 'sample-diagnostic') {
+            // Count attempted jets within the group. The two training seam
+            // limits have their own ordinals, and holdout starts at one.
+            const checked = group === 'stored-training' ? evidence.checkedTraining : evidence.checkedHoldout
+            evidence.jointFailure = { reason: diagnostic.proofFailure ?? diagnostic.reason, sampleOrdinal: (checked ?? 0) + 1 }
+            return stop('stored-joint-diagnostic-inconclusive')
+          }
+          if (diagnostic.normalChordProof === 'exact-binary64-jets')
+            evidence.exactNormalChordProofs = (evidence.exactNormalChordProofs ?? 0) + 1
           const at = { edgeParameter: sample.edgeParameter, seamSide }
-          if (diagnostic.status !== 'sample-diagnostic') return stop('stored-joint-diagnostic-inconclusive', at)
           const normalNorm = Math.hypot(...b.normal)
           if (!(normalNorm > 0) || !Number.isFinite(normalNorm)) return stop('stored-normal-unrepresentable', at)
           const centralResidual = b.normal.reduce((sum, value, axis) => sum + (value / normalNorm) * inward[axis], 0)
@@ -181,8 +192,16 @@ export function storeExperimentalPeriodicMobileSeamBoundedJumpPair(request: Supp
   return storeSuppliedPair(request, proposeExperimentalPeriodicQuinticBoundedJumpSeam, 'two-lateral-bounded-jump-storage-and-sampled-joints')
 }
 
-function storeSuppliedPair<S, E, Scope extends string>(request: SuppliedPair<S>, propose: (request: S & ProposalInput) => StorageResult<E>, evidenceScope: Scope) {
-  const store = (edge: Edge, side: SuppliedSide<S>) => storeSide(request.central, edge, side, side.targetInward, propose)
+/** Keep the bounded-jump storage checks and opt in to exact chord proof on sampled jets. */
+export function storeExperimentalPeriodicMobileSeamExactChordPair(request: SuppliedPair<Omit<ExperimentalPeriodicQuinticBoundedJumpSeamRequest, keyof ProposalInput>>) {
+  return storeSuppliedPair(request, proposeExperimentalPeriodicQuinticBoundedJumpSeam,
+    'two-lateral-bounded-jump-storage-and-exact-sampled-chord', diagnoseExperimentalPeriodicGeometricJointExactChord)
+}
+
+function storeSuppliedPair<S, E, Scope extends string>(request: SuppliedPair<S>, propose: (request: S & ProposalInput) => StorageResult<E>, evidenceScope: Scope,
+  diagnose = diagnoseExperimentalPeriodicGeometricJoint,
+) {
+  const store = (edge: Edge, side: SuppliedSide<S>) => storeSide(request.central, edge, side, side.targetInward, propose, diagnose)
   type SideResult = ReturnType<typeof store>
   type Receipt = Omit<Extract<SideResult, { status: 'diagnostic-only' }>, 'candidate'> |
     Exclude<SideResult, { status: 'diagnostic-only' }> | { status: 'not-run' }

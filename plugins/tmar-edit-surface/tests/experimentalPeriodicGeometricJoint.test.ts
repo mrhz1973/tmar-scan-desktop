@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, it } from 'vitest'
 import type { Net, Point } from '../brep'
-import { diagnoseExperimentalPeriodicGeometricJoint, type ExperimentalPeriodicGeometricJointRequest } from '../experimentalPeriodicGeometricJoint'
+import { diagnoseExperimentalPeriodicGeometricJoint, diagnoseExperimentalPeriodicGeometricJointExactChord,
+  type ExperimentalPeriodicGeometricJointRequest } from '../experimentalPeriodicGeometricJoint'
+import { experimentalBinary64NormalChordWithin } from '../experimentalBinary64NormalChord'
 import { prepareExperimentalPeriodicOneSidedSurfaceDerivatives } from '../experimentalPeriodicOneSidedSurfaceDerivatives'
 
 const request: ExperimentalPeriodicGeometricJointRequest = {
@@ -9,6 +11,37 @@ const request: ExperimentalPeriodicGeometricJointRequest = {
   minimumTangentNorm: 1e-12, minimumTransverseNorm: 1e-12, maximumTangentChord: 1e-12,
   maximumNormalChord: 1e-10, minimumPositiveScale: 0.5,
 }
+
+it('distinguishes a failed outward chord proof from a floating chord above the same threshold', () => {
+  const jets: ExperimentalPeriodicGeometricJointRequest = { ...request, lateralTangent: [1, 0, 0], supportTangent: [1, 0, 0],
+    supportInward: [0, -1, 0], lateralInward: [0, 1, 7.5e-5], maximumNormalChord: 1e-4 }
+  expect(diagnoseExperimentalPeriodicGeometricJoint(jets)).toMatchObject({ status: 'inconclusive',
+    reason: 'unrepresentable-diagnostic', proofFailure: 'normal-chord-proof' })
+  expect(diagnoseExperimentalPeriodicGeometricJointExactChord(jets)).toMatchObject({ status: 'sample-diagnostic',
+    classification: 'within-sampled-normal-budget', normalChordProof: 'exact-binary64-jets' })
+  const loose = diagnoseExperimentalPeriodicGeometricJoint({ ...jets, maximumNormalChord: 1 })
+  if (loose.status !== 'sample-diagnostic') throw new Error(loose.reason)
+  expect(loose.normalChord).toBeLessThan(jets.maximumNormalChord)
+  expect(diagnoseExperimentalPeriodicGeometricJoint({ ...jets, lateralInward: [0, 1, 2e-4] }))
+    .toMatchObject({ status: 'sample-diagnostic', classification: 'oriented-normal-mismatch' })
+  expect(diagnoseExperimentalPeriodicGeometricJointExactChord({ ...jets, lateralInward: [0, 1, 2 ** -13] }))
+    .toMatchObject({ status: 'sample-diagnostic', classification: 'oriented-normal-mismatch' })
+  expect(diagnoseExperimentalPeriodicGeometricJointExactChord({ ...jets, lateralInward: [0, -1, 0] }))
+    .toMatchObject({ status: 'sample-diagnostic', classification: 'orientation-mismatch' })
+})
+
+it('compares exact binary64 jet normals at equality and refuses zero or opposite normals', () => {
+  const t: Point = [1, -1, -1], a: Point = [-1, 1, -2], b: Point = [1, 2, -1]
+  // Both exact normal vectors are scaled by three. Their cosine is 1/2.
+  expect(experimentalBinary64NormalChordWithin(t, a, t, b, 1)).toBe(true)
+  expect(experimentalBinary64NormalChordWithin(t, a, t, b, 1 - 2 ** -53)).toBe(false)
+  expect(experimentalBinary64NormalChordWithin(t, a, t, a, 0)).toBe(true)
+  expect(experimentalBinary64NormalChordWithin(t, a, t, t, 2)).toBe(false)
+  expect(experimentalBinary64NormalChordWithin(t, a, t, [1, -1, 2], 2)).toBe(false)
+  const tiny = Number.MIN_VALUE
+  expect(experimentalBinary64NormalChordWithin([tiny, 0, 0], [0, tiny, 0], [tiny, 0, 0], [0, tiny, 0], 0)).toBe(true)
+  expect(experimentalBinary64NormalChordWithin(t, a, t, [NaN, 0, 0], 2)).toBe(false)
+})
 
 it('separates transverse scale, tangent shear and normal mismatch from equality of derivatives', () => {
   const result = diagnoseExperimentalPeriodicGeometricJoint(request)

@@ -6,10 +6,11 @@ import { solveExperimentalPeriodicMobileSeamPairTargets, solveExperimentalPeriod
   type ExperimentalPeriodicMobileSeamPairTargetsRequest } from '../experimentalPeriodicMobileSeamTargets'
 import { sampleExperimentalPeriodicGeometricSideTargets } from '../experimentalPeriodicGeometricSideTargets'
 import { solveAndStoreExperimentalPeriodicMobileSeamPair, storeExperimentalPeriodicMobileSeamSurfaceBoundPair,
-  storeExperimentalPeriodicMobileSeamBoundedJumpPair,
+  storeExperimentalPeriodicMobileSeamBoundedJumpPair, storeExperimentalPeriodicMobileSeamExactChordPair,
   type ExperimentalPeriodicMobileSeamStoredPairRequest } from '../experimentalPeriodicMobileSeamStoredPair'
 import { proposeExperimentalPeriodicQuinticFullCoordinatedSeam, proposeExperimentalPeriodicQuinticSurfaceBoundSeam } from '../experimentalPeriodicQuinticSide'
 import { prepareExperimentalPeriodicUBasis } from '../experimentalPeriodicUBasis'
+import { prepareExperimentalPeriodicOneSidedSurfaceDerivatives } from '../experimentalPeriodicOneSidedSurfaceDerivatives'
 import { experimentalCoefficientChangeWithinCap, solveExperimentalPeriodicMobileSeamConstrained } from '../experimentalPeriodicMobileSeamConstrained'
 
 function fixture(): ExperimentalPeriodicMobileSeamPairTargetsRequest {
@@ -335,6 +336,44 @@ function suppliedFixture() {
   }
   return { central, atCentralV0: withTargets(atCentralV0), atCentralV1: withTargets(atCentralV1) }
 }
+
+it('reports the failed stored holdout ordinal and chord proof code without coordinates', () => {
+  const request = suppliedFixture(), side = request.atCentralV1, net = side.strip.net
+  side.training = [0, 0.25, 8]
+  side.holdout = [0, 0.125, 3, 8]
+  side.budgets.maximumNormalChord = 1e-4
+  side.budgets.maximumHoldoutNormalResidual = 1e-3
+  // An off-seam basis coefficient contributes only to the second holdout
+  // sample. Choose its tilt relative to the transverse speed at that point.
+  const { du, dv } = prepareExperimentalPeriodicOneSidedSurfaceDerivatives(net).evaluate(3, 0)
+  const transverse = Math.abs(du[0] * dv[1] - du[1] * dv[0]) / Math.hypot(du[0], du[1])
+  const basis = prepareExperimentalPeriodicUBasis(net.du, net.ku, net.mu).evaluate(3)
+  const weight = basis.values[basis.indices.indexOf(4)]
+  side.targetInward[4][2] = 7.5e-5 * transverse / weight
+  const result = storeExperimentalPeriodicMobileSeamSurfaceBoundPair(request)
+  expect(result).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', phase: 'stored-holdout',
+    reasonCode: 'stored-joint-diagnostic-inconclusive' }, receipts: { V0: { status: 'diagnostic-only' }, V1: {
+    status: 'inconclusive', evidence: { checkedTraining: 3, checkedHoldout: 1, jointFailure: { reason: 'normal-chord-proof', sampleOrdinal: 2 } },
+  } } })
+  const receipt = result.receipts.V1
+  if (receipt.status !== 'inconclusive') throw new Error(JSON.stringify(receipt))
+  expect(receipt.at).toBeUndefined()
+  expect(receipt.evidence.jointFailure).toEqual({ reason: 'normal-chord-proof', sampleOrdinal: 2 })
+  expect(result).not.toHaveProperty('candidates')
+
+  const seamChangeBudget = { maximumAbsoluteJump: 1e-9, maximumJumpChange: 1e-9, maximumCandidateNormalChord: 1e-4,
+    maxDepth: 4, maxPieces: 32 }
+  const boundedSide = (s: typeof side) => ({ ...s, storage: { ...s.storage, seamChangeBudget } })
+  const exactRequest = { central: request.central, atCentralV0: boundedSide(request.atCentralV0), atCentralV1: boundedSide(side) }
+  expect(storeExperimentalPeriodicMobileSeamBoundedJumpPair(exactRequest)).toMatchObject({ status: 'inconclusive',
+    stop: { side: 'V1', phase: 'stored-holdout', reasonCode: 'stored-joint-diagnostic-inconclusive' } })
+  expect(storeExperimentalPeriodicMobileSeamExactChordPair(exactRequest)).toMatchObject({ status: 'diagnostic-only',
+    receipts: { V1: { evidence: { checkedHoldout: 2, exactNormalChordProofs: 1 } } } })
+  side.budgets.maximumHoldoutNormalResidual = 0
+  const stopped = storeExperimentalPeriodicMobileSeamExactChordPair(exactRequest)
+  expect(stopped).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', phase: 'stored-holdout', reasonCode: 'stored-joint-beyond-budget' } })
+  expect(stopped).not.toHaveProperty('candidates')
+})
 
 it('stores supplied targets and withholds both sides when the second seam bound fails', () => {
   const request = suppliedFixture()
