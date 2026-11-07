@@ -111,3 +111,11 @@ G1 are sampled; the test does not qualify arbitrary solids or the tube.
 A separate non-affine correspondence test proves an exact identity for four
 explicit polynomial Bezier spans under a supplied monotone quadratic map.
 It does not find a map automatically or qualify general periodic B-splines.
+
+An isolated follow-up searches seam phase, parameter direction and the local
+quadratic maps automatically for polynomial quadratic/quartic periodic curves
+with matching Bezier-span counts and knot-to-knot correspondence. It compares
+all extracted binary64 coefficients with exact integer arithmetic and rejects
+ambiguous matches. Direct and reversed synthetic cases were checked with OCCT
+samples. This narrow subclass does not establish face topology, pcurve ownership,
+general B-spline equivalence, or any result on the tube.
