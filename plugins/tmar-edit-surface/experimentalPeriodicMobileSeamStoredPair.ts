@@ -31,6 +31,22 @@ type Proposal = Extract<ReturnType<typeof proposeExperimentalPeriodicQuinticFull
 type StorageResult<E> = { status: 'coefficient-proposal'; proposal: Proposal; evidence: E } |
   { status: 'inconclusive'; phase: string; reason: string; evidence: E }
 
+export interface ExperimentalPeriodicStoredJointFailureDiagnostic {
+  side: Edge
+  phase: 'stored-training' | 'stored-holdout'
+  sampleOrdinal: number
+  edgeParameter: number
+  lateralParameter: number
+  supportParameter: number
+  seamSide?: SeamSide
+  reason: ExperimentalPeriodicGeometricJointFailureReason | 'stored-joint-beyond-budget' |
+    'stored-normal-unrepresentable' | 'stored-residual-unrepresentable'
+  jets: { lateralTangent: Point; supportTangent: Point; lateralInward: Point; supportInward: Point }
+  jointMetrics?: { classification: string; tangentChord: number; normalChord: number; normalDot: number;
+    normalAngleRadians: number; lambda: number; mu: number; signedNormalResidual: number; derivativeEqualityDistance: number;
+    minimumDerivativeChange: number; residual?: number }
+}
+
 export interface ExperimentalPeriodicMobileSeamStoredPairRequest {
   central: Net
   atCentralV0: Side
@@ -45,6 +61,7 @@ const nativeSide = (side: SeamSide | undefined, sign: number) => side === undefi
 
 function storeSide<S, E>(central: Net, edge: Edge, side: JointSide & { storage: S }, targetInward: readonly Point[],
   propose: (request: S & ProposalInput) => StorageResult<E>, diagnose = diagnoseExperimentalPeriodicGeometricJoint,
+  captureJointFailure?: (diagnostic: ExperimentalPeriodicStoredJointFailureDiagnostic) => void,
 ) {
   const evidence: {
     storage?: E
@@ -98,25 +115,48 @@ function storeSide<S, E>(central: Net, edge: Edge, side: JointSide & { storage: 
           const a = lateral.evaluate(sample.parameter, edgeV(candidate, strip.edge), { u: nativeSide(seamSide, lateralU) })
           const b = fixed.evaluate(sample.supportParameter, edgeV(central, support.edge), { u: nativeSide(seamSide, supportU) })
           const inward = directed(a.dv, lateralV)
-          const diagnostic = diagnose({ ...budgets,
+          const jets = {
             lateralTangent: directed(a.du, lateralU), supportTangent: directed(b.du, supportU),
             lateralInward: inward, supportInward: directed(b.dv, supportV),
-          })
+          }
+          const checked = group === 'stored-training' ? evidence.checkedTraining : evidence.checkedHoldout
+          const sampleOrdinal = (checked ?? 0) + 1
+          const privateJets = { lateralTangent: [...jets.lateralTangent] as Point, supportTangent: [...jets.supportTangent] as Point,
+            lateralInward: [...jets.lateralInward] as Point, supportInward: [...jets.supportInward] as Point }
+          const captureFailure = (reason: ExperimentalPeriodicStoredJointFailureDiagnostic['reason'], jointMetrics?: ExperimentalPeriodicStoredJointFailureDiagnostic['jointMetrics']) => {
+            if (!captureJointFailure) return
+            try { captureJointFailure({ side: edge, phase: group, sampleOrdinal, edgeParameter: sample.edgeParameter,
+              lateralParameter: sample.parameter, supportParameter: sample.supportParameter, seamSide, reason,
+              jets: privateJets, jointMetrics }) }
+            catch { /* Optional diagnostic capture must not alter the stored proposal result. */ }
+          }
+          const diagnostic = diagnose({ ...budgets, ...jets })
           if (diagnostic.status !== 'sample-diagnostic') {
             // Count attempted jets within the group. The two training seam
             // limits have their own ordinals, and holdout starts at one.
-            const checked = group === 'stored-training' ? evidence.checkedTraining : evidence.checkedHoldout
-            evidence.jointFailure = { reason: diagnostic.proofFailure ?? diagnostic.reason, sampleOrdinal: (checked ?? 0) + 1 }
+            const reason = diagnostic.proofFailure ?? diagnostic.reason
+            evidence.jointFailure = { reason, sampleOrdinal }
+            captureFailure(reason)
             return stop('stored-joint-diagnostic-inconclusive')
           }
           if (diagnostic.normalChordProof === 'exact-binary64-jets')
             evidence.exactNormalChordProofs = (evidence.exactNormalChordProofs ?? 0) + 1
           const at = { edgeParameter: sample.edgeParameter, seamSide }
           const normalNorm = Math.hypot(...b.normal)
-          if (!(normalNorm > 0) || !Number.isFinite(normalNorm)) return stop('stored-normal-unrepresentable', at)
+          const metrics = { classification: diagnostic.classification, tangentChord: diagnostic.tangentChord, normalChord: diagnostic.normalChord,
+            normalDot: diagnostic.normalDot, normalAngleRadians: diagnostic.normalAngleRadians, lambda: diagnostic.lambda,
+            mu: diagnostic.mu, signedNormalResidual: diagnostic.signedNormalResidual,
+            derivativeEqualityDistance: diagnostic.derivativeEqualityDistance, minimumDerivativeChange: diagnostic.minimumDerivativeChange }
+          if (!(normalNorm > 0) || !Number.isFinite(normalNorm)) {
+            captureFailure('stored-normal-unrepresentable', metrics)
+            return stop('stored-normal-unrepresentable', at)
+          }
           const centralResidual = b.normal.reduce((sum, value, axis) => sum + (value / normalNorm) * inward[axis], 0)
           const residual = Math.max(Math.abs(diagnostic.signedNormalResidual), Math.abs(centralResidual))
-          if (!Number.isFinite(residual)) return stop('stored-residual-unrepresentable', at)
+          if (!Number.isFinite(residual)) {
+            captureFailure('stored-residual-unrepresentable', { ...metrics, residual })
+            return stop('stored-residual-unrepresentable', at)
+          }
           if (group === 'stored-training') {
             evidence.checkedTraining = (evidence.checkedTraining ?? 0) + 1
             evidence.maxTrainingNormalResidual = Math.max(evidence.maxTrainingNormalResidual ?? 0, residual)
@@ -125,7 +165,10 @@ function storeSide<S, E>(central: Net, edge: Edge, side: JointSide & { storage: 
             evidence.maxHoldoutNormalResidual = Math.max(evidence.maxHoldoutNormalResidual ?? 0, residual)
           }
           if (diagnostic.classification !== 'within-sampled-normal-budget' || !(diagnostic.lambda >= budgets.minimumPositiveScale) ||
-              !(residual <= tolerance)) return stop('stored-joint-beyond-budget', at)
+              !(residual <= tolerance)) {
+            captureFailure('stored-joint-beyond-budget', { ...metrics, residual })
+            return stop('stored-joint-beyond-budget', at)
+          }
         }
       }
     }
@@ -198,10 +241,20 @@ export function storeExperimentalPeriodicMobileSeamExactChordPair(request: Suppl
     'two-lateral-bounded-jump-storage-and-exact-sampled-chord', diagnoseExperimentalPeriodicGeometricJointExactChord)
 }
 
+/** Exact-chord variant with opt-in first-failure diagnostics, delivered only through the caller callback. */
+export function storeExperimentalPeriodicMobileSeamExactChordPairWithDiagnosticCapture(
+  request: SuppliedPair<Omit<ExperimentalPeriodicQuinticBoundedJumpSeamRequest, keyof ProposalInput>>,
+  captureJointFailure: (diagnostic: ExperimentalPeriodicStoredJointFailureDiagnostic) => void,
+) {
+  return storeSuppliedPair(request, proposeExperimentalPeriodicQuinticBoundedJumpSeam,
+    'two-lateral-bounded-jump-storage-and-exact-sampled-chord', diagnoseExperimentalPeriodicGeometricJointExactChord, captureJointFailure)
+}
+
 function storeSuppliedPair<S, E, Scope extends string>(request: SuppliedPair<S>, propose: (request: S & ProposalInput) => StorageResult<E>, evidenceScope: Scope,
   diagnose = diagnoseExperimentalPeriodicGeometricJoint,
+  captureJointFailure?: (diagnostic: ExperimentalPeriodicStoredJointFailureDiagnostic) => void,
 ) {
-  const store = (edge: Edge, side: SuppliedSide<S>) => storeSide(request.central, edge, side, side.targetInward, propose, diagnose)
+  const store = (edge: Edge, side: SuppliedSide<S>) => storeSide(request.central, edge, side, side.targetInward, propose, diagnose, captureJointFailure)
   type SideResult = ReturnType<typeof store>
   type Receipt = Omit<Extract<SideResult, { status: 'diagnostic-only' }>, 'candidate'> |
     Exclude<SideResult, { status: 'diagnostic-only' }> | { status: 'not-run' }

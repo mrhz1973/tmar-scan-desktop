@@ -7,6 +7,7 @@ import { solveExperimentalPeriodicMobileSeamPairTargets, solveExperimentalPeriod
 import { sampleExperimentalPeriodicGeometricSideTargets } from '../experimentalPeriodicGeometricSideTargets'
 import { solveAndStoreExperimentalPeriodicMobileSeamPair, storeExperimentalPeriodicMobileSeamSurfaceBoundPair,
   storeExperimentalPeriodicMobileSeamBoundedJumpPair, storeExperimentalPeriodicMobileSeamExactChordPair,
+  storeExperimentalPeriodicMobileSeamExactChordPairWithDiagnosticCapture,
   type ExperimentalPeriodicMobileSeamStoredPairRequest } from '../experimentalPeriodicMobileSeamStoredPair'
 import { proposeExperimentalPeriodicQuinticFullCoordinatedSeam, proposeExperimentalPeriodicQuinticSurfaceBoundSeam } from '../experimentalPeriodicQuinticSide'
 import { prepareExperimentalPeriodicUBasis } from '../experimentalPeriodicUBasis'
@@ -373,6 +374,61 @@ it('reports the failed stored holdout ordinal and chord proof code without coord
   const stopped = storeExperimentalPeriodicMobileSeamExactChordPair(exactRequest)
   expect(stopped).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', phase: 'stored-holdout', reasonCode: 'stored-joint-beyond-budget' } })
   expect(stopped).not.toHaveProperty('candidates')
+})
+
+it('captures first exact-chord failure jets only through the opt-in callback', () => {
+  const request = suppliedFixture()
+  request.atCentralV1.training = [0, 0.25, 8]
+  request.atCentralV1.holdout = [0, 0.125, 3, 8]
+  request.atCentralV1.budgets.minimumTangentNorm = Number.MAX_VALUE
+  const seamChangeBudget = { maximumAbsoluteJump: 1e-9, maximumJumpChange: 1e-9,
+    maximumCandidateNormalChord: 1e-4, maxDepth: 4, maxPieces: 32 }
+  const withBudget = (side: typeof request.atCentralV0) => ({ ...side,
+    storage: { ...side.storage, seamChangeBudget } })
+  const exactRequest = { central: request.central, atCentralV0: withBudget(request.atCentralV0),
+    atCentralV1: withBudget(request.atCentralV1) }
+  const captured: unknown[] = []
+  const result = storeExperimentalPeriodicMobileSeamExactChordPairWithDiagnosticCapture(exactRequest,
+    diagnostic => captured.push(diagnostic))
+
+  expect(result).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', phase: 'stored-training',
+    reasonCode: 'stored-joint-diagnostic-inconclusive' }, receipts: { V1: { evidence: {
+      jointFailure: { reason: 'degenerate-tangent', sampleOrdinal: 1 },
+    } } } })
+  expect(captured).toHaveLength(1)
+  const diagnostic = captured[0] as {
+    side: string; phase: string; sampleOrdinal: number; edgeParameter: number; lateralParameter: number; supportParameter: number;
+    seamSide?: string; reason: string; jets: Record<string, number[]>
+  }
+  expect(diagnostic).toMatchObject({ side: 'V1', phase: 'stored-training', sampleOrdinal: 1, seamSide: 'left', reason: 'degenerate-tangent' })
+  expect([diagnostic.edgeParameter, diagnostic.lateralParameter, diagnostic.supportParameter].every(Number.isFinite)).toBe(true)
+  expect(Object.keys(diagnostic.jets).sort()).toEqual(['lateralInward', 'lateralTangent', 'supportInward', 'supportTangent'])
+  for (const jet of Object.values(diagnostic.jets)) expect(jet).toHaveLength(3)
+  expect(JSON.stringify(result)).not.toContain('lateralTangent')
+  expect(JSON.stringify(result)).not.toContain('supportTangent')
+  expect(result).not.toHaveProperty('candidates')
+
+  const boundedRequest = suppliedFixture()
+  boundedRequest.atCentralV1.training = [0, 0.25, 8]
+  boundedRequest.atCentralV1.holdout = [0, 0.125, 3, 8]
+  boundedRequest.atCentralV1.budgets.maximumHoldoutNormalResidual = 0
+  const { du, dv } = prepareExperimentalPeriodicOneSidedSurfaceDerivatives(boundedRequest.atCentralV1.strip.net).evaluate(3, 0)
+  const transverse = Math.abs(du[0] * dv[1] - du[1] * dv[0]) / Math.hypot(du[0], du[1])
+  const basis = prepareExperimentalPeriodicUBasis(boundedRequest.atCentralV1.strip.net.du,
+    boundedRequest.atCentralV1.strip.net.ku, boundedRequest.atCentralV1.strip.net.mu).evaluate(3)
+  const weight = basis.values[basis.indices.indexOf(4)]
+  boundedRequest.atCentralV1.targetInward[4][2] = 7.5e-5 * transverse / weight
+  const boundedExactRequest = { central: boundedRequest.central,
+    atCentralV0: withBudget(boundedRequest.atCentralV0), atCentralV1: withBudget(boundedRequest.atCentralV1) }
+  const boundedCaptured: unknown[] = []
+  const bounded = storeExperimentalPeriodicMobileSeamExactChordPairWithDiagnosticCapture(boundedExactRequest,
+    diagnosticFailure => boundedCaptured.push(diagnosticFailure))
+  expect(bounded).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', phase: 'stored-holdout',
+    reasonCode: 'stored-joint-beyond-budget' } })
+  expect(boundedCaptured).toHaveLength(1)
+  expect(boundedCaptured[0]).toMatchObject({ side: 'V1', phase: 'stored-holdout', sampleOrdinal: 2,
+    reason: 'stored-joint-beyond-budget' })
+  expect(JSON.stringify(bounded)).not.toContain('lateralTangent')
 })
 
 it('stores supplied targets and withholds both sides when the second seam bound fails', () => {
