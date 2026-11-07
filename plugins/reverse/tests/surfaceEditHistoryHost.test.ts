@@ -11,6 +11,7 @@ import {createReverseSession,installReverseSession,type ReverseSession} from '..
 import {createReverseEditorHost} from '../app/workspaceEditorHost'
 import {collectReversePart,applyReversePart,STEP_MEMBER} from '../app/projectSection'
 import {qualifySurfaceHistory,reopenSurfaceHistory,reopenAndRestoreSurfaceHistory,withFrozenHistoryTransaction,type SurfaceHistoryReplay} from '../app/surfaceEditHistory'
+import {prepareHostSurfaceHistoryRecovery} from '../app/surfaceHistoryRecovery'
 import {editorSha256} from '../../../src/plugins/editorLifetime'
 import {ReClient} from '../core/reClient'
 import {localKernel} from './reLocal'
@@ -139,6 +140,58 @@ describe('opt-in host history publication and project restoration',()=>{
       new AbortController().signal)
     expect(restored.status).toBe('restored')
     if(restored.status==='restored')await restored.session.dispose('cancelled')
+
+    // Host-only readiness: select the saved feature by stable feature ID,
+    // prove its archived upstream STEP and recipe with independent replay,
+    // then leave a fresh validated session OFF SCREEN for a future handoff.
+    let opens=0, disposes=0
+    const makeFreshSession=async(bytes:Uint8Array,key:string)=>({
+      restoreHistoryBundle:async(bundle:{recipe:unknown;notes:unknown})=>{
+        opens++
+        expect(new TextDecoder().decode(bytes)).toBe(upstream)
+        expect(key).toBe(source.binding.bodyKey)
+        expect(bundle.recipe).toEqual(recipe)
+        expect(bundle.notes).toEqual([])
+      },
+      getSnapshot:()=>({validation:{kind:'valid'}}),
+      getPanelState:()=>({notes:[]}),
+      dispose:async(_reason:'host-error'|'cancelled')=>{disposes++},
+    })
+    const recoveryArgs={featureId:reopenedFeature.id,replay,makeFreshSession,
+      awaitValidated:async()=>{},signal:new AbortController().signal}
+    const ready=await prepareHostSurfaceHistoryRecovery(recoveryArgs)
+    expect(ready.status).toBe('ready')
+    expect(opens).toBe(1)
+    if(ready.status==='ready'){
+      expect(ready.record.recipe).toEqual(recipe)
+      expect(()=>ready.assertCurrent()).not.toThrow()
+      await ready.release()
+      await ready.release()
+      expect(()=>ready.assertCurrent()).toThrow(/rilasciata/)
+    }
+    expect(disposes).toBe(1)
+
+    const withoutReplay=await prepareHostSurfaceHistoryRecovery({...recoveryArgs,replay:undefined})
+    expect(withoutReplay.status).toBe('copy-only')
+    expect(opens).toBe(1)
+    expect(await prepareHostSurfaceHistoryRecovery({...recoveryArgs,featureId:99999}))
+      .toMatchObject({status:'copy-only'})
+    // Mutate only a transient test note store during independent replay:
+    // the recovered session must never install or change authoritative CAD.
+    const beforeNotes=useNotes.getState().notes
+    let extraOpens=0
+    const stale=await prepareHostSurfaceHistoryRecovery({
+      ...recoveryArgs,
+      replay:async(text,r,key,signal)=>{
+        const output=await replay(text,r,key,signal)
+        useNotes.getState().load([])
+        return output
+      },
+      makeFreshSession:async(bytes,key,_signal)=>{extraOpens++;return makeFreshSession(bytes,key)},
+    })
+    expect(stale.status).toBe('copy-only')
+    expect(extraOpens).toBe(0)
+    expect(useNotes.getState().notes).not.toBe(beforeNotes)
     expect(useReverse.getState()).toBe(savedState)
     expect(useReverse.getState().stepFiles[reopenedFeature.file.key]).toBe(finalStep)
   },120000)
