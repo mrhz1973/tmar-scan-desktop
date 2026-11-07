@@ -71,6 +71,13 @@ common parameter square and report an inconclusive result. Extracting and
 corresponding such patches from general periodic source and candidate nets is
 not implemented. Neither routine qualifies a real solid or OCCT evaluation.
 
+For the structurally C0 periodic seam case, separate experimental tools now
+evaluate explicitly selected one-sided derivatives and compare the two U
+derivative coefficient fields exactly in binary64 arithmetic. Equal fields
+prove only parametric C1 at that seam in the coefficient model; zero fields,
+geometric G1, orientation, regularity and CAD topology remain separate. The
+existing C1-only evaluator and all operational guards are unchanged.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
