@@ -155,6 +155,14 @@ V5 periodic spline cells as interval Bernstein patches. Synthetic checks cover
 nonuniform knots and both one-sided seam cells. It is still a per-cell
 primitive: a full-domain check, trim and CAD qualification remain separate.
 
+An experimental full-domain orchestrator now checks each closed U/V knot cell
+against the original using the interval patch normal-dot bound, including the
+two one-sided seam cells. A nonpositive witness or an unproved cell stops the
+check. Synthetic coverage includes the earlier hidden inversion. Its sign
+proof applies to the coefficient models at corresponding parameters; cell
+dot magnitudes are local, and cross-cell continuity, self-intersection, wall
+thickness, trimmed faces and CAD validity are not established.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
