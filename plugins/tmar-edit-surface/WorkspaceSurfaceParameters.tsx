@@ -44,8 +44,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const [g1Pending, setG1Pending] = useState<'load' | 'apply' | null>(null)
   const [g1Error, setG1Error] = useState('')
   const disabled = state.busy || state.gesture !== 'idle'
-  const editable = state.selected.filter(i => !state.locked.includes(i))
   const hiddenPoles = controller.getViewState().hiddenPoles
+  const editable = state.selected.filter(i => !state.locked.includes(i) && !hiddenPoles.includes(i))
   const activeWholeBoundary=state.wholeBoundaryDrag ?? wholeBoundary
   const boundaryPoles = state.canFreeBoundary && state.net ? wholeBoundaryIndices(state.net,activeWholeBoundary) : []
   const boundaryManuallyLocked = boundaryPoles.length > 0 && boundaryPoles.every(id => state.manualLocks.includes(id))

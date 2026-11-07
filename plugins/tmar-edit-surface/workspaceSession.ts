@@ -483,7 +483,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   selectAllFree(): void {
     this.change(() => {
-      const net = this.requireNet(), locked = new Set(this.viewState.locked)
+      const net = this.requireNet(), locked = new Set([...this.viewState.locked,...this.draft.getSnapshot().hiddenPoles])
       this.draft.setSelection(net.poles.flatMap((_, i) => locked.has(i) ? [] : [i]))
       this.wholeFaceSelection = null // This selection was explicitly requested by the user.
     })
@@ -2094,7 +2094,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }, false, true, true)
   }
   private editable(): number[] {
-    const selected = this.draft.getSnapshot().selected, locked = new Set(this.viewState.locked)
+    const {selected,hiddenPoles} = this.draft.getSnapshot(), locked = new Set([...this.viewState.locked,...hiddenPoles])
     return selected.filter(i => !locked.has(i))
   }
   private transform(net: Net, ids: number[], fn: (point: Point, index: number) => Point): void {
@@ -2118,7 +2118,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (poles.length !== committed.poles.length || poles.some(point => !finitePoint(point)))
       throw new Error('Coordinate dei punti non valide.')
     const partners = this.partners(committed)
-    return partners ? mirrorEdit(committed.poles, poles, partners, this.mirrorAxis, this.mirrorOffset, [...this.viewState.locked]) : poles
+    return partners ? mirrorEdit(committed.poles, poles, partners, this.mirrorAxis, this.mirrorOffset, [...this.viewState.locked,...this.draft.getSnapshot().hiddenPoles]) : poles
   }
   private change<T>(fn: () => T, allowBusy = false, allowGesture = false, allowStrip = false): T {
     this.assertMutable(allowBusy)
@@ -2259,7 +2259,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         value: Object.freeze(this.notes.filter(note => note.revision === validRevision).map(note => note.at)) }
     const notePins = this.pinCache.value
     const symmetryPartners = this.partners(d.committedNet)
-    const lockedSet = new Set(locked)
+    const lockedSet = new Set([...locked,...d.hiddenPoles])
     const symmetryBlocked = !!symmetryPartners && d.selected.some(i =>
       !lockedSet.has(i) && (symmetryPartners[i] < 0 || lockedSet.has(symmetryPartners[i])))
     const message = strip?.error || d.error || this.message || noteMessage || (notesPending ? 'Verifica della posizione delle note in corso…' : null)

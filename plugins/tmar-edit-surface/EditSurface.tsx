@@ -28,6 +28,13 @@ interface Pin { anchor: DraftAnchor; at: Point; normal: Point }
 type SurfaceNote = Pin & {id:number; text:string; revision:number}
 type LoadedSurface = { step: string; name: string; bodyId: number | null }
 
+export function surfacePoleLockIds(net: Net, freeBoundary: boolean, continuity: 'G0' | 'G1',
+  trimLocks: readonly number[], locks: readonly number[], hiddenPoles: readonly number[]): number[] {
+  const trim = new Set(trimLocks), manual = new Set(locks), hidden = new Set(hiddenPoles)
+  return net.poles.flatMap((_, i) => (!freeBoundary && boundaryLocked(net, i, continuity)) ||
+    trim.has(i) || manual.has(i) || hidden.has(i) ? [i] : [])
+}
+
 function createSurfaceSession() {
   const re = useReverse.getState(), model = useStore.getState()
   const runtime = new SurfaceRuntime()
@@ -287,7 +294,8 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
       if (mounted.current && runtime.active && generation === session.generation) setError((e as Error).message)
     } finally { if (mounted.current && runtime.active && generation === session.generation) setBusy(false) }
   }
-  const locked = useMemo(() => net ? net.poles.flatMap((_, i) => (!freeBoundary && boundaryLocked(net, i, continuity)) || draftState.trimLocks.includes(i) || locks.includes(i) ? [i] : []) : [], [net, freeBoundary, continuity, draftState.trimLocks, locks])
+  const locked = useMemo(() => net ? surfacePoleLockIds(net, freeBoundary, continuity, draftState.trimLocks, locks, draftState.hiddenPoles) : [],
+    [net, freeBoundary, continuity, draftState.trimLocks, locks, draftState.hiddenPoles])
   const editable = selected.filter(i => !locked.includes(i))
   const moveDirection = net && editable.length ? dragDirection(net, editable[0], dragMode, axis) : null
   const axisNames = dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']

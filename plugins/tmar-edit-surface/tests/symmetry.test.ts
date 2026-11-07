@@ -2,7 +2,23 @@
 import { expect, it } from 'vitest'
 import { mirrorPartners, mirrorEdit } from '../symmetry'
 import { SurfaceEditorKernel } from '../editorKernel'
-import { boundaryLocked, type Point } from '../brep'
+import { boundaryLocked, type Net, type Point } from '../brep'
+import { surfacePoleLockIds } from '../EditSurface'
+
+it('treats hidden poles as protected selections and symmetry partners', () => {
+  const poles: Point[] = []
+  for (let u=0;u<5;u++) for (let v=0;v<5;v++) poles.push([u,v,0])
+  const net: Net = { nu:5,nv:5,du:3,dv:3,poles,weights:poles.map(()=>1),
+    rational:[0,0],ku:[0,.5,1],kv:[0,.5,1],mu:[4,1,4],mv:[4,1,4] }
+  const locked = surfacePoleLockIds(net,false,'G0',[12],[7],[18])
+  expect(locked).toEqual(expect.arrayContaining([7,12,18]))
+  expect(poles.flatMap((_,i)=>locked.includes(i)?[]:[i])).not.toContain(18)
+
+  const partners = mirrorPartners(poles,0,2), requested = structuredClone(poles)
+  expect(partners[8]).toBe(18)
+  requested[8][2] += .2
+  expect(()=>mirrorEdit(poles,requested,partners,0,2,locked)).toThrow(/bloccato/)
+})
 
 it('edits reflected poles on an imported solid, preserves the edges and reopens a symmetric STEP', async () => {
   const editor = await SurfaceEditorKernel.load(), k = editor.kernel

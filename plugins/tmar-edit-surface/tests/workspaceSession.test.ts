@@ -655,6 +655,38 @@ describe('experimental simultaneous surface-point controller',()=>{
   })
 })
 
+describe('hidden control-point protection',()=>{
+  it('excludes hidden poles from select-all and numeric movement',async()=>{
+    const t=await setup({hiddenPoles:[12]});await selectFace(t)
+    const s=t.session;s.setContinuity('G0');await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    s.selectAllFree()
+    expect(s.getPanelState().selected).not.toContain(12)
+    expect(s.getPanelState().selected).toContain(13)
+    s.selectPoints([12],false)
+    const {createElement}=await import('react'),{renderToStaticMarkup}=await import('react-dom/server')
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const html=renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:s}))
+    expect(html).toMatch(/<button[^>]*data-test="surface-move"[^>]*disabled/)
+    s.selectPoints([12,13],false)
+    const before=s.getPanelState().net!
+    s.moveSelected(.2)
+    const after=s.getPanelState().net!
+    expect(after.poles[12]).toEqual(before.poles[12])
+    expect(after.poles[13]).not.toEqual(before.poles[13])
+    await s.dispose('cancelled')
+  })
+  it('does not move a hidden opposite pole through symmetry',async()=>{
+    const t=await setup({hiddenPoles:[17]});await selectFace(t)
+    const s=t.session;s.setContinuity('G0');await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    s.setMirrorAxis(0);s.setMirrorOffset(2);s.setSymmetry(true);s.selectPoints([7],false)
+    expect(s.getPanelState().symmetryBlocked).toBe(true)
+    const before=s.getPanelState().net!
+    expect(()=>s.moveSelected(.2)).toThrow(/speculare/)
+    expect(s.getPanelState().net).toEqual(before)
+    await s.dispose('cancelled')
+  })
+})
+
 describe('selected-pole tangent plane projection',()=>{
   const pin={anchor:{face:0,selectionRevision:1,u:.45,v:.5},at:[1.8,2,0],normal:[1,0,1]}
   it.each(['G0','G1'] as const)('projects only selected authorized poles under %s and creates one Undo',async continuity=>{
