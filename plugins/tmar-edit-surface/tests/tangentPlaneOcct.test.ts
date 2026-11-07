@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {createHash} from 'node:crypto'
 import {expect,it,vi} from 'vitest'
-import {SurfaceEditorKernel} from '../editorKernel'
 import {SurfaceRuntime} from '../surfaceRuntime'
 import {createWorkspaceSurfaceSession,type WorkspaceSurfaceSession} from '../workspaceSession'
 import {boundaryLocked,type Point} from '../brep'
 import type {Request} from '../editor.worker'
 
 it.each(['pole','span'] as const)('validates tangent plane projection of a curved CAD draft (%s) and one Undo',async mode=>{
+  // editor.worker owns module-level editor state. Reload it for each table row
+  // so `self.onmessage` and its mocked kernel editor bind to this case's host.
+  vi.resetModules()
+  const {SurfaceEditorKernel}=await import('../editorKernel')
   const editor=await SurfaceEditorKernel.load(),k=editor.kernel,box=k.makeBox(20,30,10)
   const bytes=new TextEncoder().encode(k.exportStep(box)),source=k.toBREP(box)
   const hash=(b:Uint8Array)=>createHash('sha256').update(b).digest('hex')
