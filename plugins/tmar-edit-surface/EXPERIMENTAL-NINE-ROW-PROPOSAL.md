@@ -257,3 +257,7 @@ A separate synthetic proposal can move the periodic U0 meridian with its two adj
 ### Coordinated two-side experiment
 
 The experimental coordinated-pair diagnostic evaluates both lateral proposals against the unchanged central surface and returns neither candidate unless both pass their per-side seam, displacement, source-to-candidate normal and sampled stored-joint checks. Its targets and verification sample locations are supplied by the caller; independence is not established by the API. This is not a target solver, continuous G1 proof, pcurve or solid qualification, nor a test on the Tube.
+
+### Full-column mobile seam synthetic solve
+
+A separate experimental path solves projected tangent-plane targets across free U columns for both sides, derives U0 from its neighbors, stores both candidate nets through the quintic guard and checks stored jets on distinct training and holdout locations. Stored seam derivative jump, displacement, D2 and source-to-candidate normals have separate refusal checks. A synthetic fixture moves the seam and a distant column on both sides. This is not a continuous cross-face G1 certificate, pcurve or topology verification, a valid solid, an integrated feature or a real Tube result. Unrepresentable stored coefficients fail closed.

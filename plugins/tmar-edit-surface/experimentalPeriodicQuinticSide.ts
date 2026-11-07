@@ -15,14 +15,19 @@ interface QuinticSideRequest {
   lockIndices?: readonly number[]
 }
 
-export interface ExperimentalPeriodicQuinticCoordinatedSeamRequest extends Omit<QuinticSideRequest, 'targetInward'> {
-  previousInward: Point
-  nextInward: Point
+interface CoordinatedSeamBudgets {
   seamDerivativeTolerance: number
   maximumDisplacement: number
   maximumSeamDisplacement: number
   normalBudget: Parameters<typeof boundExperimentalPeriodicQuinticSurfaceNormals>[2]
 }
+
+export interface ExperimentalPeriodicQuinticCoordinatedSeamRequest extends Omit<QuinticSideRequest, 'targetInward'>, CoordinatedSeamBudgets {
+  previousInward: Point
+  nextInward: Point
+}
+
+export type ExperimentalPeriodicQuinticFullCoordinatedSeamRequest = QuinticSideRequest & CoordinatedSeamBudgets
 
 const fail = (reason: string): never => { throw new Error(`Fascia periodica quintica rifiutata: ${reason}`) }
 const finitePoint = (point: Point) =>
@@ -98,6 +103,17 @@ export function proposeExperimentalPeriodicAlmostC1QuinticSide(
  * joints, pcurves and CAD topology require separate verification.
  */
 export function proposeExperimentalPeriodicQuinticCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedSeamRequest) {
+  return proposeCoordinatedSeam(request, 'neighbors')
+}
+
+/** Store targets in all U columns with the same exact seam and surface checks. */
+export function proposeExperimentalPeriodicQuinticFullCoordinatedSeam(request: ExperimentalPeriodicQuinticFullCoordinatedSeamRequest) {
+  return proposeCoordinatedSeam(request, 'full')
+}
+
+function proposeCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedSeamRequest | ExperimentalPeriodicQuinticFullCoordinatedSeamRequest,
+  mode: 'neighbors' | 'full',
+) {
   const evidenceScope = 'coordinated-mobile-periodic-seam-coefficient-model' as const
   const evidence: {
     before?: ReturnType<typeof boundExperimentalPeriodicSeamDerivativeGap>
@@ -111,11 +127,12 @@ export function proposeExperimentalPeriodicQuinticCoordinatedSeam(request: Exper
   const stop = (reason: string) => ({ status: 'inconclusive' as const, phase, reason, evidence, evidenceScope })
   try {
     if (!request) return stop('invalid-input')
-    const { net, edge, previousInward, nextInward, seamDerivativeTolerance, maximumDisplacement,
+    const { net, seamDerivativeTolerance, maximumDisplacement,
       maximumSeamDisplacement, lockIndices = [] } = request
     validateQuinticSide(request)
     if (net.du > 3 || net.nu < 3 || net.mu[0] !== net.du || net.mu.slice(1, -1).some(m => m >= net.du) ||
-        !finitePoint(previousInward) || !finitePoint(nextInward) || !Array.isArray(lockIndices) ||
+        (mode === 'neighbors' && (!('previousInward' in request) || !finitePoint(request.previousInward) || !finitePoint(request.nextInward))) ||
+        (mode === 'full' && !('targetInward' in request)) || !Array.isArray(lockIndices) ||
         ![seamDerivativeTolerance, maximumDisplacement, maximumSeamDisplacement]
           .every(value => Number.isFinite(value) && value >= 0)) return stop('invalid-input')
 
@@ -124,28 +141,33 @@ export function proposeExperimentalPeriodicQuinticCoordinatedSeam(request: Exper
     if (before.status !== 'within-tolerance') return stop('source-seam-unverified')
 
     phase = 'proposal'
-    const hNext = net.ku[1] - net.ku[0], hPrevious = net.ku.at(-1)! - net.ku.at(-2)!
-    const width = Math.max(hNext, hPrevious)
-    const a = hNext / width, b = hPrevious / width
-    const previousWeight = a / (a + b), nextWeight = b / (a + b)
-    if (!(previousWeight > 0 && nextWeight > 0)) return stop('seam-weights-unrepresentable')
-    const direction = edge === 'V0' ? 1 : -1, edgeRow = edge === 'V0' ? 0 : net.nv - 1
-    const span = edge === 'V0' ? 0 : net.kv.length - 2
-    const factor = 5 / (net.kv[span + 1] - net.kv[span])
-    if (!Number.isFinite(factor) || !(factor > 0)) return stop('v-derivative-scale-unrepresentable')
     const previous = net.nu - 1
-    const targetInward = Array.from({ length: net.nu }, (_, u) => {
-      const i = u * net.nv + edgeRow
-      return net.poles[i].map((x, axis) => factor * (net.poles[i + direction][axis] - x)) as Point
-    })
-    targetInward[0] = targetInward[0].map((value, axis) => value +
-      previousWeight * (previousInward[axis] - targetInward[previous][axis]) +
-      nextWeight * (nextInward[axis] - targetInward[1][axis])) as Point
-    targetInward[previous] = previousInward
-    targetInward[1] = nextInward
-    const editable = new Set([previous, 0, 1].flatMap(u => [1, 2].map(r => u * net.nv + edgeRow + r * direction)))
-    const protectedIndices = net.poles.flatMap((_, i) => editable.has(i) ? [] : [i])
-    const proposal = proposeQuinticRows({ ...request, targetInward, lockIndices: [...lockIndices, ...protectedIndices] })
+    let proposal: ReturnType<typeof proposeQuinticRows>
+    if (mode === 'full' && 'targetInward' in request) proposal = proposeQuinticRows(request)
+    else if (mode === 'neighbors' && 'previousInward' in request) {
+      const { edge, previousInward, nextInward } = request
+      const hNext = net.ku[1] - net.ku[0], hPrevious = net.ku.at(-1)! - net.ku.at(-2)!
+      const width = Math.max(hNext, hPrevious)
+      const a = hNext / width, b = hPrevious / width
+      const previousWeight = a / (a + b), nextWeight = b / (a + b)
+      if (!(previousWeight > 0 && nextWeight > 0)) return stop('seam-weights-unrepresentable')
+      const direction = edge === 'V0' ? 1 : -1, edgeRow = edge === 'V0' ? 0 : net.nv - 1
+      const span = edge === 'V0' ? 0 : net.kv.length - 2
+      const factor = 5 / (net.kv[span + 1] - net.kv[span])
+      if (!Number.isFinite(factor) || !(factor > 0)) return stop('v-derivative-scale-unrepresentable')
+      const targetInward = Array.from({ length: net.nu }, (_, u) => {
+        const i = u * net.nv + edgeRow
+        return net.poles[i].map((x, axis) => factor * (net.poles[i + direction][axis] - x)) as Point
+      })
+      targetInward[0] = targetInward[0].map((value, axis) => value +
+        previousWeight * (previousInward[axis] - targetInward[previous][axis]) +
+        nextWeight * (nextInward[axis] - targetInward[1][axis])) as Point
+      targetInward[previous] = previousInward
+      targetInward[1] = nextInward
+      const editable = new Set([previous, 0, 1].flatMap(u => [1, 2].map(r => u * net.nv + edgeRow + r * direction)))
+      const protectedIndices = net.poles.flatMap((_, i) => editable.has(i) ? [] : [i])
+      proposal = proposeQuinticRows({ ...request, targetInward, lockIndices: [...lockIndices, ...protectedIndices] })
+    } else return stop('invalid-input')
     evidence.maxPositionDisplacementBound = proposal.maxPositionDisplacementBound
     if (proposal.maxPositionDisplacementBound > maximumDisplacement) return stop('displacement-bound-exceeds-budget')
 
