@@ -441,11 +441,18 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     publishReticle({ min: Object.freeze(point(box.min)), max: Object.freeze(point(box.max)), stamp })
   }
 
-  const sync = () => {
+  const sync = (referencesChanged = false) => {
     if (disposed || layerDisposed) return
     const revision = ++syncRevision
     try {
-      const state = owner.getViewState()
+      let state = owner.getViewState()
+      if (referencesChanged && state.surfaceTarget?.pairs && owner.cancelSurfaceTarget) {
+        owner.cancelSurfaceTarget()
+        if (disposed || layerDisposed) return
+        report('Raccolta annullata: i riferimenti esterni sono cambiati.')
+        if (disposed || layerDisposed || revision !== syncRevision) return
+        state = owner.getViewState()
+      }
       if(boundaryPending && (state.net!==boundaryPending.net||state.preview!==boundaryPending.preview||state.face!==boundaryPending.face||
         state.locked!==boundaryPending.locked||state.hiddenPoles!==boundaryPending.hidden||!state.wholeBoundaryDrag||state.navigationOnly||state.busy||state.placingNote||state.surfaceTarget))cancelBoundaryPending()
       if (state.navigationOnly && capture) { cancelGesture(); if (revision !== syncRevision) return }
@@ -1016,8 +1023,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     cleanups.push(view.onFrame(positionStripHandle))
     cleanups.push(view.subscribeReferences(() => {
       referencesDirty=true;retryReferencesAt=0
-      if(owner.getViewState().surfaceTarget?.pairs){owner.cancelSurfaceTarget?.();report('Raccolta annullata: i riferimenti esterni sono cambiati.')}
-      if(!capture)sync()
+      if(!capture)sync(true)
     }))
     cleanups.push(owner.subscribe(sync))
     sync()
