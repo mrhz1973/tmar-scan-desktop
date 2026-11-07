@@ -155,6 +155,11 @@ coefficient residual separately for editable and locked poles. It neither
 derives targets from adjacent surfaces nor demonstrates G1, topology, or
 solid validity. It is not wired into the editor.
 
+An experimental numeric periodic U basis evaluator supplies active pole
+indices and values for future fitting, with synthetic OCCT comparisons and
+guards against unrepresentable intervals. Its floating-point results are
+diagnostic inputs, not certified geometric or derivative error bounds.
+
 An isolated follow-up searches seam phase, parameter direction and the local
 quadratic maps automatically for polynomial quadratic/quartic periodic curves
 with matching Bezier-span counts and knot-to-knot correspondence. It compares
