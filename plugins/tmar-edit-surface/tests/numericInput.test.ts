@@ -7,6 +7,11 @@ describe('parseNumericInput', () => {
     expect(parseNumericInput('0.5')).toBe(0.5)
     expect(parseNumericInput('0,5')).toBe(0.5)
     expect(parseNumericInput('0.')).toBe(0)
+    expect(parseNumericInput('0,')).toBe(0)
+    expect(parseNumericInput('12,')).toBe(12)
+    expect(parseNumericInput('1e-6')).toBe(1e-6)
+    expect(parseNumericInput('1,2E+2')).toBe(120)
+    expect(parseNumericInput('1e-')).toBeNull()
     expect(['0', '0.', '0.5'].map(parseNumericInput)).toEqual([0, 0, 0.5])
   })
 

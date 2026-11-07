@@ -14,7 +14,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const state = useSyncExternalStore(controller.subscribe, controller.getPanelState, controller.getPanelState)
   const [error, setError] = useState('')
   const [smooth, setSmooth] = useState(0.5)
-  const [pointBudget, setPointBudget] = useState(1)
+  const [pointBudgetText, setPointBudgetText] = useState('1')
   const [multipleTargets,setMultipleTargets]=useState(false)
   const panelRef=useRef<HTMLDivElement>(null),removedPair=useRef<number|null>(null)
   const previousTarget=useRef<typeof state.surfaceTarget>(null)
@@ -38,12 +38,15 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   },[state.surfaceTargetBatch,state.surfaceTarget])
   const [wholeBoundary,setWholeBoundary] = useState<WholeBoundarySide>('U0')
   const [boundaryAxis,setBoundaryAxis] = useState<0|1|2>(2)
-  const [boundaryDistance,setBoundaryDistance] = useState(.1)
+  const [boundaryDistanceText,setBoundaryDistanceText] = useState('0.1')
   const [distanceText,setDistanceText] = useState('0.1')
   const [factorText,setFactorText] = useState('1.1')
   const distanceValue=parseNumericInput(distanceText)
   const factorValue=parseNumericInput(factorText)
-  const [stripDistance, setStripDistance] = useState(0.1)
+  const [stripDistanceText, setStripDistanceText] = useState('0.1')
+  const stripDistance=parseNumericInput(stripDistanceText)
+  const pointBudget=parseNumericInput(pointBudgetText)
+  const boundaryDistance=parseNumericInput(boundaryDistanceText)
   const [g1Pending, setG1Pending] = useState<'load' | 'apply' | null>(null)
   const [g1Error, setG1Error] = useState('')
   const disabled = state.busy || state.gesture !== 'idle'
@@ -88,7 +91,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
     attempt(() => controller.cancelStrip(modified))
   }
   const extendStrip = () => {
-    if (!strip || strip.selectedEdge < 0 || !Number.isFinite(stripDistance) || Math.abs(stripDistance) <= 1e-7) return
+    if (!strip || strip.selectedEdge < 0 || stripDistance===null || Math.abs(stripDistance) <= 1e-7) return
     const delta: [number, number, number] = [0, 0, 0]
     delta[strip.axis] = stripDistance
     attempt(() => controller.applyStripDelta(delta))
@@ -151,11 +154,11 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           onChange={e => attempt(() => controller.setStripAxis(Number(e.target.value) as 0 | 1 | 2))}>
           <option value={0}>X</option><option value={1}>Y</option><option value={2}>Z</option>
         </select></label>
-        <label>Spostamento · mm<input data-test="surface-strip-distance" type="number" step="any"
-          value={Number.isFinite(stripDistance) ? stripDistance : ''} disabled={disabled || strip.pending}
-          onChange={e => setStripDistance(e.target.valueAsNumber)} /></label>
+        <label>Spostamento · mm<input data-test="surface-strip-distance" type="text" inputMode="decimal"
+          value={stripDistanceText} disabled={disabled || strip.pending}
+          onChange={e => setStripDistanceText(e.target.value)} /></label>
         <button type="button" data-test="surface-strip-extend"
-          disabled={disabled || strip.pending || strip.selectedEdge < 0 || !Number.isFinite(stripDistance) || Math.abs(stripDistance) <= 1e-7}
+          disabled={disabled || strip.pending || strip.selectedEdge < 0 || stripDistance===null || Math.abs(stripDistance) <= 1e-7}
           onClick={extendStrip}>Duplica e sposta il bordo</button>
         <p role="status" data-test="surface-strip-status">{strip.pending ? state.gesture === 'strip'
           ? 'Sposta il bordo; rilascia per verificare la superficie.' : 'Calcolo della superficie in corso…' : strip.hasResult
@@ -175,14 +178,14 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       {!strip && <>
       <fieldset data-test="surface-point-target"><legend>Porta un punto della superficie sul riferimento</legend>
         <p>Seleziona i poli liberi, scegli il riferimento e clicca un punto della faccia. Cerco il riferimento esterno più vicino lungo la normale CAD, nei due versi, entro {state.snapDistance} mm. Il punto della superficie si muove; i poli possono muoversi di più.</p>
-        <label>Limite spostamento di ciascun polo · mm<input data-test="surface-point-budget" type="number" min="0.001" max="1000" step="any" value={Number.isFinite(pointBudget)?pointBudget:''}
-          disabled={disabled || !!state.surfaceTarget} onChange={e=>setPointBudget(e.target.valueAsNumber)} /></label>
+        <label>Limite spostamento di ciascun polo · mm<input data-test="surface-point-budget" type="text" inputMode="decimal" value={pointBudgetText}
+          disabled={disabled || !!state.surfaceTarget} onChange={e=>setPointBudgetText(e.target.value)} /></label>
         <label><input data-test="surface-point-multiple" type="checkbox" checked={multipleTargets} disabled={disabled||!!state.surfaceTarget}
           onChange={e=>setMultipleTargets(e.target.checked)}/>Raccogli più punti prima di applicare</label>
-        <div className="row"><button type="button" data-test="surface-point-scan" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
-          onClick={()=>attempt(()=>controller.beginSurfaceTarget('scan',pointBudget,multipleTargets))}>{multipleTargets?'Raccogli sulla scansione':'Punto sulla scansione'}</button>
-        <button type="button" data-test="surface-point-cad" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
-          onClick={()=>attempt(()=>controller.beginSurfaceTarget('cad',pointBudget,multipleTargets))}>{multipleTargets?'Raccogli sul CAD esterno':'Punto sul CAD esterno'}</button></div>
+        <div className="row"><button type="button" data-test="surface-point-scan" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || pointBudget===null || pointBudget<=0 || pointBudget>1000}
+          onClick={()=>{if(pointBudget!==null&&pointBudget>0&&pointBudget<=1000)attempt(()=>controller.beginSurfaceTarget('scan',pointBudget,multipleTargets))}}>{multipleTargets?'Raccogli sulla scansione':'Punto sulla scansione'}</button>
+        <button type="button" data-test="surface-point-cad" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || pointBudget===null || pointBudget<=0 || pointBudget>1000}
+          onClick={()=>{if(pointBudget!==null&&pointBudget>0&&pointBudget<=1000)attempt(()=>controller.beginSurfaceTarget('cad',pointBudget,multipleTargets))}}>{multipleTargets?'Raccogli sul CAD esterno':'Punto sul CAD esterno'}</button></div>
         {(state.surfaceTarget === 'scan' || state.surfaceTarget === 'cad') && <><p role="status" aria-live="polite" aria-atomic="true" data-test="surface-point-announcement">{state.surfaceTargetBatch?
           `Punti raccolti: ${state.surfaceTargetBatch.length} di 8. ${state.surfaceTargetBatch.length>=2?'Puoi applicare gli agganci con una sola Undo.':'Servono almeno due punti per applicare.'} Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`:
           `Clicca un punto sulla faccia selezionata. Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`}</p>
@@ -273,12 +276,12 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           onChange={e=>setBoundaryAxis(Number(e.target.value) as 0|1|2)}>
           <option value={0}>X</option><option value={1}>Y</option><option value={2}>Z</option>
         </select></label>
-        <label>Spostamento · mm<input data-test="surface-whole-boundary-distance" type="number" step="any" value={Number.isFinite(boundaryDistance)?boundaryDistance:''}
-          disabled={disabled} onChange={e=>setBoundaryDistance(e.target.valueAsNumber)} /></label>
+        <label>Spostamento · mm<input data-test="surface-whole-boundary-distance" type="text" inputMode="decimal" value={boundaryDistanceText}
+          disabled={disabled} onChange={e=>setBoundaryDistanceText(e.target.value)} /></label>
         <button type="button" data-test="surface-whole-boundary-move" disabled={disabled || !state.canMoveWholeBoundary ||
           boundaryPoles.some(id => state.locked.includes(id) || hiddenPoles.includes(id)) ||
-          !Number.isFinite(boundaryDistance) || Math.abs(boundaryDistance)<=1e-7 || Math.abs(boundaryDistance)>1000}
-          onClick={()=>attempt(()=>{const delta:[number,number,number]=[0,0,0];delta[boundaryAxis]=boundaryDistance;controller.moveWholeBoundary(activeWholeBoundary,delta)})}>Sposta intero bordo</button>
+          boundaryDistance===null || Math.abs(boundaryDistance)<=1e-7 || Math.abs(boundaryDistance)>1000}
+          onClick={()=>{if(boundaryDistance!==null&&Math.abs(boundaryDistance)>1e-7&&Math.abs(boundaryDistance)<=1000)attempt(()=>{const delta:[number,number,number]=[0,0,0];delta[boundaryAxis]=boundaryDistance;controller.moveWholeBoundary(activeWholeBoundary,delta)})}}>Sposta intero bordo</button>
         <label className="inline"><input data-test="surface-whole-boundary-drag" type="checkbox" checked={!!state.wholeBoundaryDrag}
           disabled={disabled || (!state.wholeBoundaryDrag && !state.canMoveWholeBoundary)}
           onChange={e=>attempt(()=>{if(!e.target.checked)setWholeBoundary(activeWholeBoundary);controller.setWholeBoundaryDrag(e.target.checked?activeWholeBoundary:null)})} />Trascina un bordo naturale nella vista</label>
