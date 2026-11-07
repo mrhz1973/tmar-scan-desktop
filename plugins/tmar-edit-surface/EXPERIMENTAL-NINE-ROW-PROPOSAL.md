@@ -62,6 +62,15 @@ regularity check exists only for the restricted mathematical form
 general claim for the real tube follows from it. Continuous regularity for
 general surfaces, budgets and actual-candidate validation remain open.
 
+Two additional experimental controls have distinct scopes. A per-knot-cell
+interval test bounds regularity of a general unit-weight C1 periodic strip
+relative to a fixed local witness; it can conservatively refuse valid cells
+and does not compare with the original normal. Separately, an interval
+Bernstein patch routine can bound the dot product of two patch normals on a
+common parameter square and report an inconclusive result. Extracting and
+corresponding such patches from general periodic source and candidate nets is
+not implemented. Neither routine qualifies a real solid or OCCT evaluation.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
