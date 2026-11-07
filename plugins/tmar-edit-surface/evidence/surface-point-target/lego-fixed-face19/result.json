@@ -1,0 +1,78 @@
+{
+  "checkpoint": "8c708fc / b3c8e78",
+  "status": "PASS",
+  "solidIndex": 1,
+  "faceIndex": 19,
+  "inputSha256": "f47e9d2ff01ed35f392c762edd860fba5b6c90514de68d9cbc29951537931243",
+  "inputBytes": 398720,
+  "policy": "One fixed face and midpoint; no fallback after refusal",
+  "transport": "In-memory structuredClone; real session, editor.worker dispatcher and OCCT",
+  "target": "Synthetic THREE.PlaneGeometry + real snapAlong ray intersection, offset 0.02 mm along CAD normal",
+  "browser": "NOT_RUN; no browser launch attempted",
+  "selectedSolidVolumeMm3": 1084.0807603212954,
+  "faceInfo": {
+    "index": 19,
+    "trimLocks": [],
+    "hiddenPoles": [],
+    "openSheet": false,
+    "freeBoundary": false,
+    "kind": "plane",
+    "reason": null,
+    "converted": true,
+    "enriched": false,
+    "experimentalCylinder": false
+  },
+  "midpointClassification": "in",
+  "selectedPoles": 1,
+  "trimLocks": 0,
+  "hiddenPoles": 0,
+  "before": [
+    7.886113137365499,
+    0.008399430415251,
+    4.664286500000001
+  ],
+  "after": [
+    7.8861131373655,
+    -0.011600569584748994,
+    4.664286500000001
+  ],
+  "threeIntersection": [
+    7.886113137365499,
+    -0.011600569584749,
+    4.664286500000001
+  ],
+  "pointResidualMm": 8.882055243408597e-16,
+  "changedPoles": [
+    12
+  ],
+  "protectedPolesUnchanged": true,
+  "result": {
+    "valid": true,
+    "solids": 1,
+    "faces": 81,
+    "volumeMm3": 1084.7248970380479
+  },
+  "undo": [
+    7.886113137365499,
+    0.008399430415251,
+    4.664286500000001
+  ],
+  "undoResidualMm": 0,
+  "inputSha256After": "f47e9d2ff01ed35f392c762edd860fba5b6c90514de68d9cbc29951537931243",
+  "inputUnchanged": true,
+  "actions": [
+    "open",
+    "select",
+    "evaluate",
+    "finalFaceWitness",
+    "notePick",
+    "finalFaceWitness",
+    "notePick",
+    "noteResolve",
+    "evaluate",
+    "finalFaceWitness",
+    "evaluate",
+    "evaluate",
+    "finalFaceWitness"
+  ]
+}

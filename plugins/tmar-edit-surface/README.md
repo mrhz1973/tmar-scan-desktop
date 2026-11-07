@@ -49,6 +49,29 @@ in memory. No browser was launched or retried. This does not qualify physical
 pointer picking, real reference-ray intersection, arbitrary trimmed/rational
 models, project persistence or the packaged app. No user file was opened.
 
+The subsequent opt-in `tests/realSurfacePointTarget.test.ts` passed on the
+owner's read-only `lego mod qs.stp`: second solid (index 1), fixed face 19,
+central UV point classified inside the trim, with no alternate face or point
+attempted. Input SHA-256 before and after was
+`f47e9d2ff01ed35f392c762edd860fba5b6c90514de68d9cbc29951537931243`.
+A real THREE plane 0.02 mm along the CAD normal and the real `snapAlong`
+intersection supplied the destination. The measured CAD point moved from
+`[7.886113137365499, 0.008399430415251, 4.664286500000001]` to
+`[7.8861131373655, -0.011600569584748994, 4.664286500000001]`; target residual
+was approximately 8.88e-16 mm. Only pole 12 changed; G1-protected pole coordinates did not.
+The exported STEP reimported valid with one solid and 81 faces; volume changed
+from 1084.0807603212954 to 1084.7248970380479 mm³. Undo restored the entire net
+and the measured point exactly in this case, and the CAD preview was valid.
+
+Evidence: `evidence/surface-point-target/lego-fixed-face19/result.json`.
+The input was read only; no copy of its STEP or derived STEP was written.
+Session, dispatcher, kernel and THREE ray intersection were real, while the
+host and worker transport were simulated in memory; reference lifetime was
+fixed for this immutable synthetic plane. This face had no trim/manual locks:
+it does not qualify edits near holes or other LEGO faces, all other-face
+geometry, a real scan, the workspace layer's target lifetime, browser input,
+project persistence or the packaged app. No browser launch was attempted.
+
 ### Shared workspace: normal drag and integration, 2026-11-04
 
 Pole movement starts on the surface's local normal N. U/V and world axes remain
