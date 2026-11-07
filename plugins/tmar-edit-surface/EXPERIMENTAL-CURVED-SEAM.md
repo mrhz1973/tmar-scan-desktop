@@ -63,6 +63,17 @@ volume guard is unchanged; this observation does not qualify the tube.
 An isolated periodic G1 proposal now modifies the adjacent control row for
 compatible periodic U bases while preserving the shared boundary and opposite
 boundary tangent. Its interval bound applies to the supplied coefficients only.
-OCCT may normalize weights or fail to preserve a periodic wrap on replay, so
-this is not CAD, topology, STEP, interior-regularity or solid validation and is
-not connected to the editor. A roundtrip and closed-seam gate is required.
+The separate `verifyExperimentalPeriodicTangencyReplay` gate rebuilds the
+original, adjacent and edited supports through OCCT BREP. It reads the
+support referenced by each replayed face and requires exact coefficient,
+periodicity, knot, multiplicity and weight retention. The closure criterion
+requires an exactly representable period and translated U padding knots for
+the cyclic C1 basis, plus OCCT position checks at paired parameters on both
+sides of the cut. Synthetic fixtures reject weights normalized by OCCT and
+a large period whose translated knots collapse despite exact BREP readback.
+The evidence concerns the mathematical basis and sampled OCCT support
+closure; the sampled tolerance is not a global bound between sample points.
+An independent review observed an unsampled gap exceeding that tolerance on a
+large-coordinate synthetic support that passed the sampled check. Topology,
+trims, STEP, interior regularity and solid validity remain
+unqualified. The experiment has no editor integration.

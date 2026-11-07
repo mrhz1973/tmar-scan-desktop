@@ -7,11 +7,13 @@ import {
   validateExperimentalPeriodicTangency,
   type ExperimentalPeriodicTangencyRequest,
 } from '../experimentalPeriodicTangency'
+import { verifyExperimentalPeriodicTangencyReplay } from '../experimentalPeriodicTangencyReplay'
 
-function fixture(rational = true, repeatedKnots = false): ExperimentalPeriodicTangencyRequest {
-  const nu = 16, nv = 4
+function fixture(rational = true, repeatedKnots = false, knots?: number[]): ExperimentalPeriodicTangencyRequest {
+  const nv = 4
   const mult = repeatedKnots ? 2 : 1
-  const ku = Array.from({ length: nu / mult + 1 }, (_, i) => i + (i % 2) / 4)
+  const ku = knots ?? Array.from({ length: 16 / mult + 1 }, (_, i) => i + (i % 2) / 4)
+  const nu = (ku.length - 1) * mult
   const make = (selected: boolean): Net => {
     const poles: Point[] = [], weights: number[] = []
     for (let u = 0; u < nu; u++) {
@@ -24,7 +26,7 @@ function fixture(rational = true, repeatedKnots = false): ExperimentalPeriodicTa
       }
     }
     return { nu, nv, du: mult + 1, dv: 3, ku: [...ku], mu: ku.map(() => mult), kv: selected ? [0, 4] : [7, 9], mv: [4, 4],
-      poles, weights, periodic: [1, 0], rational: rational ? [1, 0] : [0, 0] }
+      poles, weights, periodic: [1, 0], rational: rational ? [0, 1] : [0, 0] }
   }
   const net = make(true), supportNet = make(false)
   // Use byte-identical coefficients for the complete natural boundary.
@@ -96,13 +98,64 @@ it('keeps pure coefficient evidence separate from OCCT weight normalization', as
   const k = await OcctKernel.init(), seed = k.makeCylinder(10, 5), faces = k.getSubShapes(seed, 'face')
   let replay: ShapeHandle | undefined
   try {
-    const brep = k.toBREP(faces.find(h => k.surfaceType(h) === 'cylinder')!)
+    const face = faces.find(h => k.surfaceType(h) === 'cylinder')!
+    const brep = k.toBREP(face)
     replay = k.fromBREP(replaceSurface(brep, surfaceTable(brep)[0], result.net))
     const actual = surfaceTable(k.toBREP(replay)).find(record => record.periodicNet)?.periodicNet
     expect(actual?.rational).toEqual([0, 0])
     expect(actual?.weights).not.toEqual(result.net.weights)
+    expect(() => verifyExperimentalPeriodicTangencyReplay(k, face, request, result.net)).toThrow(/razionalità o pesi/)
   } finally {
     if (replay !== undefined) k.release(replay)
+    faces.forEach(face => k.release(face))
+    k.release(seed)
+  }
+}, 30000)
+
+it('refuses collapsed translated knots even when the serialized OCCT coefficients survive', async () => {
+  const end = 2 ** 54
+  const knots = [0, ...Array.from({ length: 54 }, (_, i) => 2 ** (i - 1)),
+    ...Array.from({ length: 48 }, (_, i) => end - 2 ** (51 - i)), end]
+  expect(knots[1] + end).toBe(end)
+  const request = fixture(true, false, knots), result = proposeExperimentalPeriodicTangency(request)
+  const k = await OcctKernel.init(), seed = k.makeCylinder(10, 5), faces = k.getSubShapes(seed, 'face')
+  let replay: ShapeHandle | undefined
+  try {
+    const face = faces.find(h => k.surfaceType(h) === 'cylinder')!
+    const brep = k.toBREP(face)
+    replay = k.fromBREP(replaceSurface(brep, surfaceTable(brep)[0], result.net))
+    const actual = surfaceTable(k.toBREP(replay)).find(record => record.periodicNet)?.periodicNet
+    expect(actual).toEqual(result.net)
+    const a = k.pointOnSurface(replay, knots[0], result.net.kv[1])
+    const b = k.pointOnSurface(replay, end, result.net.kv[1])
+    expect(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)).toBeGreaterThan(1e-3)
+    expect(() => verifyExperimentalPeriodicTangencyReplay(k, face, request, result.net)).toThrow(/nodi U traslati/)
+  } finally {
+    if (replay !== undefined) k.release(replay)
+    faces.forEach(face => k.release(face))
+    k.release(seed)
+  }
+}, 30000)
+
+it.each([
+  { rational: false, repeated: false, origin: 0 },
+  { rational: true, repeated: false, origin: -5 },
+  { rational: true, repeated: true, origin: 8 },
+])('qualifies exact OCCT BREP replay and cyclic closure (%j)', async ({ rational, repeated, origin }) => {
+  const request = fixture(rational, repeated)
+  for (const net of [request.net, request.supportNet]) net.ku = net.ku.map(u => u + origin)
+  const result = proposeExperimentalPeriodicTangency(request)
+  const k = await OcctKernel.init(), seed = k.makeCylinder(10, 5), faces = k.getSubShapes(seed, 'face')
+  try {
+    const face = faces.find(h => k.surfaceType(h) === 'cylinder')!
+    const receipt = verifyExperimentalPeriodicTangencyReplay(k, face, request, result.net)
+    expect(receipt).toMatchObject({
+      evidenceScope: 'occt-brep-supports', cadRoundTripVerified: true, globalG1Certified: false,
+      periodicClosure: 'exact-cyclic-knot-wrap-and-occt-point-samples', closureSamples: 27
+    })
+    expect(receipt.maxSampledPositionGap).toBeLessThan(1e-10)
+    expect(result.validation.cadRoundTripVerified).toBe(false)
+  } finally {
     faces.forEach(face => k.release(face))
     k.release(seed)
   }
