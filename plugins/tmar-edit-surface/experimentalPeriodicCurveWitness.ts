@@ -15,7 +15,7 @@ const fail = (reason: string): never => { throw new Error(`Curva periodica speri
 const equal = (a: readonly number[], b: readonly number[]): boolean =>
   a.length === b.length && a.every((x, i) => x === b[i])
 
-function readFullPeriod(kernel: OcctKernel, edge: ShapeHandle): NurbsCurveData {
+export function readFullPeriod(kernel: OcctKernel, edge: ShapeHandle): NurbsCurveData {
   if (kernel.curveType(edge) !== 'bspline') fail('edge senza curva B-spline')
   const data = kernel.getNurbsCurveData(edge)
   const { degree, knots, multiplicities, poles, weights } = data

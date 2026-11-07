@@ -51,3 +51,11 @@ are diagnostic only. The comparison helper does not bound OCCT rounding, and
 therefore cannot certify input equality or replace topology and volume guards.
 It currently requires identical parameter domains, phase, orientation and weights.
 No real tube, closed solid, or user-facing edit is qualified by these results.
+
+The separate affine comparison experiment supports distinct full-period
+parameter domains when every transformed knot is exactly representable. It
+keeps seam phase and orientation fixed and reports refined OCCT coefficients,
+not a proof about source surfaces. A synthetic closed-cylinder study is recorded
+in `PERIODIC-VOLUME-BASELINE.md`: volume readings vary substantially after
+representation changes despite the sampled support points matching. The existing
+volume guard is unchanged; this observation does not qualify the tube.
