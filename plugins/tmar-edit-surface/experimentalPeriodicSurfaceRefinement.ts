@@ -23,7 +23,7 @@ const validKnots = (knots: readonly number[]) =>
 const validWeights = (weights: readonly number[]) =>
   everyDense(weights, w => Number.isFinite(w) && w > 0)
 
-function validate(net: Net): void {
+export function validateExperimentalPeriodicSurfaceU(net: Net): void {
   const { nu, nv, du, dv, ku, kv, mu, mv, poles, weights, rational, periodic } = net
   if (!periodic || !equal(periodic, [1, 0]) ||
       !Number.isInteger(du) || du < 1 || du > 25 || !Number.isInteger(dv) || dv < 1 || dv > 25 ||
@@ -54,8 +54,8 @@ function validate(net: Net): void {
  * the operation gives no bound on geometric deviation or topology validity.
  */
 export function refineExperimentalPeriodicSurfaceU(kernel: OcctKernel, left: Net, right: Net) {
-  validate(left)
-  validate(right)
+  validateExperimentalPeriodicSurfaceU(left)
+  validateExperimentalPeriodicSurfaceU(right)
   if (left.du !== right.du || left.ku[0] !== right.ku[0] ||
       left.ku.at(-1) !== right.ku.at(-1) || left.mu[0] !== right.mu[0])
     fail('grado, intervallo o molteplicità alla cucitura U diversa')

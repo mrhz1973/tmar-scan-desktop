@@ -26,7 +26,7 @@ function gcd(a: bigint, b: bigint): bigint {
 const fail = (reason: string): never => { throw new Error(`Confronto affine periodico rifiutato: ${reason}`) }
 
 function exactDyadic(value: bigint, exponent: number): number {
-  if (value === 0n) return 0
+  if (value <= 0n) return value === 0n ? 0 : -exactDyadic(-value, exponent)
   const shift = trailingZeroBits(value)
   const significand = value >> BigInt(shift)
   exponent += shift
@@ -35,6 +35,23 @@ function exactDyadic(value: bigint, exponent: number): number {
   const knot = Number(significand) * 2 ** exponent
   if (!Number.isFinite(knot)) fail('nodo affine fuori intervallo')
   return knot
+}
+
+/** Positive affine map between full periods, with no rounding of knots. */
+export function mapPeriodicKnotsAffineExactly(knots: number[], first: number, last: number): number[] {
+  if (knots.length < 2 || ![...knots, first, last].every(Number.isFinite) ||
+      knots.some((value, i) => i > 0 && value <= knots[i - 1]) || !(first < last))
+    return fail('intervallo parametrico non valido')
+
+  const from = knotUnits(knots[0]), period = knotUnits(knots.at(-1)!) - from
+  const to = knotUnits(first), toPeriod = knotUnits(last) - to
+  return knots.map((knot, i) => {
+    if (i === 0) return first
+    if (i === knots.length - 1) return last
+    const offset = (knotUnits(knot) - from) * toPeriod
+    if (offset % period !== 0n) return fail('nodi affini non rappresentabili esattamente nel dominio di destinazione')
+    return exactDyadic(to + offset / period, -1074)
+  })
 }
 
 function reducePeriod(knots: number[]) {

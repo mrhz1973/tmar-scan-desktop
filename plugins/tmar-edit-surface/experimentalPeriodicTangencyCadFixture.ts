@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { OcctKernel, ShapeHandle, Vec3 } from 'occt-wasm'
 import { encodeNet, surfaceTable, type Net, type Point } from './brep'
+import { proposeExperimentalPeriodicAffineTangency } from './experimentalPeriodicAffineTangency'
 import { refineExperimentalPeriodicSurfaceU } from './experimentalPeriodicSurfaceRefinement'
 import { proposeExperimentalPeriodicTangency } from './experimentalPeriodicTangency'
 import { verifyExperimentalPeriodicTangencyReplay } from './experimentalPeriodicTangencyReplay'
@@ -8,22 +9,24 @@ import { verifyExperimentalPeriodicTangencyReplay } from './experimentalPeriodic
 const tolerance = 1e-7
 const fail = (reason: string): never => { throw new Error(`Fixture CAD periodica rifiutata: ${reason}`) }
 const gap = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+const opposite = (k: OcctKernel, edges: ShapeHandle[]) =>
+  edges.length === 2 && edges.map(edge => k.shapeOrientation(edge)).sort().join() === 'forward,reversed'
 
-function fixtureNet(selected: boolean): Net {
+function fixtureNet(selected: boolean, linearSupport = false): Net {
   // Same flared/cylindrical seam scenario as the coefficient fixtures, with a
   // uniform polynomial U basis to construct the two natural topologies exactly.
-  const nu = 16, nv = 4
+  const nu = 16, nv = !selected && linearSupport ? 2 : 4, dv = nv - 1
   const poles = Array.from({ length: nu }, (_, u) => {
     const angle = 2 * Math.PI * u / nu, x = Math.cos(angle), y = Math.sin(angle)
     return Array.from({ length: nv }, (_, v): Point => {
-      const distance = selected ? 3 - v : v
+      const distance = selected ? 3 - v : v * 3 / dv
       const radius = selected ? 10 : 10 + distance * (0.25 + x / 8)
       return [radius * x, radius * y, (selected ? -distance : distance) * (1 + y / 8)]
     })
   }).flat()
-  return { nu, nv, du: 2, dv: 3, poles, weights: poles.map(() => 1), rational: [0, 0], periodic: [1, 0],
+  return { nu, nv, du: 2, dv, poles, weights: poles.map(() => 1), rational: [0, 0], periodic: [1, 0],
     ku: Array.from({ length: nu + 1 }, (_, u) => u), mu: Array(nu + 1).fill(1),
-    kv: selected ? [0, 4] : [7, 9], mv: [4, 4] }
+    kv: selected ? [0, 4] : [7, 9], mv: [nv, nv] }
 }
 
 /**
@@ -37,7 +40,7 @@ function fixtureFace(k: OcctKernel, n: Net): ShapeHandle {
   const rim = (row: number) => Array.from({ length: n.nu }, (_, u) => n.poles[u * n.nv + row])
   // The fixture's inserted knots stay away from the cut. Require the same
   // quadratic basis there before using the two-pole average for the seam.
-  if (n.du !== 2 || n.rational.some(Boolean) || n.ku[1] - u0 !== 1 || u1 - n.ku.at(-2)! !== 1 ||
+  if (n.du !== 2 || n.rational.some(Boolean) || n.ku[1] - u0 !== u1 - n.ku.at(-2)! ||
       [n.mu[0], n.mu[1], n.mu.at(-2), n.mu.at(-1)].some(m => m !== 1))
     return fail('base della cucitura U inattesa')
   const seam = n.poles.slice(0, n.nv).map((a, v) => a.map((x, d) => (x + n.poles[n.nv + v][d]) / 2))
@@ -148,13 +151,85 @@ export function runExperimentalPeriodicRefinementTangencyCadFixture(k: OcctKerne
   return runCadFixture(k, true)
 }
 
+/** Prove the original parameter domains can be retained in this fixture. */
+export function runExperimentalPeriodicAffineTangencyCadFixture(k: OcctKernel) {
+  const handles: ShapeHandle[] = []
+  const own = (shape: ShapeHandle) => { handles.push(shape); return shape }
+  const pcurves = (brep: string) => brep.slice(brep.indexOf('Curve2ds '), brep.indexOf('Curves '))
+  try {
+    const selected = own(fixtureFace(k, insertFixtureKnot(k, fixtureNet(true), 3.5, own)))
+    const supportNet = insertFixtureKnot(k, fixtureNet(false, true), 11.5, own)
+    supportNet.ku = supportNet.ku.map(u => 32 + 2 * u)
+    const support = own(fixtureFace(k, supportNet))
+    const sourceBrep = [k.toBREP(selected), k.toBREP(support)]
+    const net = readNet(k, selected)
+    const request = { net, supportNet: readNet(k, support), edge: 'V1', supportEdge: 'V0' } as const
+    const proposal = proposeExperimentalPeriodicAffineTangency(k, request)
+    const refined = own(fixtureFace(k, proposal.refinedNet))
+    // In the fixture, rebuild the changed 3D cut curve from the edited net.
+    // Its pcurves remain at the same U/V coordinates as the source curves.
+    const edited = own(fixtureFace(k, proposal.net))
+    if (pcurves(k.toBREP(edited)) !== pcurves(sourceBrep[0])) fail('pcurve della faccia selezionata modificate')
+    if (encodeNet(readNet(k, edited)) !== encodeNet(proposal.net)) fail('coefficienti proposti alterati dal kernel')
+    const shell = own(k.sew([edited, own(k.copy(support))], tolerance))
+    const reopened = own(k.importStep(k.exportStep(shell)))
+    const faces = k.getSubShapes(reopened, 'face').map(own)
+    const low = faces.find(face => Math.abs(k.uvBounds(face).vMax - 4) <= tolerance)
+    const high = faces.find(face => Math.abs(k.uvBounds(face).vMin - 7) <= tolerance)
+    if (low === undefined || high === undefined || low === high || !k.isShell(shell) || !k.isValid(shell) ||
+        !k.isShell(reopened) || !k.isValid(reopened) || faces.length !== 2 ||
+        k.shapeOrientation(reopened) !== 'forward' || k.subShapeCount(reopened, 'solid') !== 0 ||
+        k.subShapeCount(reopened, 'edge') !== 5 || k.subShapeCount(reopened, 'vertex') !== 3)
+      return fail('guscio affine dopo STEP non valido')
+    const shared = k.sharedEdges(low, high).map(own)
+    if (shared.length !== 1 || !k.curveIsClosed(shared[0]) || !k.curveIsPeriodic(shared[0]))
+      fail('bordo affine comune non conservato')
+    const sharedUses = [low, high].map(face => {
+      const wires = k.getSubShapes(face, 'wire').map(own)
+      if (wires.length !== 1 || k.shapeOrientation(face) !== 'forward' || readNet(k, face).periodic?.join() !== '1,0')
+        return fail('faccia periodica dopo STEP non valida')
+      const uses = k.iterShapes(wires[0]).map(own)
+      const cut = uses.filter(a => uses.filter(b => k.isSame(a, b)).length === 2)
+      const rims = uses.filter(edge => k.isSame(edge, shared[0]))
+      if (uses.length !== 4 || !opposite(k, cut) || k.curveIsClosed(cut[0]) || rims.length !== 1)
+        return fail('usi dei bordi periodici dopo STEP non validi')
+      return rims[0]
+    })
+    if (!opposite(k, sharedUses)) fail('incidenza del bordo affine non valida')
+
+    const domains = [k.uvBounds(low), k.uvBounds(high)].map(({ uMin, uMax }) => [uMin, uMax])
+    const knots = proposal.net.ku
+    const samples = knots.flatMap((u, i) => i === knots.length - 1
+      ? [u] : [u, ...[0.125, 0.5, 0.875].map(t => u + (knots[i + 1] - u) * t)])
+    let beforeNormalSin = 0, afterNormalSin = 0, maxSeamGap = 0, maxRefinementGap = 0, maxProtectedGap = 0, maxProtectedNormalSin = 0
+    let maxStepSurfaceGap = 0
+    for (const u of samples) {
+      const supportU = 32 + 2 * u
+      beforeNormalSin = Math.max(beforeNormalSin, normalSin(k.surfaceNormal(selected, u, 4), k.surfaceNormal(support, supportU, 7)))
+      afterNormalSin = Math.max(afterNormalSin, normalSin(k.surfaceNormal(low, u, 4), k.surfaceNormal(high, supportU, 7)))
+      maxSeamGap = Math.max(maxSeamGap, gap(k.pointOnSurface(low, u, 4), k.pointOnSurface(high, supportU, 7)))
+      maxProtectedGap = Math.max(maxProtectedGap, gap(k.pointOnSurface(selected, u, 0), k.pointOnSurface(low, u, 0)))
+      maxProtectedNormalSin = Math.max(maxProtectedNormalSin, normalSin(k.surfaceNormal(selected, u, 0), k.surfaceNormal(low, u, 0)))
+      for (const v of [0, 1, 2, 3, 4]) {
+        maxRefinementGap = Math.max(maxRefinementGap, gap(k.pointOnSurface(selected, u, v), k.pointOnSurface(refined, u, v)))
+        maxStepSurfaceGap = Math.max(maxStepSurfaceGap, gap(k.pointOnSurface(edited, u, v), k.pointOnSurface(low, u, v)))
+      }
+      for (const v of [7, 7.5, 8, 8.5, 9])
+        maxStepSurfaceGap = Math.max(maxStepSurfaceGap, gap(k.pointOnSurface(support, supportU, v), k.pointOnSurface(high, supportU, v)))
+    }
+    if (k.toBREP(selected) !== sourceBrep[0] || k.toBREP(support) !== sourceBrep[1]) fail('facce sorgente modificate')
+    return { domains, knots, samples: samples.length, validation: proposal.validation, beforeNormalSin, afterNormalSin,
+      maxSeamGap, maxRefinementGap, maxProtectedGap, maxProtectedNormalSin, maxStepSurfaceGap }
+  } finally {
+    handles.reverse().forEach(handle => k.release(handle))
+  }
+}
+
 function runCadFixture(k: OcctKernel, refine: boolean) {
   const handles: ShapeHandle[] = []
   const own = (shape: ShapeHandle) => { handles.push(shape); return shape }
   const children = (shape: ShapeHandle, kind: 'face' | 'wire') =>
     k.getSubShapes(shape, kind).map(own)
-  const opposite = (edges: ShapeHandle[]) =>
-    edges.length === 2 && edges.map(edge => k.shapeOrientation(edge)).sort().join() === 'forward,reversed'
   const checkFace = (face: ShapeHandle, net: Net) => {
     const { uMin, uMax, vMin, vMax } = k.uvBounds(face)
     const expected = [net.ku[0], net.ku.at(-1)!, net.kv[0], net.kv.at(-1)!]
@@ -166,7 +241,7 @@ function runCadFixture(k: OcctKernel, refine: boolean) {
     // Direct wire children preserve both uses of the same U seam edge.
     const uses = k.iterShapes(wires[0]).map(own)
     const seam = uses.filter(a => uses.filter(b => k.isSame(a, b)).length === 2)
-    if (uses.length !== 4 || !opposite(seam) || k.curveIsClosed(seam[0]))
+    if (uses.length !== 4 || !opposite(k, seam) || k.curveIsClosed(seam[0]))
       fail('usi della cucitura U non validi')
     if (readNet(k, face).periodic?.join() !== '1,0') fail('periodicità U non conservata')
     for (const t of [0, 0.125, 0.5, 0.875, 1]) {
@@ -205,7 +280,7 @@ function runCadFixture(k: OcctKernel, refine: boolean) {
     const shared = k.sharedEdges(selected, support).map(own)
     if (shared.length !== 1 || !k.curveIsClosed(shared[0]) || !k.curveIsPeriodic(shared[0]))
       fail('bordo periodico comune assente o ambiguo')
-    if (!opposite(uses.filter(edge => k.isSame(edge, shared[0]))))
+    if (!opposite(k, uses.filter(edge => k.isSame(edge, shared[0]))))
       fail('incidenza del bordo comune non valida')
     const { first, last } = k.curveParameters(shared[0])
     for (const t of [first, first + (last - first) / 3, first + 2 * (last - first) / 3]) {

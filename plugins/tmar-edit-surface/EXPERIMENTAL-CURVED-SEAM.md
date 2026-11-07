@@ -112,6 +112,14 @@ A separate non-affine correspondence test proves an exact identity for four
 explicit polynomial Bezier spans under a supplied monotone quadratic map.
 It does not find a map automatically or qualify general periodic B-splines.
 
+An isolated affine-periodic proposal now maps a compatible support to the
+selected face's U domain, refines a common basis and computes tangency without
+changing that selected domain. A synthetic open-shell STEP fixture exercises
+distinct affine domains, knots and linear V support; topology and orientation
+are checked, with geometry measured at samples. STEP pcurve trimming and
+general solids remain unqualified. Inputs requiring rounded affine knots are
+rejected; this method has not been applied to the tube.
+
 An isolated follow-up searches seam phase, parameter direction and the local
 quadratic maps automatically for polynomial quadratic/quartic periodic curves
 with matching Bezier-span counts and knot-to-knot correspondence. It compares
