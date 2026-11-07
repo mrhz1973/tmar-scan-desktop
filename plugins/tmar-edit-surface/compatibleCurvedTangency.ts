@@ -2,6 +2,7 @@
 import type { Net, Point } from './brep'
 import type { NaturalEdge } from './planeTangency'
 import { refineClampedNet } from './refineClampedNet'
+import { add, cross, difference, divide, dot, l1, mul, scalar, sub, times, vector, type I, type V } from './tangencyCoefficientIntervals'
 
 /** Pure coefficient operation. The caller must prove a shared straight natural
  * CAD edge, incidence/orientation and source identity, then validate rebuilt CAD/STEP.
@@ -54,6 +55,7 @@ export interface ExperimentalCurvedSeamResult {
 const edges: NaturalEdge[] = ['U0', 'U1', 'V0', 'V1']
 const fail = (why: string): never => { throw new Error(`Tangenza curva compatibile rifiutata: ${why}`) }
 const equal = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((x, i) => Object.is(x, b[i]))
+const raw = new BigUint64Array(1), number = new Float64Array(raw.buffer)
 function row(n: Net, edge: NaturalEdge, inner = false): number[] {
   if (edge[0] === 'U') {
     const u = edge === 'U0' ? +inner : n.nu - 1 - +inner
@@ -62,42 +64,6 @@ function row(n: Net, edge: NaturalEdge, inner = false): number[] {
   const v = edge === 'V0' ? +inner : n.nv - 1 - +inner
   return Array.from({ length: n.nu }, (_, u) => u * n.nv + v)
 }
-
-// Every elementary operation used for a certificate encloses the real result
-// of the input binary coefficients. No sampled normals act as a proof oracle.
-type I = [number, number]
-type V = [I, I, I]
-const raw = new BigUint64Array(1), number = new Float64Array(raw.buffer)
-const scalar = (x: number): I => [x, x]
-const vector = (p: Point): V => p.map(scalar) as V
-function next(x: number, up: boolean): number {
-  if (!Number.isFinite(x)) fail('overflow nella prova del bordo')
-  if (x === 0) return up ? Number.MIN_VALUE : -Number.MIN_VALUE
-  number[0] = x; raw[0] += (x > 0) === up ? 1n : -1n
-  return number[0]
-}
-function enclosed(lo: number, hi: number): I {
-  const out: I = [next(lo, false), next(hi, true)]
-  if (!out.every(Number.isFinite)) fail('overflow nella prova del bordo')
-  return out
-}
-const add = (a: I, b: I): I => enclosed(a[0] + b[0], a[1] + b[1])
-const sub = (a: I, b: I): I => enclosed(a[0] - b[1], a[1] - b[0])
-function mul(a: I, b: I): I {
-  const p = [a[0] * b[0], a[0] * b[1], a[1] * b[0], a[1] * b[1]]
-  return enclosed(Math.min(...p), Math.max(...p))
-}
-function divide(a: I, b: I): I {
-  if (!(b[0] > 0)) fail('intervallo parametrico non comprovabilmente positivo')
-  return mul(a, enclosed(1 / b[1], 1 / b[0]))
-}
-const difference = (a: Point, b: Point): V => a.map((x, i) => sub(scalar(x), scalar(b[i]))) as V
-const times = (a: V, s: I): V => a.map(x => mul(x, s)) as V
-const cross = (a: V, b: V): V => [0, 1, 2].map(i => sub(mul(a[(i + 1) % 3], b[(i + 2) % 3]),
-  mul(a[(i + 2) % 3], b[(i + 1) % 3]))) as V
-const dot = (a: V, b: Point): I => a.reduce((sum, x, i) => add(sum, mul(x, scalar(b[i]))), scalar(0))
-const abs = (a: I) => Math.max(Math.abs(a[0]), Math.abs(a[1]))
-const l1 = (a: V): number => a.reduce((sum, x) => add(scalar(sum), scalar(abs(x)))[1], 0)
 
 /** Exact dyadic equality for affine knot reversal, including nonbinary-looking
  * decimal inputs. A rounded `first + last - knot` is not a basis identity proof. */

@@ -59,3 +59,10 @@ not a proof about source surfaces. A synthetic closed-cylinder study is recorded
 in `PERIODIC-VOLUME-BASELINE.md`: volume readings vary substantially after
 representation changes despite the sampled support points matching. The existing
 volume guard is unchanged; this observation does not qualify the tube.
+
+An isolated periodic G1 proposal now modifies the adjacent control row for
+compatible periodic U bases while preserving the shared boundary and opposite
+boundary tangent. Its interval bound applies to the supplied coefficients only.
+OCCT may normalize weights or fail to preserve a periodic wrap on replay, so
+this is not CAD, topology, STEP, interior-regularity or solid validation and is
+not connected to the editor. A roundtrip and closed-seam gate is required.
