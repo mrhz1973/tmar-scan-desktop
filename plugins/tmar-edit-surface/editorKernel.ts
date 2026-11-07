@@ -343,7 +343,7 @@ export class SurfaceEditorKernel {
       return {net, trimLocks: [...trimLocks], hiddenPoles, natural: rectangular && inner.length === 0 && !partial}
     } finally { [outer, ...wires, ...edges].forEach(h => k.release(h)) }
   }
-  private checkPlanarTrims(before: ShapeHandle, after: ShapeHandle) {
+  private checkPlanarTrims(before: ShapeHandle, after: ShapeHandle, operation = 'Conversione piana') {
     const k = this.kernel
     const traces = (face: ShapeHandle) => {
       const outer = k.outerWire(face), wires = k.getSubShapes(face, 'wire')
@@ -373,10 +373,10 @@ export class SurfaceEditorKernel {
         }
         return true
       })
-      if (match < 0) throw new Error('Conversione piana: contorno alterato.')
+      if (match < 0) throw new Error(operation + ': contorno alterato.')
       pending.splice(match,1)
     }
-    if (pending.length) throw new Error('Conversione piana: contorno aggiunto.')
+    if (pending.length) throw new Error(operation + ': contorno aggiunto.')
   }
   private checkPreparedArea(original: ShapeHandle, prepared: ShapeHandle, trimmed: boolean) {
     const k = this.kernel, area = k.getSurfaceArea(original)
@@ -1394,6 +1394,46 @@ export class SurfaceEditorKernel {
     return { face: this.chosen, selectionRevision: this.anchorSelectionRevision, previewRevision,
       faceBrep: this.kernel.toBREP(face) }
   }
+  /** Export an independent CAD face from the current validated solid preview. */
+  duplicateCadFace(previewRevision: number) {
+    const face = this.noteFace(previewRevision), k = this.kernel
+    if (this.solids !== 1 || this.adaptiveSelection || !this.netFor(this.chosen, this.refinements).natural)
+      throw new Error('Duplica faccia richiede una faccia naturale di un singolo solido.')
+    const owned: ShapeHandle[] = []
+    const own = (shape: ShapeHandle) => { owned.push(shape); return shape }
+    try {
+      // STEP export uses a private BREP copy so it cannot update the live face.
+      const copy = own(k.fromBREP(k.toBREP(face)))
+      if (k.getShapeType(copy) !== 'face' || !k.isValid(copy))
+        throw new Error('Copia CAD della faccia non valida.')
+      const step = k.exportStep(copy), imported = own(k.importStep(step))
+      const faces = k.getSubShapes(imported, 'face')
+      owned.push(...faces)
+      if (!k.isValid(imported) || faces.length !== 1 || k.subShapeCount(imported, 'solid') !== 0)
+        throw new Error('Lo STEP deve contenere una sola faccia CAD aperta.')
+      const result = faces[0], before = this.ownFaceSupport(face)?.net, after = this.ownFaceSupport(result)?.net
+      const orientation = k.shapeOrientation(face)
+      if (!before || !after || !this.sameCurvedNet(before, after, true) ||
+          !['forward', 'reversed'].includes(orientation) || orientation !== k.shapeOrientation(result))
+        throw new Error('Supporto NURBS o orientamento della faccia duplicata diverso.')
+      const bounds = k.uvBounds(face), reopened = k.uvBounds(result)
+      const uvBefore = [bounds.uMin, bounds.uMax, bounds.vMin, bounds.vMax]
+      const uvAfter = [reopened.uMin, reopened.uMax, reopened.vMin, reopened.vMax]
+      if (uvBefore.some((x,i) => !Number.isFinite(x) || !Number.isFinite(uvAfter[i]) || Math.abs(x - uvAfter[i]) > 1e-8))
+        throw new Error('Dominio UV della faccia duplicata diverso.')
+      if (k.subShapeCount(face, 'wire') !== 1 || k.subShapeCount(result, 'wire') !== 1 ||
+          k.subShapeCount(face, 'edge') !== 4 || k.subShapeCount(result, 'edge') !== 4)
+        throw new Error('Contorno naturale della faccia duplicata non verificabile.')
+      this.checkPlanarTrims(face, result, 'Duplica faccia')
+      for (const u of [.25,.5,.75]) for (const v of [.25,.5,.75]) {
+        const atU = bounds.uMin + u * (bounds.uMax - bounds.uMin), atV = bounds.vMin + v * (bounds.vMax - bounds.vMin)
+        if (k.classifyPointOnFace(face, atU, atV) !== 'in' || k.classifyPointOnFace(result, atU, atV) !== 'in')
+          throw new Error('Regione interna della faccia duplicata non verificabile.')
+      }
+      return { face:this.chosen, selectionRevision:this.anchorSelectionRevision, previewRevision, step }
+    } finally { owned.reverse().forEach(shape => k.release(shape)) }
+  }
+
   verifyBoundaryVisibility(previewRevision:number,candidates:BoundaryCadCandidate[],origin:Point,parallelDirection?:Point){
     const face=this.noteFace(previewRevision)
     if(this.solids || this.faces.length!==1 || !this.infos[this.chosen]?.freeBoundary || this.adaptiveSelection ||

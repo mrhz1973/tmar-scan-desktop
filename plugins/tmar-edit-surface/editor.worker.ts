@@ -42,6 +42,7 @@ export type Request = { id: number } & (
   | { action: 'sheetEdges'; previewRevision: number }
   | { action: 'duplicateSheetEdge'; previewRevision: number; edge: number; delta: Point; previous?: StripMove[]; path?: Point[] }
   | { action: 'finalFaceWitness'; previewRevision: number }
+  | { action: 'duplicateCadFace'; previewRevision: number; selection: {face:number;refinements:KnotInsertion[]} }
   | { action: 'notePick'; point: Point; previewRevision: number }
   | { action: 'noteResolve'; anchor: DraftAnchor; previewRevision: number }
   | {action:'verifyBoundaryVisibility';previewRevision:number;candidates:import('./boundaryVisibilityCad').BoundaryCadCandidate[];origin:Point;parallelDirection?:Point}
@@ -202,6 +203,12 @@ self.onmessage = (event: MessageEvent<Request>) => {
         case 'sheetEdges': result = editor.sheetEdges(req.previewRevision); break
         case 'duplicateSheetEdge': result = editor.duplicateSheetEdge(req.previewRevision,req.edge,req.delta,req.previous,req.path); break
         case 'finalFaceWitness': result = editor.finalFaceWitness(req.previewRevision); break
+        case 'duplicateCadFace':
+          if (cylinder || adaptiveSelectionKey !== null || !req.selection || selectionKey === null ||
+              selectionKey !== JSON.stringify(req.selection))
+            throw new Error('Selezione della faccia da duplicare scaduta o non supportata.')
+          result = editor.duplicateCadFace(req.previewRevision)
+          break
         case 'notePick': result = editor.anchorFromPick(req.point,req.previewRevision); break
         case 'noteResolve': result = editor.resolveAnchor(req.anchor,req.previewRevision); break
         case 'verifyBoundaryVisibility':
