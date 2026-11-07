@@ -141,6 +141,13 @@ and nets with fewer poles than degree. It does not bound the result of
 changing knots, OCCT evaluation, refinement, trimming or solid topology; it
 does not authorize a relaxed exact-mapping guard.
 
+A separate interval bound compares a linear-V unit-weight surface to a
+four- or nine-row cubic-V coefficient model with the same periodic U basis.
+It bounds positional displacement over the full mathematical domain and
+separately on the natural V borders. It uses Greville abscissae of the stored
+knots, not ideal unrounded fractions. It does not validate OCCT evaluation,
+trims, normals, self-intersection, a closed solid, wall thickness or volume.
+
 An isolated follow-up searches seam phase, parameter direction and the local
 quadratic maps automatically for polynomial quadratic/quartic periodic curves
 with matching Bezier-span counts and knot-to-knot correspondence. It compares
