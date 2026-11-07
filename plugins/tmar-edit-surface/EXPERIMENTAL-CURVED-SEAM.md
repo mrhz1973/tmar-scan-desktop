@@ -126,6 +126,14 @@ real piecewise-linear interpolant. Independent exact-fraction tests cover the
 rounding. It does not bound CAD geometry, floating-point interpolation, knot
 union with native data, or permit the existing exact-mapping guard to be bypassed.
 
+In occt-wasm 5.7.1, `curveKnotInsert` passes OCCT `Precision::Confusion()`
+(1e-7 in parameter units), not a geometric tolerance in millimetres. Nearly
+coincident distinct requested knots can therefore increase an existing knot's
+multiplicity instead of creating a new knot. The existing refinement code
+requires an exact read-back match and refuses that result. See the
+[WASM wrapper](https://github.com/andymai/occt-wasm/blob/v5.7.1/facade/generated/kernel.cpp#L3008-L3026)
+and [OCCT knot insertion](https://github.com/andymai/OCCT/blob/c7f60ffe85f28c67358d1771454044f0521f2fdd/src/FoundationClasses/TKMath/BSplCLib/BSplCLib.cxx#L2121-L2290).
+
 The companion geometry bound applies a derivative-coefficient hull to the
 same ideal polynomial periodic curve evaluated at the exact affine map and
 the real piecewise-linear map through rounded knots. It rejects sparse data
