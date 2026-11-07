@@ -200,6 +200,12 @@ is strictly below a verified lower bound for the baseline. This bounded
 search may retain the baseline or stop inconclusively. Better observation
 does not certify fit accuracy, continuous geometry or CAD validity.
 
+A separate observed-certified pair entry point composes this sampler with the
+certified-fit and full-domain normal diagnostics. Synthetic tests verify that
+the fit uses the selected grid and that a stopped side releases no candidates.
+The method remains an experimental coefficient-model diagnostic and does not
+qualify geometry or CAD.
+
 An experimental coordinator now composes independent grids, the pair joint
 diagnostic and full-domain normal comparison on both lateral coefficient nets.
 It returns no candidate if a sampling, joint or interior check fails. A

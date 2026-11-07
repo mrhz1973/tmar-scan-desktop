@@ -2,9 +2,11 @@
 import { expect, it } from 'vitest'
 import type { Net, Point } from '../brep'
 import { mapPeriodicKnotsAffineRounded } from '../experimentalPeriodicAffineKnotMap'
+import { generateExperimentalPeriodicIndependentSamples, generateExperimentalPeriodicObservedSamples } from '../experimentalPeriodicIndependentSamples'
 import { measureExperimentalPeriodicQuinticPairFullDomain, measureExperimentalPeriodicQuinticPairFullDomainCertifiedFit,
-  measureExperimentalPeriodicQuinticPairFullDomainScaled,
-  type ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest } from '../experimentalPeriodicQuinticPairFullDomainDiagnostic'
+  measureExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFit, measureExperimentalPeriodicQuinticPairFullDomainScaled,
+  type ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest,
+  type ExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFitRequest } from '../experimentalPeriodicQuinticPairFullDomainDiagnostic'
 import type { ExperimentalPeriodicQuinticCertifiedFitBudgets,
   ExperimentalPeriodicQuinticScaledBudgets } from '../experimentalPeriodicQuinticSideDiagnostic'
 
@@ -254,5 +256,97 @@ it('withholds both certified-fit proposals on an interior normal witness', () =>
     normals: { V0: { status: 'certified-positive' }, V1: { status: 'nonpositive-witness',
       nativeParameter: { u: { enclosure: [43, 43] }, v: { enclosure: [1, 1] } } } },
   } })
+  expect(result).not.toHaveProperty('candidates')
+})
+
+function observedFixture(slope?: number): ExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFitRequest {
+  const { central, atCentralV0, atCentralV1 } = certifiedFixture(slope)
+  const observed = (side: typeof atCentralV0) => ({ ...side, sampleSearch: { ...side.sampleSearch,
+    observation: { maxComparisons: 1024, maxRows: 64, maxFreeColumns: 8 },
+  } })
+  const lower = observed(atCentralV0)
+  lower.sampleSearch.training = { perSpan: 1, minimumInterior: 6 }
+  return { central, atCentralV0: lower, atCentralV1: observed(atCentralV1) }
+}
+
+it('feeds the selected observed training grids into both certified fits while preserving their holdouts and quotas', () => {
+  const request = observedFixture(), before = structuredClone(request)
+  const result = measureExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFit(request)
+  if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
+  for (const [edge, input] of [['V0', request.atCentralV0], ['V1', request.atCentralV1]] as const) {
+    const net = input.lateral.net
+    const selection = { ...input.sampleSearch, edgePeriod: input.edgePeriod,
+      lateral: { knots: net.ku, uAtEdgeEnds: input.lateral.uAtEdgeEnds },
+      support: { knots: request.central.ku, uAtEdgeEnds: input.centralUAtEdgeEnds },
+      observation: { ...input.sampleSearch.observation, degree: net.du, multiplicities: net.mu },
+    }
+    const greedy = generateExperimentalPeriodicIndependentSamples(selection)
+    const selected = generateExperimentalPeriodicObservedSamples(selection)
+    const sampling = result.receipts.sampling[edge], joint = result.receipts.joint[edge]
+    if (greedy.status !== 'generated' || selected.status !== 'generated' || sampling.status !== 'generated' ||
+        joint.status !== 'diagnostic-only' || joint.evidence.fitCertificate?.status !== 'certified' || !sampling.observation)
+      throw new Error(JSON.stringify({ greedy, selected, sampling, joint }))
+    const report = sampling.observation
+    expect(report.selection).toBe(edge === 'V0' ? 'certified-improvement' : 'baseline-retained')
+    const usedGram = report.selection === 'certified-improvement' ? report.trial : report.baseline
+    expect(report).toEqual(selected.observation)
+    expect(joint.evidence.fitCertificate.gram).toEqual(usedGram)
+    expect(joint.evidence.trainingCount).toBe(selected.training.length - 1)
+    expect(joint.evidence.holdoutInteriorCount).toBe(selected.holdout.length - 2)
+    expect(joint.evidence.maxStoredHoldoutResidual!.value).toBeLessThan(input.budgets.storedHoldoutDerivativeResidual)
+    expect(selected.holdout).toEqual(greedy.holdout)
+    expect(sampling.coverage).toEqual(greedy.coverage)
+    expect(sampling).not.toHaveProperty('training')
+    expect(sampling).not.toHaveProperty('holdout')
+    expect(result.receipts.normals[edge].status).toBe('certified-positive')
+    expect(result.candidates[edge].poles.slice(0, net.nv)).toEqual(net.poles.slice(0, net.nv))
+  }
+  expect(request).toEqual(before)
+})
+
+it('retains the certified baseline when the observed search cannot prove an improvement', () => {
+  const request = observedFixture()
+  request.atCentralV0.sampleSearch.observation.maxComparisons = 1
+  const result = measureExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFit(request)
+  expect(result).toMatchObject({ status: 'diagnostic-only', receipts: { sampling: { V0: { status: 'generated',
+    observation: { selection: 'baseline-retained', comparisonBudgetExhausted: true, baseline: { status: 'certified-full-rank' } },
+  } } } })
+  if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
+  const sampling = result.receipts.sampling.V0, joint = result.receipts.joint.V0
+  if (sampling.status !== 'generated' || joint.status !== 'diagnostic-only' || joint.evidence.fitCertificate?.status !== 'certified')
+    throw new Error(JSON.stringify(result.receipts))
+  expect(joint.evidence.fitCertificate.gram).toEqual(sampling.observation?.baseline)
+})
+
+it('stops on a second-lateral observation or fit gate without exposing either proposal', () => {
+  const request = observedFixture()
+  request.atCentralV1.sampleSearch.observation.maxRows = 1
+  const sampling = measureExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFit(request)
+  expect(sampling).toMatchObject({ status: 'inconclusive',
+    stop: { stage: 'sample-search', side: 'V1', reasonCode: 'observation-gram-inconclusive' },
+    receipts: { sampling: { V0: { status: 'generated' }, V1: { status: 'inconclusive', observation: { selection: 'baseline-not-certified' } } },
+      joint: { V0: { status: 'not-run' }, V1: { status: 'not-run' } } },
+  })
+  request.atCentralV1.sampleSearch.observation.maxRows = 64
+  request.atCentralV1.budgets.coefficientCertificate.maxCoefficientError = [1e-10, 1e-10, 0]
+  const fit = measureExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFit(request)
+  expect(fit).toMatchObject({ status: 'inconclusive', stop: { stage: 'joint-diagnostic', side: 'V1', phase: 'fit-certificate' },
+    receipts: { joint: { V0: { status: 'diagnostic-only' }, V1: { status: 'inconclusive' } },
+      normals: { V0: { status: 'not-run' }, V1: { status: 'not-run' } } },
+  })
+  for (const result of [sampling, fit]) {
+    expect(result).not.toHaveProperty('candidates')
+    expect(result.receipts.joint.V0).not.toHaveProperty('candidate')
+  }
+})
+
+it('withholds both observed-fit proposals when the native normal bound finds the V1 inversion', () => {
+  const result = measureExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFit(observedFixture(45))
+  expect(result).toMatchObject({ status: 'nonpositive-witness',
+    stop: { stage: 'surface-normals', side: 'V1', reasonCode: 'nonpositive-normal-dot-witness' },
+    receipts: { joint: { V0: { status: 'diagnostic-only' }, V1: { status: 'diagnostic-only' } },
+      normals: { V0: { status: 'certified-positive' }, V1: { status: 'nonpositive-witness',
+        nativeParameter: { u: { enclosure: [43, 43] }, v: { enclosure: [1, 1] } } } } },
+  })
   expect(result).not.toHaveProperty('candidates')
 })

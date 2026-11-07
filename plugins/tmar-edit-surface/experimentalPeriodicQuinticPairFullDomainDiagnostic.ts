@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { generateExperimentalPeriodicIndependentSamples,
-  type ExperimentalPeriodicIndependentSamplesRequest } from './experimentalPeriodicIndependentSamples'
+import { generateExperimentalPeriodicIndependentSamples, generateExperimentalPeriodicObservedSamples,
+  type ExperimentalPeriodicIndependentSamplesRequest,
+  type ExperimentalPeriodicObservedSamplesRequest } from './experimentalPeriodicIndependentSamples'
 import { measureExperimentalPeriodicQuinticPair, measureExperimentalPeriodicQuinticPairCertifiedFit,
   measureExperimentalPeriodicQuinticPairScaled,
   type ExperimentalPeriodicQuinticPairDiagnosticRequest,
@@ -13,21 +14,31 @@ type DefaultBudgets = ExperimentalPeriodicQuinticPairDiagnosticRequest['atCentra
 type PairRequest<Limits> = ExperimentalPeriodicQuinticPairDiagnosticRequest<Limits>
 type Side = 'V0' | 'V1'
 type NormalResult = ReturnType<typeof boundExperimentalPeriodicQuinticSurfaceNormals>
-type SampleResult = ReturnType<typeof generateExperimentalPeriodicIndependentSamples>
+type IndependentSampleResult = ReturnType<typeof generateExperimentalPeriodicIndependentSamples>
+type ObservedSampleResult = ReturnType<typeof generateExperimentalPeriodicObservedSamples>
+type SampleResult = IndependentSampleResult | ObservedSampleResult
 type PairResult<FitEvidence> = ExperimentalPeriodicQuinticPairDiagnosticResult<FitEvidence>
 type JointStop = Extract<PairResult<unknown>, { stop: unknown }>['stop']
 type NotRun = { status: 'not-run' }
 
-type SideRequest<Limits> = Omit<PairRequest<Limits>['atCentralV0'], 'training' | 'holdout'> & {
-  sampleSearch: Pick<ExperimentalPeriodicIndependentSamplesRequest, 'training' | 'holdout' | 'searchDepth' | 'maxAttempts'>
+type SampleSearch = Pick<ExperimentalPeriodicIndependentSamplesRequest, 'training' | 'holdout' | 'searchDepth' | 'maxAttempts'>
+type ObservedSampleSearch = SampleSearch & {
+  observation: Omit<ExperimentalPeriodicObservedSamplesRequest['observation'], 'degree' | 'multiplicities'>
+}
+
+type SideRequest<Limits, Search> = Omit<PairRequest<Limits>['atCentralV0'], 'training' | 'holdout'> & {
+  sampleSearch: Search
   normalBudget: Parameters<typeof boundExperimentalPeriodicQuinticSurfaceNormals>[2]
 }
 
-export interface ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<Limits = DefaultBudgets> {
+export interface ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<Limits = DefaultBudgets, Search = SampleSearch> {
   central: PairRequest<Limits>['central']
-  atCentralV0: SideRequest<Limits>
-  atCentralV1: SideRequest<Limits>
+  atCentralV0: SideRequest<Limits, Search>
+  atCentralV1: SideRequest<Limits, Search>
 }
+
+export type ExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFitRequest =
+  ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<ExperimentalPeriodicQuinticCertifiedFitBudgets, ObservedSampleSearch>
 
 type Stop = { stage: 'preflight'; reasonCode: 'pair-missing-input' | 'pair-aliased-input' } |
   { stage: 'sample-search' | 'surface-normals'; side: Side; reasonCode: string } |
@@ -72,11 +83,31 @@ export function measureExperimentalPeriodicQuinticPairFullDomainCertifiedFit(
   return measurePeriodicQuinticPairFullDomain(request, measureExperimentalPeriodicQuinticPairCertifiedFit)
 }
 
-function measurePeriodicQuinticPairFullDomain<Limits, FitEvidence>(
-  request: ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<Limits>,
-  diagnosePair: (input: PairRequest<Limits>) => PairResult<FitEvidence>,
+/**
+ * Select a Gram-certified training grid independently for each lateral,
+ * preserving its greedy holdout and span counts. The observation basis is
+ * derived from the lateral being fitted. A certified baseline can be retained
+ * by the selector. Every selected grid must still pass CertifiedFit and all
+ * joint and normal checks before either stored candidate is exposed.
+ */
+export function measureExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFit(
+  request: ExperimentalPeriodicQuinticPairFullDomainObservedCertifiedFitRequest,
 ) {
-  type SamplingReceipt = Omit<Extract<SampleResult, { status: 'generated' }>, 'training' | 'holdout'> |
+  return measurePeriodicQuinticPairFullDomain(request, measureExperimentalPeriodicQuinticPairCertifiedFit,
+    (input, search, lateral) => generateExperimentalPeriodicObservedSamples({ ...input,
+      observation: { ...search.observation, degree: lateral.du, multiplicities: lateral.mu },
+    }))
+}
+
+function measurePeriodicQuinticPairFullDomain<Limits, FitEvidence, Search extends SampleSearch>(
+  request: ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<Limits, Search>,
+  diagnosePair: (input: PairRequest<Limits>) => PairResult<FitEvidence>,
+  selectSamples: (input: ExperimentalPeriodicIndependentSamplesRequest, search: Search, lateral: PairRequest<Limits>['central']) =>
+    SampleResult = generateExperimentalPeriodicIndependentSamples,
+) {
+  type SamplingReceipt = Omit<Extract<IndependentSampleResult, { status: 'generated' }>, 'training' | 'holdout'> & {
+    observation?: Extract<ObservedSampleResult, { status: 'generated' }>['observation']
+  } |
     Extract<SampleResult, { status: 'inconclusive' }> | { status: 'declined' }
   const receipts = {
     sampling: { V0: { status: 'not-run' }, V1: { status: 'not-run' } } as Record<Side, SamplingReceipt | NotRun>,
@@ -98,10 +129,10 @@ function measurePeriodicQuinticPairFullDomain<Limits, FitEvidence>(
   for (const [side, { sampleSearch, normalBudget: _normalBudget, ...input }] of sides) {
     let result: SampleResult
     try {
-      result = generateExperimentalPeriodicIndependentSamples({ ...sampleSearch, edgePeriod: input.edgePeriod,
+      result = selectSamples({ ...sampleSearch, edgePeriod: input.edgePeriod,
         lateral: { knots: sources[side].ku, uAtEdgeEnds: input.lateral.uAtEdgeEnds },
         support: { knots: central.ku, uAtEdgeEnds: input.centralUAtEdgeEnds },
-      })
+      }, sampleSearch, sources[side])
     } catch {
       receipts.sampling[side] = { status: 'declined' }
       return stopped('declined', { stage: 'sample-search', side, reasonCode: 'sample-search-refused' })
