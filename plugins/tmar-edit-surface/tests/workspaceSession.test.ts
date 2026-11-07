@@ -117,11 +117,65 @@ describe('whole natural boundary movement',()=>{
   const ready=async(t:Awaited<ReturnType<typeof setup>>,revision:number)=>{
     await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.filter(r=>r.action==='evaluate').at(-1)!.id,preview(revision));await flush()
   }
+  const nativeReply=()=>({face:0,previewRevision:2,results:[{side:'U1',visible:true,point:[4,2,0],pickerSegment:31,
+    reason:'native-section-and-clear-front',frontDistanceMm:1e-5,intersectionCount:1}]})
+  it('keeps native verification read-only and consumes only the original current receipt once',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2);t.session.setWholeBoundaryDrag('U0')
+    const net=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    const pending=t.session.prepareWholeBoundaryPicks(net,[{side:'U1',seed:[4,2,0],segment:31}],[10,2,10])
+    expect(t.worker.sent.at(-1)?.action).toBe('verifyBoundaryVisibility')
+    expect(t.session.getPanelState().busy).toBe(false);expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    t.worker.reply(t.worker.sent.at(-1)!.id,nativeReply());const picks=await pending
+    expect(t.session.beginVerifiedWholeBoundaryGesture({...picks[0]})).toBe(false)
+    expect(t.session.beginVerifiedWholeBoundaryGesture(picks[0])).toBe(true)
+    t.session.finishPoleGesture(null)
+    expect(t.session.beginVerifiedWholeBoundaryGesture(picks[0])).toBe(false)
+    expect(t.session.getPanelState().net).toEqual(net);expect(t.session.getSnapshot().historyRevision).toBe(history)
+    await t.session.dispose('cancelled')
+  })
+  it.each(['cancel','selection','source'] as const)('refuses native receipts superseded by %s',async change=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2);t.session.setWholeBoundaryDrag('U0')
+    const net=t.session.getPanelState().net!
+    const pending=t.session.prepareWholeBoundaryPicks(net,[{side:'U1',seed:[4,2,0],segment:31}],[10,2,10])
+    const rejection=expect(pending).rejects.toThrow()
+    if(change==='cancel')t.session.cancelPreparedWholeBoundaryPicks()
+    if(change==='selection')t.session.selectPoints([12],false)
+    if(change==='source')t.invalidate()
+    t.worker.reply(t.worker.sent.at(-1)!.id,nativeReply());await rejection
+    expect(t.session.getPanelState().net).toBe(net)
+    await t.session.dispose('cancelled')
+  })
+  it('adopts a directly picked different side and restores its full-row move with one Undo',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.setWholeBoundaryDrag('U0')
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    expect(t.session.beginWholeBoundaryGesture('U1')).toBe(true)
+    expect(t.session.getPanelState().wholeBoundaryDrag).toBe('U1')
+    const ids=Array.from({length:before.nv},(_,i)=>(before.nu-1)*before.nv+i)
+    expect(t.session.getPanelState().selected).toEqual(ids)
+    const poles=structuredClone(before.poles);for(const id of ids)poles[id][2]+=.2
+    t.session.previewPoles(poles);t.session.finishPoleGesture(poles);await ready(t,3)
+    expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    expect(t.session.getPanelState().net!.poles).toEqual(poles)
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    expect(t.session.getPanelState().wholeBoundaryDrag).toBe('U1')
+    await t.session.dispose('cancelled')
+  })
+  it('does not adopt a directly picked side containing a manual lock',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.setWholeBoundaryDrag('U0')
+    t.session.selectPoints([20],false);t.session.lockSelected(true);await ready(t,3)
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    expect(()=>t.session.beginWholeBoundaryGesture('U1')).toThrow(/bloccato/)
+    expect(t.session.getPanelState().wholeBoundaryDrag).toBe('U0')
+    expect(t.session.getPanelState().net).toBe(before)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    await t.session.dispose('cancelled')
+  })
   it('previews the complete natural boundary without history and commits one cancellable drag',async()=>{
     const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
     t.session.setWholeBoundaryDrag('U0')
     const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
-    expect(t.session.beginWholeBoundaryGesture('U1')).toBe(false)
     expect(t.session.beginWholeBoundaryGesture('U0')).toBe(true)
     const moved=structuredClone(before.poles);for(let i=0;i<before.nv;i++)moved[i][2]+=.3
     t.session.previewPoles(moved)

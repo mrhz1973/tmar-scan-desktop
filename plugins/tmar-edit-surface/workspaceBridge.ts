@@ -9,6 +9,7 @@ import type { Mesh } from 'occt-wasm'
 import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
 import type { WholeBoundarySide } from './wholeBoundary'
+import type {BoundaryCadCandidate,VerifiedBoundaryPick} from './boundaryVisibilityCad'
 
 export interface WorkspaceStripeSettings {
   readonly orientation: 'horizontal' | 'vertical'
@@ -94,6 +95,9 @@ export interface WorkspaceSurfaceLayerOwner {
   selectPoints(ids: readonly number[], additive: boolean): void
   beginPoleGesture(): boolean
   beginWholeBoundaryGesture?(side:WholeBoundarySide): boolean
+  prepareWholeBoundaryPicks?(net:Net,candidates:BoundaryCadCandidate[],origin:Point,parallelDirection?:Point):Promise<readonly VerifiedBoundaryPick[]>
+  beginVerifiedWholeBoundaryGesture?(pick:VerifiedBoundaryPick):boolean
+  cancelPreparedWholeBoundaryPicks?():void
   previewPoles(poles: Point[]): void
   /** null cancels and restores the previous committed net. */
   finishPoleGesture(poles: Point[] | null): void

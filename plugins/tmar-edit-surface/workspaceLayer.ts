@@ -8,7 +8,7 @@ import { acceleratedRaycast, MeshBVH, type MeshBVHOptions } from 'three-mesh-bvh
 // @ts-ignore -- introduced by the workspace-editor host.
 import type { ReferenceDescriptor } from '../../src/plugins/workspaceEditorTypes'
 import type { SceneLayer } from '../../src/viewer/sceneLayers'
-import type { Point } from './brep'
+import type { Net,Point } from './brep'
 import { dragDirection } from './localFrame'
 import { pickNetAt } from './netPicking'
 import { populateSurfaceCage } from './surfaceCage'
@@ -43,6 +43,10 @@ type Capture = {
   deferredPole?: boolean
 }
 type DirectSelection = { paths: readonly (readonly Point[])[]; revision: number; edge: number }
+type BoundaryPending=Pick<Capture,'pointerId'|'camera'|'projection'|'cameraWorld'|'partWorld'|'rect'>&{
+  net:Net;preview:WorkspaceSurfaceViewState['preview'];face:number;locked:readonly number[];hidden:readonly number[];
+  start:SurfacePointer;last:SurfacePointer|null;dragMode:WorkspaceSurfaceViewState['dragMode'];axis:number;strength:number
+}
 
 const finitePoint = (p: readonly number[]): p is Point => p.length === 3 && p.every(Number.isFinite)
 const point = (p: THREE.Vector3): Point => [p.x, p.y, p.z]
@@ -106,6 +110,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   let disposed = false
   let clipping: WorkspacePreviewClipping = { planes: null, intersection: false }
   let capture: Capture | null = null
+  let boundaryPending:BoundaryPending|null=null
   let displayed: WorkspaceSurfaceViewState['preview'] | NonNullable<WorkspaceSurfaceViewState['provisionalPreview']> = null
   let selectedFace = -1
   let cageState: WorkspaceSurfaceViewState | null = null
@@ -438,6 +443,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     const revision = ++syncRevision
     try {
       const state = owner.getViewState()
+      if(boundaryPending && (state.net!==boundaryPending.net||state.preview!==boundaryPending.preview||state.face!==boundaryPending.face||
+        state.locked!==boundaryPending.locked||state.hiddenPoles!==boundaryPending.hidden||!state.wholeBoundaryDrag||state.navigationOnly||state.busy||state.placingNote||state.surfaceTarget))cancelBoundaryPending()
       if (state.navigationOnly && capture) { cancelGesture(); if (revision !== syncRevision) return }
       if (directSelection && (state.strip || state.placingNote || !state.directStrip ||
           state.directStrip.paths !== directSelection.paths || state.directStrip.revision !== directSelection.revision)) directSelection = null
@@ -533,7 +540,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     const x = event.clientX - start.clientX, y = event.clientY - start.clientY, along = (x * dx + y * dy) / length
     return along >= 5 && along <= length + 4 && Math.abs(x * dy - y * dx) / length <= 6 ? index : null
   }
-  const pickPaths = (pathsIn: readonly (readonly Point[])[], selectedEdge: number, x: number, y: number): { edge: number; anchor: Point } | null => {
+  const pickPaths = (pathsIn: readonly (readonly Point[])[], selectedEdge: number, x: number, y: number): { edge: number; anchor: Point;segment:number } | null => {
     const rect = view.bounds(), first = pathsIn[0]?.[0]
     if (!displayed || !first || !finitePoint(first) || rect.width <= 0 || rect.height <= 0 ||
         x < rect.left || x > rect.left + rect.width || y < rect.top || y > rect.top + rect.height) return null
@@ -546,11 +553,25 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     const picked = chosen ?? pickSheetEdge(paths, view.camera(), rect as DOMRect, x, y)
     if (!picked || clipping.planes?.some(plane => plane.distanceToPoint(picked.anchor) < 0)) return null
     const anchor = point(picked.anchor.clone().applyMatrix4(matrix.clone().invert()))
-    return view.projectPartPoint(anchor).visible ? { edge: picked.edge, anchor } : null
+    return view.projectPartPoint(anchor).visible ? { edge: picked.edge, anchor,segment:picked.segment } : null
   }
   const pickStrip = (x: number, y: number): { edge: number; anchor: Point } | null => {
     const strip = owner.getViewState().strip
     return strip ? pickPaths(strip.paths, strip.selectedEdge, x, y) : null
+  }
+  const cameraInPart = (anchor:Point) => {
+    const partWorld=partMatrix(anchor),camera=view.camera()
+    // Build the camera pose relative to the part before rotating translation.
+    // Multiplying full matrices with large world translations loses precision.
+    const inverseRotation=new THREE.Matrix4().extractRotation(partWorld).invert()
+    const relativePosition=new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld)
+      .sub(new THREE.Vector3().setFromMatrixPosition(partWorld)).applyMatrix4(inverseRotation)
+    const cameraBasis=camera.matrixWorld.clone().setPosition(0,0,0)
+    const localCamera=camera.clone(false)
+    localCamera.matrixAutoUpdate=false
+    localCamera.matrixWorld.copy(inverseRotation).multiply(cameraBasis).setPosition(relativePosition)
+    localCamera.matrixWorldInverse.copy(localCamera.matrixWorld).invert()
+    return localCamera
   }
   const pickFace = (x: number, y: number) => {
     if (!displayed) return null
@@ -590,6 +611,12 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     try { view.claimEditDrag(false) } catch { /* The host may already have revoked the lease. */ }
     hideFeedback()
   }
+  const cancelBoundaryPending=():boolean=>{
+    const pending=boundaryPending;if(!pending)return false
+    boundaryPending=null
+    try{owner.cancelPreparedWholeBoundaryPicks?.()}catch{/* Revoked source still releases capture. */}
+    release(pending.pointerId);return true
+  }
   const finishStrip = (delta: Point | null) => {
     if (!owner.finishStripGesture) return
     try {
@@ -604,6 +631,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     }
   }
   const cancelGesture = (): boolean => {
+    if(cancelBoundaryPending())return true
     if(owner.getViewState().surfaceTarget) {owner.cancelSurfaceTarget?.();return true}
     if (!capture) return false
     const active = capture; capture = null
@@ -615,7 +643,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     finally { release(active.pointerId) }
     return true
   }
-  const frameUnchanged = (active: Capture): boolean => {
+  const frameUnchanged = (active: Pick<Capture,'camera'|'rect'|'cameraWorld'|'projection'|'partWorld'>): boolean => {
     try {
       const now = view.bounds(), camera = view.camera()
       if (now.left !== active.rect.left || now.top !== active.rect.top || now.width !== active.rect.width || now.height !== active.rect.height || camera !== active.camera) return false
@@ -692,32 +720,57 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   }
   stripHandle.addEventListener('pointerdown', handleStripDown)
   const down = (event: PointerEvent): boolean => {
-    if (disposed || layerDisposed || capture || event.button !== 0 || event.shiftKey) return false
+    if (disposed || layerDisposed || capture || boundaryPending || event.button !== 0 || event.shiftKey) return false
     const state = owner.getViewState(), net = state.net
     if (state.busy || state.placingNote || state.surfaceTarget || state.navigationOnly || !displayed || event.ctrlKey || event.metaKey) return false
     let claimed = false, begun = false
     try {
       if(state.wholeBoundaryDrag) {
-        if(!net || !state.wholeBoundaryDrag.canStart || !owner.beginWholeBoundaryGesture)return false
-        const side=state.wholeBoundaryDrag.side,path=wholeBoundaryPath(net,side)
-        const hit=pickPaths([path],-1,event.clientX,event.clientY)
-        if(!hit)return false // Orbit/pan anywhere away from this chosen CAD rim.
-        const ids=wholeBoundaryIndices(net,side)
-        if(ids.some(i=>state.locked.includes(i)||state.hiddenPoles.includes(i))) {report('Il bordo contiene un polo bloccato.');return true}
-        const direction=dragDirection(net,ids[Math.floor(ids.length/2)],state.dragMode,state.axis)
-        if(state.dragMode!=='screen' && !direction)return true
-        const camera=view.camera(),matrix=partMatrix(hit.anchor),rect=view.bounds()
-        const frame=createDragFrame({camera,partWorld:matrix,rect,anchor:hit.anchor,clientX:event.clientX,clientY:event.clientY,
-          ...(state.dragMode==='screen'?{mode:'screen' as const}:{mode:'axis' as const,direction:direction!,allowViewAlignedDepth:true})})
-        if(!frame)return true
-        const gesture=createSurfaceGesture({frame,poles:net.poles,selected:ids,start:mousePoint(event),strength:state.dragStrength})
-        if(!gesture)return true
+        if(!net || !state.wholeBoundaryDrag.canStart || !owner.prepareWholeBoundaryPicks || !owner.beginVerifiedWholeBoundaryGesture || clipping.planes?.length)return false
+        const sides=['U0','U1','V0','V1'] as const
+        const candidates=sides.flatMap(side=>{
+          const path=wholeBoundaryPath(net,side),candidate=pickPaths([path],-1,event.clientX,event.clientY)
+          return candidate?[{side,seed:candidate.anchor,segment:candidate.segment}]:[]
+        })
+        if(!candidates.length)return false
+        const camera=view.camera(),matrix=partMatrix(candidates[0].seed),rect=view.bounds(),localCamera=cameraInPart(candidates[0].seed)
+        const caster=new THREE.Raycaster();caster.setFromCamera(new THREE.Vector2((event.clientX-rect.left)*2/rect.width-1,1-(event.clientY-rect.top)*2/rect.height),localCamera)
         if(!view.capturePointer(event.pointerId)){view.releasePointer(event.pointerId);return true}
-        claimed=true
-        if(!owner.beginWholeBoundaryGesture(side)){view.releasePointer(event.pointerId);claimed=false;return true}
-        begun=true;view.claimEditDrag(true)
-        capture={kind:'pole',pointerId:event.pointerId,gesture,camera,projection:camera.projectionMatrix.clone(),cameraWorld:camera.matrixWorld.clone(),
+        claimed=true;view.claimEditDrag(true)
+        const pending:BoundaryPending={pointerId:event.pointerId,net,preview:state.preview,face:state.face,locked:state.locked,hidden:state.hiddenPoles,
+          start:mousePoint(event),last:null,dragMode:state.dragMode,axis:state.axis,strength:state.dragStrength,camera,projection:camera.projectionMatrix.clone(),cameraWorld:camera.matrixWorld.clone(),
           partWorld:matrix,rect:{left:rect.left,top:rect.top,width:rect.width,height:rect.height}}
+        boundaryPending=pending
+        let promotedCapture:Capture|null=null
+        void owner.prepareWholeBoundaryPicks(net,candidates,point(caster.ray.origin),(localCamera as THREE.OrthographicCamera).isOrthographicCamera?point(caster.ray.direction):undefined).then(picks=>{
+          if(boundaryPending!==pending || disposed || layerDisposed)return
+          if(!frameUnchanged(pending)){cancelBoundaryPending();return}
+          const current=owner.getViewState()
+          if(current.net!==pending.net||current.preview!==pending.preview||current.face!==pending.face||current.locked!==pending.locked||current.hiddenPoles!==pending.hidden||
+            !current.wholeBoundaryDrag||!current.wholeBoundaryDrag.canStart||current.navigationOnly||current.busy||clipping.planes?.length){cancelBoundaryPending();return}
+          const visible=picks.flatMap(pick=>{
+            if(!finitePoint(pick.point)||!candidates.some(c=>c.side===pick.side))return []
+            const projected=view.projectPartPoint(pick.point),distance=Math.hypot(projected.clientX-pending.start.clientX,projected.clientY-pending.start.clientY)
+            return projected.visible&&distance<=8?[{pick,distance}]:[]
+          }).sort((a,b)=>a.distance-b.distance)
+          const pick=visible[0]?.pick
+          if(!pick){cancelBoundaryPending();return}
+          const ids=wholeBoundaryIndices(net,pick.side)
+          if(ids.some(i=>current.locked.includes(i)||current.hiddenPoles.includes(i))){report('Il bordo contiene un polo bloccato.');cancelBoundaryPending();return}
+          const direction=dragDirection(net,ids[Math.floor(ids.length/2)],pending.dragMode,pending.axis)
+          if(pending.dragMode!=='screen'&&!direction){cancelBoundaryPending();return}
+          const frame=createDragFrame({camera,partWorld:matrix,rect,anchor:pick.point,clientX:pending.start.clientX,clientY:pending.start.clientY,
+            ...(pending.dragMode==='screen'?{mode:'screen' as const}:{mode:'axis' as const,direction:direction!,allowViewAlignedDepth:true})})
+          const gesture=frame?createSurfaceGesture({frame,poles:net.poles,selected:ids,start:pending.start,strength:pending.strength}):null
+          if(!gesture){cancelBoundaryPending();return}
+          // Clear only after the guarded receipt is consumed. No geometry has
+          // changed while the query was pending, and Up cannot revive it.
+          if(!owner.beginVerifiedWholeBoundaryGesture!(pick)){cancelBoundaryPending();return}
+          boundaryPending=null
+          capture={kind:'pole',pointerId:pending.pointerId,gesture,camera,projection:pending.projection,cameraWorld:pending.cameraWorld,partWorld:matrix,rect:pending.rect}
+          promotedCapture=capture
+          if(pending.last){const result=gesture.move(pending.last);if(result.kind==='preview')owner.previewPoles(result.poles)}
+        }).catch(error=>{if(boundaryPending===pending){cancelBoundaryPending();if(!disposed&&!layerDisposed)report(errorText(error))}else if(promotedCapture&&capture===promotedCapture)cancelGesture()})
         return true
       }
       if (state.strip) {
@@ -800,6 +853,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         partWorld: matrix, deferredPole, rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } }
       return true
     } catch (error) {
+      if(boundaryPending?.pointerId===event.pointerId)cancelBoundaryPending()
       if (begun) try { if (state.strip) finishStrip(null); else owner.finishPoleGesture(null) } catch { /* Preserve initial error. */ }
       if (claimed) try { release(event.pointerId) } catch { /* Preserve initial error. */ }
       report(`Impossibile iniziare la modifica: ${errorText(error)}`); return true
@@ -860,6 +914,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     return true
   }
   const move = (event: PointerEvent) => {
+    if(boundaryPending?.pointerId===event.pointerId){if(!frameUnchanged(boundaryPending))cancelBoundaryPending();else boundaryPending.last=mousePoint(event);return}
     if (!capture || capture.pointerId !== event.pointerId) return
     if (!frameUnchanged(capture)) { cancelGesture(); return }
     const sample = mousePoint(event, capture.offsetX, capture.offsetY)
@@ -879,6 +934,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     }
   }
   const up = (event: PointerEvent) => {
+    if(boundaryPending?.pointerId===event.pointerId){cancelBoundaryPending();return}
     if (!capture || capture.pointerId !== event.pointerId) return
     if (!frameUnchanged(capture)) { cancelGesture(); return }
     const active = capture; capture = null
@@ -898,7 +954,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     }
     finally { release(active.pointerId) }
   }
-  const pointerCancel = (event: PointerEvent) => { if (capture?.pointerId === event.pointerId) cancelGesture() }
+  const pointerCancel = (event: PointerEvent) => { if (capture?.pointerId === event.pointerId || boundaryPending?.pointerId===event.pointerId) cancelGesture() }
   const clearDirect = () => {
     if (!directSelection) return
     directSelection = null
@@ -913,7 +969,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const layer: SceneLayer = {
     order: 0, covers: true, pointerDown: down, click,
     hover: (at, covered) => {
-      if (capture || covered || !at || owner.getViewState().busy || owner.getViewState().placingNote || owner.getViewState().navigationOnly) { showHover(null); return false }
+      if (capture || boundaryPending || covered || !at || owner.getViewState().busy || owner.getViewState().placingNote || owner.getViewState().navigationOnly) { showHover(null); return false }
       try { const picked = pickNet(at.x, at.y); showHover(picked); return !!picked } catch (error) { report(errorText(error)); return false }
     },
     clippingChanged: planes => { clipping = { planes, intersection: false }; preview.refreshClipping(); syncStripClipping(); positionStripHandle() },

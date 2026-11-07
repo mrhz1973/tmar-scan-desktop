@@ -12,6 +12,7 @@ import { validateAdaptiveLocks, type AdaptiveLocks } from './adaptiveLockSnapsho
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
 import { rebuildFreeBoundary } from './freeBoundary'
+import {queryBoundaryVisibilityCad,type BoundaryCadCandidate} from './boundaryVisibilityCad'
 import { prepareCylinder } from './cylinderPreparation'
 import { assertSimpleCylinderSource } from './cylinderSource'
 import { listG1SupportCandidates, resolveG1SupportCandidate as resolveSupport, type G1SourceStamp, type G1SupportCandidate } from './g1SupportTopology'
@@ -1322,6 +1323,14 @@ export class SurfaceEditorKernel {
     const face = this.noteFace(previewRevision)
     return { face: this.chosen, selectionRevision: this.anchorSelectionRevision, previewRevision,
       faceBrep: this.kernel.toBREP(face) }
+  }
+  verifyBoundaryVisibility(previewRevision:number,candidates:BoundaryCadCandidate[],origin:Point,parallelDirection?:Point){
+    const face=this.noteFace(previewRevision)
+    if(this.solids || this.faces.length!==1 || !this.infos[this.chosen]?.freeBoundary || this.adaptiveSelection ||
+      !Array.isArray(candidates)||!candidates.length||candidates.length>4||new Set(candidates.map(c=>c.side)).size!==candidates.length)
+      throw Error('Verifica bordo limitata a una singola faccia naturale aperta.')
+    return {face:this.chosen,previewRevision,results:candidates.map(candidate=>({side:candidate.side,
+      ...queryBoundaryVisibilityCad(this.kernel,face,candidate.side,candidate.seed,origin,candidate.segment,parallelDirection)}))}
   }
   resolveAnchor(anchor: DraftAnchor, previewRevision: number) {
     const face = this.noteFace(previewRevision), k = this.kernel

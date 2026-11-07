@@ -3,10 +3,16 @@
 import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import type { Net, Point } from '../brep'
+import type {BoundaryCadCandidate,VerifiedBoundaryPick} from '../boundaryVisibilityCad'
 import type { Preview } from '../editorKernel'
 import type { WorkspaceStripViewState, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState } from '../workspaceBridge'
 import { createWorkspaceLayer } from '../workspaceLayer'
 import { selectNetPoints } from '../netSelection'
+import { SurfaceEditorKernel } from '../editorKernel'
+import { wholeBoundaryPath } from '../wholeBoundary'
+import { pickSheetEdge } from '../sheetDrag'
+import { readFileSync,writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 
 const net: Net = {
   nu: 2, nv: 2, du: 1, dv: 1, poles: [[-1, -1, 0], [-1, 1, 0], [1, -1, 0], [1, 1, 0]],
@@ -25,10 +31,11 @@ const stripFixture = (): WorkspaceStripViewState => ({
   addedArea: null, totalArea: null, hasResult: false,
 })
 
-function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; oblique?: boolean; nearAligned?: boolean; perspective?: boolean; preview?: Preview | null } = {}) {
+function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; oblique?: boolean; nearAligned?: boolean; perspective?: boolean; preview?: Preview | null; worldOffset?:number } = {}) {
   const host = new THREE.Group(), group = new THREE.Group()
   host.add(group)
   if (options.rotated) { host.rotation.z = Math.PI / 2; host.position.set(5, -3, 2) }
+  if(options.worldOffset)host.position.add(new THREE.Vector3(options.worldOffset,-options.worldOffset,options.worldOffset))
   host.updateWorldMatrix(true, true)
   const target = new THREE.Vector3(0, 0, 0).applyMatrix4(group.matrixWorld)
   const camera = options.perspective ? new THREE.PerspectiveCamera(35, 1, 0.1, 100) : new THREE.OrthographicCamera(-3, 3, 3, -3, 0.1, 100)
@@ -96,6 +103,9 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
   const owner: WorkspaceSurfaceLayerOwner = { getViewState: () => state, subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn) } },
     requestFaceSelection, selectPoints, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError,
     beginStripGesture, beginDirectStripGesture, previewStripDelta, finishStripGesture }
+  owner.prepareWholeBoundaryPicks=vi.fn(async(_net:Net,candidates:BoundaryCadCandidate[])=>candidates.map(c=>({side:c.side,point:[...c.seed] as Point})))
+  owner.beginVerifiedWholeBoundaryGesture=vi.fn(pick=>owner.beginWholeBoundaryGesture?.(pick.side)??false)
+  owner.cancelPreparedWholeBoundaryPicks=vi.fn()
   const referenceGeometry = new THREE.PlaneGeometry(10, 10)
   const beforePosition = referenceGeometry.getAttribute('position')
   const refMatrix = new THREE.Matrix4().makeRotationY(Math.PI / 2)
@@ -131,8 +141,274 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
+const flushBoundaryPick=async()=>{for(let i=0;i<8;i++)await Promise.resolve()}
 
-it.each([false,true])('drags the chosen complete natural boundary and leaves off-edge navigation unclaimed (rotated: %s)',rotated=>{
+it.each(['up','escape','view','draft','navigation','dispose'] as const)('discards a late native boundary response after %s and releases only its capture',async change=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  let resolve!:(value:readonly import('../boundaryVisibilityCad').VerifiedBoundaryPick[])=>void
+  f.owner.prepareWholeBoundaryPicks=vi.fn(()=>new Promise<readonly VerifiedBoundaryPick[]>(r=>{resolve=r}))
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({wholeBoundaryDrag:{side:'U0',canStart:true}})
+  const press=f.event(1,[-1,0,0]);expect(f.getLayer().pointerDown?.(press)).toBe(true)
+  expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled()
+  expect(f.getLayer().pointerDown?.(f.event(2,[.5,0,0]))).toBe(false)
+  if(change==='up')f.getHandlers().up(press)
+  if(change==='escape')layer.cancelGesture()
+  if(change==='view'){f.view.camera().position.x+=1;f.view.camera().updateMatrixWorld(true);f.getHandlers().move(press)}
+  if(change==='draft')f.set({net:structuredClone(f.net)})
+  if(change==='navigation')f.set({navigationOnly:true})
+  if(change==='dispose')layer.dispose()
+  resolve([{side:'U0',point:[-1,0,0]}]);await flushBoundaryPick()
+  expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled();expect(f.previewPoles).not.toHaveBeenCalled()
+  expect(f.counts().captured).toBeNull();expect(f.owner.cancelPreparedWholeBoundaryPicks).toHaveBeenCalled()
+  layer.dispose()
+})
+
+it('keeps a newer gesture with the same mouse pointer when an older native request rejects',async()=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  let reject!:(reason:Error)=>void
+  f.owner.prepareWholeBoundaryPicks=vi.fn(()=>new Promise<readonly VerifiedBoundaryPick[]>((_resolve,r)=>{reject=r}))
+  const layer=createWorkspaceLayer(f.view,f.owner);f.set({wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  const press=f.event(1,[-1,0,0]);expect(f.getLayer().pointerDown?.(press)).toBe(true)
+  f.getHandlers().up(press)
+  f.owner.prepareWholeBoundaryPicks=vi.fn(async()=>[{side:'U0' as const,point:[-1,0,0] as Point}])
+  expect(f.getLayer().pointerDown?.(press)).toBe(true);await flushBoundaryPick()
+  expect(f.owner.beginWholeBoundaryGesture).toHaveBeenCalledOnce()
+  reject(Error('obsolete CAD failure'));await flushBoundaryPick()
+  expect(f.counts().captured).toBe(1);expect(f.finishPoleGesture).not.toHaveBeenCalled()
+  expect(f.reportViewError).not.toHaveBeenCalled()
+  f.getHandlers().move(f.event(1,[-.5,0,0]));expect(f.previewPoles).toHaveBeenCalledOnce()
+  f.getHandlers().up(f.event(1,[-.5,0,0]));expect(f.finishPoleGesture).toHaveBeenCalledOnce()
+  layer.dispose()
+})
+
+it('buffers boundary pointer motion until native proof and releases capture on native failure',async()=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  let resolve!:(value:readonly import('../boundaryVisibilityCad').VerifiedBoundaryPick[])=>void
+  f.owner.prepareWholeBoundaryPicks=vi.fn(()=>new Promise<readonly VerifiedBoundaryPick[]>(r=>{resolve=r}))
+  const layer=createWorkspaceLayer(f.view,f.owner);f.set({wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  const press=f.event(1,[-1,0,0]);f.getLayer().pointerDown?.(press)
+  f.getHandlers().move(f.event(1,[-.5,0,0]));expect(f.previewPoles).not.toHaveBeenCalled()
+  resolve([{side:'U0',point:[-1,0,0]}]);await flushBoundaryPick()
+  expect(f.previewPoles).toHaveBeenCalledOnce();f.getHandlers().up(f.event(1,[-.5,0,0]))
+  expect(f.finishPoleGesture).toHaveBeenCalledOnce()
+  f.owner.prepareWholeBoundaryPicks=vi.fn(async()=>{throw Error('CAD refused')})
+  f.getLayer().pointerDown?.(f.event(2,[-1,0,0]));await flushBoundaryPick()
+  expect(f.counts().captured).toBeNull();expect(f.reportViewError).toHaveBeenCalledWith('CAD refused')
+  layer.dispose()
+})
+
+it.skipIf(process.env.SURFACE_QA_CURVED_EXISTING_PROBE!=='1')('probes the prequalified compiled free-boundary STEP in one oblique view',async()=>{
+  const input=readFileSync(new URL('../evidence/free-boundary/compiled-20261103/moved.step',import.meta.url))
+  const sha=(b:Uint8Array)=>createHash('sha256').update(b).digest('hex'),inputHash=sha(input)
+  expect(inputHash).toBe('61e1e624a432089e613cc9b744a7c883ccee3cd79ba459f0ef1c5c159419741f')
+  const editor=await SurfaceEditorKernel.load(),k=editor.kernel,shape=k.importStep(input.toString('utf8')),faces=k.getSubShapes(shape,'face'),solids=k.getSubShapes(shape,'solid')
+  let layer:ReturnType<typeof createWorkspaceLayer>|undefined
+  try{
+    expect(k.isValid(shape)).toBe(true);expect(faces).toHaveLength(1);expect(solids).toHaveLength(0)
+    const opened=editor.open(input.toString('utf8'))
+    expect(opened.faces).toHaveLength(1);expect(opened.faces[0].freeBoundary).toBe(true);expect(opened.faces[0].reason).toBeNull()
+    const curved=editor.select(0),result=editor.evaluate(curved,'G0')
+    expect(result.valid).toBe(true)
+    const f=fixture({preview:result}),begin=vi.fn(()=>true);f.owner.beginWholeBoundaryGesture=begin
+    f.owner.prepareWholeBoundaryPicks=async(_net,candidates,origin,parallel)=>editor.verifyBoundaryVisibility(result.previewRevision!,candidates,origin,parallel).results.filter(r=>r.visible).map(r=>({side:r.side,point:r.point}))
+    const camera=f.view.camera() as THREE.OrthographicCamera
+    camera.left=-24;camera.right=24;camera.top=24;camera.bottom=-24;camera.near=.1;camera.far=200
+    camera.position.set(40,-25,45);camera.lookAt(10,15,10.7);camera.updateProjectionMatrix();camera.updateMatrixWorld(true)
+    layer=createWorkspaceLayer(f.view,f.owner)
+    f.set({net:curved,wholeBoundaryDrag:{side:'U1',canStart:true},snap:false})
+    const b=k.uvBounds(faces[0]),v=b.vMin+(b.vMax-b.vMin)*.37,point=k.pointOnSurface(faces[0],b.uMax,v)
+    const cadPoint:Point=[point.x,point.y,point.z],client=f.client(cadPoint),path=wholeBoundaryPath(curved,'U1')
+    const picked=pickSheetEdge([path],camera,f.rect as DOMRect,client.clientX,client.clientY)
+    expect(picked).not.toBeNull()
+    const anchor=picked!.anchor,previewGroup=f.group.getObjectByName('tmar-edit-surface-preview')!
+    previewGroup.updateWorldMatrix(true,true)
+    const rendered=previewGroup.children[0] as THREE.Mesh,position=rendered.geometry.getAttribute('position'),index=rendered.geometry.getIndex()!
+    const triangle=new THREE.Triangle(),closest=new THREE.Vector3()
+    const distance=(p:THREE.Vector3)=>{
+      let best=Infinity
+      for(let i=0;i<index.count;i+=3){
+        triangle.a.fromBufferAttribute(position,index.getX(i));triangle.b.fromBufferAttribute(position,index.getX(i+1));triangle.c.fromBufferAttribute(position,index.getX(i+2))
+        triangle.closestPointToPoint(p,closest);best=Math.min(best,closest.distanceTo(p))
+      }
+      return best
+    }
+    const projection=anchor.clone().project(camera),caster=new THREE.Raycaster()
+    caster.setFromCamera(new THREE.Vector2(projection.x,projection.y),camera)
+    const hits=caster.intersectObject(rendered,false),depth=anchor.clone().sub(caster.ray.origin).dot(caster.ray.direction)
+    const claimed=f.getLayer().pointerDown?.(f.event(1,cadPoint))??false
+    await flushBoundaryPick()
+    const evidence={scope:'Existing prequalified single natural open curved NURBS STEP; one oblique pick, no new deformation',
+      fixture:'evidence/free-boundary/compiled-20261103/moved.step',inputHash,currentValidity:true,currentSingleFace:true,currentSolids:0,currentFreeBoundary:true,
+      tessellation:{linearDeflectionMm:.08,angularDeflectionRad:.15},side:'U1',curveParameterFraction:.37,cadPoint,pickAnchor:anchor.toArray(),
+      cadCurveToStoredTrianglesMm:distance(new THREE.Vector3(...cadPoint)),pickAnchorToStoredTrianglesMm:distance(anchor),
+      rayHitCount:hits.length,anchorDepthMm:depth,firstHitDepthMm:hits[0]?.distance??null,signedDepthGapMm:hits.length?depth-hits[0].distance:null,
+      triangles:index.count/3,pointerClaimed:claimed,controllerBegun:begin.mock.calls.length,verdict:claimed?'ACCEPTED':'REFUSED',
+      inputUnchanged:sha(readFileSync(new URL('../evidence/free-boundary/compiled-20261103/moved.step',import.meta.url)))===inputHash,
+      browser:'NOT_RUN; simulated layer pointer and host lease'}
+    if(process.env.SURFACE_QA_CURVED_BOUNDARY_EVIDENCE)writeFileSync(process.env.SURFACE_QA_CURVED_BOUNDARY_EVIDENCE,JSON.stringify(evidence,null,2)+'\n')
+    console.log(JSON.stringify(evidence))
+    expect(claimed,'Prequalified visible curved boundary press must be reserved for native verification').toBe(true)
+    expect(begin).toHaveBeenCalledWith('U1')
+  }finally{layer?.dispose();solids.forEach(s=>k.release(s));faces.forEach(f=>k.release(f));k.release(shape);editor.dispose()}
+},60000)
+
+it.skipIf(process.env.SURFACE_QA_CURVED_BOUNDARY_PROBE!=='1')('probes one curved OCCT boundary with production tessellation and an oblique view',async()=>{
+  const editor=await SurfaceEditorKernel.load(),k=editor.kernel,box=k.makeBox(2,2,.1),shifted=k.translate(box,-1,-1,0)
+  const faces=k.getSubShapes(shifted,'face')
+  let layer:ReturnType<typeof createWorkspaceLayer>|undefined
+  let recorded=false,phase='kernel-curved-evaluate'
+  try{
+    const bottom=faces.find(face=>{const b=k.uvBounds(face);return Math.abs(k.pointOnSurface(face,(b.uMin+b.uMax)/2,(b.vMin+b.vMax)/2).z)<1e-8})!
+    editor.open(k.exportStep(bottom))
+    const curved=editor.select(0),height=[0,.6,.6,.6,0]
+    expect(curved.nv).toBe(5)
+    for(let i=0;i<curved.nu;i++)for(let j=0;j<curved.nv;j++)curved.poles[i*curved.nv+j][2]+=height[j]
+    const result=editor.evaluate(curved,'G0',false,true)
+    expect(result.valid).toBe(true)
+    phase='layer-depth-probe'
+    const f=fixture({oblique:true,preview:result}),begin=vi.fn(()=>true);f.owner.beginWholeBoundaryGesture=begin
+    layer=createWorkspaceLayer(f.view,f.owner)
+    f.set({net:curved,wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+    const u0x=(curved.poles[0][0]+curved.poles[curved.nv-1][0])/2
+    const u1x=(curved.poles[(curved.nu-1)*curved.nv][0]+curved.poles.at(-1)![0])/2
+    const side=u1x>=u0x?'U1':'U0'
+    const witness=editor.finalFaceWitness(result.previewRevision!),face=k.fromBREP(witness.faceBrep)
+    let cadPoint:Point
+    try{
+      const b=k.uvBounds(face),p=k.pointOnSurface(face,side==='U0'?b.uMin:b.uMax,b.vMin+(b.vMax-b.vMin)*.37)
+      cadPoint=[p.x,p.y,p.z]
+    }finally{k.release(face)}
+    const client=f.client(cadPoint),path=wholeBoundaryPath(curved,side)
+    const picked=pickSheetEdge([path],f.view.camera(),f.rect as DOMRect,client.clientX,client.clientY)
+    expect(picked).not.toBeNull()
+    const anchor=picked!.anchor,previewGroup=f.group.getObjectByName('tmar-edit-surface-preview')!
+    previewGroup.updateWorldMatrix(true,true)
+    const previewMesh=previewGroup.children[0] as THREE.Mesh,position=previewMesh.geometry.getAttribute('position'),index=previewMesh.geometry.getIndex()!
+    const triangle=new THREE.Triangle(),closest=new THREE.Vector3()
+    const distance=(p:THREE.Vector3)=>{
+      let best=Infinity
+      for(let i=0;i<index.count;i+=3){
+        triangle.a.fromBufferAttribute(position,index.getX(i));triangle.b.fromBufferAttribute(position,index.getX(i+1));triangle.c.fromBufferAttribute(position,index.getX(i+2))
+        triangle.closestPointToPoint(p,closest);best=Math.min(best,closest.distanceTo(p))
+      }
+      return best
+    }
+    const projection=anchor.clone().project(f.view.camera()),caster=new THREE.Raycaster()
+    caster.setFromCamera(new THREE.Vector2(projection.x,projection.y),f.view.camera())
+    const hits=caster.intersectObject(previewMesh,false),anchorDepth=anchor.clone().sub(caster.ray.origin).dot(caster.ray.direction)
+    const claimed=f.getLayer().pointerDown?.(f.event(1,cadPoint)) ?? false
+    const evidence={scope:'Single synthetic curved natural OCCT sheet; actual production tessellation and oblique camera',
+      tessellation:{linearDeflectionMm:.08,angularDeflectionRad:.15},side,curveParameterFraction:.37,cadPoint,pickAnchor:anchor.toArray(),
+      cadCurveToStoredTrianglesMm:distance(new THREE.Vector3(...cadPoint)),pickAnchorToStoredTrianglesMm:distance(anchor),
+      rayHitCount:hits.length,anchorDepthMm:anchorDepth,firstHitDepthMm:hits[0]?.distance??null,
+      signedDepthGapMm:hits.length?anchorDepth-hits[0].distance:null,triangles:index.count/3,
+      pointerClaimed:claimed,controllerBegun:begin.mock.calls.length,
+      verdict:claimed?'ACCEPTED':'REFUSED',browser:'NOT_RUN; simulated layer pointer and host lease'}
+    if(process.env.SURFACE_QA_CURVED_BOUNDARY_EVIDENCE)writeFileSync(process.env.SURFACE_QA_CURVED_BOUNDARY_EVIDENCE,JSON.stringify(evidence,null,2)+'\n')
+    recorded=true
+    console.log(JSON.stringify(evidence))
+    expect(claimed,'Visible curved boundary must be supported before publishing multi-edge picking').toBe(true)
+    expect(f.owner.beginWholeBoundaryGesture).toHaveBeenCalledWith(side)
+  }catch(error){
+    if(!recorded && process.env.SURFACE_QA_CURVED_BOUNDARY_EVIDENCE)writeFileSync(process.env.SURFACE_QA_CURVED_BOUNDARY_EVIDENCE,
+      JSON.stringify({scope:'Single synthetic curved OCCT sheet and oblique-view probe',phase,verdict:'REFUSED_BEFORE_MEASUREMENT',
+        error:String((error as Error).message),distanceMeasurements:null,pickingAttempted:false,browser:'NOT_RUN'},null,2)+'\n')
+    throw error
+  }finally{layer?.dispose();faces.forEach(f=>k.release(f));k.release(shifted);k.release(box);editor.dispose()}
+},60000)
+
+it.each([{perspective:false,size:1,offset:0},{perspective:true,size:1,offset:0},{perspective:false,size:50,offset:1e12}])(
+  'guards overlapping folded boundaries using native proof (perspective: $perspective, width: $size*2, offset: $offset)',async({perspective,size,offset})=>{
+  const frontX=perspective?-.9:-1
+  const folded:Net={nu:3,nv:2,du:2,dv:1,ku:[0,1],kv:[0,1],mu:[3,3],mv:[2,2],rational:[0,0],
+    poles:[[-size,-size,0],[-size,size,0],[size,-size,.5],[size,size,.5],[frontX*size,-size,1],[frontX*size,size,1]],weights:[1,1,1,1,1,1]}
+  const positions:number[]=[],indices:number[]=[]
+  for(let i=0;i<=40;i++){
+    const u=i/40,x=-((1-u)**2)+2*(1-u)*u+frontX*u*u
+    positions.push(x*size,-size,u,x*size,size,u)
+    if(i<40){const j=i*2;indices.push(j,j+1,j+2,j+1,j+3,j+2)}
+  }
+  const geometry=new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(positions,3))
+  geometry.setIndex(indices);geometry.computeVertexNormals()
+  const shape={positions:geometry.getAttribute('position').array as Float32Array,normals:geometry.getAttribute('normal').array as Float32Array,
+    indices:new Uint32Array(indices),vertexCount:positions.length/3,triangleCount:indices.length/3}
+  const f=fixture({perspective,worldOffset:offset,preview:{...validPreview,mesh:shape,faceMeshes:[shape]}})
+  if(size>1){const c=f.view.camera() as THREE.OrthographicCamera;c.left=-60;c.right=60;c.top=60;c.bottom=-60;c.updateProjectionMatrix()}
+  f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  f.owner.prepareWholeBoundaryPicks=vi.fn(async():Promise<readonly VerifiedBoundaryPick[]>=>[{side:'U1',point:[frontX*size,0,1]}])
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({net:folded,wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  const claimed=f.getLayer().pointerDown?.(f.event(1,[-size,0,0]))
+  await flushBoundaryPick()
+  expect(claimed).toBe(true)
+  expect(f.owner.beginWholeBoundaryGesture).toHaveBeenCalledExactlyOnceWith('U1')
+  layer.cancelGesture();layer.dispose();geometry.dispose()
+})
+
+it.each([{offset:0,hidden:false},{offset:1e12,hidden:false},{offset:1e12,hidden:true}])(
+  'confirms a visible 100 mm sheet and refuses native occlusion with world offset $offset (hidden: $hidden)',async({offset,hidden})=>{
+  const wide:Net={...net,poles:[[-50,-50,0],[-50,50,0],[50,-50,0],[50,50,0]]}
+  const shape={...mesh,positions:new Float32Array(Array.from(mesh.positions,(value,i)=>i%3===2?(hidden?.01:0):value*30))}
+  const f=fixture({worldOffset:offset,preview:{...validPreview,mesh:shape,faceMeshes:[shape]}})
+  const c=f.view.camera() as THREE.OrthographicCamera;c.left=-60;c.right=60;c.top=60;c.bottom=-60;c.updateProjectionMatrix()
+  f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  if(hidden)f.owner.prepareWholeBoundaryPicks=vi.fn(async()=>[])
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({net:wide,wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  expect(f.getLayer().pointerDown?.(f.event(1,[-50,0,0]))).toBe(true)
+  await flushBoundaryPick()
+  if(hidden)expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled()
+  else expect(f.owner.beginWholeBoundaryGesture).toHaveBeenCalledExactlyOnceWith('U0')
+  layer.cancelGesture();layer.dispose()
+})
+
+it.each(['occluded','no-depth-hit','preview-behind-anchor'] as const)('fails closed when native proof refuses %s',async condition=>{
+  const dx=condition==='no-depth-hit'?4:0,z=condition==='preview-behind-anchor'?-.01:condition==='occluded'?.01:0
+  const shape={...mesh,positions:new Float32Array(Array.from(mesh.positions,(value,i)=>value+(i%3===0?dx:i%3===2?z:0)))}
+  const f=fixture({preview:{...validPreview,mesh:shape,faceMeshes:[shape]}})
+  f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  f.owner.prepareWholeBoundaryPicks=vi.fn(async()=>[])
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({wholeBoundaryDrag:{side:'U0',canStart:true}})
+  expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(true)
+  await flushBoundaryPick()
+  expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled()
+  expect(f.counts().captured).toBeNull();layer.dispose()
+})
+
+it.each([
+  {side:'U0',at:[-1,0,0],ids:[0,1]}, {side:'U1',at:[1,0,0],ids:[2,3]},
+  {side:'V0',at:[0,-1,0],ids:[0,2]}, {side:'V1',at:[0,1,0],ids:[1,3]},
+] as const)('picks $side directly even when the panel previously selected U0',async({side,at,ids})=>{
+  const f=fixture({rotated:true,perspective:true});f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  const start=[...at] as Point,end=[at[0]+.4,at[1],at[2]] as Point
+  expect(f.getLayer().pointerDown?.(f.event(1,start))).toBe(true)
+  await flushBoundaryPick()
+  expect(f.owner.beginWholeBoundaryGesture).toHaveBeenCalledWith(side)
+  f.getHandlers().move(f.event(1,end));f.getHandlers().up(f.event(1,end))
+  const actual=f.finishPoleGesture.mock.lastCall![0]!
+  actual.forEach((p,i)=>{
+    expect(p[0]).toBeCloseTo(f.net.poles[i][0]+((ids as readonly number[]).includes(i)?.4:0),8)
+    expect(p[1]).toBe(f.net.poles[i][1]);expect(p[2]).toBe(f.net.poles[i][2])
+  })
+  expect(f.beginDirectStripGesture).not.toHaveBeenCalled();layer.dispose()
+})
+
+it('refuses the directly picked locked side without falling back to an unlocked side',async()=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({wholeBoundaryDrag:{side:'U0',canStart:true},locked:[2]})
+  expect(f.getLayer().pointerDown?.(f.event(1,[1,0,0]))).toBe(true)
+  await flushBoundaryPick()
+  expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled()
+  expect(f.reportViewError).toHaveBeenCalledWith('Il bordo contiene un polo bloccato.')
+  expect(f.counts().captured).toBeNull();layer.dispose()
+})
+
+it.each([false,true])('drags the chosen complete natural boundary and leaves off-edge navigation unclaimed (rotated: %s)',async rotated=>{
   const f=fixture({rotated,perspective:true}),begin=vi.fn(()=>true)
   f.owner.beginWholeBoundaryGesture=begin
   const layer=createWorkspaceLayer(f.view,f.owner)
@@ -141,6 +417,7 @@ it.each([false,true])('drags the chosen complete natural boundary and leaves off
   expect(begin).not.toHaveBeenCalled()
   const press=f.event(2,[-1,0,0])
   expect(f.getLayer().pointerDown?.(press)).toBe(true)
+  await flushBoundaryPick()
   expect(begin).toHaveBeenCalledWith('U0')
   expect(f.claimEditDrag).toHaveBeenLastCalledWith(true)
   f.getHandlers().move(f.event(3,[0,0,0]));expect(f.previewPoles).not.toHaveBeenCalled()
@@ -155,11 +432,12 @@ it.each([false,true])('drags the chosen complete natural boundary and leaves off
   layer.dispose()
 })
 
-it.each(['click','escape','cancel','camera'] as const)('restores a whole-boundary gesture on %s without a geometry commit',mode=>{
+it.each(['click','escape','cancel','camera'] as const)('restores a whole-boundary gesture on %s without a geometry commit',async mode=>{
   const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
   const layer=createWorkspaceLayer(f.view,f.owner)
   f.set({wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
   const press=f.event(1,[-1,0,0]);f.getLayer().pointerDown?.(press)
+  await flushBoundaryPick()
   if(mode==='click')f.getHandlers().up(press)
   else{
     f.getHandlers().move(f.event(1,[-.5,0,0]))
@@ -174,11 +452,12 @@ it.each(['click','escape','cancel','camera'] as const)('restores a whole-boundar
   expect(f.counts().captured).toBeNull();layer.dispose()
 })
 
-it('refuses a locked whole edge, preserves navigation-only mode and does not select cells while the tool is armed',()=>{
+it('refuses a locked whole edge, preserves navigation-only mode and does not select cells while the tool is armed',async()=>{
   const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
   const layer=createWorkspaceLayer(f.view,f.owner)
   f.set({wholeBoundaryDrag:{side:'U0',canStart:true},locked:[0]})
   expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(true)
+  await flushBoundaryPick()
   expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled()
   f.set({locked:[],navigationOnly:true})
   expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(false)

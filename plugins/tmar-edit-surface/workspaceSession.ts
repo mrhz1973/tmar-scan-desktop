@@ -20,6 +20,7 @@ import type { AdaptiveSelection } from './editor.worker'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
 import type { WorkspacePointTargetResolver } from './workspaceBridge'
 import { wholeBoundaryIndices, type WholeBoundarySide } from './wholeBoundary'
+import type {BoundaryCadCandidate,VerifiedBoundaryPick,BoundaryVisibilityCadResult} from './boundaryVisibilityCad'
 export type { WholeBoundarySide } from './wholeBoundary'
 
 export interface WorkspaceSurfaceNote {
@@ -192,6 +193,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private gestureNet: Net | null = null
   private wholeBoundaryDrag: {side:WholeBoundarySide;face:number} | null = null
   private wholeBoundaryGesture: readonly number[] | null = null
+  private boundaryPickSerial=0
+  private readonly boundaryPickReceipts=new WeakMap<VerifiedBoundaryPick,{snapshot:SurfaceDraftSnapshot;serial:number}>()
   private strip: StripMode | null = null
   private stripPending = false
   private stripGeneration = 0
@@ -470,13 +473,46 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   beginWholeBoundaryGesture(side:WholeBoundarySide):boolean {
     this.assertMutable()
-    if(this.wholeBoundaryDrag?.side!==side || !this.panel.canMoveWholeBoundary)return false
+    if(!this.wholeBoundaryDrag || !this.panel.canMoveWholeBoundary)return false
     const d=this.draft.getSnapshot(),ids=wholeBoundaryIndices(this.requireNet(),side)
     if(ids.some(i=>d.locks.includes(i)||d.trimLocks.includes(i)||d.hiddenPoles.includes(i)))throw Error('Il bordo contiene un polo bloccato.')
     this.change(()=>{
-      this.draft.setSelection(ids);this.gesture='pole';this.gestureNet=d.committedNet;this.wholeBoundaryGesture=ids
+      this.draft.setSelection(ids);this.wholeBoundaryDrag={side,face:this.face}
+      this.gesture='pole';this.gestureNet=d.committedNet;this.wholeBoundaryGesture=ids
     })
     return true
+  }
+  async prepareWholeBoundaryPicks(net:Net,candidates:BoundaryCadCandidate[],origin:Point,parallelDirection?:Point):Promise<readonly VerifiedBoundaryPick[]>{
+    this.assertMutable()
+    const before=this.draft.getSnapshot(),serial=++this.boundaryPickSerial,revision=before.preview?.previewRevision
+    if(!this.wholeBoundaryDrag||!this.panel.canMoveWholeBoundary||before.net!==net||revision===undefined)throw Error('Bozza del bordo non verificabile.')
+    const input=structuredClone(candidates)
+    const response=await this.runtime.worker.ask<{face:number;previewRevision:number;results:(BoundaryVisibilityCadResult&{side:WholeBoundarySide})[]}>({
+      action:'verifyBoundaryVisibility',previewRevision:revision,candidates:input,origin:pointCopy(origin),
+      ...(parallelDirection?{parallelDirection:pointCopy(parallelDirection)}:{})},this.context.signal)
+    this.assertMutable()
+    if(serial!==this.boundaryPickSerial||this.draft.getSnapshot()!==before||!this.wholeBoundaryDrag||!this.panel.canMoveWholeBoundary)
+      throw Error('Richiesta del bordo superata da una modifica o annullamento.')
+    if(response.face!==this.face||response.previewRevision!==revision||!Array.isArray(response.results)||response.results.length!==input.length)
+      throw Error('Risposta CAD del bordo non coerente.')
+    const receipts:VerifiedBoundaryPick[]=[]
+    response.results.forEach((result,i)=>{
+      if(result.side!==input[i].side||result.pickerSegment!==input[i].segment||typeof result.visible!=='boolean')throw Error('Candidato CAD non coerente.')
+      if(!result.visible)return
+      if(result.reason!=='native-section-and-clear-front'||!finitePoint(result.point)||!Number.isFinite(result.frontDistanceMm)||result.frontDistanceMm!<=1e-6||result.intersectionCount!==1)
+        throw Error('Conferma CAD incompleta.')
+      const pick=Object.freeze({side:result.side,point:freezePoint(result.point)})
+      this.boundaryPickReceipts.set(pick,{snapshot:before,serial});receipts.push(pick)
+    })
+    return Object.freeze(receipts)
+  }
+  cancelPreparedWholeBoundaryPicks():void{this.boundaryPickSerial++}
+  beginVerifiedWholeBoundaryGesture(pick:VerifiedBoundaryPick):boolean{
+    this.assertMutable()
+    const receipt=this.boundaryPickReceipts.get(pick);this.boundaryPickReceipts.delete(pick)
+    if(!receipt||receipt.serial!==this.boundaryPickSerial||receipt.snapshot!==this.draft.getSnapshot())return false
+    this.boundaryPickSerial++
+    return this.beginWholeBoundaryGesture(pick.side)
   }
   private checkWholeBoundaryGesture(poles:Point[]):void {
     const ids=this.wholeBoundaryGesture,base=this.gestureNet

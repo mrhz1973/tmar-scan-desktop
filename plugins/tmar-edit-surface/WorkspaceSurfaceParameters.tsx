@@ -23,6 +23,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const disabled = state.busy || state.gesture !== 'idle'
   const editable = state.selected.filter(i => !state.locked.includes(i))
   const hiddenPoles = controller.getViewState().hiddenPoles
+  const activeWholeBoundary=state.wholeBoundaryDrag ?? wholeBoundary
   const hasFreeVisiblePoint = !!state.net?.poles.some((_, index) => !state.locked.includes(index) && !hiddenPoles.includes(index))
   const axisNames = state.dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']
   const strip = state.strip
@@ -206,7 +207,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         Consenti movimento dei bordi liberi</label>}
       {state.canFreeBoundary && <fieldset data-test="surface-whole-boundary"><legend>Sposta intero bordo senza duplicarlo</legend>
         <p>Disponibile su una sola faccia aperta con quattro bordi naturali. Attiva prima il movimento dei bordi liberi. Il comando muove l’intero bordo; i suoi estremi modificano anche i bordi adiacenti.</p>
-        <label>Bordo naturale<select data-test="surface-whole-boundary-side" value={wholeBoundary} disabled={disabled}
+        <label>Bordo naturale<select data-test="surface-whole-boundary-side" value={activeWholeBoundary} disabled={disabled}
           onChange={e=>{const side=e.target.value as WholeBoundarySide;setWholeBoundary(side);if(state.wholeBoundaryDrag)attempt(()=>controller.setWholeBoundaryDrag(side))}}>
           <option value="U0">U iniziale</option><option value="U1">U finale</option><option value="V0">V iniziale</option><option value="V1">V finale</option>
         </select></label>
@@ -218,11 +219,11 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           disabled={disabled} onChange={e=>setBoundaryDistance(e.target.valueAsNumber)} /></label>
         <button type="button" data-test="surface-whole-boundary-move" disabled={disabled || !state.canMoveWholeBoundary ||
           !Number.isFinite(boundaryDistance) || Math.abs(boundaryDistance)<=1e-7 || Math.abs(boundaryDistance)>1000}
-          onClick={()=>attempt(()=>{const delta:[number,number,number]=[0,0,0];delta[boundaryAxis]=boundaryDistance;controller.moveWholeBoundary(wholeBoundary,delta)})}>Sposta intero bordo</button>
+          onClick={()=>attempt(()=>{const delta:[number,number,number]=[0,0,0];delta[boundaryAxis]=boundaryDistance;controller.moveWholeBoundary(activeWholeBoundary,delta)})}>Sposta intero bordo</button>
         <label className="inline"><input data-test="surface-whole-boundary-drag" type="checkbox" checked={!!state.wholeBoundaryDrag}
           disabled={disabled || (!state.wholeBoundaryDrag && !state.canMoveWholeBoundary)}
-          onChange={e=>attempt(()=>controller.setWholeBoundaryDrag(e.target.checked?wholeBoundary:null))} />Trascina il bordo scelto nella vista</label>
-        {state.wholeBoundaryDrag && <p>Trascina sulla curva del bordo scelto. Il gesto usa direzione e intensità del reticolo, senza magnete. Fuori dal bordo puoi navigare; Escape annulla il gesto. Il comando numerico usa invece l’asse XYZ qui sopra.</p>}
+          onChange={e=>attempt(()=>{if(!e.target.checked)setWholeBoundary(activeWholeBoundary);controller.setWholeBoundaryDrag(e.target.checked?activeWholeBoundary:null)})} />Trascina un bordo naturale nella vista</label>
+        {state.wholeBoundaryDrag && <p>Puoi afferrare uno qualsiasi dei quattro bordi naturali. Il bordo indicato nel pannello segue quello scelto nella vista. Il gesto usa direzione e intensità del reticolo, senza magnete. Fuori dai bordi puoi navigare; Escape annulla il gesto. Il comando numerico usa invece l’asse XYZ qui sopra.</p>}
         <p>Un polo bloccato impedisce il movimento di tutto il bordo. Il risultato richiede la verifica CAD e si annulla con un solo Undo. Non viene aggiunta una striscia.</p>
       </fieldset>}
       <label>Selezione del reticolo

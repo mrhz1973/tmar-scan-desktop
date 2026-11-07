@@ -42,6 +42,7 @@ export type Request = { id: number } & (
   | { action: 'finalFaceWitness'; previewRevision: number }
   | { action: 'notePick'; point: Point; previewRevision: number }
   | { action: 'noteResolve'; anchor: DraftAnchor; previewRevision: number }
+  | {action:'verifyBoundaryVisibility';previewRevision:number;candidates:import('./boundaryVisibilityCad').BoundaryCadCandidate[];origin:Point;parallelDirection?:Point}
   | { action: 'evaluate'; net: Net; continuity: 'G0' | 'G1'; exportStep?: boolean; freeBoundary?: boolean; selection?: {face:number;refinements:KnotInsertion[]} }
   // Experimental display only; this is not an evaluate/Apply result.
   | { action: 'prepareCylinder'; face:number }
@@ -194,6 +195,9 @@ self.onmessage = (event: MessageEvent<Request>) => {
         case 'finalFaceWitness': result = editor.finalFaceWitness(req.previewRevision); break
         case 'notePick': result = editor.anchorFromPick(req.point,req.previewRevision); break
         case 'noteResolve': result = editor.resolveAnchor(req.anchor,req.previewRevision); break
+        case 'verifyBoundaryVisibility':
+          if(cylinder || adaptiveSelectionKey!==null)throw Error('Preparazione non qualificata per la verifica del bordo.')
+          result=editor.verifyBoundaryVisibility(req.previewRevision,req.candidates,req.origin,req.parallelDirection);break
         case 'evaluate': {
           if(adaptiveSelectionKey!==null) throw new Error('La preparazione adattiva richiede una valutazione esplicita.')
           if(req.selection && selectionKey!==JSON.stringify(req.selection)) {

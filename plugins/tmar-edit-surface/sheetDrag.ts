@@ -25,7 +25,7 @@ export function pickSheetEdge(paths:Point[][],camera:THREE.Camera,rect:DOMRect,
   x:number,y:number,only=-1,limit=8) {
   const mouse=new THREE.Vector2(x,y),raycaster=new THREE.Raycaster()
   raycaster.setFromCamera(new THREE.Vector2((x-rect.left)*2/rect.width-1,1-(y-rect.top)*2/rect.height),camera)
-  let best=limit, edge=-1, hit=new THREE.Vector3(), anchor=new THREE.Vector3()
+  let best=limit, edge=-1, segmentIndex=-1, hit=new THREE.Vector3(), anchor=new THREE.Vector3()
   paths.forEach((path,id)=>{
     if(only>=0 && id!==only)return
     for(let i=1;i<path.length;i++){
@@ -39,11 +39,11 @@ export function pickSheetEdge(paths:Point[][],camera:THREE.Camera,rect:DOMRect,
         raycaster.ray.distanceSqToSegment(a,b,undefined,hit)
         // Screen-space interpolation is not affine in perspective. Use the
         // ray's closest point on the 3D edge for the handle anchor.
-        anchor.copy(hit);best=distance;edge=id
+        anchor.copy(hit);best=distance;edge=id;segmentIndex=i-1
       }
     }
   })
-  return edge<0?null:{edge,hit,anchor}
+  return edge<0?null:{edge,hit,anchor,segment:segmentIndex}
 }
 
 export function drawStrip(tool:StripDrag) {

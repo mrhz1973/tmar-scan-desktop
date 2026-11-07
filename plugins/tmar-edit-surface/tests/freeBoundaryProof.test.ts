@@ -3,6 +3,29 @@ import { expect, it } from 'vitest'
 import type { ShapeHandle } from 'occt-wasm'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { encodeNet, replaceSurface, signature, surfaceTable } from '../brep'
+import {rebuildFreeBoundary} from '../freeBoundary'
+
+it('preserves the reversed GUI fixture orientation when enabling unchanged free boundaries',async()=>{
+  const editor=await SurfaceEditorKernel.load(),k=editor.kernel,box=k.makeBox(20,30,10),faces=k.getSubShapes(box,'face')
+  let source:ShapeHandle|undefined,sourceFaces:ShapeHandle[]=[],rebuilt:ShapeHandle|undefined
+  try{
+    const chosen=faces.find(f=>Math.abs(k.getSurfaceArea(f)-600)<1e-7)!
+    const step=k.exportStep(chosen);source=k.importStep(step);sourceFaces=k.getSubShapes(source,'face')
+    const opened=editor.open(step),net=editor.select(0)
+    expect(opened.faces[0].freeBoundary).toBe(true)
+    expect(editor.evaluate(net,'G1').valid).toBe(true)
+    const bounds=k.uvBounds(sourceFaces[0]),u=(bounds.uMin+bounds.uMax)/2,v=(bounds.vMin+bounds.vMax)/2
+    const support=k.fromBREP(replaceSurface(k.toBREP(sourceFaces[0]),surfaceTable(k.toBREP(sourceFaces[0]))[0],net))
+    try{rebuilt=rebuildFreeBoundary(k,support,net)}finally{k.release(support)}
+    const originalNormal=k.surfaceNormal(sourceFaces[0],u,v),rebuiltNormal=k.surfaceNormal(rebuilt,u,v)
+    console.log(JSON.stringify({case:'gui-first-area600',sourceOrientation:k.shapeOrientation(sourceFaces[0]),rebuiltOrientation:k.shapeOrientation(rebuilt),originalNormal,rebuiltNormal}))
+    const result=editor.evaluate(net,'G1',true,true)
+    expect(result.valid).toBe(true);expect(result.minimumNormalDot).toBeCloseTo(1,10)
+    const output=k.importStep(result.step!),outFaces=k.getSubShapes(output,'face')
+    try{expect(k.isValid(output)).toBe(true);expect(outFaces).toHaveLength(1);expect(k.shapeOrientation(outFaces[0])).toBe(k.shapeOrientation(sourceFaces[0]))}
+    finally{outFaces.forEach(f=>k.release(f));k.release(output)}
+  }finally{if(rebuilt)k.release(rebuilt);sourceFaces.forEach(f=>k.release(f));if(source)k.release(source);faces.forEach(f=>k.release(f));k.release(box);editor.dispose()}
+},60000)
 
 it('reconstructs a free NURBS boundary without refitting its support surface',async()=>{
   const editor=await SurfaceEditorKernel.load(), k=editor.kernel

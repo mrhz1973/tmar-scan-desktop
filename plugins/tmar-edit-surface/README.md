@@ -35,9 +35,9 @@ this new command's test. Earlier `freeBoundaryProof.test.ts`,
 `freeBoundaryRational.test.ts` and `e2e-free-boundary.mjs` establish separate
 reconstruction foundations and do not replace this command's GUI acceptance.
 
-The optional **Trascina il bordo scelto nella vista** mode now picks the actual
-natural NURBS boundary curve, sampled at 65 positions for display-space picking,
-and moves its entire outer control row. It uses the existing viewport capture,
+The optional **Trascina un bordo naturale nella vista** mode now picks any of
+the four natural NURBS boundary curves, each sampled at 65 positions for
+display-space picking, and moves its entire outer control row. It uses the existing viewport capture,
 drag threshold, direction/strength, preview queue, cancellation and geometry
 Undo. The controller rejects nonuniform movement of the row or any change to
 unrelated poles. Off-edge input remains available for navigation; navigation-only
@@ -57,6 +57,120 @@ translation and one-face/four-edge STEP readback described above. Evidence:
 simulated and host/transport remain in memory; no browser, exact-host GUI or
 physical-pointer qualification is claimed. General trimmed/shared/solid edges
 remain excluded. This is the first bounded direct-drag checkpoint.
+
+Direct-side selection follow-up: the viewport no longer requires selecting the
+same U/V side in the panel before grabbing it. The existing edge picker compares
+all four curves; the controller adopts the hit side only after its complete row
+passes the lock checks. A locked hit is refused without falling back to another
+side. The panel's displayed side and numeric command follow the viewport choice.
+Five new layer tests cover all four sides with a rotated perspective view and
+the locked-hit refusal; two session tests cover a direct U0-to-U1 choice, one
+Undo and refusal without changing the previous side or history. These tests use
+simulated pointer input and host/transport; they do not qualify an actual GUI,
+shared/trimmed/solid edges or complete QS behavior. Outside the four rims the
+tool leaves navigation available, retaining the preceding scope and guards.
+
+The multi-edge picker now requires a depth confirmation against the owned CAD
+preview before admitting each candidate. A ray through the candidate's projected
+3D anchor must hit a non-clipped preview triangle at matching depth; an occluded
+anchor, missing hit or unresolved depth discrepancy is refused. Only then does
+the existing picker choose among confirmed curves. Depth is computed in the
+part frame using detached wrappers over the actual stored preview triangles.
+The camera's relative pose is formed before rotating its translation, avoiding
+cancellation from large world offsets. The allowance covers double arithmetic
+only, with a 1e-7 mm floor and the unchanged 0.00001 mm cap; an unknown
+CAD/Float32/tessellation discrepancy is refused rather than treated as
+visibility evidence. The former Float32 estimate proportional to whole-part
+extent was removed: it had incorrectly blocked parts above roughly 42 mm.
+The kernel's 0.08 mm tessellation deflection is not a visibility allowance.
+
+Five additional layer cases cover overlapping front/back rims of one folded
+face, missing depth evidence and mismatches in either depth direction. The
+orthographic fold chooses the visible front rim and rejects the hidden one.
+The perspective fold intentionally refuses the gesture where Float32 rounding
+leaves no reliable boundary hit; ordinary visible perspective/rotated-part
+cases still pass. Curved boundary/tessellation discrepancies can conservatively
+refuse a visible edge. This checks self-occlusion within the owned CAD preview,
+not occlusion by arbitrary external host objects or physical GUI interaction.
+
+Four further layer cases pass for a 100 mm sheet at the origin and at a world
+offset of `[1e12, -1e12, 1e12]`, including a nearer occluder 0.01 mm away and a
+100 mm folded sheet with overlapping front/back rims. Confirmed visible rims
+remain selectable; the hidden rim is refused or the front rim chosen. These
+are synthetic geometry and simulated pointer tests, not a global coordinate-
+accuracy, renderer or production-host qualification.
+
+The single opt-in curved/oblique OCCT probe did not reach picking: kernel
+evaluation of its synthetic curved-sheet preparation refused with
+`Deformazione troppo forte: normale ribaltata o superficie singolare.`
+No curve-to-tessellation or depth distance was measured, and no alternate
+fixture or retry was attempted. Receipt:
+`evidence/whole-boundary/curved-oblique-once/result.json`; opt-in test:
+`SURFACE_QA_CURVED_BOUNDARY_PROBE=1` in `workspaceLayer.test.ts`.
+This does not establish the refusal's cause or prove a picking defect.
+Curved-boundary support and publication of multi-edge picking remain on hold;
+the occlusion guard was not relaxed.
+
+A subsequent single probe used the already qualified curved artifact
+`evidence/free-boundary/compiled-20261103/moved.step`, unchanged SHA-256
+`61e1e624a432089e613cc9b744a7c883ccee3cd79ba459f0ef1c5c159419741f`.
+Current OCCT checks confirmed valid CAD, one natural open face, zero solids and
+`freeBoundary=true`; no new deformation or fixture search was performed.
+The fixed U1 point at 37% of V was tested from an oblique camera on its exterior
+side. With production tessellation (0.08 mm / 0.15 rad), its distance to the
+stored triangles was 0.0114742182 mm; the pick anchor's distance was
+0.0110213842 mm. The first triangle hit lay 0.0273744848 mm behind the anchor
+along the ray, rather than occluding it. The picker refused and the controller
+did not start. This demonstrates a false rejection of this qualified curved
+boundary, not a safe reason to widen the occlusion tolerance.
+
+Receipt: `evidence/whole-boundary/prequalified-curved-oblique-once/result.json`;
+opt-in test: `SURFACE_QA_CURVED_EXISTING_PROBE=1` in `workspaceLayer.test.ts`.
+The test fails its visible-boundary acceptance assertion and remains opt-in.
+No retry, browser, host modification or visibility-guard change was made.
+Publication of multi-edge picking remains on hold pending a visibility method
+that supports this case while retaining the hidden-edge refusals.
+
+An isolated native-CAD prototype is now in `boundaryVisibilityCad.ts`, not
+connected to the worker, controller or viewport. It copies the source BREP,
+identifies the natural edge, projects onto its native curve and sections the
+camera-to-edge segment against the CAD face. A separate distance query checks
+the segment ending 1e-5 mm before the anchor. Elevated source tolerances,
+ambiguous/non-point intersections, grazing views and uncertain results refuse.
+The prototype uses a 1e-6 mm CAD threshold, never a meshing-deflection allowance.
+
+Two focused real-OCCT tests in `tests/boundaryVisibilityCad.test.ts` passed.
+The qualified curved fixture produced one intersection at the anchor (depth
+difference about 5e-14 mm) and front clearance 7.22e-6 mm. A folded native
+surface with rims separated by 0.02 mm returned two intersections for the
+hidden rim, which was refused; its front rim returned one intersection and
+approximately 1e-5 mm front clearance, which passed. Source BREP text stayed
+unchanged in both cases. Receipts: `evidence/whole-boundary/native-cad-query/`.
+These two cases do not certify general intersection completeness, imported
+tolerance conventions, worker revision/gesture races or browser interaction.
+Independent review and a guarded asynchronous integration remain required;
+the existing viewport occlusion guard has not been changed by this prototype.
+
+The prototype now constructs the exact natural isocurve from the NURBS support
+instead of treating the imported 3D edge parameter as a surface UV coordinate.
+The caller must identify the segment of the same 65-sample curve used by the
+picker; the seed must lie on that declared chord. Native projection is restricted
+to the corresponding parameter interval, with the result checked on the surface
+and actual topological edge. This removes the arbitrary 0.005 mm seed-to-curve
+limit without permitting a jump to another curve interval.
+
+Four focused CAD tests pass: the qualified curved rim; front/hidden rims 0.02 mm
+apart; a geometrically identical edge parameterized 100..160 while its surface
+coordinate remains 0..30; and a seed from the actual 65-sample polyline of the
+fixture scaled by 20. The latter lies 0.008993814 mm from the precise curve and
+is accepted in its own interval; a false segment declaration is refused.
+Receipts: `evidence/whole-boundary/native-cad-query-v2/`. `attempt-1.json` records
+an implementation variable-shadowing failure and overly exact UV-bound equality
+before correction; it is not a geometry success receipt. This remains an
+isolated prototype. A future viewport adapter must pass authentic segment and
+camera data, recheck the precise anchor against the pointer/view and revisions,
+and handle asynchronous cancellation. No synchronous UI integration or new
+viewport authorization has been introduced.
 
 ### Surface-point alignment, source integration checkpoint
 
@@ -722,3 +836,13 @@ The current Apply path can still enqueue a host import after its last source che
 The existing dialog now uses `SurfaceDraft` as the sole authority for geometry, local history and CAD-preview scheduling. A session retains that controller outside the panel; it is not yet the host workspace session. `SurfaceGesture` handles the prototype's point drag, including pointer identity, the drag threshold, Alt and cancellation. `WorkspacePreview` prepares owned face meshes for the eventual shared viewport; it does not create a camera or renderer and is not yet connected to the host. Its source-mask callback must be atomic and restore only the host's temporary mask.
 
 On isolated synthetic STEP fixtures, the integrated source dialog passed history, locks, protected boundaries, failure recovery, point/edge/cell selection, drag and scan snap; the compiled prototype passed CAD-reference snap, Alt and disabled snap. A source test with Zebra and a note observed a successful `noteResolve` for the new surface revision after STEP export; the note remained a draft and annotated Apply remained disabled. TypeScript and 33 focused controller/gesture/preview tests passed. Results are in `evidence/main-view-preparation/`; a perspective error found and corrected in the CAD-snap test is documented in `evidence/snap/cad-perspective-qa-20261103.md`. These results do not demonstrate shared-viewport integration, persistence of notes, arbitrary STEP support or QuickSurface parity.
+
+### Native boundary capture integration checkpoint · 2026-11-07
+
+Whole-boundary capture now requests an asynchronous native CAD visibility proof through the serialized editor worker. The session returns single-use receipts bound to the exact draft snapshot and preview revision. The layer starts geometry changes only after consuming a current receipt and reprojecting its precise CAD anchor within the pick radius. Pointer motion is buffered during the request; release, Escape, camera/part/viewport changes, source/draft changes and disposal cancel the pending capture. Off-edge and other-pointer navigation remain available. There is no mesh-depth fallback or directional deflection allowance.
+
+The narrow layer/session selection passed 43 tests, including stale responses and failed requests. A real session/dispatcher/OCCT test passed native proof, a 0.2 mm complete-boundary gesture, valid one-face/four-edge STEP export and one Undo (maximum sampled STEP displacement error 2.66e-15 mm; Undo error zero). The existing qualified curved STEP in one oblique view also passed the native-backed layer pick despite its 0.01147 mm curve-to-render-mesh gap. Its pointer/host/controller lease is simulated; the separate session test exercises the real controller. Synthetic measurements and the unchanged input SHA are in `evidence/whole-boundary/native-async-integration/result.json`.
+
+This remains plugin WIP pending independent integration review and GUI acceptance. No host, browser or user project was changed. Support stays limited to the previously qualified single natural open face; trim/shared solids, clipping, grazing or ambiguous native intersections refuse. These checks do not establish general occlusion correctness or QuickSurface parity.
+
+The isolated GUI preparation subsequently exposed an unchanged-face refusal when the synthetic fixture selected the box's first 600 mm² face: that face is topologically reversed, whereas `makeFaceOnSurface`/`fixShape` rebuilt it forward. The native regression reproduced the -Z to +Z normal flip before the fix. `rebuildFreeBoundary` now preserves the support's forward/reversed orientation explicitly; the original normal-validation threshold remains unchanged. The regression and three existing free-boundary support/refusal checks passed (4/4), including valid STEP reimport with preserved orientation. Receipt: `evidence/whole-boundary/native-async-integration/reversed-free-boundary.json`. No browser rerun or integrated GUI acceptance is implied.
