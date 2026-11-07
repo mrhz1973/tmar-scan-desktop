@@ -92,3 +92,11 @@ that OCCT can change a curve when its U pole count is below its degree; the
 prototype conservatively rejects pole counts less than or equal to the degree.
 The measured support comparison is sampled, not a global error certificate.
 It is not connected to tangency publication or qualified on the tube.
+
+A synthetic open-shell pipeline now reads two faces with distinct U knots,
+confirms that direct tangency rejects their incompatible bases, refines each
+to a common basis, applies the periodic proposal and reopens its STEP. It
+checks topology and orientation, preserves both source BREPs byte for byte,
+and measures seam normals and gaps at 73 samples. This fixture uses the same
+degree, parameter interval and phase; it does not qualify the tube, a closed
+solid, different parameterizations, global G1 or editor integration.

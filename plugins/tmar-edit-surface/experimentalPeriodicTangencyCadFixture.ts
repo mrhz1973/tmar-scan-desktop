@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { OcctKernel, ShapeHandle, Vec3 } from 'occt-wasm'
 import { encodeNet, surfaceTable, type Net, type Point } from './brep'
+import { refineExperimentalPeriodicSurfaceU } from './experimentalPeriodicSurfaceRefinement'
 import { proposeExperimentalPeriodicTangency } from './experimentalPeriodicTangency'
 import { verifyExperimentalPeriodicTangencyReplay } from './experimentalPeriodicTangencyReplay'
 
@@ -27,13 +28,18 @@ function fixtureNet(selected: boolean): Net {
 
 /**
  * Materialize the entire natural face of the synthetic polynomial fixture.
- * Both rim curves are clamped-V isocurves. At the cut of this uniform
- * quadratic U basis the seam poles are the averages of the first two U rows.
+ * Both rim curves are clamped-V isocurves. At the locally uniform cut of the
+ * quadratic U basis, the seam poles are the averages of the first two U rows.
  * The BREP has two rim edges and one seam edge with two distinct pcurves.
  */
 function fixtureFace(k: OcctKernel, n: Net): ShapeHandle {
   const [v0, v1] = n.kv, u0 = n.ku[0], u1 = n.ku.at(-1)!
   const rim = (row: number) => Array.from({ length: n.nu }, (_, u) => n.poles[u * n.nv + row])
+  // The fixture's inserted knots stay away from the cut. Require the same
+  // quadratic basis there before using the two-pole average for the seam.
+  if (n.du !== 2 || n.rational.some(Boolean) || n.ku[1] - u0 !== 1 || u1 - n.ku.at(-2)! !== 1 ||
+      [n.mu[0], n.mu[1], n.mu.at(-2), n.mu.at(-1)].some(m => m !== 1))
+    return fail('base della cucitura U inattesa')
   const seam = n.poles.slice(0, n.nv).map((a, v) => a.map((x, d) => (x + n.poles[n.nv + v][d]) / 2))
   const curve = (poles: number[][], knots: number[], mult: number[], degree: number, periodic: number) =>
     [`7 0 ${periodic} ${degree} ${poles.length} ${knots.length}`,
@@ -98,6 +104,24 @@ Fa
 `)
 }
 
+// Build the mismatched sources by inserting one different interior knot in
+// each face, independently of the common-basis routine under test. The two
+// insertions have disjoint local supports, keeping the shared rim coefficients
+// exactly equal when the common basis is computed in either order.
+function insertFixtureKnot(k: OcctKernel, net: Net, knot: number, own: (shape: ShapeHandle) => ShapeHandle): Net {
+  const rows = Array.from({ length: net.nv }, (_, v) => {
+    const poles = Array.from({ length: net.nu }, (_, u) => net.poles[u * net.nv + v]).flat()
+    const edge = own(k.makeBSplineEdge(poles, [], net.ku, net.mu, net.du, true))
+    const inserted = k.curveKnotInsert(edge, knot, 1)
+    if (inserted !== edge) own(inserted)
+    return k.getNurbsCurveData(inserted)
+  })
+  const { knots: ku, multiplicities: mu } = rows[0]
+  const nu = rows[0].poles.length / 3
+  const poles = Array.from({ length: nu }, (_, u) => rows.map(row => row.poles.slice(3 * u, 3 * u + 3) as Point)).flat()
+  return { ...net, nu, ku, mu, poles, weights: poles.map(() => 1) }
+}
+
 function readNet(k: OcctKernel, face: ShapeHandle): Net {
   const brep = k.toBREP(face)
   // A sewn rim stores pcurves on both supports, so the face's record index
@@ -116,6 +140,15 @@ function normalSin(a: Vec3, b: Vec3) {
 
 /** Build, apply, and validate the fixed two-face fixture in a disposable kernel session. */
 export function runExperimentalPeriodicTangencyCadFixture(k: OcctKernel) {
+  return runCadFixture(k, false)
+}
+
+/** Bring two different U bases together before applying and replaying tangency. */
+export function runExperimentalPeriodicRefinementTangencyCadFixture(k: OcctKernel) {
+  return runCadFixture(k, true)
+}
+
+function runCadFixture(k: OcctKernel, refine: boolean) {
   const handles: ShapeHandle[] = []
   const own = (shape: ShapeHandle) => { handles.push(shape); return shape }
   const children = (shape: ShapeHandle, kind: 'face' | 'wire') =>
@@ -144,10 +177,11 @@ export function runExperimentalPeriodicTangencyCadFixture(k: OcctKernel) {
     }
     return uses
   }
+  const sampleU = (knots: number[]) => knots.flatMap((u, i) => i === knots.length - 1
+    ? [u] : [u, ...[0.125, 0.5, 0.875].map(t => u + (knots[i + 1] - u) * t)])
   const sample = (selected: ShapeHandle, support: ShapeHandle, net: Net, supportNet: Net) => {
     let maxGapMm = 0, maxNormalSin = 0
-    const uValues = net.ku.slice(0, -1).flatMap((u, i) => [u, ...[0.125, 0.5, 0.875].map(t => u + (net.ku[i + 1] - u) * t)])
-    uValues.push(net.ku.at(-1)!)
+    const uValues = sampleU([...new Set([...net.ku, ...supportNet.ku])].sort((a, b) => a - b))
     const selectedV = net.kv.at(-1)!, supportV = supportNet.kv[0]
     for (const u of uValues) {
       maxGapMm = Math.max(maxGapMm, gap(k.pointOnSurface(selected, u, selectedV), k.pointOnSurface(support, u, supportV)))
@@ -184,21 +218,67 @@ export function runExperimentalPeriodicTangencyCadFixture(k: OcctKernel) {
     }
     return { selected, support, seam: sample(selected, support, net, supportNet) }
   }
+  const requestParameters = { edge: 'V1', supportEdge: 'V0', scale: 0.5 } as const
+  const checkUnrefinedProposal = (net: Net, supportNet: Net) => {
+    try {
+      proposeExperimentalPeriodicTangency({ net, supportNet, ...requestParameters })
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('Tangenza periodica rifiutata: basi U diverse'))
+        return true as const
+      throw error
+    }
+    return fail('proposta accettata con basi U sorgente diverse')
+  }
 
   try {
-    const selected = own(fixtureFace(k, fixtureNet(true))), support = own(fixtureFace(k, fixtureNet(false)))
+    const seed = (selected: boolean) => {
+      const net = fixtureNet(selected)
+      return refine ? insertFixtureKnot(k, net, selected ? 3.5 : 11.5, own) : net
+    }
+    const selected = own(fixtureFace(k, seed(true))), support = own(fixtureFace(k, seed(false)))
     const selectedBrep = k.toBREP(selected), supportBrep = k.toBREP(support)
-    const net = readNet(k, selected), supportNet = readNet(k, support)
+    const sourceNet = readNet(k, selected), sourceSupportNet = readNet(k, support)
     if ([selected, support].some(face => k.shapeOrientation(face) !== 'forward'))
       fail('orientamento iniziale delle facce inatteso')
-    const request = { net, supportNet, edge: 'V1', supportEdge: 'V0', scale: 0.5 } as const
-    const proposal = proposeExperimentalPeriodicTangency(request)
-    const replay = verifyExperimentalPeriodicTangencyReplay(k, selected, request, proposal.net)
-    const before = inspectShell(own(k.sew([own(k.copy(selected)), own(k.copy(support))], tolerance)), net, supportNet)
-    const edited = own(fixtureFace(k, proposal.net))
-    const result = own(k.sew([edited, own(k.copy(support))], tolerance))
-    const after = inspectShell(result, net, supportNet)
+    if (refine) {
+      checkFace(selected, sourceNet)
+      checkFace(support, sourceSupportNet)
+    }
+    const before = inspectShell(own(k.sew([own(k.copy(selected)), own(k.copy(support))], tolerance)), sourceNet, sourceSupportNet)
+    const mismatchedBasesRefused = refine && checkUnrefinedProposal(sourceNet, sourceSupportNet)
+    const common = refine ? refineExperimentalPeriodicSurfaceU(k, sourceNet, sourceSupportNet) :
+      { left: sourceNet, right: sourceSupportNet }
+    const net = common.left, supportNet = common.right
     const sameNet = (a: Net, b: Net) => encodeNet(a) === encodeNet(b)
+    const refinedSelected = refine ? own(fixtureFace(k, net)) : selected
+    const refinedSupport = refine ? own(fixtureFace(k, supportNet)) : support
+    const compareRefined = (source: ShapeHandle, refined: ShapeHandle, n: Net) => {
+      checkFace(refined, n)
+      if (!sameNet(readNet(k, refined), n)) fail('coefficienti della base comune modificati in BREP')
+      let maxGapMm = 0, maxNormalSin = 0, samples = 0
+      for (const u of sampleU(n.ku)) for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+        const v = n.kv[0] + (n.kv.at(-1)! - n.kv[0]) * fraction
+        maxGapMm = Math.max(maxGapMm, gap(k.pointOnSurface(source, u, v), k.pointOnSurface(refined, u, v)))
+        maxNormalSin = Math.max(maxNormalSin, normalSin(k.surfaceNormal(source, u, v), k.surfaceNormal(refined, u, v)))
+        samples++
+      }
+      if (!(maxGapMm <= tolerance && maxNormalSin <= tolerance)) fail('geometria campionata modificata dal raffinamento')
+      return { samples, maxGapMm, maxNormalSin }
+    }
+    const refinement = refine ? {
+      mismatchedBasesRefused,
+      sourceKnots: [sourceNet.ku, sourceSupportNet.ku],
+      commonKnots: net.ku,
+      commonMultiplicities: net.mu,
+      selected: compareRefined(selected, refinedSelected, net),
+      support: compareRefined(support, refinedSupport, supportNet),
+    } : undefined
+    const request = { net, supportNet, ...requestParameters }
+    const proposal = proposeExperimentalPeriodicTangency(request)
+    const replay = verifyExperimentalPeriodicTangencyReplay(k, refinedSelected, request, proposal.net)
+    const edited = own(fixtureFace(k, proposal.net))
+    const result = own(k.sew([edited, own(k.copy(refinedSupport))], tolerance))
+    const after = inspectShell(result, net, supportNet)
     if (!sameNet(readNet(k, after.selected), proposal.net) || !sameNet(readNet(k, after.support), supportNet))
       fail('coefficienti modificati durante la costruzione del guscio')
     const step = k.exportStep(result)
@@ -224,7 +304,7 @@ export function runExperimentalPeriodicTangencyCadFixture(k: OcctKernel) {
     if (k.toBREP(selected) !== selectedBrep || k.toBREP(support) !== supportBrep)
       fail('facce sorgente modificate')
     return { scope: 'synthetic-two-face-open-shell' as const, sourceFacesPreserved: true as const,
-      globalG1Certified: false as const, replay, step, maxStepSurfaceGapMm,
+      globalG1Certified: false as const, ...(refinement && { refinement }), replay, step, maxStepSurfaceGapMm,
       before: before.seam, after: after.seam, reopened: reopened.seam }
   } finally {
     handles.reverse().forEach(handle => k.release(handle))
