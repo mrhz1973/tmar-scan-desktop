@@ -120,6 +120,12 @@ are checked, with geometry measured at samples. STEP pcurve trimming and
 general solids remain unqualified. Inputs requiring rounded affine knots are
 rejected; this method has not been applied to the tube.
 
+A separate affine knot mapper rounds to nearest binary64, refuses collisions,
+and returns an outward-rounded bound on parameter error for the knots and their
+real piecewise-linear interpolant. Independent exact-fraction tests cover the
+rounding. It does not bound CAD geometry, floating-point interpolation, knot
+union with native data, or permit the existing exact-mapping guard to be bypassed.
+
 An isolated follow-up searches seam phase, parameter direction and the local
 quadratic maps automatically for polynomial quadratic/quartic periodic curves
 with matching Bezier-span counts and knot-to-knot correspondence. It compares
