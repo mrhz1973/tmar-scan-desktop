@@ -5,6 +5,7 @@ import wasmUrl from 'occt-wasm/dist/occt-wasm.wasm?url'
 import type { Net, Point } from './brep'
 import type { KnotInsertion } from './refineClampedNet'
 import type { StripMove } from './sheetExtension'
+import type { SheetEdgeVisibilityCandidate } from './sheetEdgeVisibilityCad'
 import { previewPreparedCylinder } from './cylinderPreview'
 import { evaluatePreparedCylinder } from './cylinderEvaluation'
 import { cylinderAnchorFromPick, resolveCylinderAnchor } from './cylinderNotes'
@@ -40,6 +41,7 @@ export type Request = { id: number } & (
   | ({ action: 'publishG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedValidationRequest)
   | ({ action: 'evaluateG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedEvaluationRequest)
   | { action: 'sheetEdges'; previewRevision: number }
+  | { action: 'verifySheetEdgeVisibility'; previewRevision:number; selection:{face:number;refinements:KnotInsertion[]}; candidates:SheetEdgeVisibilityCandidate[]; origin:Point; parallelDirection?:Point }
   | { action: 'duplicateSheetEdge'; previewRevision: number; edge: number; delta: Point; previous?: StripMove[]; path?: Point[] }
   | { action: 'finalFaceWitness'; previewRevision: number }
   | { action: 'duplicateCadFace'; previewRevision: number; selection: {face:number;refinements:KnotInsertion[]} }
@@ -201,6 +203,12 @@ self.onmessage = (event: MessageEvent<Request>) => {
           break
         }
         case 'sheetEdges': result = editor.sheetEdges(req.previewRevision); break
+        case 'verifySheetEdgeVisibility':
+          if (cylinder || adaptiveSelectionKey !== null || !req.selection || selectionKey === null ||
+              selectionKey !== JSON.stringify(req.selection))
+            throw new Error('Selezione del bordo libero scaduta o non supportata.')
+          result = editor.verifySheetEdgeVisibility(req.previewRevision,req.candidates,req.origin,req.parallelDirection)
+          break
         case 'duplicateSheetEdge': result = editor.duplicateSheetEdge(req.previewRevision,req.edge,req.delta,req.previous,req.path); break
         case 'finalFaceWitness': result = editor.finalFaceWitness(req.previewRevision); break
         case 'duplicateCadFace':

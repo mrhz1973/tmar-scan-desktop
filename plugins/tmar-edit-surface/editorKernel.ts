@@ -11,6 +11,7 @@ import { readAdaptiveLockedRecipe, type AdaptiveLockedRecipe } from './adaptiveL
 import { validateAdaptiveLocks, type AdaptiveLocks } from './adaptiveLockSnapshot'
 
 import { extendSheet, sheetEdgePaths, type StripMove } from './sheetExtension'
+import { queryVisibleSheetEdge, type SheetEdgeVisibilityCandidate } from './sheetEdgeVisibilityCad'
 import { rebuildFreeBoundary } from './freeBoundary'
 import {queryBoundaryVisibilityCad,type BoundaryCadCandidate} from './boundaryVisibilityCad'
 import { queryWholeFaceRayPickCad, type WholeFaceRayPickInput } from './wholeFaceRayPickCad'
@@ -1362,6 +1363,11 @@ export class SurfaceEditorKernel {
     try {return read(sheet)} finally {this.kernel.release(sheet)}
   }
   sheetEdges(revision:number) { return this.withSheet(revision,s=>sheetEdgePaths(this.kernel,s)) }
+  verifySheetEdgeVisibility(revision:number, candidates:readonly SheetEdgeVisibilityCandidate[], origin:Point, parallelDirection?:Point) {
+    if (this.adaptiveSelection) throw new Error('Preparazione non qualificata per la verifica del bordo libero.')
+    const pick = this.withSheet(revision, sheet => queryVisibleSheetEdge(this.kernel,sheet,candidates,origin,parallelDirection))
+    return { face:this.chosen, previewRevision:revision, pick }
+  }
   duplicateSheetEdge(revision:number,edge:number,delta:Point,previous:StripMove[]=[],expectedPath?:Point[]) {
     return this.withSheet(revision,s=>this.extendSequence(s,edge,delta,previous,expectedPath))
   }
