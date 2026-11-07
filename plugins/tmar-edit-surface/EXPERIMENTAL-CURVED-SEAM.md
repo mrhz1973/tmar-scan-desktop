@@ -126,6 +126,13 @@ real piecewise-linear interpolant. Independent exact-fraction tests cover the
 rounding. It does not bound CAD geometry, floating-point interpolation, knot
 union with native data, or permit the existing exact-mapping guard to be bypassed.
 
+The companion geometry bound applies a derivative-coefficient hull to the
+same ideal polynomial periodic curve evaluated at the exact affine map and
+the real piecewise-linear map through rounded knots. It rejects sparse data
+and nets with fewer poles than degree. It does not bound the result of
+changing knots, OCCT evaluation, refinement, trimming or solid topology; it
+does not authorize a relaxed exact-mapping guard.
+
 An isolated follow-up searches seam phase, parameter direction and the local
 quadratic maps automatically for polynomial quadratic/quartic periodic curves
 with matching Bezier-span counts and knot-to-knot correspondence. It compares
