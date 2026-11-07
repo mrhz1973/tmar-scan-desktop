@@ -116,6 +116,13 @@ target is refused and no proposal is returned on an inconclusive seam bound.
 The original C1 guard remains in place. This preserves seam position only in
 the coefficient model and does not validate pcurves, trims, G1 or a solid.
 
+A synthetic quintic-side fit fixture exercises different nested U bases and
+opposite traversal, then checks the stored candidate on separate samples and
+both seam sides. Incompatible seam targets are refused even when unconstrained
+fit residuals are low. This demonstrates a narrow representable case; general
+targets require fitting with the seam coefficient constrained during the solve.
+The sampled joint normals are not a continuous interior regularity proof.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
