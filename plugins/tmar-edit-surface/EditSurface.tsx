@@ -20,6 +20,7 @@ import { dragDirection, type DragMode } from './localFrame'
 import { mirrorPartners, mirrorEdit } from './symmetry'
 import { selectNetPoints, type NetSelectionMode } from './netSelection'
 import { SurfaceDraft } from './surfaceDraft'
+import { parseNumericInput } from './numericInput'
 import './surface.css'
 const NO_HIDDEN_POLES: number[] = []
 
@@ -105,7 +106,10 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
   const setSourcePreview = (value: Preview | null) => { session.sourcePreview = value; setSourcePreviewState(value) }
   const preview = draftState.preview ?? sourcePreview
   const [axis, setAxis] = useState(2)
-  const [distance, setDistance] = useState(1), [factor, setFactor] = useState(1.1)
+  const [distanceText, setDistanceText] = useState('1')
+  const [factorText, setFactorText] = useState('1.1')
+  const distanceValue = parseNumericInput(distanceText)
+  const factorValue = parseNumericInput(factorText)
   const [dragStrength, setDragStrength] = useState(1), [smoothStrength, setSmoothStrength] = useState(0.5)
   const [dragMode, setDragMode] = useState<DragMode>('local')
   const [selectionMode, setSelectionMode] = useState<NetSelectionMode>('auto')
@@ -533,13 +537,17 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
         <div className="es-row"><button onClick={() => draft.setSelection(net.poles.flatMap((_, i) => locked.includes(i) ? [] : [i]))}>Seleziona liberi</button><button onClick={() => draft.setSelection([])}>Nessuno</button></div>
         <p data-test="surface-selection">{selected.length} selezionati · {editable.length} modificabili</p>
         <div className="es-row"><button disabled={busy || !selected.length} onClick={() => draft.setLocks([...locks, ...selected])}>Blocca punti</button><button disabled={busy || !selected.length} onClick={() => draft.setLocks(locks.filter(i => !selected.includes(i)))}>Sblocca punti</button></div>
-        <label>Spostamento · mm<input type="number" step="0.1" value={distance} data-test="surface-distance" onChange={e => setDistance(Number(e.target.value))} /></label>
-        <button data-test="surface-move" disabled={busy || !moveDirection || !Number.isFinite(distance)} onClick={() => { if (moveDirection) transform(p => p.map((x, i) => x + moveDirection[i] * distance) as Point) }}>Sposta lungo {axisNames[axis]}</button>
+        <label>Spostamento · mm<input type="text" inputMode="decimal" value={distanceText} data-test="surface-distance" onChange={e => {
+          setDistanceText(e.target.value)
+        }} onBlur={() => { if (distanceText.trim() === '-') setDistanceText('') }} /></label>
+        <button data-test="surface-move" disabled={busy || !moveDirection || distanceValue === null} onClick={() => { if (moveDirection && distanceValue !== null) transform(p => p.map((x, i) => x + moveDirection[i] * distanceValue) as Point) }}>Sposta lungo {axisNames[axis]}</button>
         <button disabled={busy || !editable.length} onClick={flatten}>Spiana sul piano dei tre angoli iniziali</button>
         <label>Intensità levigatura · {Math.round(smoothStrength * 100)}%<input data-test="surface-smooth-strength" type="range" min="0.05" max="1" step="0.05" value={smoothStrength} onChange={e => setSmoothStrength(Number(e.target.value))} /></label>
         <button data-test="surface-smooth" disabled={busy || !editable.length} onClick={() => transform((p, i, n) => { const row = Math.floor(i / n.nv), col = i % n.nv, neighbors = [row > 0 ? i - n.nv : -1, row + 1 < n.nu ? i + n.nv : -1, col > 0 ? i - 1 : -1, col + 1 < n.nv ? i + 1 : -1].filter(j => j >= 0); return p.map((x, d) => x * (1 - smoothStrength) + neighbors.reduce((s, j) => s + n.poles[j][d], 0) / neighbors.length * smoothStrength) as Point })}>Levigatura locale · {Math.round(smoothStrength * 100)}%</button>
-        <label>Fattore stiramento<input type="number" step="0.1" min="0.1" max="3" value={factor} onChange={e => setFactor(Number(e.target.value))} /></label>
-        <button disabled={busy || !editable.length || !Number.isFinite(factor) || factor <= 0 || factor > 3} onClick={() => { const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factor : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
+        <label>Fattore stiramento<input type="text" inputMode="decimal" value={factorText} onChange={e => {
+          setFactorText(e.target.value)
+        }} onBlur={() => { if (factorText.trim() === '-') setFactorText('') }} /></label>
+        <button disabled={busy || !editable.length || factorValue === null || factorValue <= 0 || factorValue > 3} onClick={() => { if (factorValue === null || factorValue <= 0 || factorValue > 3) return; const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factorValue : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
         <div className="es-row"><button data-test="surface-undo" disabled={busy || !draftState.canUndo} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || !draftState.canRedo} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => draft.restoreOriginal()}>Ripristina</button></div>
       </>}
     </aside><main><SurfaceViewport mirrorAxis={mirrorAxis} mirrorOffset={mirrorOffset} mirrorPartners={partners} strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} stripBlocked={()=>stripPending.current} directStrip={directEdges && directEdges.revision===preview?.previewRevision && net===validNet && !busy && !calculating && !freeBoundary && !placingNote && !notes.length && !stripPaths ? {paths:directEdges.paths,axis,revision:directEdges.revision,begin:beginDirectStrip,abort:abortDirectStrip,unavailable:()=>setError('Direzione allineata alla vista: ruota il modello o scegli un altro asse.'),change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} hiddenPoles={faces[face]?.hiddenPoles ?? NO_HIDDEN_POLES} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} snap={snap} snapDistance={snapDistance} referenceBody={referenceBody} onReferenceCount={setReferenceCount} registerCancel={fn=>{cancelGesture.current=fn}} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => draft.setSelection(selectNetPoints([...draft.getSnapshot().selected], ids, multi))} onDrag={changePoles} />

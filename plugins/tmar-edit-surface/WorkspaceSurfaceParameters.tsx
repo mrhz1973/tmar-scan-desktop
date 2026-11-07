@@ -6,15 +6,14 @@ import type { NetSelectionMode } from './netSelection'
 import { hasSurfaceZebra } from './SurfaceViewport'
 import { formatTangentSpanDisplacement } from './tangentSpan'
 import { wholeBoundaryIndices } from './wholeBoundary'
+import { parseNumericInput } from './numericInput'
 import './workspaceSurface.css'
 
 /** The host owns Apply and Cancel; this panel edits only the session draft. */
 export function WorkspaceSurfaceParameters({ controller }: { controller: WorkspaceSurfaceSession }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getPanelState, controller.getPanelState)
   const [error, setError] = useState('')
-  const [distance, setDistance] = useState(0.1)
   const [smooth, setSmooth] = useState(0.5)
-  const [factor, setFactor] = useState(1.1)
   const [pointBudget, setPointBudget] = useState(1)
   const [multipleTargets,setMultipleTargets]=useState(false)
   const panelRef=useRef<HTMLDivElement>(null),removedPair=useRef<number|null>(null)
@@ -40,6 +39,10 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const [wholeBoundary,setWholeBoundary] = useState<WholeBoundarySide>('U0')
   const [boundaryAxis,setBoundaryAxis] = useState<0|1|2>(2)
   const [boundaryDistance,setBoundaryDistance] = useState(.1)
+  const [distanceText,setDistanceText] = useState('0.1')
+  const [factorText,setFactorText] = useState('1.1')
+  const distanceValue=parseNumericInput(distanceText)
+  const factorValue=parseNumericInput(factorText)
   const [stripDistance, setStripDistance] = useState(0.1)
   const [g1Pending, setG1Pending] = useState<'load' | 'apply' | null>(null)
   const [g1Error, setG1Error] = useState('')
@@ -394,10 +397,11 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <button type="button" disabled={disabled} onClick={() => attempt(() => controller.clearSelection())}>Nessuno</button></div>
       <div className="row"><button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(true))}>Blocca punti</button>
         <button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(false))}>Sblocca punti</button></div>
-      <label>Spostamento · mm<input data-test="surface-distance" type="number" step="0.1" value={Number.isFinite(distance) ? distance : ''}
-        onChange={e => setDistance(e.target.valueAsNumber)} disabled={disabled} /></label>
-      <button type="button" data-test="surface-move" disabled={disabled || state.symmetryBlocked || !editable.length || !Number.isFinite(distance)}
-        onClick={() => attempt(() => controller.moveSelected(distance))}>Sposta lungo {axisNames[state.axis]}</button>
+      <label>Spostamento · mm<input data-test="surface-distance" type="text" inputMode="decimal" value={distanceText}
+        onChange={e => setDistanceText(e.target.value)}
+        onBlur={() => { if(distanceText.trim()==='-')setDistanceText('') }} disabled={disabled} /></label>
+      <button type="button" data-test="surface-move" disabled={disabled || state.symmetryBlocked || !editable.length || distanceValue===null}
+        onClick={() => { if(distanceValue!==null)attempt(() => controller.moveSelected(distanceValue)) }}>Sposta lungo {axisNames[state.axis]}</button>
       <button type="button" disabled={disabled || state.symmetryBlocked || !editable.length} onClick={() => attempt(() => controller.flattenSelected())}>Spiana i poli sul piano originale</button>
       <button type="button" data-test="surface-point-tangent-plane" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint}
         onClick={() => attempt(() => controller.beginTangentPlane())}>Spiana i poli sul piano tangente nel punto</button>
@@ -422,11 +426,12 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         disabled={disabled} onChange={e => setSmooth(Number(e.target.value))} /></label>
       <button type="button" data-test="surface-smooth" disabled={disabled || state.symmetryBlocked || !editable.length}
         onClick={() => attempt(() => controller.smoothSelected(smooth))}>Leviga i punti selezionati</button>
-      <label>Fattore di stiramento<input data-test="surface-stretch-factor" type="number" min="0.1" max="3" step="0.1" value={Number.isFinite(factor) ? factor : ''}
-        disabled={disabled} onChange={e => setFactor(e.target.valueAsNumber)} /></label>
+      <label>Fattore di stiramento<input data-test="surface-stretch-factor" type="text" inputMode="decimal" value={factorText}
+        disabled={disabled} onChange={e => setFactorText(e.target.value)}
+        onBlur={() => { if(factorText.trim()==='-')setFactorText('') }} /></label>
       <p>Lo stiramento usa il centro del reticolo. In modalità locale segue la direzione del primo punto selezionato.</p>
-      <button type="button" data-test="surface-stretch" disabled={disabled || state.symmetryBlocked || !editable.length || !(factor > 0 && factor <= 3)}
-        onClick={() => attempt(() => controller.stretchSelected(factor))}>Stira lungo {axisNames[state.axis]}</button>
+      <button type="button" data-test="surface-stretch" disabled={disabled || state.symmetryBlocked || !editable.length || factorValue===null || !(factorValue>0&&factorValue<=3)}
+        onClick={() => { if(factorValue!==null&&factorValue>0&&factorValue<=3)attempt(() => controller.stretchSelected(factorValue)) }}>Stira lungo {axisNames[state.axis]}</button>
       <div className="row"><button type="button" data-test="surface-undo" disabled={disabled || !state.canUndo} onClick={() => attempt(() => controller.undo())}>Annulla modifica</button>
         <button type="button" data-test="surface-redo" disabled={disabled || !state.canRedo} onClick={() => attempt(() => controller.redo())}>Ripeti</button>
         <button type="button" disabled={disabled || tangencyActive} onClick={() => attempt(() => controller.restoreOriginal())}>Ripristina</button></div>
