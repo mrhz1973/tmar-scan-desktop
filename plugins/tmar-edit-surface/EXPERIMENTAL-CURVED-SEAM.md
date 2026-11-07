@@ -175,6 +175,14 @@ remains above the test budget on independent holdouts. Matching the fitted
 coefficients alone is therefore not evidence of matching the support; the
 support residual must be checked separately.
 
+An alternative experimental cubic strip has nine V rows. It changes only the
+rows adjacent to the boundaries, using each end span's own width, while
+preserving the boundary and central rows. In one analytic synthetic fixture,
+the corresponding four-row proposal reverses the normal at the middle while
+the nine-row proposal retains its orientation throughout the domain. This
+does not establish that localized edits are always regular or safe, nor does
+it qualify any real CAD solid.
+
 An isolated follow-up searches seam phase, parameter direction and the local
 quadratic maps automatically for polynomial quadratic/quartic periodic curves
 with matching Bezier-span counts and knot-to-knot correspondence. It compares
