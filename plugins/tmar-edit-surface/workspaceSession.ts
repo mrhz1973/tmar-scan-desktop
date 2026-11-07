@@ -116,6 +116,9 @@ export interface WorkspaceSurfacePanelState {
   readonly directStripAxis: 0 | 1 | 2
   readonly directStripError: string | null
   readonly canExportStep: boolean
+  readonly canDuplicateCadFace: boolean
+  readonly duplicateCadFace: boolean
+  readonly duplicateCadFaceStale: boolean
   readonly strip: WorkspaceStripViewState | null
 }
 
@@ -143,7 +146,8 @@ interface StripMode {
 interface DirectIdentity { readonly revision:number; readonly selectionEpoch:number; readonly face:number; readonly faceCount:number; readonly net:Net }
 interface DirectCache extends DirectIdentity { readonly paths:readonly (readonly Point[])[] }
 interface DirectPending extends DirectIdentity { readonly controller:AbortController; readonly generation:number; readonly key:string }
-type Frozen = { readonly ticketKey: string; readonly operationId: string; readonly stamp: PreviewStamp; readonly source: SourceBinding; readonly stripResult: StripResult | null; readonly notes?: readonly Note[]; readonly notesRevision?: number; preparing: boolean }
+type FaceCopyIntent = { readonly stamp: string; readonly previewRevision: number }
+type Frozen = { readonly faceCopy?: FaceCopyIntent; readonly ticketKey: string; readonly operationId: string; readonly stamp: PreviewStamp; readonly source: SourceBinding; readonly stripResult: StripResult | null; readonly notes?: readonly Note[]; readonly notesRevision?: number; preparing: boolean }
 type Options = {
   /** Injected only for a controlled worker in tests; the session owns this runtime. */
   runtime?: SurfaceRuntime
@@ -256,6 +260,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private mirrorOffset = 0
   private stripes: WorkspaceStripeSettings | null = null
   private placingNote = false
+  private faceCopy: FaceCopyIntent | null = null
   private notes: readonly Note[] = Object.freeze([])
   private notesRevision = 0
   private resolvingNotes = false
@@ -367,9 +372,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (index === this.face && this.draft.getSnapshot().net) return
     if (this.draft.getSnapshot().calculating) throw new Error('Attendi la verifica CAD prima di cambiare faccia.')
     const dirty = this.snapshot.dirty
-    const prompt = this.notes.length
-      ? 'Cambiare faccia e scartare le modifiche e le note in bozza?'
-      : 'Cambiare faccia e scartare la modifica corrente?'
+    const prompt = this.faceCopy
+      ? 'Cambiare faccia e scartare la scelta Duplica faccia CAD e l’eventuale bozza corrente?'
+      : this.notes.length ? 'Cambiare faccia e scartare le modifiche e le note in bozza?'
+        : 'Cambiare faccia e scartare la modifica corrente?'
     if (dirty && !confirmDiscard(prompt)) return
     await this.chooseFace(index, dirty)
   }
@@ -419,6 +425,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
           refinements: 'selection' in picked ? picked.selection.refinements : 'refinements' in picked ? picked.refinements : [], face:index,
           ...('selection' in picked ? {adaptiveSelection:picked.selection,experimentalAdaptiveLocks:true} : {}) })
         if (this.notes.length) { this.advanceNotesRevision(); this.notes = Object.freeze([]) }
+        this.faceCopy = null
         this.selectionEpoch++; this.face = index; this.busy = false
         this.placingNote = false; this.failedNoteRevision = null; this.failedNoteSet = null
         if(picked.session !== null) this.message = 'Cilindro sperimentale: trascina i punti disponibili, poi verifica la geometria CAD prima di aggiungere note o applicare.'
@@ -1391,7 +1398,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   async prepareHistoryRecipe(): Promise<PreparedHistoryRecipe> {
     this.assertMutable()
     const before = this.draft.getSnapshot()
-    if (this.gesture !== 'idle' || this.placingNote || this.notes.length || this.strip || this.stripPending ||
+    if (this.faceCopy || this.gesture !== 'idle' || this.placingNote || this.notes.length || this.strip || this.stripPending ||
         this.snapshot.validation.kind !== 'valid' || !before.net || before.net !== before.committedNet ||
         before.validNet !== before.net || before.calculating || before.cylinderSession !== null)
       throw new Error('Termina le operazioni e verifica la bozza senza note prima di preparare la ricetta.')
@@ -1705,6 +1712,21 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     } finally {if(!this.disposed){this.busy=false;this.refresh();this.resolveNotes()}}
   }
 
+  setDuplicateCadFace(value: boolean): void {
+    this.assertMutable()
+    if (this.gesture !== 'idle') throw new Error('Termina prima il trascinamento.')
+    const validation = this.snapshot.validation
+    const revision = this.draft.getSnapshot().preview?.previewRevision
+    if (value === !!this.faceCopy) return
+    if (value && (!this.panel.canDuplicateCadFace || validation.kind !== 'valid' || revision === undefined))
+      throw new Error('Scegli una faccia naturale di un solido e attendi una preview CAD valida, senza note.')
+    this.draftEpoch++
+    this.faceCopy = value && validation.kind === 'valid' && revision !== undefined
+      ? { stamp: stampKey({ ...validation.stamp, draftEpoch:this.draftEpoch }), previewRevision:revision }
+      : null
+    this.refresh()
+  }
+
   freeze(ticket: ApplyTicket): () => void {
     this.assertLive()
     if (this.frozen || this.mutating || this.busy || this.placingNote || this.gesture !== 'idle' || this.notes.length)
@@ -1715,7 +1737,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       throw new Error('Il ticket non corrisponde alla bozza convalidata.')
     const frozen: Frozen = { ticketKey: ticketKey(ticket), operationId: ticket.operationId,
       source: Object.freeze({ ...this.source }), stamp: Object.freeze({ ...ticket.stamp }),
-      stripResult: this.strip?.frames[this.strip.at] ?? null, preparing: false }
+      stripResult: this.strip?.frames[this.strip.at] ?? null, faceCopy: this.faceCopy ?? undefined, preparing: false }
     this.frozen = frozen // Set synchronously, before notifying any listener.
     this.refresh()
     return () => { if (this.frozen === frozen) { this.frozen = null; if (!this.disposed) this.refresh() } }
@@ -1755,14 +1777,28 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     frozen.preparing = true
     try {
       const cylinder = this.currentValidatedCylinder()
-      const result = cylinder ? {step:cylinder.step} : frozen.stripResult ?? await this.draft.evaluateForExport()
+      const result = frozen.faceCopy ? await this.prepareDuplicateCadFace(frozen.faceCopy, signal)
+        : cylinder ? {step:cylinder.step} : frozen.stripResult ?? await this.draft.evaluateForExport()
       this.assertFrozen(ticket, frozen, signal)
       if (!result.step.trim()) throw new Error('Esportazione STEP vuota.')
       const step = new TextEncoder().encode(result.step)
       this.assertFrozen(ticket, frozen, signal)
       return { kind: 'cad-copy', operationId: frozen.operationId, source: frozen.source, stamp: frozen.stamp,
-        units: 'mm', coordinateFrame: 'part', name: 'superficie-modificata.step', step, draftNoteCount: 0 }
+        units: 'mm', coordinateFrame: 'part', name: frozen.faceCopy ? 'faccia-duplicata.step' : 'superficie-modificata.step', step, draftNoteCount: 0 }
     } finally { frozen.preparing = false }
+  }
+
+  private async prepareDuplicateCadFace(intent: FaceCopyIntent, signal: AbortSignal): Promise<{step:string}> {
+    const face = this.face
+    const refinements = this.draft.getSnapshot().refinements.map(knot => ({...knot}))
+    const result = await this.runtime.worker.ask<{ face:number; selectionRevision:number; previewRevision:number; step:string }>({
+      action:'duplicateCadFace', selection:{ face, refinements }, previewRevision:intent.previewRevision,
+    }, signal)
+    if (result?.face !== face || result.previewRevision !== intent.previewRevision ||
+        !Number.isSafeInteger(result.selectionRevision) || result.selectionRevision <= 0 ||
+        typeof result.step !== 'string' || !result.step.trim())
+      throw new Error('Il motore CAD non ha restituito la copia della faccia selezionata.')
+    return result
   }
 
   /** Prepare a single-face witness and every note against the final STEP evaluation. */
@@ -1818,6 +1854,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   /** Produce a local STEP download from the current validated draft, without publishing it. */
   async exportStep(): Promise<{ readonly name: string; readonly step: string }> {
     this.assertMutable()
+    if (this.faceCopy) throw new Error('Togli la spunta a Duplica faccia CAD prima di esportare il corpo.')
     const initial = this.snapshot.validation
     if (initial.kind !== 'valid' || this.gesture !== 'idle' || this.stripPending || this.placingNote || this.notes.length)
       throw new Error(this.notes.length || this.placingNote
@@ -1903,7 +1940,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   private assertFrozen(ticket: ApplyTicket, frozen: Frozen, signal: AbortSignal): void {
     abortIf(signal); this.assertLive(); abortIf(signal)
-    if (this.frozen !== frozen || ticketKey(ticket) !== frozen.ticketKey || this.notes.length ||
+    if (this.frozen !== frozen || this.faceCopy !== (frozen.faceCopy ?? null) || ticketKey(ticket) !== frozen.ticketKey || this.notes.length ||
         this.busy || this.gesture !== 'idle' || this.snapshot.validation.kind !== 'valid' ||
         (this.strip?.frames[this.strip.at] ?? null) !== frozen.stripResult || (!!this.strip !== !!frozen.stripResult) ||
         stampKey(this.snapshot.validation.stamp) !== stampKey(frozen.stamp))
@@ -2111,11 +2148,22 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const notesPending = checkNotes && this.notes.some(note => note.revision !== noteRevision)
     const noteResolutionError = noteRevision !== undefined && this.failedNoteRevision === noteRevision &&
       this.failedNoteSet === this.notes
-    const validation = geometryValidation.kind !== 'valid' ? geometryValidation : noteMessage
+    const noteValidation = geometryValidation.kind !== 'valid' ? geometryValidation : noteMessage
       ? { kind: 'invalid' as const, stamp, message: noteMessage }
       : notesPending ? { kind: 'pending' as const, wanted: stamp } : geometryValidation
+    const adaptive = !!this.runtime.history.current?.preparation?.adaptiveSelection
+    const canDuplicateCadFace = !adaptive && !this.disposed && !this.busy && !this.notes.length && !this.placingNote &&
+      !strip && !this.stripPending && this.gesture === 'idle' && noteValidation.kind === 'valid' &&
+      d.cylinderSession === null && Number.isSafeInteger(d.preview?.previewRevision) && d.preview!.previewRevision! > 0 &&
+      this.faces[this.face]?.canDuplicateCadFace === true
+    const duplicateCadFaceStale = !!this.faceCopy && (!canDuplicateCadFace || this.faceCopy.stamp !== stampKey(stamp) ||
+      this.faceCopy.previewRevision !== d.preview?.previewRevision)
+    // An obsolete output choice must never silently publish the entire body.
+    const validation = duplicateCadFaceStale && noteValidation.kind === 'valid'
+      ? { kind:'invalid' as const, stamp, message:'Preview cambiata. Deseleziona Duplica faccia CAD e scegli di nuovo cosa applicare.' }
+      : noteValidation
     const original = d.originalNet
-    const dirty = !!this.notes.length || !!strip?.frames.some(Boolean) || d.canUndo || !!(d.net && d.net !== d.committedNet) ||
+    const dirty = !!this.faceCopy || !!this.notes.length || !!strip?.frames.some(Boolean) || d.canUndo || !!(d.net && d.net !== d.committedNet) ||
       !!(d.net && original && !d.canUndo && JSON.stringify(d.net.poles) !== JSON.stringify(original.poles))
     let cached = this.lockCache
     if (!cached || cached.net !== d.net || cached.locks !== d.locks || cached.trim !== d.trimLocks ||
@@ -2151,7 +2199,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const canBeginStrip = !tangency && !strip && !this.stripPending && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
       this.gesture === 'idle' && this.initialSheetFaceCount(d) !== null &&
       validation.kind === 'valid'
-    const canExportStep = !this.disposed && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
+    const canExportStep = !this.faceCopy && !this.disposed && !this.busy && !this.frozen && !this.notes.length && !this.placingNote &&
       this.gesture === 'idle' && !this.stripPending && validation.kind === 'valid' &&
       (!strip || (!!stripResult && !strip.error))
     this.syncDirectCache()
@@ -2164,7 +2212,6 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       canUndo, canRedo, undoLabel: canUndo ? (strip ? 'Annulla striscia' : 'Annulla modifica superficie') : null,
       redoLabel: canRedo ? (strip ? 'Ripeti striscia' : 'Ripeti modifica superficie') : null, historyRevision: this.historyRevision,
       draftNoteCount: this.notes.length, notesRevision:this.notesRevision, message })
-    const adaptive = !!this.runtime.history.current?.preparation?.adaptiveSelection
     const canMoveWholeBoundary=!adaptive && !this.disposed && !this.busy && !this.frozen && !this.symmetry && !this.placingNote &&
       !this.surfaceTarget && !this.notes.length && !strip && !this.stripPending && this.gesture==='idle' && this.faces.length===1 &&
       !!face?.freeBoundary && d.freeBoundary && !tangency && d.cylinderSession===null && !!d.net &&
@@ -2201,7 +2248,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency,
       placingNote: this.placingNote, canPlaceNote:validation.kind==='valid' && this.gesture==='idle' && !this.busy && !this.frozen, notes: this.notes, annotatedCopyAvailable, noteResolutionError, gesture: this.gesture, canBeginStrip, directStripAxis:this.directStripAxis,
       directStripError,
-      canExportStep, strip:stripView })
+      canExportStep, canDuplicateCadFace:canDuplicateCadFace && !this.frozen, duplicateCadFace:!!this.faceCopy, duplicateCadFaceStale, strip:stripView })
     this.viewState = Object.freeze({ reticleStamp: current, net: strip ? null : d.net, preview, provisionalPreview:d.cylinderPreview?.faceMeshes ? {kind:'provisional' as const,faceMeshes:d.cylinderPreview.faceMeshes} : null, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
       hiddenPoles: d.hiddenPoles, selectionMode: this.selectionMode, navigationOnly: this.navigationOnly, dragMode: this.dragMode,
       wholeBoundaryDrag:this.wholeBoundaryDrag ? {side:this.wholeBoundaryDrag.side,canStart:canMoveWholeBoundary}:null,
@@ -2267,7 +2314,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.notes = Object.freeze([]); this.failedNoteSet = null; this.faces = Object.freeze([]); this.sourcePreview = null; this.symmetryCache = null
     this.g1Candidates = Object.freeze([]); this.g1Choice = null; this.g1Basis = null; this.g1SearchNotice = null; this.g1DraftIdentity = null
     this.face = -1; this.busy = false; this.gesture = 'idle'; this.gestureNet = null
-    this.placingNote = false; this.message = 'Editor chiuso.'
+    this.placingNote = false; this.faceCopy = null; this.message = 'Editor chiuso.'
     try { this.refresh() } catch (error) { failure ??= error }
     this.listeners.clear()
     if (failure) throw failure

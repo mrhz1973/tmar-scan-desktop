@@ -21,7 +21,7 @@ import { proposePlaneTangency, validatePlaneTangencyResult, validatePlaneTangenc
 import { listCompatibleCurvedSupportCandidates, resolveCompatibleCurvedSupportCandidate, type CompatibleCurvedSupportCandidate, type ResolvedCompatibleCurvedSupport } from './compatibleCurvedSupportTopology'
 import { proposeCompatibleCurvedTangency, validateCompatibleCurvedTangencyResult, type CompatibleCurvedTangencyRequest, type CompatibleCurvedTangencyValidation } from './compatibleCurvedTangency'
 
-export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[]; experimentalCylinder?: boolean }
+export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; canDuplicateCadFace?: boolean; trimLocks: number[]; hiddenPoles: number[]; experimentalCylinder?: boolean }
 export interface G1SupportCandidates { stamp: G1SourceStamp; candidates: G1SupportCandidate[] }
 export interface G1CurvedSupportCandidates { stamp: G1SourceStamp; candidates: CompatibleCurvedSupportCandidate[] }
 export interface G1CurvedSupportGeometry {
@@ -254,7 +254,8 @@ export class SurfaceEditorKernel {
       if(reason && k.surfaceType(face)==='cylinder') {
         try {assertSimpleCylinderSource(k,this.source!,face);experimentalCylinder=true} catch { /* Full preparation remains the final gate. */ }
       }
-      return { index, trimLocks, hiddenPoles, openSheet, freeBoundary: openSheet && this.faces.length === 1 && natural, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
+      return { index, trimLocks, hiddenPoles, openSheet, canDuplicateCadFace: this.solids === 1 && natural,
+        freeBoundary: openSheet && this.faces.length === 1 && natural, kind: k.surfaceType(face), reason, converted: record?.kind === 1,
         enriched: !!record?.net && enrichBicubic(record.net) !== record.net, experimentalCylinder }
     })
     const preview = this.render(this.source)

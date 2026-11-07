@@ -32,7 +32,7 @@ const preview = (revision: number) => ({ valid:true, previewRevision:revision, m
 const info = { index:0,kind:'plane',reason:null,converted:true,enriched:false,
   openSheet:false,freeBoundary:false,trimLocks:[],hiddenPoles:[] }
 async function flush() { for (let i=0;i<8;i++) await Promise.resolve() }
-async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number;blockedPlane?:boolean;trimLocks?:number[];hiddenPoles?:number[]} = {}) {
+async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number;blockedPlane?:boolean;trimLocks?:number[];hiddenPoles?:number[];duplicateFace?:boolean} = {}) {
   vi.useFakeTimers()
   const worker = new FakeWorker(), runtime = new SurfaceRuntime(() => worker as unknown as Worker)
   const abort = new AbortController(), hash = 'a'.repeat(64)
@@ -54,7 +54,7 @@ async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number;
     bytes.length===3 && bytes[0]===1 && bytes[1]===2 && bytes[2]===3 ? hash : createHash('sha256').update(bytes).digest('hex')})
   await flush()
   expect(worker.sent[0]?.action).toBe('open')
-  const first = {...info,trimLocks:options.trimLocks??[],hiddenPoles:options.hiddenPoles??[],
+  const first = {...info,canDuplicateCadFace:options.duplicateFace,trimLocks:options.trimLocks??[],hiddenPoles:options.hiddenPoles??[],
     ...(options.blockedPlane?{reason:'Tutti i poli influenzano un contorno ritagliato.'}:{})}
   const faces = options.sheet ? [{...first,openSheet:true,freeBoundary:true}] : [first,{...info,index:1}]
   worker.reply(worker.sent[0].id,{faces,preview:{...preview(0),faceMeshes:faces.map(()=>({}))}})
@@ -1442,6 +1442,104 @@ describe('WorkspaceSurfaceSession',()=>{
     expect(t.runtime.active).toBe(false)
     expect(t.worker.terminate).toHaveBeenCalledTimes(1)
     expect(t.session.getSnapshot().validation.kind).toBe('none')
+  })
+
+  it('prepares only the explicitly selected CAD face through the ordinary frozen copy contract', async()=>{
+    const t=await setup({duplicateFace:true});await selectFace(t)
+    const before=ticket(t), history=t.session.getSnapshot().historyRevision
+    expect(t.session.getSnapshot().dirty).toBe(false)
+    t.session.setDuplicateCadFace(true)
+    expect(t.session.getSnapshot()).toMatchObject({dirty:true,canUndo:false,validation:{kind:'valid'}})
+    expect(t.session.getPanelState()).toMatchObject({duplicateCadFace:true,duplicateCadFaceStale:false,canExportStep:false})
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const {renderToStaticMarkup}=await import('react-dom/server')
+    const {createElement}=await import('react')
+    const html=renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:t.session}))
+    expect(html).toContain('data-test="surface-duplicate-cad-face"')
+    expect(html).toContain('Con Applica, la faccia della preview')
+    expect(()=>t.session.freeze(before as never)).toThrow(/ticket/)
+    const value=ticket(t), release=t.session.freeze(value as never)
+    const pending=t.session.prepareApply(value as never,new AbortController().signal)
+    const request=t.worker.sent.at(-1)!
+    expect(request).toMatchObject({action:'duplicateCadFace',selection:{face:0,refinements:[]},previewRevision:1})
+    expect(()=>t.session.setDuplicateCadFace(false)).toThrow(/congelata/)
+    expect(()=>t.session.undo()).toThrow(/congelata/)
+    t.worker.reply(request.id,{face:0,selectionRevision:2,previewRevision:1,step:'DETACHED FACE STEP'})
+    const output=await pending
+    expect(output).toMatchObject({kind:'cad-copy',source:t.binding,stamp:value.stamp,name:'faccia-duplicata.step',draftNoteCount:0})
+    expect(new TextDecoder().decode(output.step)).toBe('DETACHED FACE STEP')
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    release()
+    await t.session.dispose('applied')
+  })
+
+  it('confirms loss of a duplicate-only draft and clears the choice only after a successful face switch', async()=>{
+    const t=await setup({duplicateFace:true});await selectFace(t)
+    t.session.setDuplicateCadFace(true)
+    const selected=ticket(t), sent=t.worker.sent.length
+    const decline=vi.fn(()=>false)
+    await t.session.requestFaceSelection(0,decline)
+    expect(decline).not.toHaveBeenCalled()
+    await t.session.requestFaceSelection(1,decline)
+    expect(decline).toHaveBeenCalledWith(expect.stringContaining('Duplica faccia CAD'))
+    await expect(t.session.chooseFace(1)).rejects.toThrow(/conferma/)
+    expect(t.worker.sent).toHaveLength(sent)
+    expect(t.session.getPanelState()).toMatchObject({face:0,duplicateCadFace:true,duplicateCadFaceStale:false})
+    expect(ticket(t)).toEqual(selected)
+
+    const failed=t.session.requestFaceSelection(1,()=>true)
+    const rejected=expect(failed).rejects.toThrow('selezione rifiutata')
+    t.worker.fail(t.worker.sent.at(-1)!.id,'selezione rifiutata')
+    await rejected
+    expect(t.session.getPanelState()).toMatchObject({face:0,duplicateCadFace:true})
+    expect(t.session.getSnapshot().dirty).toBe(true)
+
+    const accepted=t.session.requestFaceSelection(1,()=>true)
+    const selecting=t.worker.sent.at(-1)!
+    expect(selecting).toMatchObject({action:'select',face:1})
+    t.worker.reply(selecting.id,plane())
+    await accepted
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    expect(t.session.getPanelState()).toMatchObject({face:1,duplicateCadFace:false,duplicateCadFaceStale:false})
+    expect(t.session.getSnapshot()).toMatchObject({dirty:false,validation:{kind:'valid'}})
+    expect(()=>t.session.freeze(selected as never)).toThrow(/ticket/)
+    await t.session.dispose('cancelled')
+  })
+
+  it('invalidates the duplicate intent after draft Undo without falling back to an entire-body copy', async()=>{
+    const t=await setup({duplicateFace:true});await selectFace(t)
+    t.session.selectPoints([12],false);t.session.moveSelected(.2)
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    t.session.setDuplicateCadFace(true)
+    const old=ticket(t)
+    t.session.undo()
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(3));await flush()
+    expect(t.session.getPanelState()).toMatchObject({duplicateCadFace:true,duplicateCadFaceStale:true})
+    expect(t.session.getSnapshot().validation.kind).toBe('invalid')
+    expect(()=>t.session.freeze(old as never)).toThrow(/ticket/)
+    expect(t.worker.sent.some(item=>item.action==='duplicateCadFace')).toBe(false)
+    t.session.setDuplicateCadFace(false)
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    await t.session.dispose('cancelled')
+  })
+
+  it.each(['wrong preview', 'source changed', 'apply aborted', 'freeze released'])('rejects a detached STEP reply when %s', async(reason)=>{
+    const t=await setup({duplicateFace:true});await selectFace(t)
+    t.session.setDuplicateCadFace(true)
+    const value=ticket(t), release=t.session.freeze(value as never), abort=new AbortController()
+    const pending=t.session.prepareApply(value as never,abort.signal)
+    const rejected=expect(pending).rejects.toThrow()
+    if(reason==='source changed')t.invalidate()
+    if(reason==='apply aborted')abort.abort()
+    if(reason==='freeze released')release()
+    t.worker.reply(t.worker.sent.at(-1)!.id,{face:0,selectionRevision:2,previewRevision:reason==='wrong preview'?2:1,step:'LATE'})
+    await rejected
+    expect(t.worker.sent.some(item=>item.exportStep)).toBe(false)
+    release()
+    await t.session.dispose('cancelled')
   })
 
   it('rejects stale tickets and cancels pointer capture before leaving a gesture', async()=>{

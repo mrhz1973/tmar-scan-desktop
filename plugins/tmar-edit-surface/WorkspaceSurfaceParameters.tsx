@@ -121,6 +121,14 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <button type="button" data-test="surface-export-step" disabled={disabled || !state.canExportStep}
         title={state.notes.length || state.placingNote ? 'Le note non vengono incluse nello STEP: rimuovile prima di esportare.' : 'Scarica la geometria CAD convalidata come STEP.'}
         onClick={() => { void exportStep() }}>Esporta STEP</button>
+      {(state.duplicateCadFace || state.faces[state.face]?.canDuplicateCadFace) && <div>
+        <label className="inline"><input data-test="surface-duplicate-cad-face" type="checkbox" checked={state.duplicateCadFace}
+          disabled={disabled || (!state.duplicateCadFace && !state.canDuplicateCadFace)} onChange={e => attempt(() => controller.setDuplicateCadFace(e.target.checked))} />
+          Duplica faccia CAD</label>
+        {state.duplicateCadFace && <p role="status">{state.duplicateCadFaceStale
+          ? 'Preview cambiata. Togli la spunta e scegli di nuovo cosa applicare.'
+          : 'Con Applica, la faccia della preview diventa una superficie CAD separata. Il solido resta nel progetto. Per mantenerlo visibile, togli la spunta a «Nascondi l’originale dopo Applica».'}</p>}
+      </div>}
       <label className="inline"><input data-test="surface-navigation-only" type="checkbox" checked={state.navigationOnly} disabled={disabled}
         onChange={e => attempt(() => controller.setNavigationOnly(e.target.checked))} />
         Naviga nella vista (sospendi modifica del reticolo)</label>
