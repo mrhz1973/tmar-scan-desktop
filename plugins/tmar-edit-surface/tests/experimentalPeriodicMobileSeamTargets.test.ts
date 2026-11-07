@@ -5,8 +5,9 @@ import { solveExperimentalPeriodicMobileSeamLeastSquares } from '../experimental
 import { solveExperimentalPeriodicMobileSeamPairTargets, solveExperimentalPeriodicMobileSeamTargets,
   type ExperimentalPeriodicMobileSeamPairTargetsRequest } from '../experimentalPeriodicMobileSeamTargets'
 import { sampleExperimentalPeriodicGeometricSideTargets } from '../experimentalPeriodicGeometricSideTargets'
-import { solveAndStoreExperimentalPeriodicMobileSeamPair, type ExperimentalPeriodicMobileSeamStoredPairRequest } from '../experimentalPeriodicMobileSeamStoredPair'
-import { proposeExperimentalPeriodicQuinticFullCoordinatedSeam } from '../experimentalPeriodicQuinticSide'
+import { solveAndStoreExperimentalPeriodicMobileSeamPair, storeExperimentalPeriodicMobileSeamSurfaceBoundPair,
+  type ExperimentalPeriodicMobileSeamStoredPairRequest } from '../experimentalPeriodicMobileSeamStoredPair'
+import { proposeExperimentalPeriodicQuinticFullCoordinatedSeam, proposeExperimentalPeriodicQuinticSurfaceBoundSeam } from '../experimentalPeriodicQuinticSide'
 import { prepareExperimentalPeriodicUBasis } from '../experimentalPeriodicUBasis'
 import { experimentalCoefficientChangeWithinCap, solveExperimentalPeriodicMobileSeamConstrained } from '../experimentalPeriodicMobileSeamConstrained'
 
@@ -293,4 +294,58 @@ it('withholds stored candidates when the second stored seam movement exceeds bud
   expect(result).not.toHaveProperty('candidates')
   expect(result).not.toHaveProperty('targets')
   expect(result.receipts.V0).not.toHaveProperty('candidate')
+})
+
+it('certifies a 0.05 surface and seam cap even though a stored pole moves 0.1', () => {
+  const { atCentralV1: { storage } } = storedFixture()
+  const net: Net = { du: 2, dv: 5, nu: 4, nv: 6, ku: [0, 1, 2, 4], mu: [2, 1, 1, 2],
+    kv: [0, 0.05], mv: [6, 6], periodic: [1, 0], rational: [0, 0], weights: Array<number>(24).fill(1),
+    poles: [[0, 0], [1, 0], [2, 2], [-2, 0]].flatMap(([x, y]) => Array.from({ length: 6 }, (_, v): Point => [x, y, v])),
+  }
+  const request = { ...storage, net, edge: 'V0' as const, seamDerivativeTolerance: 1e-9,
+    maximumDisplacement: 0.05, maximumSeamDisplacement: 0.05, targetInward: Array<Point>(4).fill([0, 0, 105]),
+    surfaceDisplacementBudget: { maximumSurfaceDisplacement: 0.05, maxDepth: 6, maxPieces: 512 },
+  }
+  expect(proposeExperimentalPeriodicQuinticFullCoordinatedSeam(request)).toMatchObject({ status: 'inconclusive',
+    reason: 'displacement-bound-exceeds-budget' })
+  const result = proposeExperimentalPeriodicQuinticSurfaceBoundSeam(request)
+  if (result.status !== 'coefficient-proposal') throw new Error(JSON.stringify(result))
+  expect(result.evidence).toMatchObject({ seamJumpPreserved: true, normals: { status: 'certified-positive' } })
+  expect(result.proposal.maxSecondDerivativeChangeBound).toBeLessThan(1e-10)
+  expect(result.evidence.displacement.maximumPoleDisplacementUpper).toBeGreaterThan(0.09)
+  expect(result.evidence.displacement.maximumSurfaceDisplacementUpper).toBeLessThanOrEqual(0.05)
+  expect(result.evidence.displacement.maximumSeamDisplacementUpper).toBeLessThanOrEqual(0.05)
+  const stopped = proposeExperimentalPeriodicQuinticSurfaceBoundSeam({ ...request, maximumSeamDisplacement: 0.03 })
+  expect(stopped).toMatchObject({ status: 'inconclusive', phase: 'surface-displacement', reason: 'seam-displacement-unverified' })
+  expect(stopped).not.toHaveProperty('proposal')
+})
+
+it('stores supplied targets and withholds both sides when the second seam bound fails', () => {
+  const { central, atCentralV0, atCentralV1 } = storedFixture()
+  const withTargets = (side: typeof atCentralV0) => {
+    const { net, edge } = side.strip
+    const first = edge === 'V0' ? 0 : net.nv - 1, direction = edge === 'V0' ? 1 : -1
+    const targetInward = Array.from({ length: net.nu }, (_, u): Point => {
+      const index = u * net.nv + first, a = net.poles[index], b = net.poles[index + direction]
+      return [b[0] - a[0], b[1] - a[1], 0]
+    })
+    return { ...side, targetInward, storage: { ...side.storage,
+      surfaceDisplacementBudget: { maximumSurfaceDisplacement: 0.2, maxDepth: 6, maxPieces: 512 } } }
+  }
+  const request = { central, atCentralV0: withTargets(atCentralV0), atCentralV1: withTargets(atCentralV1) }
+  const before = structuredClone(request)
+  const result = storeExperimentalPeriodicMobileSeamSurfaceBoundPair(request)
+  if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
+  for (const edge of ['V0', 'V1'] as const) expect(result.receipts[edge]).toMatchObject({ status: 'diagnostic-only', evidence: {
+    checkedTraining: 33, checkedHoldout: 32, storage: { seamJumpPreserved: true, normals: { status: 'certified-positive' },
+      displacement: { status: 'within-surface-budget' } },
+  } })
+  expect(request).toEqual(before)
+  request.atCentralV1.storage.maximumSeamDisplacement = 0
+  const stopped = storeExperimentalPeriodicMobileSeamSurfaceBoundPair(request)
+  expect(stopped).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', phase: 'storage', reasonCode: 'seam-displacement-unverified' },
+    receipts: { V0: { status: 'diagnostic-only' }, V1: { status: 'inconclusive' } },
+  })
+  expect(stopped).not.toHaveProperty('candidates')
+  expect(stopped.receipts.V0).not.toHaveProperty('candidate')
 })

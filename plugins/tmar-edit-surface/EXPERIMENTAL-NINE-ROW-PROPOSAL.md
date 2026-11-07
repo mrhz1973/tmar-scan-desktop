@@ -273,3 +273,7 @@ The separate experimental bound subdivides stored quintic displacement patches i
 ### Constrained ADMM synthetic solver
 
 An opt-in ADMM experiment reuses an augmented QR factorization and enforces a per-column Euclidean target cap during optimization. On a 741-by-714 synthetic case it met the declared split and numerical gap thresholds within the cap, independently checked against NumPy. It may return inconclusive at tighter tolerances. This concerns numerical targets; stored-surface displacement, continuity, wall thickness and CAD validity remain separate and unqualified for the Tube.
+
+### Separate physical-surface storage experiment
+
+An additive storage-only path for precomputed targets replaces the sufficient pole-hull refusal with independent outward bounds on stored surface and seam-curve displacement. Legacy entry points retain their existing checks. Exact U jump, D1/D2, locks, source-to-candidate normal and sampled stored joint checks remain separate. Synthetic tests show cases with a 0.10 mm pole movement but both physical bounds below 0.05 mm. These tests do not establish wall thickness, pcurves, topology or CAD validity.

@@ -2,6 +2,8 @@
 import type { Net, Point } from './brep'
 import { binary64Units, boundExperimentalPeriodicSeamDerivativeGap } from './experimentalPeriodicSeamDerivativeGap'
 import { boundExperimentalPeriodicQuinticSurfaceNormals } from './experimentalPeriodicQuinticSurfaceNormals'
+import { boundExperimentalPeriodicQuinticStoredSurfaceAndSeamDisplacement,
+  type ExperimentalPeriodicQuinticDisplacementBudget } from './experimentalPeriodicQuinticStoredDisplacement'
 import { validateExperimentalPeriodicSurfaceU } from './experimentalPeriodicSurfaceRefinement'
 import { divide, l1, scalar, sub, times, type V } from './tangencyCoefficientIntervals'
 
@@ -28,6 +30,9 @@ export interface ExperimentalPeriodicQuinticCoordinatedSeamRequest extends Omit<
 }
 
 export type ExperimentalPeriodicQuinticFullCoordinatedSeamRequest = QuinticSideRequest & CoordinatedSeamBudgets
+export type ExperimentalPeriodicQuinticSurfaceBoundSeamRequest = Omit<ExperimentalPeriodicQuinticFullCoordinatedSeamRequest, 'maximumDisplacement'> & {
+  surfaceDisplacementBudget: ExperimentalPeriodicQuinticDisplacementBudget
+}
 
 const fail = (reason: string): never => { throw new Error(`Fascia periodica quintica rifiutata: ${reason}`) }
 const finitePoint = (point: Point) =>
@@ -111,8 +116,20 @@ export function proposeExperimentalPeriodicQuinticFullCoordinatedSeam(request: E
   return proposeCoordinatedSeam(request, 'full')
 }
 
-function proposeCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedSeamRequest | ExperimentalPeriodicQuinticFullCoordinatedSeamRequest,
-  mode: 'neighbors' | 'full',
+/** Store precomputed targets and prove the surface and seam-curve budgets on the stored model. */
+export function proposeExperimentalPeriodicQuinticSurfaceBoundSeam(request: ExperimentalPeriodicQuinticSurfaceBoundSeamRequest) {
+  const staged = proposeCoordinatedSeam(request, 'surface-bound')
+  if (staged.status !== 'coefficient-proposal') return staged
+  const displacement = boundExperimentalPeriodicQuinticStoredSurfaceAndSeamDisplacement(request.net, staged.proposal.net,
+    request.surfaceDisplacementBudget, request.maximumSeamDisplacement)
+  if (displacement.status !== 'within-surface-budget') return { status: 'inconclusive' as const,
+    phase: 'surface-displacement' as const, reason: displacement.reason,
+    evidence: { ...staged.evidence, displacement }, evidenceScope: staged.evidenceScope }
+  return { ...staged, evidence: { ...staged.evidence, displacement } }
+}
+
+function proposeCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedSeamRequest | ExperimentalPeriodicQuinticFullCoordinatedSeamRequest |
+  ExperimentalPeriodicQuinticSurfaceBoundSeamRequest, mode: 'neighbors' | 'full' | 'surface-bound',
 ) {
   const evidenceScope = 'coordinated-mobile-periodic-seam-coefficient-model' as const
   const evidence: {
@@ -127,13 +144,14 @@ function proposeCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedS
   const stop = (reason: string) => ({ status: 'inconclusive' as const, phase, reason, evidence, evidenceScope })
   try {
     if (!request) return stop('invalid-input')
-    const { net, seamDerivativeTolerance, maximumDisplacement,
-      maximumSeamDisplacement, lockIndices = [] } = request
+    const { net, seamDerivativeTolerance, maximumSeamDisplacement, lockIndices = [] } = request
+    const maximumDisplacement = 'maximumDisplacement' in request ? request.maximumDisplacement : undefined
     validateQuinticSide(request)
     if (net.du > 3 || net.nu < 3 || net.mu[0] !== net.du || net.mu.slice(1, -1).some(m => m >= net.du) ||
         (mode === 'neighbors' && (!('previousInward' in request) || !finitePoint(request.previousInward) || !finitePoint(request.nextInward))) ||
-        (mode === 'full' && !('targetInward' in request)) || !Array.isArray(lockIndices) ||
-        ![seamDerivativeTolerance, maximumDisplacement, maximumSeamDisplacement]
+        (mode !== 'neighbors' && !('targetInward' in request)) || !Array.isArray(lockIndices) ||
+        (mode !== 'surface-bound' && (maximumDisplacement === undefined || !Number.isFinite(maximumDisplacement) || maximumDisplacement < 0)) ||
+        ![seamDerivativeTolerance, maximumSeamDisplacement]
           .every(value => Number.isFinite(value) && value >= 0)) return stop('invalid-input')
 
     phase = 'source-seam'
@@ -143,7 +161,7 @@ function proposeCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedS
     phase = 'proposal'
     const previous = net.nu - 1
     let proposal: ReturnType<typeof proposeQuinticRows>
-    if (mode === 'full' && 'targetInward' in request) proposal = proposeQuinticRows(request)
+    if (mode !== 'neighbors' && 'targetInward' in request) proposal = proposeQuinticRows(request)
     else if (mode === 'neighbors' && 'previousInward' in request) {
       const { edge, previousInward, nextInward } = request
       const hNext = net.ku[1] - net.ku[0], hPrevious = net.ku.at(-1)! - net.ku.at(-2)!
@@ -169,7 +187,8 @@ function proposeCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedS
       proposal = proposeQuinticRows({ ...request, targetInward, lockIndices: [...lockIndices, ...protectedIndices] })
     } else return stop('invalid-input')
     evidence.maxPositionDisplacementBound = proposal.maxPositionDisplacementBound
-    if (proposal.maxPositionDisplacementBound > maximumDisplacement) return stop('displacement-bound-exceeds-budget')
+    if (mode !== 'surface-bound' && maximumDisplacement !== undefined && proposal.maxPositionDisplacementBound > maximumDisplacement)
+      return stop('displacement-bound-exceeds-budget')
 
     phase = 'candidate-seam'
     const candidate = proposal.net
@@ -186,7 +205,7 @@ function proposeCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedS
     }
     evidence.seamJumpPreserved = true
     evidence.maxSeamDisplacementBound = maxSeamDisplacementBound
-    if (maxSeamDisplacementBound > maximumSeamDisplacement) return stop('seam-displacement-bound-exceeds-budget')
+    if (mode !== 'surface-bound' && maxSeamDisplacementBound > maximumSeamDisplacement) return stop('seam-displacement-bound-exceeds-budget')
     const after = evidence.after = boundExperimentalPeriodicSeamDerivativeGap(candidate, seamDerivativeTolerance)
     if (after.status !== 'within-tolerance') return stop('candidate-seam-unverified')
 

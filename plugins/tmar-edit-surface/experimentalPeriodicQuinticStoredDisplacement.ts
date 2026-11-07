@@ -52,12 +52,28 @@ function bisect(controls: V[]) {
 export function boundExperimentalPeriodicQuinticStoredDisplacement(original: Net, candidate: Net,
   budget: ExperimentalPeriodicQuinticDisplacementBudget,
 ) {
+  const { maximumSeamDisplacementUpper: _maximumSeamDisplacementUpper, ...result } = boundDisplacement(original, candidate, budget)
+  return result
+}
+
+/** Independently limit the displacement of the shared saturated U0 curve. */
+export function boundExperimentalPeriodicQuinticStoredSurfaceAndSeamDisplacement(original: Net, candidate: Net,
+  budget: ExperimentalPeriodicQuinticDisplacementBudget, maximumSeamDisplacement: number,
+) {
+  return boundDisplacement(original, candidate, budget, { maximum: maximumSeamDisplacement })
+}
+
+function boundDisplacement(original: Net, candidate: Net, budget: ExperimentalPeriodicQuinticDisplacementBudget,
+  seam?: { maximum: number },
+) {
   const evidenceScope = 'stored-periodic-quintic-correspondence-displacement' as const
   const work = { checkedPieces: 0, terminalPieces: 0, maximumDepthUsed: 0 }
   let maximumPoleDisplacementUpper: number | undefined
   const stop = (reason: string, at?: { vSpan: number; uColumn: number; depth: number; pieceUpper: number }) =>
-    ({ status: 'inconclusive' as const, reason, at, work, maximumPoleDisplacementUpper, evidenceScope })
+    ({ status: 'inconclusive' as const, reason, at, work, maximumPoleDisplacementUpper,
+      maximumSeamDisplacementUpper: undefined, evidenceScope })
   if (!budget || !Number.isFinite(budget.maximumSurfaceDisplacement) || budget.maximumSurfaceDisplacement < 0 ||
+      (seam && (!Number.isFinite(seam.maximum) || seam.maximum < 0)) ||
       !Number.isInteger(budget.maxPieces) || budget.maxPieces < 1 || budget.maxPieces > 100_000 ||
       !Number.isInteger(budget.maxDepth) || budget.maxDepth < 0 || budget.maxDepth > 16) return stop('invalid-budget')
   try {
@@ -74,10 +90,12 @@ export function boundExperimentalPeriodicQuinticStoredDisplacement(original: Net
     }
     maximumPoleDisplacementUpper = poleMaximum
 
-    let maximumSurfaceDisplacementUpper = 0
+    let maximumSurfaceDisplacementUpper = 0, maximumSeamDisplacementUpper = 0
     for (let vSpan = 0; vSpan < spans; vSpan++) {
       const columns = vSpan === 0 ? first : extractExperimentalPeriodicQuinticVDifferenceColumns(original, candidate, vSpan)
       for (const [uColumn, controls] of columns.entries()) {
+        const seamLimit = uColumn === 0 && seam ? seam.maximum : Infinity
+        const limit = Math.min(budget.maximumSurfaceDisplacement, seamLimit)
         const pending = [{ controls, depth: 0 }]
         while (pending.length) {
           if (work.checkedPieces === budget.maxPieces) return stop('piece-budget')
@@ -85,14 +103,17 @@ export function boundExperimentalPeriodicQuinticStoredDisplacement(original: Net
           work.checkedPieces++
           work.maximumDepthUsed = Math.max(work.maximumDepthUsed, piece.depth)
           const pieceUpper = Math.max(...piece.controls.map(euclideanUpper))
-          if (pieceUpper <= budget.maximumSurfaceDisplacement) {
+          if (pieceUpper <= limit) {
             work.terminalPieces++
             maximumSurfaceDisplacementUpper = Math.max(maximumSurfaceDisplacementUpper, pieceUpper)
-          } else if (piece.depth === budget.maxDepth) return stop('surface-displacement-unverified', { vSpan, uColumn, depth: piece.depth, pieceUpper })
+            if (uColumn === 0) maximumSeamDisplacementUpper = Math.max(maximumSeamDisplacementUpper, pieceUpper)
+          } else if (piece.depth === budget.maxDepth) return stop(seamLimit < budget.maximumSurfaceDisplacement
+            ? 'seam-displacement-unverified' : 'surface-displacement-unverified', { vSpan, uColumn, depth: piece.depth, pieceUpper })
           else for (const controls of bisect(piece.controls)) pending.push({ controls, depth: piece.depth + 1 })
         }
       }
     }
-    return { status: 'within-surface-budget' as const, maximumSurfaceDisplacementUpper, maximumPoleDisplacementUpper, work, evidenceScope }
+    return { status: 'within-surface-budget' as const, maximumSurfaceDisplacementUpper, maximumSeamDisplacementUpper,
+      maximumPoleDisplacementUpper, work, evidenceScope }
   } catch { return stop('displacement-bound-refused') }
 }
