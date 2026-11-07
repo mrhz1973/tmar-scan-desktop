@@ -72,6 +72,37 @@ it does not qualify edits near holes or other LEGO faces, all other-face
 geometry, a real scan, the workspace layer's target lifetime, browser input,
 project persistence or the packaged app. No browser launch was attempted.
 
+One real-scan follow-up passed with `tests/realScanSurfacePointTarget.test.ts`:
+`lego.stl` (267,834 triangles, SHA-256
+`fa9f320db3b776c2b6298ba6f7608456cc6e37826a330cccf40e85e3edd898a7`)
+and the matching `lego_CAD_R01.step` (SHA-256
+`9278dbf72e5b148d4f9027053867caae40e35a28836f8f629759aab899ff7b22`).
+Their live hashes and the report hash matched `lego_R01_manifest.json`. That
+report records identity alignment in the original scan frame; this test applied
+no transform, fit or scaling. Millimetres remain the source report's assumption,
+without independent physical scale verification. This pairing does not assert
+that the separate `lego mod qs.stp` file has the same verified provenance.
+
+A single fixed case used the minimum-Y planar wall (R01 face 0), its UV midpoint
+and its one free G1 pole. The real `snapAlong` resolver intersected the real STL
+using THREE and MeshBVH. It found the scan 0.02824079024493623 mm along the CAD
+normal from `[7.89, 0.05, 4.765]`, at approximately
+`[7.89, 0.021759209755063767, 4.765]`. The measured edited CAD point differed
+from that intersection by 8.88e-16 mm; only pole 12 moved and protected pole
+coordinates remained unchanged. Exported STEP reimported valid with one solid
+and 51 faces; volume changed from 1205.5405497440622 to 1206.4904604811247 mm³.
+Undo restored the entire net and the measured point with zero difference.
+Both original file hashes remained unchanged; no original or derived STEP/mesh
+was written. No alternate candidate or retry was attempted.
+
+Evidence: `evidence/surface-point-target/lego-R01-real-scan-once/result.json`.
+The session, dispatcher, CAD kernel, scan loader and reference intersection were
+real. Host/transport were simulated, and reference lifetime stayed fixed in
+memory. This is one point on one planar face, with no trim/manual locks; it does
+not establish global scan deviation, physical accuracy, all other faces,
+dynamic workspace-reference behavior, browser interaction or project save/load.
+No browser was launched and no active project was accessed.
+
 ### Shared workspace: normal drag and integration, 2026-11-04
 
 Pole movement starts on the surface's local normal N. U/V and world axes remain
