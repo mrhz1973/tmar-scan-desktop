@@ -25,7 +25,7 @@ export interface WorkspacePointTarget {
 }
 export type WorkspacePointTargetResolver = (point: Point, normal: Point, distance: number,
   kind: 'scan' | 'cad') => WorkspacePointTarget | null
-export type WorkspaceSurfacePickKind = 'scan' | 'cad' | 'tangent-plane'
+export type WorkspaceSurfacePickKind = 'scan' | 'cad' | 'tangent-plane' | 'tangent-span'
 export interface WorkspaceSurfaceTargetPair {
   readonly at:Point
   readonly target:Point

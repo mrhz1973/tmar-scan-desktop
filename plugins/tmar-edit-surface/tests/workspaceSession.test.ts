@@ -421,6 +421,21 @@ describe('selected-pole tangent plane projection',()=>{
   })
 })
 
+it('discards a reviewed UV span when its pole selection changes',async()=>{
+  const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+  const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+  t.session.beginTangentPlane('span')
+  const pending=t.session.pickTangentPlane([1.5,1.6,0])
+  t.worker.reply(t.worker.sent.at(-1)!.id,{anchor:{face:0,selectionRevision:1,u:.3,v:.4},at:[1.5,1.6,0],normal:[0,0,1]})
+  await pending
+  expect(t.session.getPanelState().tangentSpanReview).toMatchObject({u:[0,.5],v:[0,.5],supportCount:16,movedCount:0})
+  t.session.clearSelection()
+  expect(t.session.getPanelState().tangentSpanReview).toBeNull()
+  expect(()=>t.session.applyTangentSpan()).toThrow(/selezione/)
+  expect(t.session.getPanelState().net).toBe(before);expect(t.session.getSnapshot().historyRevision).toBe(history)
+  await t.session.dispose('cancelled')
+})
+
 describe('explicit surface-point reference alignment',()=>{
   const pin={anchor:{face:0,selectionRevision:1,u:.5,v:.5},at:[2,2,0],normal:[0,0,1]}
   it('keeps pole snapping independent, resolves a clicked surface point, and commits one validated Undo step',async()=>{

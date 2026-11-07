@@ -239,7 +239,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
 
   const refreshReferences = () => {
     const state = owner.getViewState()
-    const pickingReference = state.surfaceTarget && state.surfaceTarget.kind !== 'tangent-plane'
+    const pickingReference = state.surfaceTarget?.kind === 'scan' || state.surfaceTarget?.kind === 'cad'
     if (!referencesDirty || disposed || (!state.snap && !pickingReference)) return
     if (Date.now() < retryReferencesAt) return
     // Only an automatic partial retry may reuse existing wrappers. A host
@@ -513,7 +513,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // state. In either case this invocation must not apply its stale state.
       if (disposed || layerDisposed || revision !== syncRevision) return
       positionStripHandle()
-      if ((state.snap || (state.surfaceTarget && state.surfaceTarget.kind !== 'tangent-plane')) && !state.strip) { refreshReferences(); refreshNeighbours() }
+      if ((state.snap || state.surfaceTarget?.kind === 'scan' || state.surfaceTarget?.kind === 'cad') && !state.strip) { refreshReferences(); refreshNeighbours() }
       else { disposeTargets(referenceTargets); referenceTargets = []; disposeTargets(neighbourTargets); neighbourTargets = []; referencesDirty = neighboursDirty = true; retryNeighboursAt = 0; hideFeedback() }
       syncZebra(state)
       syncOpacity(state)
@@ -887,13 +887,13 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (state.strip) return true
     if (state.wholeBoundaryDrag) return false // No cell/point selection side effects while the rim tool is armed.
     try {
-      if(state.surfaceTarget?.kind === 'tangent-plane' && owner.pickTangentPlane) {
+      if((state.surfaceTarget?.kind === 'tangent-plane' || state.surfaceTarget?.kind === 'tangent-span') && owner.pickTangentPlane) {
         const hit = pickFace(x,y)
         if (!hit || hit.face !== state.face) { report('Clicca sulla faccia CAD selezionata.'); return true }
         void owner.pickTangentPlane(hit.point).catch(error => report(errorText(error)))
         return true
       }
-      if(state.surfaceTarget && state.surfaceTarget.kind !== 'tangent-plane' && owner.pickSurfaceTarget) {
+      if((state.surfaceTarget?.kind === 'scan' || state.surfaceTarget?.kind === 'cad') && owner.pickSurfaceTarget) {
         const hit=pickFace(x,y)
         if(!hit || hit.face!==state.face) {report('Clicca sulla faccia CAD selezionata.');return true}
         const sourceBodyId=state.surfaceTarget.sourceBodyId

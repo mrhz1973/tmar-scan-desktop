@@ -22,6 +22,7 @@ import type { WorkspacePointTargetResolver,WorkspacePointTarget,WorkspaceSurface
 import { wholeBoundaryIndices, type WholeBoundarySide } from './wholeBoundary'
 import type {BoundaryCadCandidate,VerifiedBoundaryPick,BoundaryVisibilityCadResult} from './boundaryVisibilityCad'
 import {SurfacePointTargetsCandidateRefusal} from './surfacePointTargetsExperimental'
+import {planTangentSpan,type TangentSpanReview} from './tangentSpan'
 export type { WholeBoundarySide } from './wholeBoundary'
 
 export interface WorkspaceSurfaceNote {
@@ -86,6 +87,7 @@ export interface WorkspaceSurfacePanelState {
   readonly snapDistance: number
   readonly surfaceTarget: WorkspaceSurfacePickKind | null
   readonly surfaceTargetBatch:readonly WorkspaceSurfaceTargetPair[]|null
+  readonly tangentSpanReview: TangentSpanReview | null
   readonly canTargetPoint: boolean
   readonly dragMode: DragMode
   readonly axis: number
@@ -230,6 +232,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private surfaceTarget: ({snapshot:SurfaceDraftSnapshot;epoch:number} & (
     {kind:'scan'|'cad';budget:number;distance:number;points?:{anchor:DraftAnchor;at:Point;reference:WorkspacePointTarget}[]}
     | {kind:'tangent-plane';points?:never}
+    | {kind:'tangent-span';points?:never;plan?:ReturnType<typeof planTangentSpan>}
   )) | null = null
   private dragMode: DragMode = 'local'
   private axis = 2
@@ -932,22 +935,26 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       })
     })
   }
-  beginTangentPlane(): void {
+  beginTangentPlane(scope: 'poles' | 'span' = 'poles'): void {
     this.change(() => {
       const snapshot = this.draft.getSnapshot()
       if (this.surfaceTarget || !this.panel.canTargetPoint || !Number.isSafeInteger(snapshot.preview?.previewRevision))
         throw new Error('Seleziona poli liberi su una faccia CAD valida, senza simmetria o tangenze aggiunte.')
-      this.surfaceTarget = { kind:'tangent-plane', snapshot, epoch:this.selectionEpoch }
+      if (scope === 'span' && snapshot.freeBoundary) throw new Error('Proteggi i contorni prima di spianare uno span UV.')
+      this.surfaceTarget = { kind:scope === 'span' ? 'tangent-span' : 'tangent-plane', snapshot, epoch:this.selectionEpoch }
       this.message = 'Clicca sulla faccia CAD selezionata per scegliere il piano tangente.'
     })
   }
   async pickTangentPlane(point: Point): Promise<void> {
     this.assertMutable()
     const operation = this.surfaceTarget
-    if (operation?.kind !== 'tangent-plane' || !finitePoint(point)) throw new Error('Scegli un punto sulla faccia CAD selezionata.')
+    if ((operation?.kind !== 'tangent-plane' && operation?.kind !== 'tangent-span') || !finitePoint(point))
+      throw new Error('Scegli un punto sulla faccia CAD selezionata.')
     const before = operation.snapshot, revision = before.preview?.previewRevision
     if (!before.net || revision === undefined || this.draft.getSnapshot() !== before)
       throw new Error('La bozza del piano tangente è cambiata.')
+    let reviewingSpan = false
+    if (operation.kind === 'tangent-span') operation.plan = undefined
     this.busy = true
     this.refresh()
     try {
@@ -960,10 +967,16 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         throw new Error('Il punto CAD o la bozza del piano tangente è cambiato.')
       const length = Math.hypot(...pin.normal)
       if (!Number.isFinite(length) || length < 1e-12) throw new Error('Normale CAD non determinabile nel punto scelto.')
-      const normal = pin.normal.map(value => value / length)
+      const normal = pin.normal.map(value => value / length) as Point
       const offset = (pole: Point) => pole.reduce((sum, value, axis) => sum + (value-pin.at[axis])*normal[axis], 0)
       const ids = this.editable().filter(id => !before.hiddenPoles.includes(id))
       if (!ids.length) throw new Error('Seleziona almeno un polo libero.')
+      if (operation.kind === 'tangent-span') {
+        operation.plan = planTangentSpan(before.net, pin.anchor.u, pin.anchor.v, pin.at, normal, ids)
+        reviewingSpan = true
+        this.message = 'Controlla lo span UV e i poli coinvolti prima di applicare.'
+        return
+      }
       if (ids.every(id => Math.abs(offset(before.net!.poles[id])) <= 1e-9)) {
         this.message = 'I poli selezionati sono già sul piano tangente.'
         return
@@ -976,10 +989,25 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         this.message = 'Poli proiettati sul piano tangente. Attendi la verifica CAD.'
       }, true)
     } finally {
-      if (this.surfaceTarget === operation) this.surfaceTarget = null
+      if (!reviewingSpan && this.surfaceTarget === operation) this.surfaceTarget = null
       this.busy = false
       if (!this.disposed) { this.refresh(); this.resolveNotes() }
     }
+  }
+  applyTangentSpan(): void {
+    this.change(() => {
+      const operation = this.surfaceTarget
+      if (operation?.kind !== 'tangent-span' || !operation.plan || !operation.snapshot.net ||
+          this.draft.getSnapshot() !== operation.snapshot || this.selectionEpoch !== operation.epoch ||
+          operation.snapshot.freeBoundary || this.symmetry)
+        throw new Error('La zona UV o la selezione dei poli è cambiata.')
+      const { projections } = operation.plan
+      if (projections.size) {
+        this.transform(operation.snapshot.net, [...projections.keys()], (_, id) => projections.get(id)!)
+        this.message = 'Zona UV proiettata. Attendi la verifica CAD.'
+      } else this.message = 'I poli di supporto sono già sul piano tangente.'
+      this.surfaceTarget = null
+    })
   }
   stretchSelected(factor: number): void {
     this.change(() => {
@@ -1038,7 +1066,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   private referenceTarget() {
     const operation = this.surfaceTarget
-    return operation?.kind === 'tangent-plane' ? null : operation
+    return operation?.kind === 'scan' || operation?.kind === 'cad' ? operation : null
   }
   removeSurfaceTarget(index:number):void{
     this.assertMutable()
@@ -2010,6 +2038,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,
       surfaceTarget:this.surfaceTarget?.kind ?? null,surfaceTargetBatch,canTargetPoint,
+      tangentSpanReview:this.surfaceTarget?.kind==='tangent-span' ? this.surfaceTarget.plan?.review ?? null : null,
       dragMode: this.dragMode, axis: this.axis, dragStrength: this.dragStrength, selectionMode: this.selectionMode, navigationOnly: this.navigationOnly,
       showNet: this.showNet, stripes: this.stripes, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
       mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency,

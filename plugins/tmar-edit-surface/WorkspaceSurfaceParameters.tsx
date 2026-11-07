@@ -168,7 +168,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           onClick={()=>attempt(()=>controller.beginSurfaceTarget('scan',pointBudget,multipleTargets))}>{multipleTargets?'Raccogli sulla scansione':'Punto sulla scansione'}</button>
         <button type="button" data-test="surface-point-cad" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
           onClick={()=>attempt(()=>controller.beginSurfaceTarget('cad',pointBudget,multipleTargets))}>{multipleTargets?'Raccogli sul CAD esterno':'Punto sul CAD esterno'}</button></div>
-        {state.surfaceTarget && state.surfaceTarget !== 'tangent-plane' && <><p role="status" aria-live="polite" aria-atomic="true" data-test="surface-point-announcement">{state.surfaceTargetBatch?
+        {(state.surfaceTarget === 'scan' || state.surfaceTarget === 'cad') && <><p role="status" aria-live="polite" aria-atomic="true" data-test="surface-point-announcement">{state.surfaceTargetBatch?
           `Punti raccolti: ${state.surfaceTargetBatch.length} di 8. ${state.surfaceTargetBatch.length>=2?'Puoi applicare gli agganci con una sola Undo.':'Servono almeno due punti per applicare.'} Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`:
           `Clicca un punto sulla faccia selezionata. Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`}</p>
           {state.surfaceTargetBatch && <>
@@ -372,6 +372,18 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <button type="button" disabled={disabled || state.symmetryBlocked || !editable.length} onClick={() => attempt(() => controller.flattenSelected())}>Spiana i poli sul piano originale</button>
       <button type="button" data-test="surface-point-tangent-plane" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint}
         onClick={() => attempt(() => controller.beginTangentPlane())}>Spiana i poli sul piano tangente nel punto</button>
+      <button type="button" data-test="surface-point-tangent-span" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || state.freeBoundary}
+        onClick={() => attempt(() => controller.beginTangentPlane('span'))}>Spiana una zona UV sul piano tangente</button>
+      {state.surfaceTarget === 'tangent-span' && <>
+        <p>Il clic sceglie un intervallo tra nodi U e V. I poli di supporto fuori piano devono essere selezionati e liberi. Il movimento può interessare le zone adiacenti.</p>
+        {state.tangentSpanReview && <p role="status" data-test="surface-tangent-span-review">
+          U da {state.tangentSpanReview.u[0].toPrecision(7)} a {state.tangentSpanReview.u[1].toPrecision(7)}, V da {state.tangentSpanReview.v[0].toPrecision(7)} a {state.tangentSpanReview.v[1].toPrecision(7)}.
+          Verranno mossi {state.tangentSpanReview.movedCount} dei {state.tangentSpanReview.supportCount} poli di supporto. Gli altri sono già sul piano entro la tolleranza.
+        </p>}
+        <button type="button" data-test="surface-tangent-span-apply" disabled={disabled || !state.tangentSpanReview}
+          onClick={() => attempt(() => controller.applyTangentSpan())}>Applica alla zona UV</button>
+        <button type="button" data-test="surface-tangent-span-cancel" onClick={() => controller.cancelSurfaceTarget()}>Annulla scelta della zona</button>
+      </>}
       {state.surfaceTarget === 'tangent-plane' && <>
         <p role="status">Clicca sulla faccia CAD selezionata per scegliere il piano. La proiezione riguarda i poli selezionati e liberi.</p>
         <button type="button" data-test="surface-tangent-plane-cancel" onClick={() => controller.cancelSurfaceTarget()}>Annulla scelta del piano</button>
