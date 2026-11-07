@@ -20,16 +20,44 @@ function normal(k:OcctLike,face:number,u:number,w:number):Vec3 {
   // occt-wasm 5.7.1 already applies the topological face orientation.
   return p.map(x=>x/length) as Vec3
 }
+// A coarse UV grid can miss the interior of a narrow trimmed face entirely.
+// Refine deterministically, reusing the previous grid vertices, with a hard
+// upper bound on kernel classifications. Boundary samples never count as
+// interior evidence: an ambiguous or unsampled face must still fail closed.
+const UV_STEPS=[8,16,32,64] as const
+const MIN_INTERIOR_SAMPLES=12
 function sampleFace(k:OcctLike,face:number):Vec3[] {
   const b=k.uvBounds(face),out:Vec3[]=[]
-  if(!Object.values(b).every(Number.isFinite)) throw Error('Dominio CAD non limitato.')
-  for(let i=0;i<=8;i++)for(let j=0;j<=8;j++){
-    const u=b.uMin+(b.uMax-b.uMin)*i/8,vv=b.vMin+(b.vMax-b.vMin)*j/8
-    if(k.classifyPointOnFace(face,u,vv)==='in')out.push(v(k.pointOnSurface(face,u,vv)))
+  if(!Object.values(b).every(Number.isFinite) || !(b.uMax>b.uMin && b.vMax>b.vMin))
+    throw Error('Dominio CAD non limitato o degenere.')
+  let interior=0
+  for(let level=0;level<UV_STEPS.length;level++){
+    const divisions=UV_STEPS[level]
+    for(let i=0;i<=divisions;i++)for(let j=0;j<=divisions;j++){
+      // All even/even indices were visited at the previous resolution.
+      if(level>0 && i%2===0 && j%2===0)continue
+      const u=b.uMin+(b.uMax-b.uMin)*i/divisions
+      const vv=b.vMin+(b.vMax-b.vMin)*j/divisions
+      if(k.classifyPointOnFace(face,u,vv)!=='in')continue
+      const p=v(k.pointOnSurface(face,u,vv))
+      if(!p.every(Number.isFinite))throw Error('Campione CAD interno non finito.')
+      out.push(p);interior++
+    }
+    // Require more than the historical 3 sparse interior points: thin
+    // annuli must be checked across a sufficiently sampled trimmed domain.
+    if(interior>=MIN_INTERIOR_SAMPLES)break
   }
-  if(out.length<3)throw Error('Faccia troppo sottile o dominio non verificabile.')
+  if(interior<MIN_INTERIOR_SAMPLES)throw Error('Faccia troppo sottile o dominio non verificabile.')
   const edges=k.getSubShapes(face,'edge')
-  try {for(const e of edges){const b=k.curveParameters(e);for(let i=0;i<=8;i++)out.push(v(k.curvePointAtParam(e,b.first+(b.last-b.first)*i/8)))}}
+  try {for(const e of edges){
+    const range=k.curveParameters(e)
+    if(!Number.isFinite(range.first)||!Number.isFinite(range.last))throw Error('Bordo CAD non limitato.')
+    for(let i=0;i<=8;i++){
+      const p=v(k.curvePointAtParam(e,range.first+(range.last-range.first)*i/8))
+      if(!p.every(Number.isFinite))throw Error('Campione bordo CAD non finito.')
+      out.push(p)
+    }
+  }}
   finally{edges.forEach(e=>k.release(e))}
   return out
 }

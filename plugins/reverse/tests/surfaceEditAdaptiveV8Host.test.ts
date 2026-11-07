@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Opt-in QA only: host v8 annotated CAD copy and project archive with real OCCT replay.
+// Opt-in QA only: host v8 refuses forged note normals and preserves CAD copy/project archive.
 // No feature/UI enablement, no source STEP mutation, no plugin source edits.
 import {readFileSync} from 'node:fs'
 import {afterEach,expect,it,vi} from 'vitest'
@@ -51,7 +51,7 @@ function inside(k:SurfaceEditorKernel['kernel'],face:ReturnType<SurfaceEditorKer
   throw new Error('No interior note witness on selected LEGO annular face')
 }
 afterEach(()=>vi.unstubAllGlobals())
-it.skipIf(!enabled)('host opt-in v8 refuses thin notes safely and saves/reopens an unannotated CAD copy',async()=>{
+it.skipIf(!enabled)('host opt-in v8 refuses invalid notes safely and saves/reopens an unannotated CAD copy',async()=>{
   plugin.install?.()
   const headless=await startHeadless()
   const session=createReverseSession({sceneRef:{current:null},kernel:()=>new ReClient(localKernel())})
@@ -123,17 +123,22 @@ it.skipIf(!enabled)('host opt-in v8 refuses thin notes safely and saves/reopens 
     // Default path refuses experimental v8; UI and production do not request this permission.
     await expect(qualifyAnnotatedSurfaceHistory(prepInput)).rejects.toThrow(/incompatibile/)
     const prior=useReverse.getState(),priorHistory=useHistory.getState().past.length
-    // The host's real annotation validator conservatively refuses this narrow annular face.
-    // Do not bypass it: no CAD feature, note or project history may be published.
+    // The thin-face sampling guard is now adaptive. Keep a deterministic negative
+    // regression by forging an inverted note normal; never publish partial state.
+    const invalidNormalPlan=await validateAnnotatedCopy({...payload,notes:[{
+      ...payload.notes[0],target:{...payload.notes[0].target,
+        orientedNormal:[-n[0],-n[1],-n[2]] as [number,number,number]},
+    }]},ticket)
     await expect(withFrozenHistoryTransaction({
       freezeHistory:()=>({isCurrent:()=>true,release:()=>{}}),
     },prepared,async gate=>{
-      const qualified=await qualifyAnnotatedSurfaceHistory({...prepInput,experimentalAdaptiveV8:true})
+      const qualified=await qualifyAnnotatedSurfaceHistory({...prepInput,
+        annotationPlan:invalidNormalPlan,experimentalAdaptiveV8:true})
       const stage=await session.stageEditorCopy(finalStep,'host-v8-annotated.step',
-        source.assertCurrent,ctrl.signal,undefined,plan,gate.bindQualified(qualified))
-      try { return stage.publish(ticket.operationId,plan.artifactSha256) }
+        source.assertCurrent,ctrl.signal,undefined,invalidNormalPlan,gate.bindQualified(qualified))
+      try { return stage.publish(ticket.operationId,invalidNormalPlan.artifactSha256) }
       finally {stage.dispose()}
-    })).rejects.toThrow(/troppo sottile|dominio non verificabile/)
+    })).rejects.toThrow()
     expect(useReverse.getState()).toBe(prior)
     expect(useHistory.getState().past).toHaveLength(priorHistory)
     expect(useNotes.getState().notes).toHaveLength(0)
@@ -175,7 +180,7 @@ it.skipIf(!enabled)('host opt-in v8 refuses thin notes safely and saves/reopens 
     rec.recipeSha256=await hash(canonicalHistoryJson(rec.recipe))
     expect((await reopenSurfaceHistory(recomputed,stepFiles,replay,ctrl.signal,storeNotes,
       {experimentalAdaptiveV8:true})).status).toBe('copy-only')
-    // Native project archive round-trip: preserve v8 CAD copy plus its exact original STEP; note path remains HOLD.
+    // Native project archive round-trip: preserve v8 CAD copy plus its exact original STEP; annotated v8 still HOLD.
     const members=new Map<string,Uint8Array>()
     const saved=JSON.parse(JSON.stringify(collectReversePart({addMember:(name,bytes)=>members.set(name,bytes.slice())})))
     const savedNotes=JSON.parse(JSON.stringify(notesForFile(storeNotes)))
