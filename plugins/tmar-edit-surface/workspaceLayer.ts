@@ -198,6 +198,11 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     view.group.updateWorldMatrix(false, false)
     return view.group.matrixWorld.clone()
   }
+  const snapSectionInPart = (partWorld: THREE.Matrix4): readonly THREE.Plane[] | undefined => {
+    if (!clipping.planes?.length) return undefined
+    const partFromWorld = partWorld.clone().invert()
+    return clipping.planes.map(plane => plane.clone().applyMatrix4(partFromWorld))
+  }
   const mousePoint = (event: PointerEvent, offsetX = 0, offsetY = 0): SurfacePointer => {
     const state = owner.getViewState()
     return { pointerId: event.pointerId, clientX: event.clientX - offsetX, clientY: event.clientY - offsetY, altKey: event.altKey,
@@ -1014,7 +1019,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
                 return false
               }
             }).map(target => target.mesh)
-            const hit = snapAlong(anchor.clone().add(new THREE.Vector3(...delta)), snapDirection, owner.getViewState().snapDistance, targets)
+            const hit = snapAlong(anchor.clone().add(new THREE.Vector3(...delta)), snapDirection,
+              owner.getViewState().snapDistance, targets, snapSectionInPart(matrix))
             if (!hit) { hideFeedback(); return null }
             showFeedback(hit)
             return point(hit.point.clone().sub(anchor))
@@ -1067,11 +1073,12 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
           const candidates=referenceTargets.filter(t=>t.current() && t.reference?.kind===kind &&
             (kind==='scan' || (typeof t.reference.bodyId==='number' && t.reference.bodyId!==sourceBodyId)))
           const origin=new THREE.Vector3(...at),direction=new THREE.Vector3(...normal)
+          const section = clipping.planes?.length ? snapSectionInPart(partMatrix(at)) : undefined
           const visible=(p:THREE.Vector3)=>view.projectPartPoint(point(p)).visible &&
             !clipping.planes?.some(plane=>plane.distanceToPoint(view.group.localToWorld(p.clone()))<0)
           let closest:{target:Target;hit:SnapHit;distance:number}|null=null
           for(const target of candidates) {
-            const snapped=snapAlong(origin,direction,distance,[target.mesh])
+            const snapped=snapAlong(origin,direction,distance,[target.mesh],section)
             if(!snapped || !visible(snapped.point)) continue
             const gap=snapped.point.distanceTo(origin)
             if(!closest || gap<closest.distance) closest={target,hit:snapped,distance:gap}
@@ -1164,6 +1171,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     },
     clippingChanged: planes => {
       clipping = { planes, intersection: false }
+      hideFeedback()
       if (planes?.length && (pickPending?.kind === 'face' || capture?.wholeFaceLocal)) cancelGesture()
       preview.refreshClipping(); syncOverlayClipping(stripGroup); syncOverlayClipping(g1Group); positionStripHandle()
     },

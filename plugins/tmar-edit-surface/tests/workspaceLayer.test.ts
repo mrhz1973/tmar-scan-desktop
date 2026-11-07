@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Unit fixture for the lease contract. This does not qualify the real host UI.
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { describe, expect, it, vi } from 'vitest'
 import type { Net, Point } from '../brep'
 import type {BoundaryCadCandidate,VerifiedBoundaryPick} from '../boundaryVisibilityCad'
@@ -141,6 +142,14 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
+function putLayersInReference(f: ReturnType<typeof fixture>, depths: readonly number[]) {
+  const layers = depths.map(z => new THREE.PlaneGeometry(10,10).translate(0,0,z))
+  const merged = mergeGeometries(layers)!
+  f.referenceGeometry.copy(merged)
+  merged.dispose()
+  layers.forEach(layer => layer.dispose())
+}
+
 it('renders only current G1 CAD geometry in part coordinates without intercepting picks', () => {
   const f = fixture({rotated:true})
   const layer = createWorkspaceLayer(f.view,f.owner)
@@ -735,6 +744,32 @@ it.each(['scan','cad'] as const)('resolves a surface target from external %s ref
   layer.dispose()
 })
 
+it.each(['scan','cad'] as const)('uses the farther visible surface for a clipped %s point target', async kind=>{
+  const f=fixture({reference:kind==='scan'?'scan':'cad-face',rotated:true})
+  putLayersInReference(f,[-.7,-.2])
+  const targets: Array<import('../workspaceBridge').WorkspacePointTarget|null> = []
+  f.owner.pickSurfaceTarget=vi.fn(async(_p,resolve)=>{targets.push(resolve([-.5,0,0],[1,0,0],1,kind))})
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({snap:false,surfaceTarget:{kind,sourceBodyId:4}})
+  const world = f.group.matrixWorld
+  const left = new THREE.Plane(new THREE.Vector3(1,0,0),.6).applyMatrix4(world)
+  f.getLayer().clippingChanged?.([left],false)
+  const at=f.client([-.5,0,0])
+  expect(f.getLayer().click?.(at.clientX,at.clientY,false)).toBe(true)
+  await Promise.resolve()
+  expect(targets[0]?.point[0]).toBeCloseTo(-.2)
+  expect(targets[0]?.current()).toBe(true)
+
+  const right = new THREE.Plane(new THREE.Vector3(-1,0,0),-.4).applyMatrix4(world)
+  f.getLayer().clippingChanged?.([left,right],false)
+  expect(targets[0]?.current()).toBe(false)
+  expect(f.getLayer().click?.(at.clientX,at.clientY,false)).toBe(true)
+  await Promise.resolve()
+  expect(targets).toHaveLength(2)
+  expect(targets[1]).toBeNull()
+  layer.dispose()
+})
+
 it('shows collected CAD/target pairs and clears them on reference invalidation and Escape',()=>{
   const f=fixture({reference:'scan'});f.owner.cancelSurfaceTarget=vi.fn(()=>f.set({surfaceTarget:null}))
   const layer=createWorkspaceLayer(f.view,f.owner),pair={at:[0,0,0] as Point,target:[0,0,.2] as Point,label:'scan QA'}
@@ -863,6 +898,32 @@ describe.each(['scan', 'cad-face'] as const)('snap on %s reference', kind => {
     expect(disposeGeometry).not.toHaveBeenCalled()
     expect(f.referenceGeometry.getAttribute('position')).toBe(f.beforePosition)
     expect(f.referenceGeometry.boundsTree).toBeUndefined()
+  })
+
+  it('snaps past a clipped surface on the same reference and falls back to free movement if all hits are clipped',()=>{
+    const f=fixture({reference:kind,rotated:true}), raw:Point=[-.1,-1,0]
+    putLayersInReference(f,[0,-.5])
+    const layer=createWorkspaceLayer(f.view,f.owner)
+    f.set({snapDistance:.6})
+    const section=(x:number) => new THREE.Plane(new THREE.Vector3(-1,0,0),x).applyMatrix4(f.group.matrixWorld)
+    f.getLayer().clippingChanged?.([section(-.3)],false)
+    expect(f.getLayer().pointerDown?.(f.event(1,[-1,-1,0]))).toBe(true)
+    f.getHandlers().move(f.event(1,raw))
+    expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(-.5)
+    expect(f.overlay.children[0].textContent).toContain('Agganciato')
+    f.getHandlers().move(f.event(1,raw,true))
+    expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(-.1)
+    f.set({snap:false})
+    f.getHandlers().move(f.event(1,raw))
+    expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(-.1)
+    f.set({snap:true})
+    f.getHandlers().move(f.event(1,raw))
+    expect(f.previewPoles.mock.lastCall?.[0][0][0]).toBeCloseTo(-.5)
+    f.getLayer().clippingChanged?.([section(-.75)],false)
+    expect(f.overlay.children[0].style.display).toBe('none')
+    f.getHandlers().up(f.event(1,raw))
+    expect(f.finishPoleGesture.mock.lastCall?.[0]?.[0][0]).toBeCloseTo(-.1)
+    layer.dispose()
   })
 })
 
