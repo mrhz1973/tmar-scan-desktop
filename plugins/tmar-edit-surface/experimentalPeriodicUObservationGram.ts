@@ -51,6 +51,7 @@ const magnitude = ([low, high]: I) => Math.max(Math.abs(low), Math.abs(high))
  * The Cholesky solve only proposes C. An outward bound η on ||I−CG||∞
  * below one proves invertibility and ||G⁻¹||∞ ≤ ||C||∞/(1−η). Since G is
  * symmetric positive definite, the reciprocal also bounds λ_min(G) below.
+ * From C=(CG)G⁻¹ we also get ||G⁻¹||∞ ≥ ||C||∞/(1+η).
  * This measures the finite sample design. It solves no derivative fit and
  * supplies no bound on the basis evaluation error or between samples.
  */
@@ -95,7 +96,7 @@ export function boundExperimentalPeriodicUObservationGram(request: ExperimentalP
   if (inverse === undefined) return stop('inverse-seed-refused')
   const sparse = gram.map(row => row.flatMap((entry, index) => entry === undefined ? [] : [{ entry, index }]))
   try {
-    let inverseResidualUpper = 0, inverseSeedNormUpper = 0
+    let inverseResidualUpper = 0, inverseSeedNormUpper = 0, inverseSeedNormLower = 0
     for (const [i, row] of inverse.entries()) {
       let residualSum = scalar(0), normSum = scalar(0)
       for (const [j, column] of sparse.entries()) {
@@ -107,12 +108,16 @@ export function boundExperimentalPeriodicUObservationGram(request: ExperimentalP
       }
       inverseResidualUpper = Math.max(inverseResidualUpper, residualSum[1])
       inverseSeedNormUpper = Math.max(inverseSeedNormUpper, normSum[1])
+      inverseSeedNormLower = Math.max(inverseSeedNormLower, normSum[0])
     }
     if (!(inverseResidualUpper < 1)) return stop('inverse-not-certified')
     const inverseInfinityNormUpper = divide(scalar(inverseSeedNormUpper), sub(scalar(1), scalar(inverseResidualUpper)))[1]
     const minimumEigenvalueLower = divide(scalar(1), scalar(inverseInfinityNormUpper))[0]
     if (!(minimumEigenvalueLower > 0)) return stop('inverse-not-certified')
+    let inverseInfinityNormLower = 0
+    try { inverseInfinityNormLower = Math.max(0, divide(scalar(inverseSeedNormLower), add(scalar(1), scalar(inverseResidualUpper)))[0]) }
+    catch { /* Zero remains a valid lower bound if the optional calculation cannot be enclosed. */ }
     return { status: 'certified-full-rank' as const, size, inverseResidualUpper,
-      inverseInfinityNormUpper, minimumEigenvalueLower, evidenceScope }
+      inverseInfinityNormUpper, inverseInfinityNormLower, minimumEigenvalueLower, evidenceScope }
   } catch { return stop('interval-arithmetic-refused') }
 }

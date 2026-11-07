@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { mapPeriodicKnotsAffineRounded } from './experimentalPeriodicAffineKnotMap'
+import { prepareExperimentalPeriodicUBasis } from './experimentalPeriodicUBasis'
+import { boundExperimentalPeriodicUObservationGram } from './experimentalPeriodicUObservationGram'
+import { improveExperimentalPeriodicSampleObservation,
+  type PeriodicObservationCandidate as Candidate } from './experimentalPeriodicSampleObservation'
 
 type Period = readonly [number, number]
 type AxisInput = { knots: readonly number[]; uAtEdgeEnds: Period }
 type Quota = { perSpan: number; minimumInterior: number }
 type AxisName = 'lateral' | 'support'
 type Group = 'training' | 'holdout'
-type Candidate = { t: number; lateralU: number; supportU: number; lateral: number; support: number }
 type Counts = Record<AxisName, number[]>
 
 export interface ExperimentalPeriodicIndependentSamplesRequest {
@@ -17,6 +20,16 @@ export interface ExperimentalPeriodicIndependentSamplesRequest {
   holdout: Quota
   searchDepth: number
   maxAttempts: number
+}
+
+export interface ExperimentalPeriodicObservedSamplesRequest extends ExperimentalPeriodicIndependentSamplesRequest {
+  observation: {
+    degree: number
+    multiplicities: readonly number[]
+    maxComparisons: number
+    maxRows: number
+    maxFreeColumns: number
+  }
 }
 
 const maxInteriorSamples = 4094
@@ -113,6 +126,14 @@ function assign(candidates: Candidate[], sizes: Record<AxisName, number>, quotas
  * concern the rounded affine model and leave fit rank and CAD separate.
  */
 export function generateExperimentalPeriodicIndependentSamples(request: ExperimentalPeriodicIndependentSamplesRequest) {
+  return searchIndependentSamples(request)
+}
+
+type Selection = NonNullable<ReturnType<typeof assign>>
+
+function searchIndependentSamples(request: ExperimentalPeriodicIndependentSamplesRequest,
+  choose?: (baseline: Selection, pool: Candidate[], baselineAttempts: number) => Selection,
+) {
   if (!request || !validPeriod(request.edgePeriod)) fail('periodo del bordo non valido')
   const { edgePeriod: edge, training, holdout, searchDepth, maxAttempts } = request
   if (![training, holdout].every(quota => quota && Number.isInteger(quota.perSpan) &&
@@ -169,7 +190,8 @@ export function generateExperimentalPeriodicIndependentSamples(request: Experime
 
   const quotas = { training, holdout }
   let chosen: ReturnType<typeof assign>
-  for (let depth = 1; chosen === undefined && attempts < maxAttempts && depth <= searchDepth; depth++) {
+  let baselineAttempts = 0
+  for (let depth = 1; (chosen === undefined || choose !== undefined) && attempts < maxAttempts && depth <= searchDepth; depth++) {
     const denominator = 2 ** depth
     for (let i = 1; i < denominator && attempts < maxAttempts; i += 2) {
       const fraction = i / denominator
@@ -180,7 +202,10 @@ export function generateExperimentalPeriodicIndependentSamples(request: Experime
         if (attempts === maxAttempts) break
       }
     }
-    chosen = assign(candidates, sizes, quotas)
+    if (chosen === undefined) {
+      chosen = assign(candidates, sizes, quotas)
+      if (chosen !== undefined) baselineAttempts = attempts
+    }
   }
   if (chosen === undefined && attempts < maxAttempts) {
     trial(adjacent(edge[0], true))
@@ -196,11 +221,12 @@ export function generateExperimentalPeriodicIndependentSamples(request: Experime
       if (attempts === maxAttempts) break
     }
     chosen = assign(candidates, sizes, quotas)
+    if (chosen !== undefined) baselineAttempts = attempts
   }
   if (chosen === undefined)
     return stop(attempts === maxAttempts ? 'candidate-budget-exhausted' : 'insufficient-independent-coverage')
 
-  const selection = chosen
+  const selection = choose ? choose(chosen, candidates, baselineAttempts) : chosen
   const grid = (group: Group) => [edge[0], ...selection[group].map(item => item.t).sort((a, b) => a - b), edge[1]]
   const trainingGrid = grid('training'), holdoutGrid = grid('holdout')
   const coverage = { training: emptyCounts(sizes.lateral, sizes.support), holdout: emptyCounts(sizes.lateral, sizes.support) }
@@ -221,4 +247,60 @@ export function generateExperimentalPeriodicIndependentSamples(request: Experime
     }
   } catch { return stop('mapping-verification-refused') }
   return { status: 'generated' as const, training: trainingGrid, holdout: holdoutGrid, coverage, attempts, evidenceScope }
+}
+
+/**
+ * Improve the sampled free-U Gram inverse norm at fixed training cardinality.
+ * The greedy seed and its holdout grid are unchanged until proposed exchanges
+ * pass independent Gram comparison. Exchanges stay within the same two
+ * rounded native spans. A certified baseline is retained when no strict
+ * improvement is proved. A baseline whose Gram cannot be certified yields
+ * an inconclusive result. The method does not search for rank recovery.
+ */
+export function generateExperimentalPeriodicObservedSamples(request: ExperimentalPeriodicObservedSamplesRequest) {
+  const limits = request?.observation
+  if (!limits || !Array.isArray(limits.multiplicities) ||
+      !Number.isInteger(limits.maxComparisons) || limits.maxComparisons < 1 || limits.maxComparisons > 1_000_000 ||
+      !Number.isInteger(limits.maxRows) || limits.maxRows < 1 || limits.maxRows > 4096 ||
+      !Number.isInteger(limits.maxFreeColumns) || limits.maxFreeColumns < 1 || limits.maxFreeColumns > 256)
+    fail('budget di osservazione non validi')
+  const { degree, multiplicities, maxRows, maxFreeColumns, maxComparisons } = limits
+  const knots = request.lateral?.knots
+  const firstSeamU = request.lateral?.uAtEdgeEnds?.[0]
+  if (!Array.isArray(knots) || !Number.isFinite(firstSeamU)) fail('base laterale di osservazione non valida')
+  const basis = prepareExperimentalPeriodicUBasis(degree, knots, multiplicities)
+  const gram = (training: Candidate[]) => boundExperimentalPeriodicUObservationGram({
+    degree, knots, multiplicities, maxRows, maxFreeColumns,
+    parameters: [firstSeamU, ...training.map(point => point.lateralU).sort((a, b) =>
+      firstSeamU === knots[0] ? a - b : b - a)],
+  })
+  type Gram = ReturnType<typeof gram>
+  type Report = { selection: 'baseline-not-certified' | 'baseline-retained' | 'certified-improvement'; baselineAttempts: number; baseline: Gram;
+    trial?: Gram; comparisons: number; proposedExchanges: number; comparisonBudgetExhausted: boolean }
+  let observation: Report | undefined
+  const result = searchIndependentSamples(request, (baseline, pool, baselineAttempts) => {
+    const initial = gram(baseline.training)
+    const report: Report = { selection: initial.status === 'certified-full-rank' ? 'baseline-retained' : 'baseline-not-certified',
+      baselineAttempts, baseline: initial,
+      comparisons: 0, proposedExchanges: 0, comparisonBudgetExhausted: false }
+    observation = report
+    if (initial.status !== 'certified-full-rank') return baseline
+
+    const { training, ...work } = improveExperimentalPeriodicSampleObservation(
+      baseline.training, baseline.holdout, pool, basis, firstSeamU, maxComparisons,
+    )
+    Object.assign(report, work)
+    if (report.proposedExchanges === 0) return baseline
+    const trial = report.trial = gram(training)
+    if (trial.status !== 'certified-full-rank' || !(trial.inverseInfinityNormUpper < initial.inverseInfinityNormLower))
+      return baseline
+    report.selection = 'certified-improvement'
+    return { training, holdout: baseline.holdout }
+  })
+  if (result.status !== 'generated') return result
+  if (observation?.baseline.status !== 'certified-full-rank') {
+    const { attempts, evidenceScope } = result
+    return { status: 'inconclusive' as const, reason: 'observation-gram-inconclusive', attempts, evidenceScope, observation }
+  }
+  return { ...result, observation }
 }

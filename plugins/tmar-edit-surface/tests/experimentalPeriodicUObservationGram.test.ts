@@ -20,6 +20,8 @@ it('encloses the inverse norm and smallest eigenvalue for an exact one-column ob
   expect(result.size).toEqual({ rows: 4, freeColumns: 1 })
   expect(result.inverseInfinityNormUpper).toBeGreaterThanOrEqual(0.8)
   expect(result.inverseInfinityNormUpper).toBeLessThan(0.800000000001)
+  expect(result.inverseInfinityNormLower).toBeLessThanOrEqual(0.8)
+  expect(result.inverseInfinityNormLower).toBeGreaterThan(0.799999999999)
   expect(result.minimumEigenvalueLower).toBeLessThanOrEqual(1.25)
   expect(result.minimumEigenvalueLower).toBeGreaterThan(1.249999999999)
 })

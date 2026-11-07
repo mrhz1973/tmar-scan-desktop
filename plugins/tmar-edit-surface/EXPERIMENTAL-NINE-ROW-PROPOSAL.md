@@ -193,6 +193,13 @@ without partial grids; it does not prove that no grid exists. Coverage does
 not establish fit rank, geometric continuity or CAD validity. It has not been
 used to repeat the refused Tube diagnostic.
 
+An opt-in synthetic sampling experiment can replace training points only
+within the same pair of native spans while preserving holdout and counts.
+It adopts a trial only when a verified upper bound for the new Gram inverse
+is strictly below a verified lower bound for the baseline. This bounded
+search may retain the baseline or stop inconclusively. Better observation
+does not certify fit accuracy, continuous geometry or CAD validity.
+
 An experimental coordinator now composes independent grids, the pair joint
 diagnostic and full-domain normal comparison on both lateral coefficient nets.
 It returns no candidate if a sampling, joint or interior check fails. A
