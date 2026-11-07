@@ -1,5 +1,29 @@
 # Edit Surface — CAD prototype checkpoint
 
+### Section-aware free-edge picking — plugin checkpoint
+
+The direct D-handle edge picker now sends the current world-space section planes
+and part transform through the workspace session and serialized CAD worker.
+For supported straight and sampled open nonperiodic B-spline sheet edges, the
+native query distinguishes visible edges from occluders removed by the section.
+It verifies the precise anchor at the cursor and rechecks camera, source,
+references, preview and section state before and during the drag. A changed
+state cancels the gesture. Unsupported paths retain their previous fallback;
+the CAD proof rejects ambiguous intersections and non-rigid transforms.
+
+A real OCCT worker test on a STEP shell with front and back rims 0.02 mm apart
+selected the remaining rim after clipping; both candidate orders were tested
+in the lower-level CAD query. Session tests check worker payload and stale
+selection; workspace tests exercise pointer handling and changes to section or
+reference state, including during drag. The source-app working tree had other
+experimental edits: only the two relevant lines of editorKernel.ts were staged
+in commit 1a18002, preserving that WIP. Focused checks: 156 layer tests passed,
+2 skipped; 130 session/CAD tests passed; TypeScript passed. These are native
+CAD and simulated workspace/transport checks, not an integrated host, packaged
+application, real GUI acceptance, unrestricted STEP support or QS parity.
+Host integration, merge and release remain subject to coordinator HOLD.
+
+
 ### Move an entire natural CAD boundary without duplicating it
 
 The workspace panel now offers **Sposta intero bordo senza duplicarlo** on a
