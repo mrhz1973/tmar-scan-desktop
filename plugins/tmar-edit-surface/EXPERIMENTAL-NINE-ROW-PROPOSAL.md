@@ -241,3 +241,7 @@ sampling coverage and uncertainty on both junctions. Stop on any failure.
 An apparently successful coefficient proposal would still not qualify the
 part: pcurves, topology, intersections, wall, functional details, STEP
 roundtrip, volume and the existing host release gate remain separate.
+
+### Pointwise geometric joint diagnostic
+
+`experimentalPeriodicGeometricJoint.ts` examines corresponding samples with oriented tangents and inward derivatives. It separates tangent-plane agreement from equal derivative magnitudes, reports floating-point scale and tangential components, and refuses degenerate or numerically unresolved cases. Synthetic tests and independent review cover scaling, orientation and near-parallel inputs. This is a pointwise diagnostic, not an edit, a continuous G1 certificate, a solid-validity check, or a result on the Tube STEP. Existing CAD guards and integration HOLD remain in force.
