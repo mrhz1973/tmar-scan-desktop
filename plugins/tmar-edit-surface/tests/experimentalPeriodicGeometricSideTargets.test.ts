@@ -8,6 +8,8 @@ import { prepareExperimentalPeriodicOneSidedSurfaceDerivatives } from '../experi
 import { proposeExperimentalPeriodicAlmostC1QuinticSide, proposeExperimentalPeriodicQuinticCoordinatedSeam,
   type ExperimentalPeriodicQuinticCoordinatedSeamRequest } from '../experimentalPeriodicQuinticSide'
 import { boundExperimentalPeriodicQuinticSurfaceNormals } from '../experimentalPeriodicQuinticSurfaceNormals'
+import { measureExperimentalPeriodicQuinticCoordinatedPair,
+  type ExperimentalPeriodicQuinticCoordinatedPairRequest } from '../experimentalPeriodicQuinticCoordinatedPair'
 import { certifyExperimentalPeriodicUFitCoefficients } from '../experimentalPeriodicUFitCertificate'
 import { fitExperimentalPeriodicUVectorSamplesWithFixedFirst } from '../experimentalPeriodicUVectorFit'
 
@@ -263,4 +265,91 @@ it('withholds a proposal when exact stored coordination, a lock or a work budget
     evidence: { seamJumpPreserved: true, normals: { status: 'nonpositive-witness' } },
   })
   for (const result of [rounded, locked, displaced, normalBudget, inverted]) expect(result).not.toHaveProperty('proposal')
+})
+
+function pairFixture(): ExperimentalPeriodicQuinticCoordinatedPairRequest {
+  const original = fixture(true), upper = original.strip.net, central = original.support.net
+  for (let v = 0; v < upper.nv; v++) upper.poles[4 * upper.nv + v][2] = 0
+  const ring = Array.from({ length: upper.nu }, (_, u) => upper.poles[u * upper.nv])
+  const reversed = [ring[0], ...ring.slice(1).reverse()]
+  const lower: Net = { ...structuredClone(upper), ku: upper.ku.map(u => 100 + 3 * u),
+    poles: reversed.flatMap(([x, y], u) => Array.from({ length: 6 }, (_, v): Point => {
+      const radius = 0.5 - (5 - v) / 16
+      const z = [0, 1, upper.nu - 1].includes(u) ? (5 - v) / 16 : 0
+      return [radius * x, radius * y, z]
+    })),
+  }
+  const side = (net: Net, below: boolean): ExperimentalPeriodicQuinticCoordinatedPairRequest['atCentralV0'] => {
+    const edge = below ? 'V1' : 'V0', first = below ? net.nv - 1 : 0, sign = below ? -1 : 1
+    const target = (u: number): Point => {
+      const i = u * net.nv + first
+      return [net.poles[i + sign][0] - net.poles[i][0], net.poles[i + sign][1] - net.poles[i][1], 0]
+    }
+    return { lateral: { net, edge, uAtEdgeEnds: below ? [124, 100] : [0, 8] }, centralUAtEdgeEnds: [26, 10],
+      edgePeriod: below ? [-1, 1] : [0, 8], verificationParameters: original.holdout.map(t => below ? t / 4 - 1 : t),
+      move: { ...coordinatedBudgets, previousInward: target(net.nu - 1), nextInward: target(1) },
+      joint: { ...limits, minimumPositiveScale: below ? 0.0625 : limits.minimumPositiveScale },
+    }
+  }
+  return { central, atCentralV0: side(lower, true), atCentralV1: side(upper, false) }
+}
+
+it('exposes both coordinated laterals after validating both stored joints against the unchanged center', () => {
+  const request = pairFixture(), before = structuredClone(request)
+  const result = measureExperimentalPeriodicQuinticCoordinatedPair(request)
+  if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
+  for (const [edge, input] of [['V0', request.atCentralV0], ['V1', request.atCentralV1]] as const) {
+    const receipt = result.receipts[edge]
+    if (receipt.status !== 'diagnostic-only') throw new Error(JSON.stringify(receipt))
+    expect(receipt.evidence.move).toMatchObject({ seamJumpPreserved: true, normals: { status: 'certified-positive' } })
+    expect(receipt.evidence.joint).toMatchObject({ checked: input.verificationParameters.length })
+    expect(receipt.evidence.joint!.maxNormalResidual).toBeLessThan(input.joint.maximumNormalResidual)
+    const candidate = result.candidates[edge], original = input.lateral.net
+    expect(candidate.poles).not.toEqual(original.poles)
+    for (let u = 0; u < original.nu; u++) for (const v of [0, original.nv - 1])
+      expect(candidate.poles[u * original.nv + v]).toEqual(original.poles[u * original.nv + v])
+  }
+  expect(request).toEqual(before)
+})
+
+it('withholds both candidates on a second move or a second stored joint stop', () => {
+  const request = pairFixture()
+  request.atCentralV1.move.maximumSeamDisplacement = 0
+  const movement = measureExperimentalPeriodicQuinticCoordinatedPair(request)
+  expect(movement).toMatchObject({ status: 'inconclusive',
+    stop: { side: 'V1', phase: 'coordinated-move', reasonCode: 'seam-displacement-bound-exceeds-budget' },
+    receipts: { V0: { status: 'diagnostic-only' }, V1: { evidence: { movePhase: 'candidate-seam' } } },
+  })
+  request.atCentralV1.move.maximumSeamDisplacement = 1
+  request.atCentralV1.move.previousInward[2] = request.atCentralV1.move.nextInward[2] = 0.0625
+  const stored = measureExperimentalPeriodicQuinticCoordinatedPair(request)
+  expect(stored).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', phase: 'stored-joint', reasonCode: 'stored-joint-beyond-budget' },
+    receipts: { V0: { status: 'diagnostic-only' }, V1: { at: { edgeParameter: 0, seamSide: 'left' },
+      evidence: { move: { seamJumpPreserved: true, normals: { status: 'certified-positive' } } } } },
+  })
+  for (const result of [movement, stored]) {
+    expect(result).not.toHaveProperty('candidates')
+    expect(result.receipts.V0).not.toHaveProperty('candidate')
+    expect(result.receipts.V1).not.toHaveProperty('candidate')
+  }
+})
+
+it('refuses a shared lateral before either coordinated proposal is evaluated', () => {
+  const request = pairFixture()
+  request.atCentralV1.lateral.net = request.atCentralV0.lateral.net
+  expect(measureExperimentalPeriodicQuinticCoordinatedPair(request)).toMatchObject({ status: 'inconclusive',
+    stop: { phase: 'preflight', reasonCode: 'pair-aliased-input' }, receipts: { V0: { status: 'not-run' }, V1: { status: 'not-run' } },
+  })
+})
+
+it('validates the center before recording any support seam status or evaluating a move', () => {
+  const request = pairFixture()
+  request.central.mu[0] = request.central.du + 1
+  const result = measureExperimentalPeriodicQuinticCoordinatedPair(request)
+  expect(result).toMatchObject({ status: 'inconclusive', stop: { side: 'V0', phase: 'support-seam' },
+    receipts: { V0: { evidence: {} }, V1: { status: 'not-run' } },
+  })
+  expect(result.receipts.V0).not.toHaveProperty('evidence.supportSeam')
+  expect(result.receipts.V0).not.toHaveProperty('evidence.move')
+  expect(result).not.toHaveProperty('candidates')
 })

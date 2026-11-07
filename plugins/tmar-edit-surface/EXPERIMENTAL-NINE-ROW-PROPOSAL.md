@@ -253,3 +253,7 @@ The separate experimental side-target generator projects sampled inward derivati
 ### Coordinated periodic seam experiment
 
 A separate synthetic proposal can move the periodic U0 meridian with its two adjacent columns, changing at most six poles while retaining V boundaries and checking exactly that the stored U derivative jump is unchanged. It refuses locks, budgets, orientation failures and unrepresentable rounding. This does not ensure the angle across an existing nonzero seam jump is unchanged, does not certify cross-face G1 or pcurves, and has not been exercised on the real Tube. It is not an integrated edit; CAD validity, topology, functional features and thickness require independent verification.
+
+### Coordinated two-side experiment
+
+The experimental coordinated-pair diagnostic evaluates both lateral proposals against the unchanged central surface and returns neither candidate unless both pass their per-side seam, displacement, source-to-candidate normal and sampled stored-joint checks. Its targets and verification sample locations are supplied by the caller; independence is not established by the API. This is not a target solver, continuous G1 proof, pcurve or solid qualification, nor a test on the Tube.
