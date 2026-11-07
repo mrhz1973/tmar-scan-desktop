@@ -42,3 +42,12 @@ reflections not representable in binary64. A synthetic OCCT/STEP roundtrip now
 demonstrates a shared edge with opposite parameter directions on the two faces.
 That fixture covers nonrational single-span clamped surfaces; the matcher alone
 is not evidence of topological orientation or G1 continuity.
+
+A separate cylindrical fixture now sews two periodic faces whose common closed
+edge has different U knot subdivisions. The shared edge and distinct bases
+survive a synthetic STEP roundtrip. OCCT refinement gives matching coefficients
+for the two fixture boundaries on a common basis; 65 samples and knot positions
+are diagnostic only. The comparison helper does not bound OCCT rounding, and
+therefore cannot certify input equality or replace topology and volume guards.
+It currently requires identical parameter domains, phase, orientation and weights.
+No real tube, closed solid, or user-facing edit is qualified by these results.
