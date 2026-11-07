@@ -8,6 +8,7 @@ import { sampleExperimentalPeriodicGeometricSideTargets } from '../experimentalP
 import { solveAndStoreExperimentalPeriodicMobileSeamPair, type ExperimentalPeriodicMobileSeamStoredPairRequest } from '../experimentalPeriodicMobileSeamStoredPair'
 import { proposeExperimentalPeriodicQuinticFullCoordinatedSeam } from '../experimentalPeriodicQuinticSide'
 import { prepareExperimentalPeriodicUBasis } from '../experimentalPeriodicUBasis'
+import { experimentalCoefficientChangeWithinCap, solveExperimentalPeriodicMobileSeamConstrained } from '../experimentalPeriodicMobileSeamConstrained'
 
 function fixture(): ExperimentalPeriodicMobileSeamPairTargetsRequest {
   const spans = 8, nu = spans + 2, ku = Array.from({ length: spans + 1 }, (_, i) => i)
@@ -102,7 +103,7 @@ it('checks the regularized solution after unscaling and refuses invalid sparse c
   expect(solve(9, 1)).toMatchObject({ status: 'inconclusive', reason: 'invalid-input' })
 })
 
-it('solves a comparable cubic sampled design with augmented QR when diagonal PCG exhausts 128 iterations', () => {
+function coupledCubicRows() {
   const spans = 237, basis = prepareExperimentalPeriodicUBasis(3, Array.from({ length: spans + 1 }, (_, i) => i),
     [3, ...Array<number>(spans - 1).fill(1), 3])
   const free = basis.poleCount - 1
@@ -122,7 +123,11 @@ it('solves a comparable cubic sampled design with augmented QR when diagonal PCG
       ({ column: 3 * column + axis, weight: component * value })))
     return { entries, value: entries.reduce((sum, { column, weight }) => sum + weight * Math.sin(0.081 * column), 0) }
   })
-  const ridge = 1e-9, tolerance = 1e-11
+  return { rows, free }
+}
+
+it('solves a comparable cubic sampled design with augmented QR when diagonal PCG exhausts 128 iterations', () => {
+  const { rows, free } = coupledCubicRows(), ridge = 1e-9, tolerance = 1e-11
   const run = (factorCap?: number) => solveExperimentalPeriodicMobileSeamLeastSquares(rows, free, 0.5, 0.5, ridge, 128, tolerance, factorCap)
   expect([rows.length, free]).toEqual([741, 238])
   const old = run()
@@ -156,6 +161,27 @@ it('solves a comparable cubic sampled design with augmented QR when diagonal PCG
   expect(bounded).not.toHaveProperty('changes')
 })
 
+it('solves the active cap on a 741 by 714 synthetic design with one reused factorization', () => {
+  const { rows, free } = coupledCubicRows()
+  const samples = rows.map(row => ({ ...row, value: 5 * row.value }))
+  const ridge = 1e-9, cap = 5, budget = { penalty: 0.01, maxIterations: 4000, maxFactorUpdates: 500_000,
+    relativeGapTolerance: 1e-10, relativeSplitTolerance: 1e-6 }
+  const freeFit = solveExperimentalPeriodicMobileSeamLeastSquares(samples, free, 0.5, 0.5, ridge, 128, 1e-11, 500_000)
+  if (freeFit.status !== 'solved') throw new Error(JSON.stringify(freeFit))
+  const column = (x: Float64Array, u: number): Point => [x[3 * u], x[3 * u + 1], x[3 * u + 2]]
+  expect(Array.from({ length: free }, (_, u) => Math.hypot(...column(freeFit.changes, u))).some(norm => norm > cap)).toBe(true)
+  const fit = solveExperimentalPeriodicMobileSeamConstrained(samples, free, 0.5, 0.5, ridge, cap, budget)
+  if (fit.status !== 'solved') throw new Error(JSON.stringify(fit))
+  expect(fit.evidence.factorUpdates).toBeLessThan(budget.maxFactorUpdates)
+  expect(fit.evidence.primalResidual).toBeLessThanOrEqual(budget.relativeSplitTolerance)
+  expect(fit.evidence.dualResidual).toBeLessThanOrEqual(budget.relativeSplitTolerance)
+  expect(fit.evidence.relativeOptimalityGap).toBeLessThanOrEqual(budget.relativeGapTolerance)
+  for (let u = 0; u < free; u++) expect(experimentalCoefficientChangeWithinCap([0, 0, 0], column(fit.changes, u), cap)).toBe(true)
+  const maxResidual = Math.max(...samples.map(({ value, entries }) =>
+    Math.abs(value - entries.reduce((sum, { column, weight }) => sum + weight * fit.changes[column], 0))))
+  expect(fit.evidence.maxSampleResidual).toBeCloseTo(maxResidual, 12)
+})
+
 it('selects augmented QR explicitly and keeps sampled gates and receipts at both joints', () => {
   const request = fixture()
   request.atCentralV0.budgets.augmentedQrMaxUpdates = 10_000
@@ -177,6 +203,30 @@ it('selects augmented QR explicitly and keeps sampled gates and receipts at both
   const result = solveAndStoreExperimentalPeriodicMobileSeamPair(stored)
   if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
   for (const side of ['V0', 'V1'] as const) expect(result.receipts[side]).toMatchObject({ status: 'diagnostic-only', evidence: {
+    checkedTraining: 33, checkedHoldout: 32, storage: { seamJumpPreserved: true, normals: { status: 'certified-positive' } },
+  } })
+})
+
+it('selects the coefficient-constrained solver explicitly and retains the sampled joint gates', () => {
+  const request = fixture()
+  const admm = { penalty: 0.1, maxIterations: 512, maxFactorUpdates: 10_000, relativeGapTolerance: 1e-10, relativeSplitTolerance: 1e-9 }
+  request.atCentralV0.budgets.constrainedAdmm = admm
+  request.atCentralV1.budgets.constrainedAdmm = admm
+  const result = solveExperimentalPeriodicMobileSeamPairTargets(request)
+  expect(result).toMatchObject({ status: 'targets-only', receipts: {
+    V0: { evidence: { constrainedFit: expect.any(Object), checkedTraining: 33, checkedHoldout: 32 } },
+    V1: { evidence: { constrainedFit: expect.any(Object), checkedTraining: 33, checkedHoldout: 32 } },
+  } })
+  request.atCentralV1.budgets.maximumCoefficientChange = 0
+  const stopped = solveExperimentalPeriodicMobileSeamPairTargets(request)
+  expect(stopped).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', phase: 'training', reasonCode: 'target-joint-beyond-budget' } })
+  expect(stopped).not.toHaveProperty('targets')
+
+  const stored = storedFixture()
+  stored.atCentralV0.budgets.constrainedAdmm = stored.atCentralV1.budgets.constrainedAdmm = admm
+  const resultStored = solveAndStoreExperimentalPeriodicMobileSeamPair(stored)
+  if (resultStored.status !== 'diagnostic-only') throw new Error(JSON.stringify(resultStored))
+  for (const side of ['V0', 'V1'] as const) expect(resultStored.receipts[side]).toMatchObject({ status: 'diagnostic-only', evidence: {
     checkedTraining: 33, checkedHoldout: 32, storage: { seamJumpPreserved: true, normals: { status: 'certified-positive' } },
   } })
 })

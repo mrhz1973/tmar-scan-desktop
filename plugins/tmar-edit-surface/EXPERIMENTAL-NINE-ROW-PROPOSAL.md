@@ -269,3 +269,7 @@ An explicit experimental augmented sparse QR solves the same regularized full-co
 ### Stored-surface displacement bound
 
 The separate experimental bound subdivides stored quintic displacement patches in V using outward intervals and bounds all U columns. A synthetic case with a 0.10 mm pole displacement is certified below 0.05 mm surface displacement; the 0.049775 mm bound is above the analytic maximum 0.049383 mm. It can return inconclusive where U subdivision would be needed. This bounds corresponding parametric points only; it neither changes existing guards nor verifies thickness, pcurves, topology or a real STEP.
+
+### Constrained ADMM synthetic solver
+
+An opt-in ADMM experiment reuses an augmented QR factorization and enforces a per-column Euclidean target cap during optimization. On a 741-by-714 synthetic case it met the declared split and numerical gap thresholds within the cap, independently checked against NumPy. It may return inconclusive at tighter tolerances. This concerns numerical targets; stored-surface displacement, continuity, wall thickness and CAD validity remain separate and unqualified for the Tube.

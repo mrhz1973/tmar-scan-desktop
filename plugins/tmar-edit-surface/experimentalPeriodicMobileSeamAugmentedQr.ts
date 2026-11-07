@@ -4,9 +4,10 @@ import type { SparseRow } from './experimentalPeriodicMobileSeamLeastSquares'
 /** Streaming Givens QR of the data rows and the ridge rows, without forming AᵀA. */
 export function factorExperimentalPeriodicMobileSeamAugmentedQr(rows: readonly SparseRow[], size: number,
   scale: number, previousWeight: number, nextWeight: number, ridge: number, maxUpdates: number,
+  additionalDiagonalRidge = 0,
 ) {
   const rootRidge = Math.sqrt(ridge)
-  const diagonal = new Float64Array(size).fill(rootRidge), rhs = new Float64Array(size)
+  const diagonal = new Float64Array(size).fill(Math.sqrt(ridge + additionalDiagonalRidge)), rhs = new Float64Array(size)
   const upper = Array.from({ length: size }, () => new Map<number, number>())
   let updates = 0
   const insert = (row: Map<number, number>, value: number) => {
@@ -49,13 +50,28 @@ export function factorExperimentalPeriodicMobileSeamAugmentedQr(rows: readonly S
     const reason = insert(new Map(entries.filter(entry => entry.weight !== 0).map(({ column, weight }) => [column, weight])), value / scale)
     if (reason) return { status: 'inconclusive' as const, reason, updates }
   }
-  const solution = new Float64Array(size)
-  for (let i = size - 1; i >= 0; i--) {
-    let value = rhs[i]
-    for (const [j, weight] of upper[i]) value -= weight * solution[j]
-    solution[i] = value / diagonal[i]
-    if (!Number.isFinite(solution[i]) || (solution[i] === 0 && value !== 0))
-      return { status: 'inconclusive' as const, reason: 'arithmetic-refused' as const, updates }
+  const solveUpper = (right: Float64Array) => {
+    const solution = new Float64Array(size)
+    for (let i = size - 1; i >= 0; i--) {
+      let value = right[i]
+      for (const [j, weight] of upper[i]) value -= weight * solution[j]
+      solution[i] = value / diagonal[i]
+      if (!Number.isFinite(solution[i]) || (solution[i] === 0 && value !== 0)) return undefined
+    }
+    return solution
   }
-  return { status: 'factored' as const, solution, updates }
+  const solution = solveUpper(rhs)
+  if (!solution) return { status: 'inconclusive' as const, reason: 'arithmetic-refused' as const, updates }
+  const solveNormal = (right: Float64Array) => {
+    if (right.length !== size) return undefined
+    const transformed = right.slice()
+    for (let i = 0; i < size; i++) {
+      const value = transformed[i], divided = value / diagonal[i]
+      if (!Number.isFinite(divided) || (divided === 0 && value !== 0)) return undefined
+      transformed[i] = divided
+      for (const [j, weight] of upper[i]) transformed[j] -= weight * divided
+    }
+    return solveUpper(transformed)
+  }
+  return { status: 'factored' as const, solution, solveNormal, updates }
 }

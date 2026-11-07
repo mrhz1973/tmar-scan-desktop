@@ -2,6 +2,8 @@
 import type { Net, Point } from './brep'
 import { diagnoseExperimentalPeriodicGeometricJoint, type ExperimentalPeriodicGeometricJointRequest } from './experimentalPeriodicGeometricJoint'
 import { solveExperimentalPeriodicMobileSeamLeastSquares, type SparseRow } from './experimentalPeriodicMobileSeamLeastSquares'
+import { experimentalCoefficientChangeWithinCap, solveExperimentalPeriodicMobileSeamConstrained,
+  type ExperimentalPeriodicMobileSeamAdmmBudget } from './experimentalPeriodicMobileSeamConstrained'
 import { prepareExperimentalPeriodicOneSidedSurfaceDerivatives } from './experimentalPeriodicOneSidedSurfaceDerivatives'
 import { boundExperimentalPeriodicSeamDerivativeGap } from './experimentalPeriodicSeamDerivativeGap'
 import { sampleExperimentalPeriodicTransverseDerivatives } from './experimentalPeriodicTransverseSamples'
@@ -29,6 +31,8 @@ export interface ExperimentalPeriodicMobileSeamTargetsRequest extends Pick<Sampl
     maxFreeColumns: number
     /** Select augmented QR with an explicit factorization work cap. */
     augmentedQrMaxUpdates?: number
+    /** Select the constrained solve instead of unconstrained PCG or QR. */
+    constrainedAdmm?: ExperimentalPeriodicMobileSeamAdmmBudget
   }
 }
 
@@ -56,6 +60,7 @@ export function solveExperimentalPeriodicMobileSeamTargets(request: Experimental
   let phase: 'preflight' | 'seam-gap' | 'sampling' | 'fit' | 'training' | 'holdout' = 'preflight'
   const evidence: { iterations?: number; relativeStationarityResidual?: number; freeColumns?: number;
     convergence?: ReturnType<typeof solveExperimentalPeriodicMobileSeamLeastSquares>['convergence'];
+    constrainedFit?: ReturnType<typeof solveExperimentalPeriodicMobileSeamConstrained>['evidence'];
     maximumCoefficientChange?: number; maxTrainingNormalResidual?: number; maxHoldoutNormalResidual?: number;
     checkedTraining?: number; checkedHoldout?: number; minimumScale?: number } = {}
   const stop = (reasonCode: string, at?: Location) => ({ status: 'inconclusive' as const, phase, reasonCode, at, evidence, evidenceScope })
@@ -69,6 +74,7 @@ export function solveExperimentalPeriodicMobileSeamTargets(request: Experimental
         ![budgets.regularization, budgets.relativeStationarityTolerance, budgets.minimumPositiveScale].every(x => Number.isFinite(x) && x > 0 && x <= 1) ||
         ![budgets.minimumTangentNorm, budgets.minimumTransverseNorm].every(x => Number.isFinite(x) && x > 0) ||
         ![budgets.maximumTangentChord, budgets.maximumNormalChord].every(x => Number.isFinite(x) && x >= 0 && x <= 2) ||
+        (budgets.constrainedAdmm !== undefined && budgets.augmentedQrMaxUpdates !== undefined) ||
         !Number.isInteger(budgets.maxIterations) || budgets.maxIterations < 1 || budgets.maxIterations > 512 ||
         !Number.isInteger(budgets.maxFreeColumns) || budgets.maxFreeColumns < 2 || budgets.maxFreeColumns > 256)
       return stop('invalid-input')
@@ -129,12 +135,24 @@ export function solveExperimentalPeriodicMobileSeamTargets(request: Experimental
     }
 
     phase = 'fit'
-    const fit = solveExperimentalPeriodicMobileSeamLeastSquares(rows, freeColumns, previousWeight, nextWeight,
-      budgets.regularization, budgets.maxIterations, budgets.relativeStationarityTolerance, budgets.augmentedQrMaxUpdates)
-    evidence.iterations = fit.iterations
-    evidence.convergence = fit.convergence
-    if (fit.status !== 'solved') return stop(fit.reason)
-    evidence.relativeStationarityResidual = fit.relativeStationarityResidual
+    const constrained = budgets.constrainedAdmm !== undefined
+    let changes: Float64Array
+    if (constrained) {
+      const fit = solveExperimentalPeriodicMobileSeamConstrained(rows, freeColumns, previousWeight, nextWeight,
+        budgets.regularization, budgets.maximumCoefficientChange, budgets.constrainedAdmm!)
+      evidence.constrainedFit = fit.evidence
+      evidence.iterations = fit.evidence.iterations
+      if (fit.status !== 'solved') return stop(fit.reason)
+      changes = fit.changes
+    } else {
+      const fit = solveExperimentalPeriodicMobileSeamLeastSquares(rows, freeColumns, previousWeight, nextWeight,
+        budgets.regularization, budgets.maxIterations, budgets.relativeStationarityTolerance, budgets.augmentedQrMaxUpdates)
+      evidence.iterations = fit.iterations
+      evidence.convergence = fit.convergence
+      if (fit.status !== 'solved') return stop(fit.reason)
+      evidence.relativeStationarityResidual = fit.relativeStationarityResidual
+      changes = fit.changes
+    }
     const direction = lateralV, edgeRow = strip.edge === 'V0' ? 0 : net.nv - 1
     const vSpan = strip.edge === 'V0' ? 0 : net.kv.length - 2
     const factor = 5 / (net.kv[vSpan + 1] - net.kv[vSpan])
@@ -143,9 +161,11 @@ export function solveExperimentalPeriodicMobileSeamTargets(request: Experimental
     for (let u = 0; u < net.nu; u++) {
       const index = u * net.nv + edgeRow, point = net.poles[index]
       const before = point.map((value, axis) => factor * (net.poles[index + direction][axis] - value)) as Point
-      const after = before.map((value, axis) => value + (u === 0 ? nextWeight * fit.changes[axis] +
-        previousWeight * fit.changes[3 * (freeColumns - 1) + axis] : fit.changes[3 * (u - 1) + axis])) as Point
+      const after = before.map((value, axis) => value + (u === 0 ? nextWeight * changes[axis] +
+        previousWeight * changes[3 * (freeColumns - 1) + axis] : changes[3 * (u - 1) + axis])) as Point
       if (!after.every(Number.isFinite)) return stop('target-coefficient-unrepresentable')
+      if (constrained && !experimentalCoefficientChangeWithinCap(before, after, budgets.maximumCoefficientChange))
+        return stop('coefficient-cap-unverified')
       maximumChange = Math.max(maximumChange, Math.hypot(...after.map((value, axis) => value - before[axis])))
       coefficients.push(after)
     }
