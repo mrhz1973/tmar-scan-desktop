@@ -46,6 +46,16 @@ it('checks later V spans and withholds a full bound when the cap or piece budget
     .toMatchObject({ status: 'inconclusive', reason: 'piece-budget' })
 })
 
+it('withholds the pole maximum when a later pole displacement overflows', () => {
+  const original = fixture([0, 0.05, 0.1], [6, 1, 6]), candidate = structuredClone(original)
+  candidate.poles[0][2] = 0.01
+  original.poles.at(-1)![2] = -Number.MAX_VALUE
+  candidate.poles.at(-1)![2] = Number.MAX_VALUE
+  const result = boundExperimentalPeriodicQuinticStoredDisplacement(original, candidate, budget)
+  expect(result).toMatchObject({ status: 'inconclusive', reason: 'displacement-bound-refused' })
+  expect(result.maximumPoleDisplacementUpper).toBeUndefined()
+})
+
 it('encloses vector norms and accepts exact zero only for matching bases and displacement', () => {
   const original = fixture(), candidate = structuredClone(original)
   expect(boundExperimentalPeriodicQuinticStoredDisplacement(original, candidate, { ...budget, maximumSurfaceDisplacement: 0 }))

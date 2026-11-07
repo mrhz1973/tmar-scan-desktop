@@ -64,14 +64,15 @@ export function boundExperimentalPeriodicQuinticStoredDisplacement(original: Net
     const first = extractExperimentalPeriodicQuinticVDifferenceColumns(original, candidate, 0)
     const spans = original.kv.length - 1
     if (first.length * spans > budget.maxPieces) return stop('piece-budget')
-    maximumPoleDisplacementUpper = 0
+    let poleMaximum = 0
     for (const [i, point] of original.poles.entries()) {
       const difference = point.map((x, axis) => {
         const value = candidate.poles[i][axis]
         return value === x ? scalar(0) : sub(scalar(value), scalar(x))
       }) as V
-      maximumPoleDisplacementUpper = Math.max(maximumPoleDisplacementUpper, euclideanUpper(difference))
+      poleMaximum = Math.max(poleMaximum, euclideanUpper(difference))
     }
+    maximumPoleDisplacementUpper = poleMaximum
 
     let maximumSurfaceDisplacementUpper = 0
     for (let vSpan = 0; vSpan < spans; vSpan++) {
