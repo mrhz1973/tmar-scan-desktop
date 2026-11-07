@@ -14,6 +14,15 @@ export interface WorkspaceStripeSettings {
   readonly width: number
   readonly color: string
 }
+export interface WorkspacePointTarget {
+  point: Point
+  kind: 'scan' | 'cad'
+  label: string
+  /** Revalidate visibility, geometry, transform and lease before committing. */
+  current(): boolean
+}
+export type WorkspacePointTargetResolver = (point: Point, normal: Point, distance: number,
+  kind: 'scan' | 'cad') => WorkspacePointTarget | null
 
 /** Part-frame bounds only. The optional host action owns all camera framing. */
 export interface WorkspaceReticleFrame {
@@ -59,6 +68,7 @@ export interface WorkspaceSurfaceViewState {
   readonly snapDistance: number
   readonly busy: boolean
   readonly placingNote: boolean
+  readonly surfaceTarget?: { readonly kind:'scan'|'cad'; readonly sourceBodyId:number } | null
   /** Only anchors resolved against the currently displayed valid preview. */
   readonly notePins: readonly Point[]
   readonly stripes: WorkspaceStripeSettings | null
@@ -85,6 +95,8 @@ export interface WorkspaceSurfaceLayerOwner {
   /** null cancels and restores the previous committed net. */
   finishPoleGesture(poles: Point[] | null): void
   placeNote(point: Point | null): Promise<void>
+  pickSurfaceTarget?(point: Point | null, resolve: WorkspacePointTargetResolver): Promise<void>
+  cancelSurfaceTarget?(): void
   reportViewError(message: string): void
   /** Optional hooks for a future shared-view strip handle. */
   beginStripGesture?(edge: number): boolean

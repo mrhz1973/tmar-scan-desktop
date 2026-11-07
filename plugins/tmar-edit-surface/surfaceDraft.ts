@@ -825,8 +825,10 @@ export class SurfaceDraft {
    * It does not mean that the resulting body has already passed CAD validation.
    */
   async targetPoint(expected: SurfaceDraftSnapshot, anchor: DraftAnchor,
-    request: Omit<SurfacePointTarget, 'u' | 'v' | 'editablePoles'>): Promise<ReturnType<typeof targetSurfacePoint>> {
+    request: Omit<SurfacePointTarget, 'u' | 'v' | 'editablePoles'>,
+    targetCurrent: () => boolean = () => true): Promise<ReturnType<typeof targetSurfacePoint>> {
     this.ensureActive()
+    if (!targetCurrent()) throw new Error('Il riferimento del punto superficie è cambiato.')
     const before = this.snapshot, preparation = this.runtime.history.current?.preparation
     if (before !== expected) throw new Error('La bozza del punto superficie è cambiata.')
     if (!before.net || before.net !== before.committedNet || before.validNet !== before.net ||
@@ -850,6 +852,7 @@ export class SurfaceDraft {
     const resolved = await this.runtime.worker.ask<{ at: Point; normal: Point }>({ action: 'noteResolve',
       anchor: picked, previewRevision: before.preview.previewRevision! })
     this.ensureActive()
+    if (!targetCurrent()) throw new Error('Il riferimento del punto superficie è cambiato.')
     if (this.snapshot !== before || this.exportRequests || this.proposingPlaneTangency || this.proposingCurvedTangency)
       throw new Error('La bozza del punto superficie è cambiata durante la verifica CAD.')
     if (!resolved || !Array.isArray(resolved.at) || resolved.at.length !== 3 || !resolved.at.every(Number.isFinite) ||

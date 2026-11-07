@@ -13,6 +13,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const [distance, setDistance] = useState(0.1)
   const [smooth, setSmooth] = useState(0.5)
   const [factor, setFactor] = useState(1.1)
+  const [pointBudget, setPointBudget] = useState(1)
   const [stripDistance, setStripDistance] = useState(0.1)
   const [g1Pending, setG1Pending] = useState<'load' | 'apply' | null>(null)
   const [g1Error, setG1Error] = useState('')
@@ -132,6 +133,18 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         title={!state.canBeginStrip ? 'Serve una superficie aperta con anteprima valida e senza note o vincoli G1 attivi.' : 'Duplica un bordo libero della superficie aperta.'}
         onClick={() => attempt(() => controller.beginStrip())}>Duplica bordo libero</button>}
       {!strip && <>
+      <fieldset data-test="surface-point-target"><legend>Porta un punto della superficie sul riferimento</legend>
+        <p>Seleziona i poli liberi, scegli il riferimento e clicca un punto della faccia. Cerco il riferimento esterno più vicino lungo la normale CAD, nei due versi, entro {state.snapDistance} mm. Il punto della superficie si muove; i poli possono muoversi di più.</p>
+        <label>Limite spostamento di ciascun polo · mm<input data-test="surface-point-budget" type="number" min="0.001" max="1000" step="any" value={Number.isFinite(pointBudget)?pointBudget:''}
+          disabled={disabled || !!state.surfaceTarget} onChange={e=>setPointBudget(e.target.valueAsNumber)} /></label>
+        <div className="row"><button type="button" data-test="surface-point-scan" disabled={disabled || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
+          onClick={()=>attempt(()=>controller.beginSurfaceTarget('scan',pointBudget))}>Punto sulla scansione</button>
+        <button type="button" data-test="surface-point-cad" disabled={disabled || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
+          onClick={()=>attempt(()=>controller.beginSurfaceTarget('cad',pointBudget))}>Punto sul CAD esterno</button></div>
+        {state.surfaceTarget && <><p role="status">Clicca un punto sulla faccia selezionata. Destinazione: {state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.</p>
+          <button type="button" data-test="surface-point-cancel" onClick={()=>controller.cancelSurfaceTarget()}>Annulla scelta punto</button></>}
+        <p>Il riferimento usa i triangoli visualizzati. L’esito richiede la verifica CAD; le protezioni dei bordi restano attive. Disattiva simmetria e tangenze aggiunte per usare questo comando.</p>
+      </fieldset>
       {state.canBeginStrip && <label>Direzione CAD per il bordo D
         <select data-test="surface-direct-strip-axis" value={state.directStripAxis} disabled={disabled}
           onChange={e => attempt(() => controller.setDirectStripAxis(Number(e.target.value) as 0 | 1 | 2))}>

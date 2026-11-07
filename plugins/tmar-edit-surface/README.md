@@ -1,5 +1,33 @@
 # Edit Surface — CAD prototype checkpoint
 
+### Surface-point alignment, source integration checkpoint
+
+The shared-workspace panel offers **Punto sulla scansione** and **Punto sul CAD
+esterno**. Select unlocked poles, set the maximum movement allowed for each
+pole, then click a point on the selected CAD face. The worker resolves its UV
+and CAD normal; the layer searches in both normal directions for the nearest
+visible external reference within the displayed magnet reach. The operation
+targets the actual NURBS point rather than moving a pole onto the reference.
+The existing pole-drag magnet remains independent, including when disabled.
+
+Only selected poles permitted by manual, trim, hidden and G0/G1 protection may
+move. Added tangency constraints, adaptive/cylindrical preparations and symmetry
+are refused. Reference identity, visibility, geometry, transform, session source
+and the exact draft are checked before commit. CAD destinations exclude the
+source body and its preview neighbours. Escape or the panel's cancel command
+cancels point selection. A successful proposal adds one local Undo operation
+and then goes through ordinary CAD validation; a rejected candidate remains
+unverified and can be undone.
+
+New session/layer tests cover normal-direction targeting, part coordinates with
+a rotated host, independence from pole snapping, reference lifetime, cancellation,
+source changes and exclusion of the edited body. Controller and independent
+Bernstein/OCCT tests cover the mathematical point and protected geometry.
+These are source-level tests with simulated host/transport, not browser-pointer,
+packaged desktop or project save/reopen qualification. Targets use displayed
+triangles; the numerical point residual is not an accuracy claim for the scan,
+the entire surface or its continuous boundary. No QuickSurface parity is claimed.
+
 ### Shared workspace: normal drag and integration, 2026-11-04
 
 Pole movement starts on the surface's local normal N. U/V and world axes remain

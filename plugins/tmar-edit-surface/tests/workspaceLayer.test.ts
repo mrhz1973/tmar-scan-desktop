@@ -132,6 +132,37 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
 
+it.each(['scan','cad'] as const)('resolves a surface target from external %s references in part coordinates, with snap disabled',async kind=>{
+  const f=fixture({reference:kind==='scan'?'scan':'cad-face',rotated:true})
+  let found:import('../workspaceBridge').WorkspacePointTarget|null=null
+  f.owner.pickSurfaceTarget=vi.fn(async(_p,resolve)=>{found=resolve([.2,0,0],[1,0,0],1,kind)})
+  f.owner.cancelSurfaceTarget=vi.fn(()=>f.set({surfaceTarget:null}))
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({snap:false,surfaceTarget:{kind,sourceBodyId:4}})
+  expect(f.getLayer().pointerDown?.(f.event(4,[0,0,0]))).toBe(false)
+  const client=f.client([0,0,0]);f.getLayer().click?.(client.clientX,client.clientY,false)
+  await Promise.resolve()
+  expect(f.owner.pickSurfaceTarget).toHaveBeenCalled()
+  const hit=found as import('../workspaceBridge').WorkspacePointTarget|null
+  expect(hit?.point[0]).toBeCloseTo(0,10);expect(hit?.current()).toBe(true)
+  const ref=f.view.references()[0]
+  ref.partFromGeometry[12]=2
+  expect(hit?.current()).toBe(false)
+  expect(layer.cancelGesture()).toBe(true)
+  expect(f.owner.cancelSurfaceTarget).toHaveBeenCalled()
+  layer.dispose()
+})
+
+it('never uses the edited CAD body or neighbouring preview faces as an external point target',async()=>{
+  const f=fixture({reference:'cad-face'})
+  let found:unknown='not called'
+  f.owner.pickSurfaceTarget=vi.fn(async(_p,resolve)=>{found=resolve([.2,0,0],[1,0,0],1,'cad')})
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({surfaceTarget:{kind:'cad',sourceBodyId:7}})
+  const client=f.client([0,0,0]);f.getLayer().click?.(client.clientX,client.clientY,false)
+  await Promise.resolve();expect(found).toBeNull();layer.dispose()
+})
+
 it.each(['up', 'cancel', 'lostCapture', 'interruption', 'dispose'] as const)(
   'releases the navigation claim after pole gesture %s', termination => {
     const f=fixture(), layer=createWorkspaceLayer(f.view,f.owner), press=f.event(4,[-1,-1,0])

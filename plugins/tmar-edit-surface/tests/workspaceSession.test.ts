@@ -113,6 +113,60 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 }
 afterEach(()=>vi.useRealTimers())
 
+describe('explicit surface-point reference alignment',()=>{
+  const pin={anchor:{face:0,selectionRevision:1,u:.5,v:.5},at:[2,2,0],normal:[0,0,1]}
+  it('keeps pole snapping independent, resolves a clicked surface point, and commits one validated Undo step',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false);t.session.setSnap(false)
+    expect(t.session.getPanelState().canTargetPoint).toBe(true)
+    t.session.beginSurfaceTarget('scan',2)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    const resolve=vi.fn(()=>({point:[2,2,.2] as Point,kind:'scan' as const,label:'Scansione',current:()=>true}))
+    const pending=t.session.pickSurfaceTarget([2,2,0],resolve),pick=t.worker.sent.at(-1)!
+    expect(pick.action).toBe('notePick');t.worker.reply(pick.id,pin);await flush()
+    expect(resolve).toHaveBeenCalledWith([2,2,0],[0,0,1],1,'scan')
+    expect(t.worker.sent.at(-1)?.action).toBe('noteResolve')
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    expect(t.session.getPanelState().snap).toBe(false)
+    expect(t.session.getPanelState().notes).toHaveLength(0)
+    expect(t.session.getPanelState().surfaceTarget).toBeNull()
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    expect(t.session.getPanelState().net!.poles[12][2]).toBeCloseTo(.8,12)
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(plane())
+    expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it.each(['reference','cancel','source'] as const)('does not commit a result when %s changes during resolution',async change=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false);t.session.beginSurfaceTarget('cad',2)
+    let current=true
+    const pending=t.session.pickSurfaceTarget([2,2,0],()=>({point:[2,2,.2],kind:'cad',label:'Corpo CAD 7',current:()=>current})).catch(e=>e as Error)
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()
+    expect(t.worker.sent.at(-1)?.action).toBe('noteResolve')
+    if(change==='reference') current=false
+    if(change==='cancel') t.session.cancelSurfaceTarget()
+    if(change==='source') t.invalidate()
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin)
+    expect(await pending).toBeInstanceOf(Error)
+    expect(t.session.getPanelState().net).toEqual(plane())
+    expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it('refuses missing references and budgets and disables unsupported symmetry without altering geometry',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    expect(()=>t.session.beginSurfaceTarget('scan',0)).toThrow()
+    t.session.beginSurfaceTarget('scan',1)
+    const pending=t.session.pickSurfaceTarget([2,2,0],()=>null)
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin)
+    await expect(pending).rejects.toThrow(/Nessun riferimento/)
+    expect(t.session.getPanelState().net).toEqual(plane())
+    t.session.setSymmetry(true)
+    expect(t.session.getPanelState().canTargetPoint).toBe(false)
+    expect(()=>t.session.beginSurfaceTarget('scan',1)).toThrow()
+    await t.session.dispose('cancelled')
+  })
+})
+
 describe('WorkspaceSurfaceSession',()=>{
   it('keeps the navigation control visible while editing a free edge',async()=>{
     const {createElement}=await import('react')

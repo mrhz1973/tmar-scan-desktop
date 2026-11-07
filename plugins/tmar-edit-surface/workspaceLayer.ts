@@ -208,7 +208,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (disposed || layerDisposed) return
     try {
       const state = owner.getViewState(), anchor = stripAnchor(state)
-      if (!anchor || state.placingNote || state.navigationOnly) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
+      if (!anchor || state.placingNote || state.surfaceTarget || state.navigationOnly) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
       const direct = !state.strip && state.directStrip && directSelection &&
         state.directStrip.paths === directSelection.paths && state.directStrip.revision === directSelection.revision ? directSelection : null
       stripHandle.dataset.edge = String(state.strip ? state.strip.selectedEdge : direct?.edge ?? -1)
@@ -231,7 +231,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   }
 
   const refreshReferences = () => {
-    if (!referencesDirty || disposed || !owner.getViewState().snap) return
+    if (!referencesDirty || disposed || (!owner.getViewState().snap && !owner.getViewState().surfaceTarget)) return
     if (Date.now() < retryReferencesAt) return
     // Only an automatic partial retry may reuse existing wrappers. A host
     // notification resets retryReferencesAt and forces a fresh enumeration.
@@ -485,7 +485,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // state. In either case this invocation must not apply its stale state.
       if (disposed || layerDisposed || revision !== syncRevision) return
       positionStripHandle()
-      if (state.snap && !state.strip) { refreshReferences(); refreshNeighbours() }
+      if ((state.snap || state.surfaceTarget) && !state.strip) { refreshReferences(); refreshNeighbours() }
       else { disposeTargets(referenceTargets); referenceTargets = []; disposeTargets(neighbourTargets); neighbourTargets = []; referencesDirty = neighboursDirty = true; retryNeighboursAt = 0; hideFeedback() }
       syncZebra(state)
       syncOpacity(state)
@@ -603,6 +603,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     }
   }
   const cancelGesture = (): boolean => {
+    if(owner.getViewState().surfaceTarget) {owner.cancelSurfaceTarget?.();return true}
     if (!capture) return false
     const active = capture; capture = null
     active.gesture.cancel()
@@ -627,7 +628,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     try {
       const state = owner.getViewState()
       if (disposed || layerDisposed || capture || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey ||
-          state.busy || state.placingNote || state.navigationOnly || !displayed || !owner.previewStripDelta || !owner.finishStripGesture) return false
+          state.busy || state.placingNote || state.surfaceTarget || state.navigationOnly || !displayed || !owner.previewStripDelta || !owner.finishStripGesture) return false
       if (direct) {
         if (state.strip || !state.directStrip || state.directStrip.paths !== direct.paths ||
             state.directStrip.revision !== direct.revision || !owner.beginDirectStripGesture) return false
@@ -692,7 +693,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const down = (event: PointerEvent): boolean => {
     if (disposed || layerDisposed || capture || event.button !== 0 || event.shiftKey) return false
     const state = owner.getViewState(), net = state.net
-    if (state.busy || state.placingNote || state.navigationOnly || !displayed || event.ctrlKey || event.metaKey) return false
+    if (state.busy || state.placingNote || state.surfaceTarget || state.navigationOnly || !displayed || event.ctrlKey || event.metaKey) return false
     let claimed = false, begun = false
     try {
       if (state.strip) {
@@ -783,10 +784,41 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const click = (x: number, y: number, additive: boolean): boolean => {
     if (disposed || layerDisposed) return false
     const state = owner.getViewState()
-    if (state.navigationOnly && !state.placingNote) return false
+    if (state.navigationOnly && !state.placingNote && !state.surfaceTarget) return false
     if (state.busy || faceRequest) return true
     if (state.strip) return true
     try {
+      if(state.surfaceTarget && owner.pickSurfaceTarget) {
+        const hit=pickFace(x,y)
+        if(!hit || hit.face!==state.face) {report('Clicca sulla faccia CAD selezionata.');return true}
+        const sourceBodyId=state.surfaceTarget.sourceBodyId
+        void owner.pickSurfaceTarget(hit.point,(at,normal,distance,kind)=>{
+          refreshReferences()
+          // Only external host references: never the edited face or its neighbours.
+          const candidates=referenceTargets.filter(t=>t.current() && t.reference?.kind===kind &&
+            (kind==='scan' || (typeof t.reference.bodyId==='number' && t.reference.bodyId!==sourceBodyId)))
+          const origin=new THREE.Vector3(...at),direction=new THREE.Vector3(...normal)
+          const visible=(p:THREE.Vector3)=>view.projectPartPoint(point(p)).visible &&
+            !clipping.planes?.some(plane=>plane.distanceToPoint(view.group.localToWorld(p.clone()))<0)
+          let closest:{target:Target;hit:SnapHit;distance:number}|null=null
+          for(const target of candidates) {
+            const snapped=snapAlong(origin,direction,distance,[target.mesh])
+            if(!snapped || !visible(snapped.point)) continue
+            const gap=snapped.point.distanceTo(origin)
+            if(!closest || gap<closest.distance) closest={target,hit:snapped,distance:gap}
+          }
+          if(!closest) return null
+          const chosen=closest.target,reference=chosen.reference!,snapped=closest.hit
+          return {point:point(snapped.point),kind,label:snapped.label,current:()=>{
+            if(disposed || layerDisposed || !referenceTargets.includes(chosen) || !chosen.current() || !visible(snapped.point)) return false
+            return (view.references() as readonly ReferenceDescriptor[]).some(ref=>ref.visible && ref.isCurrent() &&
+              ref.id===reference.id && ref.revision===reference.revision && ref.geometry===reference.source &&
+              (ref.kind==='scan'?'scan':'cad')===kind && ref.bodyId===reference.bodyId &&
+              new THREE.Matrix4().fromArray([...ref.partFromGeometry]).equals(reference.matrix))
+          }}
+        }).catch(error=>report(errorText(error)))
+        return true
+      }
       if (state.placingNote) { void owner.placeNote(pickFace(x, y)?.point ?? null).catch(error => report(errorText(error))); return true }
       const picked = pickNet(x, y)
       if (picked) { owner.selectPoints(picked, additive); return true }
