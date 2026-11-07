@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { assertNet, boundaryLocked, type Net, type Point } from './brep'
-import type { Preview, G1PlaneResult, G1PublishedPlaneResult, G1CurvedResult, G1PublishedCurvedResult, RecipeRestoreResult, CurvedRecipeRestoreResult } from './editorKernel'
+import type { Preview, DraftAnchor, G1PlaneResult, G1PublishedPlaneResult, G1CurvedResult, G1PublishedCurvedResult, RecipeRestoreResult, CurvedRecipeRestoreResult } from './editorKernel'
 import { readRecipe, readCurvedRecipe, sha256, decodeRecipePoint, type SurfaceEditRecipe, type SurfaceEditRecipeV6 } from './recipe'
 import type { EditFrame, SurfacePreparation, SurfacePlaneTangency, SurfaceCurvedTangency } from './surfaceHistory'
 import type { PreviewDraft, SurfaceRuntime } from './surfaceRuntime'
@@ -13,6 +13,7 @@ import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupport
 import type { AdaptiveSelection } from './editor.worker'
 import { readAdaptiveLockedRecipe, type AdaptiveLockedRecipe } from './adaptiveLockedRecipe'
 import { validatePlaneTangencyResult, validatePlaneTangencyConstraint, type PlaneTangencyRequest, type NaturalEdge } from './planeTangency'
+import { targetSurfacePoint, type SurfacePointTarget } from './surfacePointTarget'
 
 export interface CylinderProvisionalPreview { kind: 'provisional'; mesh: Mesh; faceMeshes?: Mesh[] }
 
@@ -816,6 +817,46 @@ export class SurfaceDraft {
       continuity: this.snapshot.continuity, freeBoundary: this.snapshot.freeBoundary, preparation: this.runtime.history.current?.preparation,
       planeTangency: this.runtime.history.current?.planeTangency, curvedTangency: this.runtime.history.current?.curvedTangency })
     this.applyFrame(frame, equivalentToShown)
+  }
+
+  /** Controller-only point targeting. The anchor must belong to the caller's
+   * exact validated snapshot; its UV is classified on the current CAD face.
+   * Success commits one candidate, then the ordinary CAD queue validates it.
+   * It does not mean that the resulting body has already passed CAD validation.
+   */
+  async targetPoint(expected: SurfaceDraftSnapshot, anchor: DraftAnchor,
+    request: Omit<SurfacePointTarget, 'u' | 'v' | 'editablePoles'>): Promise<ReturnType<typeof targetSurfacePoint>> {
+    this.ensureActive()
+    const before = this.snapshot, preparation = this.runtime.history.current?.preparation
+    if (before !== expected) throw new Error('La bozza del punto superficie è cambiata.')
+    if (!before.net || before.net !== before.committedNet || before.validNet !== before.net ||
+        before.calculating || before.previewStale || !before.preview?.valid ||
+        !Number.isSafeInteger(before.preview.previewRevision) || this.exportRequests ||
+        this.proposingPlaneTangency || this.proposingCurvedTangency)
+      throw new Error('Attendi una bozza CAD valida prima di scegliere il punto superficie.')
+    if (before.cylinderSession !== null || before.planeTangency || before.curvedTangency || preparation?.adaptiveSelection)
+      throw new Error('Punto superficie non qualificato per questa preparazione o tangenza.')
+    if (!preparation || !anchor || anchor.face !== preparation.face || !Number.isSafeInteger(anchor.selectionRevision) ||
+        anchor.selectionRevision < 0 || !Number.isFinite(anchor.u) || !Number.isFinite(anchor.v))
+      throw new Error('Riferimento del punto superficie non coerente con la faccia.')
+    const locked = new Set([...before.locks, ...before.trimLocks, ...before.hiddenPoles])
+    const editablePoles = before.selected.filter(i => !locked.has(i) &&
+      (before.freeBoundary || !boundaryLocked(before.net!, i, before.continuity)))
+    if (!editablePoles.length) throw new Error('Seleziona poli liberi che influenzino il punto superficie.')
+    // Own caller inputs before yielding; they may change while CAD resolves UV.
+    const picked = structuredClone(anchor), options = structuredClone(request)
+    const candidate = targetSurfacePoint(before.net, { ...options, u: picked.u, v: picked.v, editablePoles })
+    this.checkEdit(candidate.net)
+    const resolved = await this.runtime.worker.ask<{ at: Point; normal: Point }>({ action: 'noteResolve',
+      anchor: picked, previewRevision: before.preview.previewRevision! })
+    this.ensureActive()
+    if (this.snapshot !== before || this.exportRequests || this.proposingPlaneTangency || this.proposingCurvedTangency)
+      throw new Error('La bozza del punto superficie è cambiata durante la verifica CAD.')
+    if (!resolved || !Array.isArray(resolved.at) || resolved.at.length !== 3 || !resolved.at.every(Number.isFinite) ||
+        Math.hypot(...resolved.at.map((x, d) => x - candidate.before[d])) > 1e-7)
+      throw new Error('Il punto CAD non coincide con il riferimento della superficie.')
+    this.commit(candidate.net)
+    return candidate
   }
 
   /** Restore the source surface even when points have since been manually locked. */
