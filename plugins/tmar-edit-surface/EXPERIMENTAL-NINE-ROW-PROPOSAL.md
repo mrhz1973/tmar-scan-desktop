@@ -150,6 +150,11 @@ to degree three in U and five in V. It remains a patch-level proof only:
 extracting corresponding periodic spline patches and checking all cells is
 separate, and no result here qualifies trims, thickness or a CAD solid.
 
+An experimental cell extractor now encloses a corresponding pair of U2/U3,
+V5 periodic spline cells as interval Bernstein patches. Synthetic checks cover
+nonuniform knots and both one-sided seam cells. It is still a per-cell
+primitive: a full-domain check, trim and CAD qualification remain separate.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
