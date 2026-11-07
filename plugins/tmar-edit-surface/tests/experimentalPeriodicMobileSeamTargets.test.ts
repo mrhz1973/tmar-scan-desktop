@@ -7,6 +7,7 @@ import { solveExperimentalPeriodicMobileSeamPairTargets, solveExperimentalPeriod
 import { sampleExperimentalPeriodicGeometricSideTargets } from '../experimentalPeriodicGeometricSideTargets'
 import { solveAndStoreExperimentalPeriodicMobileSeamPair, type ExperimentalPeriodicMobileSeamStoredPairRequest } from '../experimentalPeriodicMobileSeamStoredPair'
 import { proposeExperimentalPeriodicQuinticFullCoordinatedSeam } from '../experimentalPeriodicQuinticSide'
+import { prepareExperimentalPeriodicUBasis } from '../experimentalPeriodicUBasis'
 
 function fixture(): ExperimentalPeriodicMobileSeamPairTargetsRequest {
   const spans = 8, nu = spans + 2, ku = Array.from({ length: spans + 1 }, (_, i) => i)
@@ -99,6 +100,85 @@ it('checks the regularized solution after unscaling and refuses invalid sparse c
   expect(regular.changes[3]).toBeCloseTo(0.8, 14)
   expect(solve(3, Number.MIN_VALUE)).toMatchObject({ status: 'inconclusive', reason: 'arithmetic-refused' })
   expect(solve(9, 1)).toMatchObject({ status: 'inconclusive', reason: 'invalid-input' })
+})
+
+it('solves a comparable cubic sampled design with augmented QR when diagonal PCG exhausts 128 iterations', () => {
+  const spans = 237, basis = prepareExperimentalPeriodicUBasis(3, Array.from({ length: spans + 1 }, (_, i) => i),
+    [3, ...Array<number>(spans - 1).fill(1), 3])
+  const free = basis.poleCount - 1
+  const parameters = [0, 0, ...Array.from({ length: spans }, (_, i) =>
+    (i % 8 === 0 && i < 224 ? [0.13, 0.31, 0.47, 0.81] : [0.13, 0.47, 0.81]).map(fraction => i + fraction)).flat()]
+  const rows = parameters.map(u => {
+    const k = u / spans, theta = 0.7 + 0.03 * (Math.sin(7 * k) + Math.sin(13 * u) * 0.3), phi = 0.03 * Math.cos(9 * k + 4 * u)
+    const normal = [Math.cos(theta) * Math.cos(phi), Math.sin(theta) * Math.cos(phi), Math.sin(phi)]
+    const active = basis.evaluate(u), reduced = new Map<number, number>()
+    const add = (column: number, value: number) => reduced.set(column, (reduced.get(column) ?? 0) + value)
+    for (const [j, index] of active.indices.entries()) {
+      const weight = active.values[j]
+      if (index === 0) { add(0, weight / 2); add(free - 1, weight / 2) }
+      else add(index - 1, weight)
+    }
+    const entries = [...reduced.entries()].flatMap(([column, value]) => normal.map((component, axis) =>
+      ({ column: 3 * column + axis, weight: component * value })))
+    return { entries, value: entries.reduce((sum, { column, weight }) => sum + weight * Math.sin(0.081 * column), 0) }
+  })
+  const ridge = 1e-9, tolerance = 1e-11
+  const run = (factorCap?: number) => solveExperimentalPeriodicMobileSeamLeastSquares(rows, free, 0.5, 0.5, ridge, 128, tolerance, factorCap)
+  expect([rows.length, free]).toEqual([741, 238])
+  const old = run()
+  expect(old).toMatchObject({ status: 'inconclusive', reason: 'iteration-budget', iterations: 128,
+    convergence: { method: 'diagonal-pcg', last: { iteration: 128 }, representedRelativeStationarityResidual: null },
+  })
+  expect(old.convergence.last!.relativeStationarityResidual).toBeGreaterThan(tolerance)
+  expect(old.convergence.best!.relativeStationarityResidual).toBeLessThanOrEqual(old.convergence.last!.relativeStationarityResidual)
+  expect(old).not.toHaveProperty('changes')
+
+  const qr = run(500_000)
+  if (qr.status !== 'solved') throw new Error(JSON.stringify(qr))
+  expect(qr.convergence.method).toBe('augmented-qr')
+  expect(qr.convergence.factorUpdates).toBeLessThan(500_000)
+  expect(qr.convergence.representedRelativeStationarityResidual).toBeLessThan(tolerance)
+  const gradient = new Float64Array(3 * free), rhs = new Float64Array(3 * free)
+  for (const { entries, value } of rows) {
+    const residual = value - entries.reduce((sum, entry) => sum + entry.weight * qr.changes[entry.column], 0)
+    for (const { column, weight } of entries) { gradient[column] += weight * residual; rhs[column] += weight * value }
+  }
+  for (const [i, change] of qr.changes.entries()) gradient[i] -= ridge * change
+  for (let axis = 0; axis < 3; axis++) {
+    const last = 3 * (free - 1) + axis, seam = ridge * (qr.changes[axis] + qr.changes[last]) / 4
+    gradient[axis] -= seam
+    gradient[last] -= seam
+  }
+  expect(Math.max(...gradient.map(Math.abs)) / Math.max(...rhs.map(Math.abs))).toBeLessThan(tolerance)
+  const bounded = run(10)
+  expect(bounded).toMatchObject({ status: 'inconclusive', reason: 'factor-budget', convergence: { method: 'augmented-qr' } })
+  expect(bounded.convergence.factorUpdates).toBeLessThanOrEqual(10)
+  expect(bounded).not.toHaveProperty('changes')
+})
+
+it('selects augmented QR explicitly and keeps sampled gates and receipts at both joints', () => {
+  const request = fixture()
+  request.atCentralV0.budgets.augmentedQrMaxUpdates = 10_000
+  request.atCentralV1.budgets.augmentedQrMaxUpdates = 10_000
+  const fitted = solveExperimentalPeriodicMobileSeamPairTargets(request)
+  expect(fitted).toMatchObject({ status: 'targets-only', receipts: {
+    V0: { evidence: { convergence: { method: 'augmented-qr' }, checkedTraining: 33, checkedHoldout: 32 } },
+    V1: { evidence: { convergence: { method: 'augmented-qr' }, checkedTraining: 33, checkedHoldout: 32 } },
+  } })
+  request.atCentralV1.budgets.augmentedQrMaxUpdates = 1
+  const bounded = solveExperimentalPeriodicMobileSeamPairTargets(request)
+  expect(bounded).toMatchObject({ status: 'inconclusive', stop: { side: 'V1', phase: 'fit', reasonCode: 'factor-budget' },
+    receipts: { V1: { evidence: { convergence: { method: 'augmented-qr', representedRelativeStationarityResidual: null } } } } })
+  expect(bounded).not.toHaveProperty('targets')
+
+  const stored = storedFixture()
+  stored.atCentralV0.budgets.augmentedQrMaxUpdates = 10_000
+  stored.atCentralV1.budgets.augmentedQrMaxUpdates = 10_000
+  const result = solveAndStoreExperimentalPeriodicMobileSeamPair(stored)
+  if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
+  for (const side of ['V0', 'V1'] as const) expect(result.receipts[side]).toMatchObject({ status: 'diagnostic-only', evidence: {
+    checkedTraining: 33, checkedHoldout: 32, storage: { seamJumpPreserved: true, normals: { status: 'certified-positive' } },
+  } })
 })
 
 function storedFixture(): ExperimentalPeriodicMobileSeamStoredPairRequest {

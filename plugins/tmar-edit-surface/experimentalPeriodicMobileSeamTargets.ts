@@ -27,6 +27,8 @@ export interface ExperimentalPeriodicMobileSeamTargetsRequest extends Pick<Sampl
     maxIterations: number
     relativeStationarityTolerance: number
     maxFreeColumns: number
+    /** Select augmented QR with an explicit factorization work cap. */
+    augmentedQrMaxUpdates?: number
   }
 }
 
@@ -53,6 +55,7 @@ export function solveExperimentalPeriodicMobileSeamTargets(request: Experimental
   const evidenceScope = 'sampled-mobile-seam-normal-residual-targets' as const
   let phase: 'preflight' | 'seam-gap' | 'sampling' | 'fit' | 'training' | 'holdout' = 'preflight'
   const evidence: { iterations?: number; relativeStationarityResidual?: number; freeColumns?: number;
+    convergence?: ReturnType<typeof solveExperimentalPeriodicMobileSeamLeastSquares>['convergence'];
     maximumCoefficientChange?: number; maxTrainingNormalResidual?: number; maxHoldoutNormalResidual?: number;
     checkedTraining?: number; checkedHoldout?: number; minimumScale?: number } = {}
   const stop = (reasonCode: string, at?: Location) => ({ status: 'inconclusive' as const, phase, reasonCode, at, evidence, evidenceScope })
@@ -127,8 +130,9 @@ export function solveExperimentalPeriodicMobileSeamTargets(request: Experimental
 
     phase = 'fit'
     const fit = solveExperimentalPeriodicMobileSeamLeastSquares(rows, freeColumns, previousWeight, nextWeight,
-      budgets.regularization, budgets.maxIterations, budgets.relativeStationarityTolerance)
+      budgets.regularization, budgets.maxIterations, budgets.relativeStationarityTolerance, budgets.augmentedQrMaxUpdates)
     evidence.iterations = fit.iterations
+    evidence.convergence = fit.convergence
     if (fit.status !== 'solved') return stop(fit.reason)
     evidence.relativeStationarityResidual = fit.relativeStationarityResidual
     const direction = lateralV, edgeRow = strip.edge === 'V0' ? 0 : net.nv - 1

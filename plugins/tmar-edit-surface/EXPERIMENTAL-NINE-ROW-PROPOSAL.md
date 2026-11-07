@@ -261,3 +261,7 @@ The experimental coordinated-pair diagnostic evaluates both lateral proposals ag
 ### Full-column mobile seam synthetic solve
 
 A separate experimental path solves projected tangent-plane targets across free U columns for both sides, derives U0 from its neighbors, stores both candidate nets through the quintic guard and checks stored jets on distinct training and holdout locations. Stored seam derivative jump, displacement, D2 and source-to-candidate normals have separate refusal checks. A synthetic fixture moves the seam and a distant column on both sides. This is not a continuous cross-face G1 certificate, pcurve or topology verification, a valid solid, an integrated feature or a real Tube result. Unrepresentable stored coefficients fail closed.
+
+### Augmented QR solve
+
+An explicit experimental augmented sparse QR solves the same regularized full-column objective without changing the default PCG path or stored-geometry guards. On a synthetic 741-row system with rotating normals and 711 unknowns, the independent NumPy least-squares result agreed within 5.18e-11 in the solution; the old iterative method reached its 128-iteration limit in that fixture. Synthetic convergence does not establish real geometry, cross-face continuity or CAD validity.
