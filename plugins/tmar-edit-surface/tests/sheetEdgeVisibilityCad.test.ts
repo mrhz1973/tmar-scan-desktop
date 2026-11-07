@@ -68,6 +68,13 @@ it('certifies the front free edge of a folded shell independent of candidate ord
         expect(cadPick?.edge).toBe(frontRim.edge)
         expect(cadPick?.point[2]).toBeCloseTo(frontZ,10)
       }
+      const clipping = {partToWorld:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+        planes:[{normal:[0,0,-1] as Point,constant:.01}],margins:{planeClearanceMm:.001,startGuardMm:.001,
+          endpointExtensionMm:.0001,minimumVisibleLengthMm:.003,minimumCrossingCosine:.01}}
+      expect(queryVisibleSheetEdge(k,source,[rearRim],[-2,0,5],[0,0,-1],clipping)?.edge).toBe(rearRim.edge)
+      expect(queryVisibleSheetEdge(k,source,[frontRim],[-2,0,5],[0,0,-1],clipping)).toBeNull()
+      for (const candidates of [[frontRim,rearRim],[rearRim,frontRim]])
+        expect(queryVisibleSheetEdge(k,source,candidates,[-2,0,5],[0,0,-1],clipping)?.edge).toBe(rearRim.edge)
       expect(queryVisibleSheetEdge(k,source,[rearRim],[-2,0,5],[0,0,-1])).toBeNull()
       expect(queryVisibleSheetEdge(k,source,[frontRim],[-2,0,5],[0,0,-1])?.edge).toBe(frontRim.edge)
       const anotherFront = at([0,-2,frontZ],p=>Math.abs(p[1]+2)<1e-8 && Math.abs(p[2]-frontZ)<1e-8)

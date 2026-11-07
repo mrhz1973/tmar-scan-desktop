@@ -2,6 +2,8 @@
 import type { OcctKernel, ShapeHandle, Vec3 } from 'occt-wasm'
 import type { Point } from './brep'
 import { proveBoundaryPointVisibility } from './boundaryVisibilityCad'
+import { proveClippedBoundaryVisibility } from './clippedBoundaryVisibilityCad'
+import { clippedPointCertainty, type ClippedRayMargins, type WorldClipPlane } from './clippedRayInterval'
 import { sheetEdgePaths, withBoundary } from './sheetExtension'
 
 const tolerance = 1e-6
@@ -10,6 +12,12 @@ const finite = (p:readonly number[]) => p.length === 3 && p.every(Number.isFinit
 const tuple = (p:Vec3):Point => [p.x,p.y,p.z]
 const vec = (p:Point):Vec3 => ({x:p[0],y:p[1],z:p[2]})
 const distance = (a:Point,b:Point) => Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2])
+
+export interface SheetEdgeClippingProof {
+  partToWorld:readonly number[]
+  planes:readonly WorldClipPlane[]
+  margins:ClippedRayMargins
+}
 
 export interface SheetEdgeVisibilityCandidate {
   /** Same free-edge index and path supplied by sheetEdgePaths for this CAD revision. */
@@ -64,7 +72,7 @@ function candidatePoint(k:OcctKernel,edge:ShapeHandle,path:Point[],candidate:She
  * preview/camera fence and reprojection of the returned point.
  */
 export function queryVisibleSheetEdge(k:OcctKernel,source:ShapeHandle,candidates:readonly SheetEdgeVisibilityCandidate[],
-  cameraOrigin:Point,parallelDirection?:Point):{edge:number;point:Point}|null {
+  cameraOrigin:Point,parallelDirection?:Point,clipping?:SheetEdgeClippingProof):{edge:number;point:Point}|null {
   if (!candidates.length || candidates.length > 8 || !finite(cameraOrigin) ||
       (parallelDirection && !finite(parallelDirection)) ||
       candidates.some(candidate => !Number.isSafeInteger(candidate.edge) || candidate.edge < 0 ||
@@ -107,10 +115,15 @@ export function queryVisibleSheetEdge(k:OcctKernel,source:ShapeHandle,candidates
         const surface = tuple(k.pointOnSurface(face,u,v))
         if (!finite(surface) || distance(surface,point) > tolerance ||
             !['in','on'].includes(k.classifyPointOnFace(face,u,v))) return null
-        const result = proveBoundaryPointVisibility(k,shell,point,tuple(k.surfaceNormal(face,u,v)),cameraOrigin,parallelDirection)
+        if (clipping && clippedPointCertainty(point,clipping.partToWorld,clipping.planes,
+          clipping.margins.planeClearanceMm)==='clipped') continue
+        const normal=tuple(k.surfaceNormal(face,u,v))
+        const result = clipping
+          ? proveClippedBoundaryVisibility(k,shell,point,normal,cameraOrigin,clipping.partToWorld,clipping.planes,clipping.margins,parallelDirection)
+          : proveBoundaryPointVisibility(k,shell,point,normal,cameraOrigin,parallelDirection)
         if (result.reason === 'occluded') continue
         if (!result.visible || winner) return null
-        winner = {edge:candidate.edge,point:result.point}
+        winner = {edge:candidate.edge,point}
       }
       return winner
     })

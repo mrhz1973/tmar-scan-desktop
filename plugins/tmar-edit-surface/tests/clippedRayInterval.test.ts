@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, it } from 'vitest'
-import { clippedRayInterval, type ClippedRayMargins } from '../clippedRayInterval'
+import { clippedPointCertainty, clippedRayInterval, type ClippedRayMargins } from '../clippedRayInterval'
 import type { Point } from '../brep'
 
 const identity = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]
@@ -128,4 +128,12 @@ it('accepts the minimum ray length when the retained front segment still meets i
     margins:{...margins,minimumVisibleLengthMm:.5,endpointExtensionMm:.05}})
   expect(result).not.toBeNull()
   expect(result!.visibleLengthMm - .05).toBeCloseTo(.51,10)
+})
+
+it('distinguishes a definitely clipped candidate from the uncertain boundary band',()=>{
+  const plane=[{normal:[0,0,-1] as Point,constant:.01}]
+  expect(clippedPointCertainty([0,0,.02],identity,plane,.001)).toBe('clipped')
+  expect(clippedPointCertainty([0,0,0],identity,plane,.001)).toBe('retained')
+  expect(clippedPointCertainty([0,0,.01],identity,plane,.001)).toBe('uncertain')
+  expect(clippedPointCertainty([0,0,.02],identity,[...plane,null] as unknown as typeof plane,.001)).toBe('uncertain')
 })

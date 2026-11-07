@@ -87,6 +87,31 @@ const lerp = (a: Point, b: Point, t: number): Point => [
   a[2] + (b[2] - a[2]) * t,
 ]
 
+/** Classify a target against all world half-spaces, retaining an uncertainty
+ * band. Invalid data or a point near a clipping plane must never be skipped.
+ */
+export function clippedPointCertainty(pointPart:Point,partToWorld:readonly number[],
+  planes:readonly WorldClipPlane[],clearanceMm:number):'clipped'|'retained'|'uncertain' {
+  if(!finitePoint(pointPart)||!finiteDense(partToWorld,16)||!Array.isArray(planes)||
+    !Number.isFinite(clearanceMm)||clearanceMm<0||clearanceMm>maxInputMagnitude ||
+    Math.abs(partToWorld[3])>1e-12||Math.abs(partToWorld[7])>1e-12||
+    Math.abs(partToWorld[11])>1e-12||Math.abs(partToWorld[15]-1)>1e-12)return 'uncertain'
+  const world=transformPoint(pointPart,partToWorld)
+  if(!finitePoint(world.point)||!finitePoint(world.error))return 'uncertain'
+  let ambiguous=false, definitelyClipped=false
+  for(let index=0;index<planes.length;index++){
+    if(!Object.prototype.hasOwnProperty.call(planes,index))return 'uncertain'
+    const plane=planes[index]
+    if(!plane||!finitePoint(plane.normal)||!Number.isFinite(plane.constant)||
+      Math.abs(plane.constant)>maxInputMagnitude)return 'uncertain'
+    const value=planeDistance(plane,world.point,world.error)
+    if(!Number.isFinite(value.distance)||!Number.isFinite(value.error))return 'uncertain'
+    if(value.distance+value.error < -clearanceMm)definitelyClipped=true
+    else if(value.distance-value.error <= clearanceMm)ambiguous=true
+  }
+  return definitelyClipped?'clipped':ambiguous?'uncertain':'retained'
+}
+
 /**
  * Compute the visible portion of an origin-to-target ray against intersecting
  * world-space clipping half-spaces. Invalid or marginal cases return null so
