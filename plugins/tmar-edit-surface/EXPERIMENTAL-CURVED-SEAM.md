@@ -84,3 +84,11 @@ expected shell topology and orientation, and 65 sampled seam positions and
 normals remained close. Source face BREP was unchanged. This fixture does not
 qualify a closed solid, different bases, global continuity, the tube, or an
 editor operation; it is not a general-purpose CAD edit implementation.
+
+An isolated U-refinement prototype constructs a common periodic knot basis
+row by row for compatible input degrees, domain, cut multiplicity, phase and
+direction. Each input keeps its V basis. Independent synthetic review found
+that OCCT can change a curve when its U pole count is below its degree; the
+prototype conservatively rejects pole counts less than or equal to the degree.
+The measured support comparison is sampled, not a global error certificate.
+It is not connected to tangency publication or qualified on the tube.
