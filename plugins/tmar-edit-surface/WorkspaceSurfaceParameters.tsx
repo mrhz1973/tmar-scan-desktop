@@ -235,7 +235,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         {g1Error && <p role="alert" data-test="surface-g1-error">{g1Error}</p>}
         {state.g1SearchNotice && <p role="status" data-test="surface-g1-search-notice">{state.g1SearchNotice}</p>}
         <p data-test="surface-g1-limits">Sono ammessi solo bordi condivisi rettilinei su facce naturali a quattro lati senza fori. Per i supporti B-spline servono superfici native non razionali con basi compatibili sul bordo; non viene eseguito un adattamento automatico. Il vincolo riguarda il bordo scelto; non certifica la continuità G1 dell’intero modello. La Zebra aiuta il controllo visivo.</p>
-        {(curvedSupportChosen || state.curvedTangencyActive) && <p data-test="surface-g1-curved-limits">Con il supporto B-spline compatibile puoi creare la copia CAD con Applica; il salvataggio del vincolo come ricetta modificabile non è ancora disponibile.</p>}
+        {(curvedSupportChosen || state.curvedTangencyActive) && <p data-test="surface-g1-curved-limits">Quando disponibile, la vista evidenzia il supporto B-spline in arancione e il bordo comune in giallo. Applica crea la copia CAD. Il salvataggio del vincolo come ricetta modificabile non è ancora disponibile.</p>}
       </fieldset>
       {state.canFreeBoundary && <label className="inline"><input data-test="surface-free-boundary" type="checkbox"
         checked={state.freeBoundary} disabled={disabled} onChange={e => attempt(() => controller.setFreeBoundary(e.target.checked))} />

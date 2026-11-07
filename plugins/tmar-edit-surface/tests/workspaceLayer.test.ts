@@ -141,6 +141,43 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
+it('renders only current G1 CAD geometry in part coordinates without intercepting picks', () => {
+  const f = fixture({rotated:true})
+  const layer = createWorkspaceLayer(f.view,f.owner)
+  const preview = {...validPreview,previewRevision:4}
+  const candidate = {kind:'compatible-bspline' as const,id:'g1',stamp:{sourceId:'source',sourceRevision:1,selectionRevision:2,faceIndex:0},
+    supportFaceIndex:1,edgeIndex:0,side:'uMin' as const,supportSide:'uMax' as const,reverseSupport:false,lengthMm:2}
+  const result = {choice:candidate,previewRevision:4,supportMesh:mesh,seam:[[0,-1,0],[0,1,0]] as [Point,Point]}
+  f.set({preview,g1CurvedSupportGeometry:result})
+  const group = f.group.getObjectByName('tmar-edit-surface-g1-support')!
+  expect(group.children).toHaveLength(2)
+  expect(group.parent).toBe(f.group)
+  f.group.updateWorldMatrix(true,true)
+  expect(group.localToWorld(new THREE.Vector3(1,2,0))).toEqual(f.group.localToWorld(new THREE.Vector3(1,2,0)))
+  const ray = new THREE.Raycaster()
+  ray.setFromCamera(new THREE.Vector2(0,0),f.view.camera())
+  expect(ray.intersectObjects(group.children,false)).toEqual([])
+  const materials = group.children.map(child => (child as THREE.Mesh<THREE.BufferGeometry,THREE.Material>).material)
+  expect(materials.every(material => material.depthTest && !material.depthWrite)).toBe(true)
+  const clipping = new THREE.Plane(new THREE.Vector3(0,0,1),.5)
+  f.getLayer().clippingChanged?.([clipping],false)
+  expect(materials.every(material => material.clippingPlanes?.[0] === clipping)).toBe(true)
+
+  const disposeGeometry = vi.spyOn((group.children[0] as THREE.Mesh).geometry,'dispose')
+  f.set({preview:{...preview,previewRevision:5}})
+  expect(group.children).toHaveLength(0)
+  expect(disposeGeometry).toHaveBeenCalledTimes(1)
+  f.set({g1CurvedSupportGeometry:{...result,previewRevision:5}})
+  expect(group.children).toHaveLength(2)
+  f.set({face:1})
+  expect(group.children).toHaveLength(0)
+  f.set({face:0,g1CurvedSupportGeometry:{...result,previewRevision:5,supportMesh:{} as Preview['mesh']}})
+  expect(group.children).toHaveLength(0)
+  expect(f.group.getObjectByName('tmar-edit-surface-preview')?.children).toHaveLength(1)
+  layer.dispose()
+  expect(group.parent).toBeNull()
+})
+
 it('uses the visible face interior for whole-face translation and leaves space outside it to navigation', () => {
   const f = fixture({ reference:'scan' })
   f.reference.partFromGeometry = new THREE.Matrix4().makeTranslation(0,0,-1).toArray()

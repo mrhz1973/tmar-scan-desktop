@@ -4,6 +4,7 @@ import {afterEach,describe,expect,it,vi} from 'vitest'
 import type {Net} from '../brep'
 import type {G1PlaneResult,G1PublishedPlaneResult} from '../editorKernel'
 import type {G1SupportCandidate} from '../g1SupportTopology'
+import type { CompatibleCurvedSupportCandidate } from '../compatibleCurvedSupportTopology'
 import {proposePlaneTangency,validatePlaneTangencyResult,type PlaneTangencyRequest} from '../planeTangency'
 import {SurfaceRuntime} from '../surfaceRuntime'
 import {createWorkspaceSurfaceSession,type WorkspaceSurfaceSession} from '../workspaceSession'
@@ -50,12 +51,12 @@ async function setup(){
   return {session,worker,invalidate:()=>{current=false}}
 }
 type Context=Awaited<ReturnType<typeof setup>>
-function supportReplies(t:Context,plane:unknown){
+function supportReplies(t:Context,plane:unknown,curvedChoices:CompatibleCurvedSupportCandidate[] = []){
   const planar=[...t.worker.sent].reverse().find(message=>message.action==='g1SupportCandidates')!
   const curved=[...t.worker.sent].reverse().find(message=>message.action==='g1CurvedSupportCandidates')!
   expect(planar).toBeDefined();expect(curved).toBeDefined()
   t.worker.reply(plane,planar.id)
-  t.worker.reply({stamp:candidate.stamp,candidates:[]},curved.id)
+  t.worker.reply({stamp:candidate.stamp,candidates:curvedChoices},curved.id)
 }
 async function load(t:Context){const pending=t.session.loadG1Supports();expect(t.worker.sent.some(message=>message.action==='g1SupportCandidates')).toBe(true);supportReplies(t,{stamp:candidate.stamp,candidates:[candidate]});await pending;t.session.chooseG1Support(candidate.id)}
 function proposal(base:Net):G1PlaneResult{
@@ -77,6 +78,63 @@ async function apply(t:Context){
 afterEach(async()=>{for(const session of contexts.splice(0))await session.dispose('cancelled');vi.useRealTimers()})
 
 describe('workspace session local planar G1 orchestration (controlled worker)',()=>{
+  it.each(['choice','face','source','dispose'] as const)('does not display a late curved G1 highlight after %s changes', async change => {
+    const t = await setup(), s = t.session
+    const curved: CompatibleCurvedSupportCandidate = {kind:'compatible-bspline', id:'curved', stamp:candidate.stamp,
+      supportFaceIndex:1, edgeIndex:0, side:'uMin', supportSide:'uMax', reverseSupport:false, lengthMm:4}
+    const loading = s.loadG1Supports()
+    supportReplies(t, {stamp:candidate.stamp,candidates:[candidate]}, [curved])
+    await loading
+    s.chooseG1Support(curved.id)
+    const request = t.worker.sent.at(-1)!
+    const revision = s.getViewState().preview!.previewRevision
+    expect(request).toMatchObject({action:'g1CurvedSupportGeometry',choice:curved,previewRevision:revision,selection:{face:0,refinements:[]}})
+    if (change === 'choice') s.chooseG1Support(candidate.id)
+    if (change === 'face') {
+      const changing = s.chooseFace(1,true)
+      t.worker.reply(net())
+      await changing
+    }
+    if (change === 'source') t.invalidate()
+    if (change === 'dispose') await s.dispose('cancelled')
+    t.worker.reply({choice:curved,previewRevision:revision,seam:[[0,0,0],[0,4,0]],supportMesh:{}},request.id)
+    await flush()
+    expect(s.getViewState().g1CurvedSupportGeometry).toBeNull()
+  })
+
+  it('refreshes G1 highlight after Undo of a manual lock even when the CAD preview is reused', async () => {
+    const t = await setup(), s = t.session
+    const curved: CompatibleCurvedSupportCandidate = {kind:'compatible-bspline', id:'curved', stamp:candidate.stamp,
+      supportFaceIndex:1, edgeIndex:0, side:'uMin', supportSide:'uMax', reverseSupport:false, lengthMm:4}
+    const loading = s.loadG1Supports()
+    supportReplies(t, {stamp:candidate.stamp,candidates:[candidate]}, [curved])
+    await loading
+    s.chooseG1Support(curved.id)
+    const first = t.worker.sent.at(-1)!, preview = s.getViewState().preview!
+    const geometry = {choice:curved,previewRevision:preview.previewRevision,seam:[[0,0,0],[0,4,0]],supportMesh:{}}
+    t.worker.reply(geometry,first.id)
+    await flush()
+    expect(s.getViewState().g1CurvedSupportGeometry).toEqual(geometry)
+    s.selectPoints([12],false)
+    s.lockSelected(true)
+    const locked = t.worker.sent.at(-1)!
+    expect(locked.action).toBe('g1CurvedSupportGeometry')
+    expect(s.getViewState().preview).toBe(preview)
+    expect(s.getViewState().g1CurvedSupportGeometry).toBeNull()
+
+    s.undo()
+    const unlocked = t.worker.sent.at(-1)!
+    expect(unlocked.action).toBe('g1CurvedSupportGeometry')
+    expect(unlocked.id).not.toBe(locked.id)
+    expect(s.getViewState().preview).toBe(preview)
+    t.worker.reply(geometry,locked.id)
+    await flush()
+    expect(s.getViewState().g1CurvedSupportGeometry).toBeNull()
+    t.worker.reply(geometry,unlocked.id)
+    await flush()
+    expect(s.getViewState().g1CurvedSupportGeometry).toEqual(geometry)
+  })
+
   it('reports a partial support search without hiding it after selection, and clears it on face change',async()=>{
     const t=await setup(), pending=t.session.loadG1Supports()
     const plane=[...t.worker.sent].reverse().find(message=>message.action==='g1SupportCandidates')!

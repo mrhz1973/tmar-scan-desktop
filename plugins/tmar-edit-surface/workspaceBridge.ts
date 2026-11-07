@@ -4,7 +4,7 @@
 // @ts-ignore -- this optional host type does not exist in older builds.
 import type { DraftStamp, EditorViewportLease } from '../../src/plugins/workspaceEditorTypes'
 import type { Net, Point } from './brep'
-import type { Preview } from './editorKernel'
+import type { G1CurvedSupportGeometry, Preview } from './editorKernel'
 import type { Mesh } from 'occt-wasm'
 import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
@@ -70,6 +70,7 @@ export interface WorkspaceSurfaceViewState {
   readonly navigationOnly?: boolean
   readonly wholeBoundaryDrag?: {readonly side:WholeBoundarySide;readonly canStart:boolean} | null
   readonly wholeFaceDrag?: { readonly canStart: boolean } | null
+  readonly g1CurvedSupportGeometry?: G1CurvedSupportGeometry | null
   readonly dragMode: DragMode
   readonly axis: number
   readonly dragStrength: number

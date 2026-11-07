@@ -4,7 +4,7 @@ import type { ApplyTicket, DraftStamp, EditorSnapshot, ExitReason, PreparedCadCo
 // @ts-ignore -- this optional V1 contract is supplied by annotation-capable hosts.
 import type { AnnotatedTicketV1, PreparedAnnotatedCopyV1 } from '../../src/plugins/annotatedCopyTypes'
 import { boundaryLocked, type Net, type Point } from './brep'
-import type { DraftAnchor, FaceInfo, Preview, G1SupportCandidates, G1CurvedSupportCandidates } from './editorKernel'
+import type { DraftAnchor, FaceInfo, Preview, G1SupportCandidates, G1CurvedSupportCandidates, G1CurvedSupportGeometry } from './editorKernel'
 import type { G1SupportCandidate } from './g1SupportTopology'
 import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupportTopology'
 import { dragDirection, localFrameAtUv, type DragMode } from './localFrame'
@@ -232,6 +232,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private g1SearchNotice: string | null = null
   private g1Basis: { selectionEpoch: number; refinements: SurfaceDraftSnapshot['refinements'] } | null = null
   private g1ValidationSerial = 0
+  private g1Geometry: { choice: CompatibleCurvedSupportCandidate; preview: Preview; selectionEpoch: number; historyRevision: number;
+    abort: AbortController; result: G1CurvedSupportGeometry | null } | null = null
   private g1DraftIdentity: { net: Net; constraint: NonNullable<SurfaceDraftSnapshot['planeTangency'] | SurfaceDraftSnapshot['curvedTangency']>; requestId: number } | null = null
   private revision = 0
   private message: string | null = null
@@ -962,6 +964,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (choice.kind === 'compatible-bspline') await this.draft.applyCurvedTangency(choice)
       else await this.draft.applyPlaneTangency(choice)
       this.assertLive()
+      if (choice.kind === 'compatible-bspline') this.g1Choice = null
     } catch (error) {
       if (!this.disposed) this.message = String((error as Error)?.message ?? error)
       throw error
@@ -2038,6 +2041,32 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (!this.disposed) { this.refresh(); this.resolveNotes() }
     }
   }
+  private syncG1Geometry(choice: CompatibleCurvedSupportCandidate | undefined, preview: Preview | null, d: SurfaceDraftSnapshot) {
+    const current = this.g1Geometry, revision = preview?.previewRevision
+    if (choice && preview && current?.choice.id === choice.id && current.preview === preview &&
+        current.selectionEpoch === this.selectionEpoch && current.historyRevision === this.historyRevision) return current.result
+    if (current) { this.g1Geometry = null; current.abort.abort() }
+    if (!choice || !preview || revision === undefined || choice.stamp.faceIndex !== this.face) return null
+
+    const request = { choice, preview, selectionEpoch:this.selectionEpoch, historyRevision:this.historyRevision, abort:new AbortController(),
+      result:null as G1CurvedSupportGeometry | null }
+    this.g1Geometry = request
+    const selection = { face:this.face, refinements:d.refinements.map(knot => ({...knot})) }
+    void this.runtime.worker.ask<G1CurvedSupportGeometry>({
+      action:'g1CurvedSupportGeometry', choice, previewRevision:revision, selection,
+    }, request.abort.signal).then(result => {
+      this.assertLive()
+      if (this.g1Geometry !== request || this.selectionEpoch !== request.selectionEpoch || this.historyRevision !== request.historyRevision ||
+          this.draft.getSnapshot().preview !== preview || result?.previewRevision !== revision ||
+          JSON.stringify(result.choice) !== JSON.stringify(choice) ||
+          result.seam?.length !== 2 || !result.seam.every(finitePoint) || !result.supportMesh)
+        return
+      request.result = Object.freeze(result)
+      this.refresh()
+    }).catch(() => { /* A refused or cancelled visual query leaves no highlight. */ })
+    return null
+  }
+
   private refresh(): void {
     let d: SurfaceDraftSnapshot = this.draft.getSnapshot()
     if(this.wholeBoundaryDrag && (this.wholeBoundaryDrag.face!==this.face || !d.freeBoundary || this.symmetry || this.notes.length || this.placingNote || this.surfaceTarget ||
@@ -2148,6 +2177,12 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const canLoadG1 = !adaptive && !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
       this.gesture === 'idle' && !!d.net && d.net === d.committedNet && d.validNet === d.net &&
       !d.calculating && !d.previewStale && !d.freeBoundary && !tangency && d.cylinderSession === null
+    const chosenG1 = d.curvedTangency?.choice ?? (canLoadG1 && this.g1Basis
+      ? this.g1Candidates.find(candidate => candidate.id === this.g1Choice) : undefined)
+    const g1CurvedSupportGeometry = this.syncG1Geometry(
+      !this.disposed && chosenG1?.kind === 'compatible-bspline' && validation.kind === 'valid' && preview === d.preview &&
+      !this.busy && !this.frozen && this.gesture === 'idle' && !strip && !d.calculating && !d.previewStale
+        ? chosenG1 : undefined, preview, d)
     this.panel = Object.freeze({ faces: this.faces, face: this.face, net: d.net, selected: d.selected,
       locked, manualLocks: d.locks, continuity: d.continuity, freeBoundary: d.freeBoundary,
       g1Candidates: this.g1Candidates, g1Choice: this.g1Choice, g1SearchNotice: this.g1SearchNotice, canLoadG1,
@@ -2171,6 +2206,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       hiddenPoles: d.hiddenPoles, selectionMode: this.selectionMode, navigationOnly: this.navigationOnly, dragMode: this.dragMode,
       wholeBoundaryDrag:this.wholeBoundaryDrag ? {side:this.wholeBoundaryDrag.side,canStart:canMoveWholeBoundary}:null,
       wholeFaceDrag: this.wholeFaceDrag ? { canStart: canMoveWholeFace } : null,
+      g1CurvedSupportGeometry,
       axis: this.axis, dragStrength: this.dragStrength, showNet: this.showNet, snap: this.snap,
       snapDistance: this.snapDistance, busy: this.busy || !!this.frozen, placingNote: this.placingNote,
       surfaceTarget:this.surfaceTarget ? {kind:this.surfaceTarget.kind,sourceBodyId:this.source.bodyId,...(surfaceTargetBatch?{pairs:surfaceTargetBatch}:{})}:null,
@@ -2216,6 +2252,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (this.disposed) return
     this.disposed = true; this.disposedSignal.abort(); this.exportGeneration++; this.frozen = null; this.stripGeneration++; this.stripAbort?.abort()
     this.restoredHistory = null
+    const g1Geometry = this.g1Geometry
+    this.g1Geometry = null
+    g1Geometry?.abort.abort()
     this.clearDirectCache(); this.directGestureOrigin = false
     this.strip = null; this.stripPending = false; this.stripAbort = null
     this.context.signal.removeEventListener('abort', this.onAbort)

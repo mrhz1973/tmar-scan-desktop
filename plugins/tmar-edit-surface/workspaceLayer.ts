@@ -144,11 +144,14 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const cleanups: Array<() => void> = []
 
   const cage = new THREE.Group(), hover = new THREE.Group(), pins = new THREE.Group(), stripGroup = new THREE.Group()
+  const g1Group = new THREE.Group()
+  let g1Drawn: WorkspaceSurfaceViewState['g1CurvedSupportGeometry'] = null
   cage.name = 'tmar-edit-surface-cage'
   hover.name = 'tmar-edit-surface-hover'
   pins.name = 'tmar-edit-surface-notes'
   stripGroup.name = 'tmar-edit-surface-strip'
-  view.group.add(cage, hover, pins, stripGroup)
+  g1Group.name = 'tmar-edit-surface-g1-support'
+  view.group.add(cage, hover, pins, stripGroup, g1Group)
   const preview = new WorkspacePreview({ session: view.group,
     maskSource: () => view.maskSourceForPreview(), invalidate: () => view.invalidate(), clipping: () => clipping })
   const feedback = view.overlayRoot.ownerDocument.createElement('div')
@@ -365,8 +368,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     }
   }
 
-  const syncStripClipping = () => {
-    stripGroup.traverse(object => {
+  const syncOverlayClipping = (group: THREE.Group) => {
+    group.traverse(object => {
       const m = (object as THREE.Mesh).material
       const materials = Array.isArray(m) ? m : m ? [m] : []
       for (const material of materials) {
@@ -396,7 +399,44 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       const line = new Line2(geometry, new LineMaterial({ color: 0xffce30, linewidth: 3, depthTest: false, depthWrite: false }))
       line.name = 'tmar-selected-strip-edge'; line.renderOrder = 9; stripGroup.add(line)
     }
-    syncStripClipping()
+    syncOverlayClipping(stripGroup)
+  }
+
+  const syncG1Support = (state: WorkspaceSurfaceViewState) => {
+    const result = state.g1CurvedSupportGeometry
+    const current = result && displayed && displayed === state.preview && state.preview?.valid &&
+      result.previewRevision === state.preview.previewRevision && result.choice.stamp.faceIndex === state.face
+      ? result : null
+    if (current === g1Drawn) return
+    clearOwned(g1Group)
+    g1Drawn = current
+    if (!current) return
+
+    try {
+      const mesh = current.supportMesh
+      const support = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({
+        color:0xff8f32, opacity:.45, transparent:true, depthTest:true, depthWrite:false, side:THREE.DoubleSide,
+        polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-2,
+      }))
+      support.raycast = () => {}
+      support.renderOrder = 6
+      g1Group.add(support)
+      support.geometry.setAttribute('position', new THREE.BufferAttribute(mesh.positions.slice(), 3))
+      support.geometry.setIndex(new THREE.BufferAttribute(mesh.indices.slice(), 1))
+
+      const seam = new Line2(new LineGeometry(), new LineMaterial({
+        color:0xffdd55, linewidth:3, depthTest:true, depthWrite:false,
+        polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-3,
+      }))
+      seam.raycast = () => {}
+      seam.renderOrder = 7
+      g1Group.add(seam)
+      seam.geometry.setPositions(current.seam.flat())
+      syncOverlayClipping(g1Group)
+    } catch {
+      // A display-only annotation cannot revoke an otherwise valid preview.
+      clearOwned(g1Group)
+    }
   }
 
   /** Optional PR30 publication is observational; older or revoked leases must
@@ -518,6 +558,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         targetPairState=state.surfaceTarget?.pairs
       }
       syncStrip(state)
+      syncG1Support(state)
       publishCageFrame(state)
       // A host callback may revoke the layer or synchronously publish newer
       // state. In either case this invocation must not apply its stale state.
@@ -537,7 +578,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // Notifications must remain non-throwing even if the lease is revoked
       // mid-refresh; clean every owned resource independently.
       try { stopZebra() } catch { /* Keep the original error. */ }
-      displayed = null; cageState = null; pinState = null
+      displayed = null; g1Drawn = null; cageState = null; pinState = null
       try { disposeTargets(referenceTargets) } catch { /* Keep the original error. */ }
       referenceTargets = []; referencesDirty = true
       try { disposeTargets(neighbourTargets) } catch { /* Keep the original error. */ }
@@ -546,7 +587,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       stripHandle.style.display = 'none'
       publishReticle(null)
       for (const clean of [() => preview.clear(), () => clearOwned(cage), () => clearOwned(hover),
-        () => clearOwned(pins), () => clearOwned(stripGroup)]) {
+        () => clearOwned(pins), () => clearOwned(stripGroup), () => clearOwned(g1Group)]) {
         try { clean() } catch { /* Keep the original error. */ }
       }
       report(`Anteprima superficie non disponibile: ${errorText(error)}`)
@@ -1124,7 +1165,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     clippingChanged: planes => {
       clipping = { planes, intersection: false }
       if (planes?.length && (pickPending?.kind === 'face' || capture?.wholeFaceLocal)) cancelGesture()
-      preview.refreshClipping(); syncStripClipping(); positionStripHandle()
+      preview.refreshClipping(); syncOverlayClipping(stripGroup); syncOverlayClipping(g1Group); positionStripHandle()
     },
     tick: () => { zebra?.tick(); if (capture && !frameUnchanged(capture)) cancelGesture() },
     dispose: () => {
@@ -1136,8 +1177,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       attempt(() => { cancelGesture() }); attempt(stopZebra)
       attempt(() => disposeTargets(referenceTargets)); attempt(() => disposeTargets(neighbourTargets))
       referenceTargets = []; neighbourTargets = []
-      attempt(() => clearOwned(cage)); attempt(() => clearOwned(hover)); attempt(() => clearOwned(pins)); attempt(() => clearOwned(stripGroup))
-      cage.removeFromParent(); hover.removeFromParent(); pins.removeFromParent(); stripGroup.removeFromParent()
+      attempt(() => clearOwned(cage)); attempt(() => clearOwned(hover)); attempt(() => clearOwned(pins)); attempt(() => clearOwned(stripGroup)); attempt(() => clearOwned(g1Group))
+      cage.removeFromParent(); hover.removeFromParent(); pins.removeFromParent(); stripGroup.removeFromParent(); g1Group.removeFromParent()
       attempt(() => preview.dispose()); attempt(() => feedback.remove())
       attempt(() => stripHandle.removeEventListener('pointerdown', handleStripDown)); attempt(() => stripHandle.remove())
       if (failure) throw failure
