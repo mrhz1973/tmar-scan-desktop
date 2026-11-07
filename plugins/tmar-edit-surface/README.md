@@ -28,6 +28,27 @@ packaged desktop or project save/reopen qualification. Targets use displayed
 triangles; the numerical point residual is not an accuracy claim for the scan,
 the entire surface or its continuous boundary. No QuickSurface parity is claimed.
 
+Real-kernel follow-up for plugin checkpoint `8c708fc`:
+`tests/surfacePointTarget-session-occt.test.ts` passed on a synthetic 20 × 30 ×
+10 mm box exported and reimported as STEP. The real workspace session and real
+`editor.worker` dispatcher resolved a clicked CAD anchor, targeted Z=10.2 mm
+from Z=10 mm, validated the result, exported STEP and performed one Undo.
+The CAD point residual was 5.33e-15 mm; independent STEP reimport measured
+zero point-to-target distance, a valid one-solid/six-face result and volume
+6030.000779997741 mm³ (source 6000 mm³). Only the authorized centre pole moved.
+At 68 boundary samples the maximum point difference was 4.36e-15 mm and the
+minimum source/result normal dot product was 1. Undo restored the sampled
+anchor with zero difference and reimported a valid 6000 mm³ solid. A manual
+point lock and an insufficient movement budget both refused the operation.
+These finite checks do not prove continuous boundary conditions.
+
+Evidence and the three synthetic STEP files are in
+`evidence/surface-point-target/kernel-session-8c708fc/`. The kernel and worker
+dispatcher are real; transport, host and target-reference resolver are simulated
+in memory. No browser was launched or retried. This does not qualify physical
+pointer picking, real reference-ray intersection, arbitrary trimmed/rational
+models, project persistence or the packaged app. No user file was opened.
+
 ### Shared workspace: normal drag and integration, 2026-11-04
 
 Pole movement starts on the surface's local normal N. U/V and world axes remain
