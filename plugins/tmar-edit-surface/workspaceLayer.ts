@@ -242,6 +242,69 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (direct?.proof) return direct.proof.anchor
     const path = strip ? strip.paths[strip.selectedEdge] : direct?.paths[direct.edge]
     if (!displayed || !path || path.length < 2 || !path.every(finitePoint)) return null
+    // Keep the historical length midpoint when there is no section. With
+    // clipping, find the midpoint of the portions that remain visible after
+    // applying the strip preview delta in part space and the part transform.
+    // Return the corresponding unshifted point: positionStripHandle applies
+    // the delta exactly once, and startStrip still receives the strip anchor.
+    if (clipping.planes?.length) {
+      const delta = new THREE.Vector3(...(strip?.delta ?? [0, 0, 0]))
+      const partWorld = partMatrix(path[0])
+      const visible: Array<{ start: THREE.Vector3; end: THREE.Vector3; from: number; to: number; length: number }> = []
+      let totalVisible = 0
+      for (let i = 0; i + 1 < path.length; i++) {
+        const baseStart = new THREE.Vector3(...path[i]), baseEnd = new THREE.Vector3(...path[i + 1])
+        const worldStart = baseStart.clone().add(delta).applyMatrix4(partWorld)
+        const worldEnd = baseEnd.clone().add(delta).applyMatrix4(partWorld)
+        let from = 0, to = 1, rejected = false
+        for (const plane of clipping.planes) {
+          const a = plane.distanceToPoint(worldStart), b = plane.distanceToPoint(worldEnd)
+          if (!Number.isFinite(a) || !Number.isFinite(b)) return null
+          if (a < 0 && b < 0) { rejected = true; break }
+          if (a < 0 || b < 0) {
+            const crossing = a / (a - b)
+            if (a < 0) from = Math.max(from, crossing)
+            else to = Math.min(to, crossing)
+            if (from >= to) { rejected = true; break }
+          }
+        }
+        if (rejected) continue
+        const length = worldStart.distanceTo(worldEnd) * (to - from)
+        if (!(length > 0) || !Number.isFinite(length)) continue
+        visible.push({ start: baseStart, end: baseEnd, from, to, length })
+        totalVisible += length
+      }
+      if (!(totalVisible > 0) || !Number.isFinite(totalVisible)) return null
+      let remaining = totalVisible / 2
+      for (const segment of visible) {
+        if (remaining <= segment.length) {
+          let t = segment.from + (segment.to - segment.from) * (remaining / segment.length)
+          const candidateWorld = (parameter: number) => segment.start.clone().lerp(segment.end, parameter)
+            .add(delta).applyMatrix4(partWorld)
+          const atMidpoint = candidateWorld(t)
+          const scale = Math.max(1, ...atMidpoint.toArray().map(Math.abs),
+            ...clipping.planes.map(plane => Math.abs(plane.constant)))
+          const clearance = clipping.planes.map(plane => plane.distanceToPoint(atMidpoint))
+          if (clearance.some(distance => !Number.isFinite(distance))) return null
+          const nearClippedEndpoint = Math.min(t - segment.from, segment.to - t) <= 128 * Number.EPSILON &&
+            clearance.some(distance => distance <= 64 * Number.EPSILON * scale)
+          if (nearClippedEndpoint) {
+            // Equal visible runs can put the global midpoint exactly on a
+            // section boundary. Prefer the interior of this visible run, then
+            // verify it against every plane without loosening the clip test.
+            t = (segment.from + segment.to) / 2
+          }
+          const world = candidateWorld(t)
+          if (clipping.planes.some(plane => {
+            const distance = plane.distanceToPoint(world)
+            return !Number.isFinite(distance) || distance < 0
+          })) return null
+          return point(segment.start.lerp(segment.end, t))
+        }
+        remaining -= segment.length
+      }
+      return null
+    }
     const lengths = path.slice(1).map((p, i) => new THREE.Vector3(...p).distanceTo(new THREE.Vector3(...path[i])))
     const total = lengths.reduce((a, b) => a + b, 0)
     if (!Number.isFinite(total) || total <= 1e-12) return null

@@ -1825,6 +1825,62 @@ it('hides D for unselected, clipped or disposed borders and cancels the captured
   expect(f.beginStripGesture).toHaveBeenCalledOnce()
 })
 
+it('places D at the length midpoint of the visible portion when a section clips the edge midpoint', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  f.set({ net: null, strip: { ...stripFixture(), selectedEdge: 0, axis: 0 } })
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), -0.5)
+  f.getLayer().clippingChanged?.([plane], false)
+  expect(handle.style.display).toBe('block')
+  const expected = f.client([0.75, -1, 0])
+  expect(Number.parseFloat(handle.style.left)).toBeCloseTo(expected.clientX + 32)
+  expect(Number.parseFloat(handle.style.top)).toBeCloseTo(expected.clientY - 32)
+  layer.dispose()
+})
+
+it('does not show D when the section planes clip the whole selected edge', () => {
+  const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
+  f.set({ net: null, strip: { ...stripFixture(), selectedEdge: 0, axis: 0 } })
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  const keepRight = new THREE.Plane(new THREE.Vector3(1, 0, 0), -0.5)
+  const keepLeft = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0.25)
+  f.getLayer().clippingChanged?.([keepRight, keepLeft], false)
+  expect(handle.style.display).toBe('none')
+  layer.dispose()
+})
+
+it('moves D into a visible run when equal disconnected runs put their global midpoint on the section boundary', () => {
+  const f = fixture({ worldOffset: 1e8 }), layer = createWorkspaceLayer(f.view, f.owner)
+  const strip = { ...stripFixture(), selectedEdge: 0, axis: 0 as const,
+    paths: [[[0, -1, 0], [0.5, -1, 0], [-0.5, -1, 0], [0, -1, 0], [1, -1, 0]] as Point[], ...stripFixture().paths.slice(1)] }
+  f.set({ net: null, strip })
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  const section = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0).applyMatrix4(f.group.matrixWorld)
+  f.getLayer().clippingChanged?.([section], false)
+  expect(handle.style.display).toBe('block')
+  const expected = f.client([0.25, -1, 0])
+  expect(Number.parseFloat(handle.style.left)).toBeCloseTo(expected.clientX + 32)
+  expect(Number.parseFloat(handle.style.top)).toBeCloseTo(expected.clientY - 32)
+  layer.dispose()
+})
+
+it('uses translated strip geometry and world section planes under a part transform', () => {
+  const f = fixture({ rotated: true, worldOffset: 20 }), layer = createWorkspaceLayer(f.view, f.owner)
+  const strip = { ...stripFixture(), selectedEdge: 0, axis: 0 as const, delta: [0.4, 0, 0] as Point }
+  f.set({ net: null, strip })
+  const handle = f.overlay.children.find(item => item.dataset.test === 'surface-strip-handle')!
+  const partWorld = f.group.matrixWorld
+  const keepRight = new THREE.Plane(new THREE.Vector3(1, 0, 0), -0.5).applyMatrix4(partWorld)
+  const keepLeft = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0.75).applyMatrix4(partWorld)
+  f.getLayer().clippingChanged?.([keepRight, keepLeft], false)
+  expect(handle.style.display).toBe('block')
+  // The visible translated interval is x=[0.5, 0.75], centered at 0.625.
+  const expected = f.client([0.625, -1, 0])
+  expect(Number.parseFloat(handle.style.left)).toBeCloseTo(expected.clientX + 32)
+  expect(Number.parseFloat(handle.style.top)).toBeCloseTo(expected.clientY - 32)
+  layer.dispose()
+})
+
 it('keeps the panel-selected edge when two boundaries overlap in the projection', () => {
   const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
   const strip: WorkspaceStripViewState = { ...stripFixture(), selectedEdge: 1,
