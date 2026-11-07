@@ -249,3 +249,7 @@ roundtrip, volume and the existing host release gate remain separate.
 ### Sampled geometric side targets
 
 The separate experimental side-target generator projects sampled inward derivatives onto a support tangent plane with a positive, variable transverse scale and free tangential component. A fixed U0 seam incompatible at either one-sided limit refuses the proposal; this is a restriction of this experiment, not a requirement that a real periodic seam remain fixed. A synthetic quintic fit with independent holdout reduces its sampled out-of-plane residual below 1e-10 and passes its separate full-domain source-to-candidate orientation check. Target residuals and scale-floor comparisons are floating-point sample diagnostics: they do not establish continuous cross-face G1, pcurve coherence, solid validity or suitability for the real Tube. No real STEP was used. Existing production guards and integration HOLD remain unchanged.
+
+### Coordinated periodic seam experiment
+
+A separate synthetic proposal can move the periodic U0 meridian with its two adjacent columns, changing at most six poles while retaining V boundaries and checking exactly that the stored U derivative jump is unchanged. It refuses locks, budgets, orientation failures and unrepresentable rounding. This does not ensure the angle across an existing nonzero seam jump is unchanged, does not certify cross-face G1 or pcurves, and has not been exercised on the real Tube. It is not an integrated edit; CAD validity, topology, functional features and thickness require independent verification.

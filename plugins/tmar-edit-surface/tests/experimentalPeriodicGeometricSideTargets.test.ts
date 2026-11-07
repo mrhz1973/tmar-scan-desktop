@@ -5,7 +5,8 @@ import { diagnoseExperimentalPeriodicGeometricJoint, projectExperimentalPeriodic
 import { sampleExperimentalPeriodicGeometricSideTargets,
   type ExperimentalPeriodicGeometricSideTargetsRequest } from '../experimentalPeriodicGeometricSideTargets'
 import { prepareExperimentalPeriodicOneSidedSurfaceDerivatives } from '../experimentalPeriodicOneSidedSurfaceDerivatives'
-import { proposeExperimentalPeriodicAlmostC1QuinticSide } from '../experimentalPeriodicQuinticSide'
+import { proposeExperimentalPeriodicAlmostC1QuinticSide, proposeExperimentalPeriodicQuinticCoordinatedSeam,
+  type ExperimentalPeriodicQuinticCoordinatedSeamRequest } from '../experimentalPeriodicQuinticSide'
 import { boundExperimentalPeriodicQuinticSurfaceNormals } from '../experimentalPeriodicQuinticSurfaceNormals'
 import { certifyExperimentalPeriodicUFitCoefficients } from '../experimentalPeriodicUFitCertificate'
 import { fitExperimentalPeriodicUVectorSamplesWithFixedFirst } from '../experimentalPeriodicUVectorFit'
@@ -173,4 +174,93 @@ it('refuses incompatible fixed seam derivatives and mapped training/holdout alia
   const alias = sampleExperimentalPeriodicGeometricSideTargets({ ...fixture(), holdout: [0, 0.25 + 2 ** -54, 8] })
   expect(alias).toMatchObject({ status: 'inconclusive', phase: 'sampling', reason: 'mapped-training-holdout-alias' })
   expect(alias).not.toHaveProperty('training')
+})
+
+const coordinatedBudgets = { derivativeTolerance: 1e-10, secondDerivativeTolerance: 1e-10, seamDerivativeTolerance: 1e-9,
+  maximumDisplacement: 2, maximumSeamDisplacement: 1, normalBudget: { maxCells: 8, maxPatchChecks: 1024, maxDepth: 4 } }
+
+it('repairs the synthetic fixed-U0 incompatibility while preserving both borders and the periodic derivative jump', () => {
+  const request = fixture(true), net = request.strip.net
+  // Isolate the perturbation to the seam and its two neighboring columns.
+  for (let v = 0; v < net.nv; v++) net.poles[4 * net.nv + v][2] = 0
+  const before = structuredClone(request)
+  expect(sampleExperimentalPeriodicGeometricSideTargets(request)).toMatchObject({
+    status: 'inconclusive', reason: 'locked-u0-geometric-target-incompatible',
+  })
+  const inwardWithoutNormal = (u: number): Point => {
+    const i = u * net.nv
+    return [net.poles[i + 1][0] - net.poles[i][0], net.poles[i + 1][1] - net.poles[i][1], 0]
+  }
+  const result = proposeExperimentalPeriodicQuinticCoordinatedSeam({ ...coordinatedBudgets, net, edge: 'V0',
+    previousInward: inwardWithoutNormal(net.nu - 1), nextInward: inwardWithoutNormal(1),
+  })
+  if (result.status !== 'coefficient-proposal') throw new Error(JSON.stringify(result))
+  const candidate = result.proposal.net
+  expect(result.proposal.changedIndices).toEqual([1, 2, 7, 8, 55, 56])
+  expect(result.evidence).toMatchObject({ seamJumpPreserved: true, normals: { status: 'certified-positive' } })
+  expect(result.evidence.before).toEqual(result.evidence.after)
+  expect(result.evidence.maxSeamDisplacementBound).toBeCloseTo(0.25, 14)
+  expect(candidate.poles[1][2]).toBe(0)
+  expect(candidate.poles[2][2]).toBe(0)
+  expect(candidate.poles[3]).toEqual(net.poles[3])
+  for (let i = 0; i < net.poles.length; i++) if (!result.proposal.changedIndices.includes(i)) expect(candidate.poles[i]).toEqual(net.poles[i])
+
+  const updated = sampleExperimentalPeriodicGeometricSideTargets({ ...request, strip: { ...request.strip, net: candidate } })
+  if (updated.status !== 'targets-only') throw new Error(JSON.stringify(updated))
+  const source = prepareExperimentalPeriodicOneSidedSurfaceDerivatives(candidate)
+  const support = prepareExperimentalPeriodicOneSidedSurfaceDerivatives(request.support.net)
+  for (const { parameter, supportParameter } of updated.holdout) {
+    const a = source.evaluate(parameter, 0), b = support.evaluate(supportParameter, 1)
+    expect(diagnoseExperimentalPeriodicGeometricJoint({ ...limits, lateralTangent: a.du,
+      supportTangent: b.du.map(x => -x) as Point, lateralInward: a.dv, supportInward: b.dv.map(x => -x) as Point,
+    })).toMatchObject({ status: 'sample-diagnostic', classification: 'within-sampled-normal-budget' })
+  }
+  expect(request).toEqual(before)
+})
+
+function unevenSeam(lastWidth: number): ExperimentalPeriodicQuinticCoordinatedSeamRequest {
+  const ring = [[1, 0], [1, 0.25 + 2 ** -38], [0, 1], [-1, 0], [1, -lastWidth / 4]]
+  const net: Net = { du: 3, dv: 5, nu: 5, nv: 6, periodic: [1, 0], rational: [0, 0],
+    ku: [0, 1, 2, 2 + lastWidth], mu: [3, 1, 1, 3], kv: [0, 5], mv: [6, 6], weights: Array<number>(30).fill(1),
+    poles: ring.flatMap(([x, y]) => Array.from({ length: 6 }, (_, v): Point => [x, y, v])),
+  }
+  return { ...coordinatedBudgets, net, edge: 'V0', previousInward: [0, 0, 1.5], nextInward: [0, 0, 1.25] }
+}
+
+it.each(['V0', 'V1'] as const)('uses unequal native seam widths at %s and preserves a nonzero source jump exactly', edge => {
+  const request = unevenSeam(3)
+  request.edge = edge
+  if (edge === 'V1') {
+    const { net } = request
+    net.poles = Array.from({ length: net.nu }, (_, u) => net.poles.slice(u * net.nv, (u + 1) * net.nv).reverse()).flat()
+  }
+  const result = proposeExperimentalPeriodicQuinticCoordinatedSeam(request)
+  if (result.status !== 'coefficient-proposal') throw new Error(JSON.stringify(result))
+  // h+=1, h−=3. ΔD0=(.5 + 3·.25)/4 = .3125.
+  const [first, second] = edge === 'V0' ? [1, 2] : [4, 3]
+  expect(result.proposal.net.poles[first][2]).toBe(1.3125)
+  expect(result.proposal.net.poles[second][2]).toBe(2.625)
+  expect(result.evidence.before?.maxDerivativeDifferenceBound).toBe(3 * 2 ** -38)
+  expect(result.evidence.after).toEqual(result.evidence.before)
+})
+
+it('withholds a proposal when exact stored coordination, a lock or a work budget cannot be respected', () => {
+  const rounded = proposeExperimentalPeriodicQuinticCoordinatedSeam(unevenSeam(2))
+  expect(rounded).toMatchObject({ status: 'inconclusive', phase: 'candidate-seam', reason: 'stored-seam-jump-changed' })
+  const request = unevenSeam(3)
+  const locked = proposeExperimentalPeriodicQuinticCoordinatedSeam({ ...request, lockIndices: [1] })
+  expect(locked).toMatchObject({ status: 'inconclusive', phase: 'proposal' })
+  const displaced = proposeExperimentalPeriodicQuinticCoordinatedSeam({ ...request, maximumSeamDisplacement: 0.5 })
+  expect(displaced).toMatchObject({ status: 'inconclusive', phase: 'candidate-seam', reason: 'seam-displacement-bound-exceeds-budget' })
+  const normalBudget = proposeExperimentalPeriodicQuinticCoordinatedSeam({ ...request, normalBudget: { ...request.normalBudget, maxCells: 2 } })
+  expect(normalBudget).toMatchObject({ status: 'inconclusive', phase: 'surface-normals',
+    evidence: { normals: { status: 'inconclusive', reason: 'knot-cell-budget' } },
+  })
+  const inverted = proposeExperimentalPeriodicQuinticCoordinatedSeam({ ...request,
+    previousInward: [0, 0, -1], nextInward: [0, 0, -1], maximumDisplacement: 8, maximumSeamDisplacement: 8,
+  })
+  expect(inverted).toMatchObject({ status: 'inconclusive', phase: 'surface-normals',
+    evidence: { seamJumpPreserved: true, normals: { status: 'nonpositive-witness' } },
+  })
+  for (const result of [rounded, locked, displaced, normalBudget, inverted]) expect(result).not.toHaveProperty('proposal')
 })

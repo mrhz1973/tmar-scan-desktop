@@ -8,7 +8,7 @@ const abs = (value: bigint) => value < 0n ? -value : value
 
 // Work in exact units of the least positive subnormal. Validation ensures
 // that knots and coordinates are finite before they reach this function.
-function binary64Units(value: number): bigint {
+export function binary64Units(value: number): bigint {
   bits.setFloat64(0, value)
   const word = bits.getBigUint64(0)
   const exponent = (word >> 52n) & 0x7ffn

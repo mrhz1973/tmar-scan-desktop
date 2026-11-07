@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Net, Point } from './brep'
-import { boundExperimentalPeriodicSeamDerivativeGap } from './experimentalPeriodicSeamDerivativeGap'
+import { binary64Units, boundExperimentalPeriodicSeamDerivativeGap } from './experimentalPeriodicSeamDerivativeGap'
+import { boundExperimentalPeriodicQuinticSurfaceNormals } from './experimentalPeriodicQuinticSurfaceNormals'
 import { validateExperimentalPeriodicSurfaceU } from './experimentalPeriodicSurfaceRefinement'
 import { divide, l1, scalar, sub, times, type V } from './tangencyCoefficientIntervals'
 
@@ -12,6 +13,15 @@ interface QuinticSideRequest {
   derivativeTolerance: number
   secondDerivativeTolerance: number
   lockIndices?: readonly number[]
+}
+
+export interface ExperimentalPeriodicQuinticCoordinatedSeamRequest extends Omit<QuinticSideRequest, 'targetInward'> {
+  previousInward: Point
+  nextInward: Point
+  seamDerivativeTolerance: number
+  maximumDisplacement: number
+  maximumSeamDisplacement: number
+  normalBudget: Parameters<typeof boundExperimentalPeriodicQuinticSurfaceNormals>[2]
 }
 
 const fail = (reason: string): never => { throw new Error(`Fascia periodica quintica rifiutata: ${reason}`) }
@@ -75,7 +85,97 @@ export function proposeExperimentalPeriodicAlmostC1QuinticSide(
   return { status: 'coefficient-proposal' as const, before, after, proposal, evidenceScope }
 }
 
-function validateQuinticSide({ net, edge }: QuinticSideRequest) {
+/**
+ * Move the seam column and its two neighbors in the two inward V rows
+ * of a unit-weight surface with saturated U seam and U degree up to three.
+ * The requested neighbor changes determine the seam change by the native
+ * end-span widths. After binary64 storage, verify the exact U derivative
+ * jump at every V coefficient and independently bound the seam movement.
+ * The original periodic basis still shares one position for both seam names;
+ * both V borders and their seam endpoints stay fixed. Full-domain normals
+ * compare the lateral to its source. A pre-existing nonzero jump can still
+ * lead to a different normal angle across the seam. That angle, neighboring
+ * joints, pcurves and CAD topology require separate verification.
+ */
+export function proposeExperimentalPeriodicQuinticCoordinatedSeam(request: ExperimentalPeriodicQuinticCoordinatedSeamRequest) {
+  const evidenceScope = 'coordinated-mobile-periodic-seam-coefficient-model' as const
+  const evidence: {
+    before?: ReturnType<typeof boundExperimentalPeriodicSeamDerivativeGap>
+    after?: ReturnType<typeof boundExperimentalPeriodicSeamDerivativeGap>
+    normals?: ReturnType<typeof boundExperimentalPeriodicQuinticSurfaceNormals>
+    seamJumpPreserved?: true
+    maxSeamDisplacementBound?: number
+    maxPositionDisplacementBound?: number
+  } = {}
+  let phase: 'preflight' | 'source-seam' | 'proposal' | 'candidate-seam' | 'surface-normals' = 'preflight'
+  const stop = (reason: string) => ({ status: 'inconclusive' as const, phase, reason, evidence, evidenceScope })
+  try {
+    if (!request) return stop('invalid-input')
+    const { net, edge, previousInward, nextInward, seamDerivativeTolerance, maximumDisplacement,
+      maximumSeamDisplacement, lockIndices = [] } = request
+    validateQuinticSide(request)
+    if (net.du > 3 || net.nu < 3 || net.mu[0] !== net.du || net.mu.slice(1, -1).some(m => m >= net.du) ||
+        !finitePoint(previousInward) || !finitePoint(nextInward) || !Array.isArray(lockIndices) ||
+        ![seamDerivativeTolerance, maximumDisplacement, maximumSeamDisplacement]
+          .every(value => Number.isFinite(value) && value >= 0)) return stop('invalid-input')
+
+    phase = 'source-seam'
+    const before = evidence.before = boundExperimentalPeriodicSeamDerivativeGap(net, seamDerivativeTolerance)
+    if (before.status !== 'within-tolerance') return stop('source-seam-unverified')
+
+    phase = 'proposal'
+    const hNext = net.ku[1] - net.ku[0], hPrevious = net.ku.at(-1)! - net.ku.at(-2)!
+    const width = Math.max(hNext, hPrevious)
+    const a = hNext / width, b = hPrevious / width
+    const previousWeight = a / (a + b), nextWeight = b / (a + b)
+    if (!(previousWeight > 0 && nextWeight > 0)) return stop('seam-weights-unrepresentable')
+    const direction = edge === 'V0' ? 1 : -1, edgeRow = edge === 'V0' ? 0 : net.nv - 1
+    const span = edge === 'V0' ? 0 : net.kv.length - 2
+    const factor = 5 / (net.kv[span + 1] - net.kv[span])
+    if (!Number.isFinite(factor) || !(factor > 0)) return stop('v-derivative-scale-unrepresentable')
+    const previous = net.nu - 1
+    const targetInward = Array.from({ length: net.nu }, (_, u) => {
+      const i = u * net.nv + edgeRow
+      return net.poles[i].map((x, axis) => factor * (net.poles[i + direction][axis] - x)) as Point
+    })
+    targetInward[0] = targetInward[0].map((value, axis) => value +
+      previousWeight * (previousInward[axis] - targetInward[previous][axis]) +
+      nextWeight * (nextInward[axis] - targetInward[1][axis])) as Point
+    targetInward[previous] = previousInward
+    targetInward[1] = nextInward
+    const editable = new Set([previous, 0, 1].flatMap(u => [1, 2].map(r => u * net.nv + edgeRow + r * direction)))
+    const protectedIndices = net.poles.flatMap((_, i) => editable.has(i) ? [] : [i])
+    const proposal = proposeQuinticRows({ ...request, targetInward, lockIndices: [...lockIndices, ...protectedIndices] })
+    evidence.maxPositionDisplacementBound = proposal.maxPositionDisplacementBound
+    if (proposal.maxPositionDisplacementBound > maximumDisplacement) return stop('displacement-bound-exceeds-budget')
+
+    phase = 'candidate-seam'
+    const candidate = proposal.net
+    const firstWidth = binary64Units(net.ku[1]) - binary64Units(net.ku[0])
+    const lastWidth = binary64Units(net.ku.at(-1)!) - binary64Units(net.ku.at(-2)!)
+    const delta = (i: number, axis: number) => binary64Units(candidate.poles[i][axis]) - binary64Units(net.poles[i][axis])
+    let maxSeamDisplacementBound = 0
+    for (let v = 0; v < net.nv; v++) {
+      for (let axis = 0; axis < 3; axis++) {
+        const at = delta(v, axis), next = delta(net.nv + v, axis), prev = delta(previous * net.nv + v, axis)
+        if ((next - at) * lastWidth !== (at - prev) * firstWidth) return stop('stored-seam-jump-changed')
+      }
+      maxSeamDisplacementBound = Math.max(maxSeamDisplacementBound, norm(difference(candidate.poles[v], net.poles[v])))
+    }
+    evidence.seamJumpPreserved = true
+    evidence.maxSeamDisplacementBound = maxSeamDisplacementBound
+    if (maxSeamDisplacementBound > maximumSeamDisplacement) return stop('seam-displacement-bound-exceeds-budget')
+    const after = evidence.after = boundExperimentalPeriodicSeamDerivativeGap(candidate, seamDerivativeTolerance)
+    if (after.status !== 'within-tolerance') return stop('candidate-seam-unverified')
+
+    phase = 'surface-normals'
+    const normals = evidence.normals = boundExperimentalPeriodicQuinticSurfaceNormals(net, candidate, request.normalBudget)
+    if (normals.status !== 'certified-positive') return stop('surface-normal-comparison-unverified')
+    return { status: 'coefficient-proposal' as const, proposal, evidence, evidenceScope }
+  } catch { return stop('coordinated-seam-evaluation-refused') }
+}
+
+function validateQuinticSide({ net, edge }: Pick<QuinticSideRequest, 'net' | 'edge'>) {
   validateExperimentalPeriodicSurfaceU(net)
   if (net.dv !== 5 || net.weights.some(w => w !== 1) || (edge !== 'V0' && edge !== 'V1'))
     fail('serve una fascia V clamped di grado cinque a pesi unitari e un bordo naturale')
