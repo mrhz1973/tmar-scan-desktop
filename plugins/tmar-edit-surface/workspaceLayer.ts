@@ -215,7 +215,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (disposed || layerDisposed) return
     try {
       const state = owner.getViewState(), anchor = stripAnchor(state)
-      if (!anchor || state.placingNote || state.surfaceTarget || state.wholeBoundaryDrag || state.navigationOnly) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
+      if (!anchor || state.placingNote || state.surfaceTarget || state.wholeBoundaryDrag || state.wholeFaceDrag || state.navigationOnly) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
       const direct = !state.strip && state.directStrip && directSelection &&
         state.directStrip.paths === directSelection.paths && state.directStrip.revision === directSelection.revision ? directSelection : null
       stripHandle.dataset.edge = String(state.strip ? state.strip.selectedEdge : direct?.edge ?? -1)
@@ -540,7 +540,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
 
   const pickNet = (x: number, y: number) => {
     const state = owner.getViewState(), net = state.net
-    if (!net || !displayed) return null
+    if (!net || !displayed || state.wholeFaceDrag) return null
     if (!state.showNet && (state.selectionMode === 'edges' || state.selectionMode === 'cells')) return null
     return pickNetAt({ net, mode: state.showNet ? state.selectionMode : 'points', hiddenPoles: state.hiddenPoles,
       camera: view.camera(), partWorld: partMatrix(net.poles[0]), rect: view.bounds(), clientX: x, clientY: y })
@@ -677,7 +677,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     try {
       const state = owner.getViewState()
       if (disposed || layerDisposed || capture || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey ||
-          state.busy || state.placingNote || state.surfaceTarget || state.wholeBoundaryDrag || state.navigationOnly || !displayed || !owner.previewStripDelta || !owner.finishStripGesture) return false
+          state.busy || state.placingNote || state.surfaceTarget || state.wholeBoundaryDrag || state.wholeFaceDrag || state.navigationOnly || !displayed || !owner.previewStripDelta || !owner.finishStripGesture) return false
       if (direct) {
         if (state.strip || !state.directStrip || state.directStrip.paths !== direct.paths ||
             state.directStrip.revision !== direct.revision || !owner.beginDirectStripGesture) return false
@@ -800,10 +800,13 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         return startStrip(event, picked, null)
       }
       if (!net) return false
-      const arrow = pickArrow(event), picked = arrow === null ? pickNet(event.clientX, event.clientY) : [arrow]
+      const faceHit = state.wholeFaceDrag?.canStart && state.dragMode !== 'local' ? pickFace(event.clientX, event.clientY) : null
+      if (state.wholeFaceDrag && (!owner.beginWholeFaceGesture || faceHit?.face !== state.face)) return false
+      const arrow = state.wholeFaceDrag ? null : pickArrow(event)
+      const picked = faceHit ? net.poles.map((_, index) => index) : arrow === null ? pickNet(event.clientX, event.clientY) : [arrow]
       // Preserve the entire net interaction. A coincident boundary may also
       // reveal D, but a pole or its arrow always takes precedence.
-      const directHit = arrow === null && (!picked || picked.length > 1) && state.directStrip && owner.beginDirectStripGesture
+      const directHit = !faceHit && arrow === null && (!picked || picked.length > 1) && state.directStrip && owner.beginDirectStripGesture
         ? pickPaths(state.directStrip.paths, -1, event.clientX, event.clientY) : null
       if (directHit && state.directStrip) {
         directSelection = { paths: state.directStrip.paths, revision: state.directStrip.revision, edge: directHit.edge }
@@ -814,12 +817,13 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // press on it prevents the host from orbiting over the model. An
       // unselected cell is selected by a click; a subsequent drag edits it.
       // Explicit cell mode keeps the direct-drag interaction.
-      if (state.selectionMode === 'auto' && picked.length === 4 &&
+      if (!faceHit && state.selectionMode === 'auto' && picked.length === 4 &&
           !picked.every(i => state.selected.includes(i))) return false
       if (!directHit && directSelection) { directSelection = null; syncStrip(state); positionStripHandle(); view.invalidate() }
-      const selected = picked.every(i => state.selected.includes(i)) ? [...state.selected] : picked
-      if (arrow === null) owner.selectPoints(picked, false)
+      const selected = !faceHit && picked.every(i => state.selected.includes(i)) ? [...state.selected] : picked
+      if (!faceHit && arrow === null) owner.selectPoints(picked, false)
       const ids = selected.filter(i => !state.locked.includes(i) && !state.hiddenPoles.includes(i))
+      if (faceHit && ids.length !== net.poles.length) return false
       if (!ids.length) return true
       const current = owner.getViewState()
       if (current.symmetry && current.symmetryBlocked) {
@@ -828,7 +832,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       }
       const direction = dragDirection(net, ids[0], state.dragMode, state.axis)
       if (state.dragMode !== 'screen' && !direction) return true
-      const origin = picked.reduce((v, i) => v.add(new THREE.Vector3(...net.poles[i])), new THREE.Vector3()).multiplyScalar(1 / picked.length)
+      const origin = faceHit ? new THREE.Vector3(...faceHit.point)
+        : picked.reduce((v, i) => v.add(new THREE.Vector3(...net.poles[i])), new THREE.Vector3()).multiplyScalar(1 / picked.length)
       const matrix = partMatrix(point(origin)), rect = view.bounds(), camera = view.camera()
       const frame = createDragFrame({ camera, partWorld: matrix, rect, anchor: point(origin), clientX: event.clientX, clientY: event.clientY,
         ...(state.dragMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction: direction!, allowViewAlignedDepth: true }) })
@@ -838,7 +843,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       const anchor = new THREE.Vector3(...net.poles[ids[0]])
       let reportedInvalidTarget = false
       const gesture = createSurfaceGesture({ frame, poles: net.poles, selected: ids, start: mousePoint(event), strength: state.dragStrength,
-        resolveDelta: delta => {
+        resolveDelta: faceHit ? undefined : delta => {
           try {
             refreshReferences(); refreshNeighbours()
             const targets = [...referenceTargets, ...neighbourTargets].filter(target => {
@@ -865,7 +870,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // would revoke the validated direct-edge cache before D can be used.
       const deferredPole = !!directHit
       if (!deferredPole) {
-        if (!owner.beginPoleGesture()) { view.releasePointer(event.pointerId); claimed = false; return true }
+        const started = faceHit ? owner.beginWholeFaceGesture?.(net) : owner.beginPoleGesture()
+        if (!started) { view.releasePointer(event.pointerId); claimed = false; return true }
         begun = true
       }
       view.claimEditDrag(true)
@@ -885,7 +891,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (state.navigationOnly && !state.placingNote && !state.surfaceTarget) return false
     if (state.busy || faceRequest) return true
     if (state.strip) return true
-    if (state.wholeBoundaryDrag) return false // No cell/point selection side effects while the rim tool is armed.
+    if (state.wholeBoundaryDrag || state.wholeFaceDrag) return false
     try {
       if((state.surfaceTarget?.kind === 'tangent-plane' || state.surfaceTarget?.kind === 'tangent-span') && owner.pickTangentPlane) {
         const hit = pickFace(x,y)

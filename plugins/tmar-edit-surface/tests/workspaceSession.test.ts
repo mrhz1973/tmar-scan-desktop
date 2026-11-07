@@ -121,6 +121,143 @@ describe('whole natural boundary movement',()=>{
   }
   const nativeReply=()=>({face:0,previewRevision:2,results:[{side:'U1',visible:true,point:[4,2,0],pickerSegment:31,
     reason:'native-section-and-clear-front',frontDistanceMm:1e-5,intersectionCount:1}]})
+  it('selects the whole open face, refuses partial movement and makes one Undo entry', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setDragMode('screen')
+    expect(() => s.setWholeFaceDrag(true)).toThrow(/bordi liberi/)
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    s.setWholeBoundaryDrag('U0')
+    s.setWholeFaceDrag(true)
+    expect(s.getPanelState().wholeBoundaryDrag).toBeNull()
+    const before = s.getPanelState().net!
+    const history = s.getSnapshot().historyRevision
+    expect(s.beginWholeFaceGesture(structuredClone(before))).toBe(false)
+    expect(s.beginWholeFaceGesture(before)).toBe(true)
+    expect(s.getPanelState().selected).toEqual(before.poles.map((_, index) => index))
+    const moved = before.poles.map(([x,y,z]): Point => [x + .25, y - .5, z + .125])
+    const partial = structuredClone(moved)
+    partial[12] = before.poles[12]
+    expect(() => s.previewPoles(partial)).toThrow(/tutti i poli/)
+    s.previewPoles(moved)
+    expect(() => s.finishPoleGesture(partial)).toThrow(/tutti i poli/)
+    expect(s.getPanelState().net).toEqual(before)
+    expect(s.getSnapshot().historyRevision).toBe(history)
+    await ready(t, 3)
+    expect(s.beginWholeFaceGesture(s.getPanelState().net!)).toBe(true)
+    s.finishPoleGesture(moved)
+    expect(s.getSnapshot().historyRevision).toBe(history + 1)
+    await ready(t, 4)
+    expect(s.getPanelState().net).toEqual({...before, poles:moved})
+    s.undo()
+    expect(s.getPanelState().net).toEqual(before)
+    await t.session.dispose('cancelled')
+  })
+
+  it.each([
+    {sheet:false}, {sheet:true,trimLocks:[12]}, {sheet:true,hiddenPoles:[12]}, {sheet:true},
+  ])('refuses whole-face mode with a solid, trim protection, hidden pole or manual lock (%j)', async options => {
+    const t = await setup(options)
+    await selectFace(t)
+    const s = t.session
+    s.setDragMode('axis')
+    if (options.sheet) {
+      s.setFreeBoundary(true)
+      await ready(t, 2)
+      if (!options.trimLocks && !options.hiddenPoles) {
+        s.setWholeFaceDrag(true)
+        s.selectPoints([12], false)
+        s.lockSelected(true)
+        await ready(t, 3)
+      }
+    }
+    expect(s.getPanelState().wholeFaceDrag).toBe(false)
+    expect(s.getPanelState().canMoveWholeFace).toBe(false)
+    expect(() => s.setWholeFaceDrag(true)).toThrow(/tutti i poli/)
+    expect(s.beginWholeFaceGesture(s.getPanelState().net!)).toBe(false)
+    await s.dispose('cancelled')
+  })
+
+  it('releases the selection created by the whole-face gesture before the next single-pole drag', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setDragMode('axis')
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    const original = s.getPanelState().net!
+    s.setWholeFaceDrag(true)
+    expect(s.beginWholeFaceGesture(original)).toBe(true)
+    s.finishPoleGesture(original.poles.map(([x,y,z]): Point => [x,y,z+.2]))
+    await ready(t, 3)
+    const translated = s.getPanelState().net!
+    expect(s.getViewState().selected).toHaveLength(original.poles.length)
+
+    s.setWholeFaceDrag(false)
+    expect(s.getViewState().selected).toEqual([])
+    s.selectPoints([12], false)
+    expect(s.beginPoleGesture()).toBe(true)
+    const poles = changedPoles(s, .3)
+    s.finishPoleGesture(poles)
+    expect(s.getPanelState().net!.poles.flatMap((p, i) => p[2] === translated.poles[i][2] ? [] : [i])).toEqual([12])
+    await s.dispose('cancelled')
+  })
+
+  it('preserves independent selection and clears owned selection on automatic whole-face disarm', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setDragMode('screen')
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    const net = s.getPanelState().net!
+    s.selectPoints([12], false)
+    s.setWholeFaceDrag(true)
+    s.setWholeFaceDrag(false)
+    expect(s.getPanelState().selected).toEqual([12])
+    s.setWholeFaceDrag(true)
+    expect(s.beginWholeFaceGesture(net)).toBe(true)
+    s.finishPoleGesture(null)
+    s.setPlacingNote(true)
+    expect(s.getPanelState()).toMatchObject({ wholeFaceDrag:false, selected:[] })
+    s.setPlacingNote(false)
+
+    s.setWholeFaceDrag(true)
+    expect(s.beginWholeFaceGesture(net)).toBe(true)
+    s.finishPoleGesture(null)
+    s.selectAllFree()
+    s.setWholeFaceDrag(false)
+    expect(s.getPanelState().selected).toHaveLength(net.poles.length)
+    await s.dispose('cancelled')
+  })
+
+  it('requires Screen or XYZ for whole-face drag and disarms it when switching to Local', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    const net = s.getPanelState().net!, history = s.getSnapshot().historyRevision
+    expect(s.getPanelState().dragMode).toBe('local')
+    expect(s.getPanelState().canMoveWholeFace).toBe(false)
+    expect(() => s.setWholeFaceDrag(true)).toThrow(/Schermo o Assi XYZ/)
+    s.setDragMode('axis')
+    s.setWholeFaceDrag(true)
+    expect(s.beginWholeFaceGesture(net)).toBe(true)
+    s.finishPoleGesture(null)
+    s.setDragMode('local')
+    expect(s.getPanelState()).toMatchObject({ wholeFaceDrag:false, canMoveWholeFace:false, selected:[] })
+    expect(s.getPanelState().message).toMatch(/disattivato/)
+    expect(s.beginWholeFaceGesture(net)).toBe(false)
+    expect(s.getSnapshot().historyRevision).toBe(history)
+    s.setDragMode('screen')
+    expect(s.getPanelState().canMoveWholeFace).toBe(true)
+    expect(s.getPanelState().wholeFaceDrag).toBe(false)
+    await s.dispose('cancelled')
+  })
+
   it('keeps native verification read-only and consumes only the original current receipt once',async()=>{
     const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2);t.session.setWholeBoundaryDrag('U0')
     const net=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision

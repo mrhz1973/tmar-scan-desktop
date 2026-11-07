@@ -70,6 +70,8 @@ export interface WorkspaceSurfacePanelState {
   readonly canFreeBoundary: boolean
   readonly canMoveWholeBoundary: boolean
   readonly wholeBoundaryDrag: WholeBoundarySide | null
+  readonly wholeFaceDrag: boolean
+  readonly canMoveWholeFace: boolean
   readonly canRefineNet: boolean
   readonly g1Candidates: readonly WorkspaceG1Candidate[]
   readonly g1Choice: string | null
@@ -196,7 +198,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private gesture: 'idle' | 'pole' | 'strip' = 'idle'
   private gestureNet: Net | null = null
   private wholeBoundaryDrag: {side:WholeBoundarySide;face:number} | null = null
-  private wholeBoundaryGesture: readonly number[] | null = null
+  private wholeFaceDrag = false
+  private wholeFaceSelection: readonly number[] | null = null
+  private uniformGesture: { readonly ids: readonly number[]; readonly scope: 'bordo' | 'faccia' } | null = null
   private boundaryPickSerial=0
   private readonly boundaryPickReceipts=new WeakMap<VerifiedBoundaryPick,{snapshot:SurfaceDraftSnapshot;serial:number}>()
   private strip: StripMode | null = null
@@ -461,12 +465,18 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     catch(error) { if(!this.disposed) this.message=String((error as Error)?.message ?? error); throw error }
     finally { if(!this.disposed) { this.busy=false; this.refresh() } }
   }
-  selectAllFree(): void { this.change(() => { const net = this.requireNet(), locked = new Set(this.viewState.locked); this.draft.setSelection(net.poles.flatMap((_, i) => locked.has(i) ? [] : [i])) }) }
+  selectAllFree(): void {
+    this.change(() => {
+      const net = this.requireNet(), locked = new Set(this.viewState.locked)
+      this.draft.setSelection(net.poles.flatMap((_, i) => locked.has(i) ? [] : [i]))
+      this.wholeFaceSelection = null // This selection was explicitly requested by the user.
+    })
+  }
   clearSelection(): void { this.change(() => this.draft.setSelection([])) }
   beginPoleGesture(): boolean {
     this.assertMutable()
     if (this.strip || this.stripPending) throw new Error('Chiudi prima la modifica del bordo.')
-    if (this.gesture !== 'idle' || !this.editable().length || !this.draft.getSnapshot().committedNet) return false
+    if (this.wholeFaceDrag || this.gesture !== 'idle' || !this.editable().length || !this.draft.getSnapshot().committedNet) return false
     this.change(() => { this.gesture = 'pole'; this.gestureNet = this.draft.getSnapshot().committedNet })
     return true
   }
@@ -476,8 +486,45 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if(!this.panel.canMoveWholeBoundary)throw Error('Attiva i bordi liberi e attendi una singola faccia CAD valida.')
       const ids=wholeBoundaryIndices(this.requireNet(),side),d=this.draft.getSnapshot()
       if(ids.some(i=>d.locks.includes(i)||d.trimLocks.includes(i)||d.hiddenPoles.includes(i)))throw Error('Il bordo contiene un polo bloccato.')
+      this.disarmWholeFaceDrag()
       this.draft.setSelection(ids);this.wholeBoundaryDrag={side,face:this.face}
     })
+  }
+  setWholeFaceDrag(active: boolean): void {
+    this.change(() => {
+      if (active && this.dragMode === 'local')
+        throw new Error('Scegli Schermo o Assi XYZ per trascinare l’intera faccia.')
+      if (active && !this.panel.canMoveWholeFace)
+        throw new Error('Attiva i bordi liberi su una singola faccia aperta valida con tutti i poli modificabili.')
+      if (!active) {
+        this.disarmWholeFaceDrag()
+        return
+      }
+      this.wholeBoundaryDrag = null
+      this.message = null
+      this.wholeFaceDrag = true
+    })
+  }
+  private disarmWholeFaceDrag(): void {
+    this.wholeFaceDrag = false
+    const owned = this.wholeFaceSelection
+    this.wholeFaceSelection = null
+    if (owned && owned === this.draft.getSnapshot().selected) this.draft.setSelection([])
+  }
+  beginWholeFaceGesture(net: Net): boolean {
+    this.assertMutable()
+    const draft = this.draft.getSnapshot()
+    if (!this.wholeFaceDrag || !this.panel.canMoveWholeFace || draft.committedNet !== net) return false
+    this.change(() => {
+      const ids = net.poles.map((_, index) => index)
+      this.draft.setSelection(ids)
+      const selected = this.draft.getSnapshot().selected
+      if (selected !== draft.selected) this.wholeFaceSelection = selected
+      this.gesture = 'pole'
+      this.gestureNet = net
+      this.uniformGesture = { ids, scope: 'faccia' }
+    })
+    return true
   }
   beginWholeBoundaryGesture(side:WholeBoundarySide):boolean {
     this.assertMutable()
@@ -486,7 +533,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if(ids.some(i=>d.locks.includes(i)||d.trimLocks.includes(i)||d.hiddenPoles.includes(i)))throw Error('Il bordo contiene un polo bloccato.')
     this.change(()=>{
       this.draft.setSelection(ids);this.wholeBoundaryDrag={side,face:this.face}
-      this.gesture='pole';this.gestureNet=d.committedNet;this.wholeBoundaryGesture=ids
+      this.gesture='pole';this.gestureNet=d.committedNet;this.uniformGesture={ids,scope:'bordo'}
     })
     return true
   }
@@ -522,23 +569,27 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.boundaryPickSerial++
     return this.beginWholeBoundaryGesture(pick.side)
   }
-  private checkWholeBoundaryGesture(poles:Point[]):void {
-    const ids=this.wholeBoundaryGesture,base=this.gestureNet
-    if(!ids || !base)return
-    if(poles.length!==base.poles.length || poles.some(p=>!finitePoint(p)))throw Error('Coordinate del bordo non valide.')
+  private checkUniformGesture(poles:Point[]):void {
+    const gesture = this.uniformGesture, base = this.gestureNet
+    if (!gesture || !base) return
+    const { ids, scope } = gesture
+    if (poles.length !== base.poles.length || poles.some(p => !finitePoint(p)))
+      throw Error('Coordinate dei poli non valide.')
     const delta=poles[ids[0]].map((x,d)=>x-base.poles[ids[0]][d])
-    if(Math.hypot(...delta)>1000)throw Error('Spostamento del bordo oltre 1000 mm.')
+    if(Math.hypot(...delta)>1000)throw Error(scope === 'faccia' ? 'Spostamento della faccia oltre 1000 mm.' : 'Spostamento del bordo oltre 1000 mm.')
     const selected=new Set(ids)
     for(let i=0;i<poles.length;i++)for(let d=0;d<3;d++){
       const expected=base.poles[i][d]+(selected.has(i)?delta[d]:0)
       if(selected.has(i)?Math.abs(poles[i][d]-expected)>1e-8:poles[i][d]!==base.poles[i][d])
-        throw Error('Il trascinamento deve traslare tutto il bordo, senza cambiare altri poli.')
+        throw Error(scope === 'faccia'
+          ? 'Il trascinamento deve traslare tutti i poli della faccia.'
+          : 'Il trascinamento deve traslare tutto il bordo, senza cambiare altri poli.')
     }
   }
   previewPoles(poles: Point[]): void {
     this.change(() => {
       if (this.gesture !== 'pole' || !this.gestureNet) throw new Error('Nessun trascinamento attivo.')
-      this.checkWholeBoundaryGesture(poles)
+      this.checkUniformGesture(poles)
       this.draft.preview({ ...this.gestureNet, poles: this.mirroredPoles(this.gestureNet, poles) })
     }, false, true)
   }
@@ -546,15 +597,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     // The layer can release a captured pointer while the host revokes the
     // session. Closing discards the gesture; it must not attempt a CAD write.
     if (!poles && (this.disposed || this.context.signal.aborted || !this.runtime.active)) {
-      this.gesture = 'idle'; this.gestureNet = null; this.wholeBoundaryGesture=null
+      this.gesture = 'idle'; this.gestureNet = null; this.uniformGesture=null
       return
     }
     this.change(() => {
       if (this.gesture !== 'pole' || !this.gestureNet) return
       const net = this.gestureNet
-      try { if (poles) {this.checkWholeBoundaryGesture(poles);this.draft.commit({ ...net, poles: this.mirroredPoles(net, poles) })} else this.draft.cancelDraft() }
-      catch(error){if(this.wholeBoundaryGesture)this.draft.cancelDraft();throw error}
-      finally { this.gesture = 'idle'; this.gestureNet = null;this.wholeBoundaryGesture=null }
+      try { if (poles) {this.checkUniformGesture(poles);this.draft.commit({ ...net, poles: this.mirroredPoles(net, poles) })} else this.draft.cancelDraft() }
+      catch(error){if(this.uniformGesture)this.draft.cancelDraft();throw error}
+      finally { this.gesture = 'idle'; this.gestureNet = null;this.uniformGesture=null }
     }, false, true)
   }
   cancelGesture(): boolean {
@@ -1193,7 +1244,16 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if(!this.disposed){this.refresh();this.resolveNotes()}
     }
   }
-  setDragMode(value: DragMode): void { this.change(() => { if (!['axis','screen','local'].includes(value)) throw new Error('Modalità non valida.'); this.dragMode = value }) }
+  setDragMode(value: DragMode): void {
+    this.change(() => {
+      if (!['axis','screen','local'].includes(value)) throw new Error('Modalità non valida.')
+      this.dragMode = value
+      if (value === 'local' && this.wholeFaceDrag) {
+        this.disarmWholeFaceDrag()
+        this.message = 'Trascinamento dell’intera faccia disattivato. Per usarlo, scegli Schermo o Assi XYZ.'
+      }
+    })
+  }
   setAxis(value: number): void { this.change(() => { if (![0,1,2].includes(value)) throw new Error('Asse non valido.'); this.axis = value }) }
   setDragStrength(value: number): void { this.change(() => { if (!Number.isFinite(value) || value < .05 || value > 1) throw new Error('Intensità non valida.'); this.dragStrength = value }) }
   setSelectionMode(value: NetSelectionMode): void { this.change(() => { if (!['auto','points','edges','cells','mixed'].includes(value)) throw new Error('Selezione non valida.'); this.selectionMode = value }) }
@@ -1925,9 +1985,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }
   }
   private refresh(): void {
-    const d: SurfaceDraftSnapshot = this.draft.getSnapshot()
+    let d: SurfaceDraftSnapshot = this.draft.getSnapshot()
     if(this.wholeBoundaryDrag && (this.wholeBoundaryDrag.face!==this.face || !d.freeBoundary || this.symmetry || this.notes.length || this.placingNote || this.surfaceTarget ||
       d.planeTangency || d.curvedTangency || d.cylinderSession!==null || this.strip))this.wholeBoundaryDrag=null
+    if (this.wholeFaceDrag && (!d.freeBoundary || this.symmetry || this.notes.length || this.placingNote ||
+        this.surfaceTarget || d.planeTangency || d.curvedTangency || d.cylinderSession !== null || this.strip ||
+        d.locks.length || d.trimLocks.length || d.hiddenPoles.length)) {
+      this.disarmWholeFaceDrag()
+      d = this.draft.getSnapshot()
+    }
     if(this.surfaceTarget && (this.surfaceTarget.snapshot!==d || this.symmetry)) this.surfaceTarget=null
     const tangency = d.planeTangency ?? d.curvedTangency
     if (this.g1Basis && (this.g1Basis.selectionEpoch !== this.selectionEpoch || this.g1Basis.refinements !== d.refinements)) {
@@ -2020,8 +2086,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       !this.surfaceTarget && !this.notes.length && !strip && !this.stripPending && this.gesture==='idle' && this.faces.length===1 &&
       !!face?.freeBoundary && d.freeBoundary && !tangency && d.cylinderSession===null && !!d.net &&
       d.net===d.committedNet && d.validNet===d.net && !d.calculating && !d.previewStale
+    const canMoveWholeFace = canMoveWholeBoundary && this.dragMode !== 'local' && !this.navigationOnly && !locked.length && !d.hiddenPoles.length
     const surfaceTargetBatch=this.surfaceTarget?.points?Object.freeze(this.surfaceTarget.points.map(p=>Object.freeze({at:freezePoint(p.at),target:freezePoint(p.reference.point),label:p.reference.label}))):null
-    const canTargetPoint=!adaptive && !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
+    const canTargetPoint=!adaptive && !this.wholeFaceDrag && !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
       this.gesture==='idle' && !this.symmetry && !tangency && d.cylinderSession===null && !!d.net && d.net===d.committedNet &&
       d.validNet===d.net && !d.calculating && !d.previewStale && d.selected.some(i=>!locked.includes(i) && !d.hiddenPoles.includes(i))
     const canLoadG1 = !adaptive && !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
@@ -2035,6 +2102,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       curvedTangencyActive: !!d.curvedTangency,
       canFreeBoundary: !adaptive && !!face?.freeBoundary && !tangency, canMoveWholeBoundary, wholeBoundaryDrag:this.wholeBoundaryDrag?.side??null, canRefineNet: !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
         !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
+      wholeFaceDrag: this.wholeFaceDrag, canMoveWholeFace,
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,
       surfaceTarget:this.surfaceTarget?.kind ?? null,surfaceTargetBatch,canTargetPoint,
@@ -2048,6 +2116,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.viewState = Object.freeze({ reticleStamp: current, net: strip ? null : d.net, preview, provisionalPreview:d.cylinderPreview?.faceMeshes ? {kind:'provisional' as const,faceMeshes:d.cylinderPreview.faceMeshes} : null, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
       hiddenPoles: d.hiddenPoles, selectionMode: this.selectionMode, navigationOnly: this.navigationOnly, dragMode: this.dragMode,
       wholeBoundaryDrag:this.wholeBoundaryDrag ? {side:this.wholeBoundaryDrag.side,canStart:canMoveWholeBoundary}:null,
+      wholeFaceDrag: this.wholeFaceDrag ? { canStart: canMoveWholeFace } : null,
       axis: this.axis, dragStrength: this.dragStrength, showNet: this.showNet, snap: this.snap,
       snapDistance: this.snapDistance, busy: this.busy || !!this.frozen, placingNote: this.placingNote,
       surfaceTarget:this.surfaceTarget ? {kind:this.surfaceTarget.kind,sourceBodyId:this.source.bodyId,...(surfaceTargetBatch?{pairs:surfaceTargetBatch}:{})}:null,

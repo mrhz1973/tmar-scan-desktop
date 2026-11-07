@@ -69,6 +69,7 @@ export interface WorkspaceSurfaceViewState {
   readonly selectionMode: NetSelectionMode
   readonly navigationOnly?: boolean
   readonly wholeBoundaryDrag?: {readonly side:WholeBoundarySide;readonly canStart:boolean} | null
+  readonly wholeFaceDrag?: { readonly canStart: boolean } | null
   readonly dragMode: DragMode
   readonly axis: number
   readonly dragStrength: number
@@ -100,6 +101,7 @@ export interface WorkspaceSurfaceLayerOwner {
   requestFaceSelection(index: number): Promise<void>
   selectPoints(ids: readonly number[], additive: boolean): void
   beginPoleGesture(): boolean
+  beginWholeFaceGesture?(net: Net): boolean
   beginWholeBoundaryGesture?(side:WholeBoundarySide): boolean
   prepareWholeBoundaryPicks?(net:Net,candidates:BoundaryCadCandidate[],origin:Point,parallelDirection?:Point):Promise<readonly VerifiedBoundaryPick[]>
   beginVerifiedWholeBoundaryGesture?(pick:VerifiedBoundaryPick):boolean

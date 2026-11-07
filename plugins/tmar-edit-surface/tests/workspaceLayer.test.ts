@@ -141,6 +141,50 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
+it('uses the visible face interior for whole-face translation and leaves space outside it to navigation', () => {
+  const f = fixture({ reference:'scan' })
+  f.set({ wholeFaceDrag:{ canStart:true }, showNet:false, dragMode:'screen' })
+  f.owner.beginWholeFaceGesture = vi.fn(() => true)
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  f.set({ dragMode:'local' })
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,0,0]))).toBe(false)
+  expect(f.owner.beginWholeFaceGesture).not.toHaveBeenCalled()
+  expect(f.counts().captured).toBeNull()
+  f.set({ dragMode:'screen' })
+  expect(f.getLayer().pointerDown?.(f.event(1,[2.5,2.5,0]))).toBe(false)
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,0,0]))).toBe(true)
+  expect(f.owner.beginWholeFaceGesture).toHaveBeenCalledWith(f.net)
+  expect(f.beginPoleGesture).not.toHaveBeenCalled()
+  expect(f.selectPoints).not.toHaveBeenCalled()
+  f.getHandlers().move(f.event(1,[.1,.15,0]))
+  f.getHandlers().up(f.event(1,[.1,.15,0]))
+  const moved = f.finishPoleGesture.mock.calls[0][0]!
+  moved.forEach((pole, i) => {
+    expect(pole[0] - f.net.poles[i][0]).toBeCloseTo(.1)
+    expect(pole[1] - f.net.poles[i][1]).toBeCloseTo(.15)
+    expect(pole[2] - f.net.poles[i][2]).toBeCloseTo(0)
+  })
+  expect(f.counts().captured).toBeNull()
+
+  f.set({ locked:[0] })
+  expect(f.getLayer().pointerDown?.(f.event(2,[0,0,0]))).toBe(false)
+  expect(f.owner.beginWholeFaceGesture).toHaveBeenCalledTimes(1)
+  f.set({ locked:[] })
+  expect(f.getLayer().pointerDown?.(f.event(3,[0,0,0]))).toBe(true)
+  f.getHandlers().cancel(f.event(3,[0,0,0]))
+  expect(f.finishPoleGesture).toHaveBeenLastCalledWith(null)
+  expect(f.counts().captured).toBeNull()
+
+  // The controller releases the mode-owned selection before normal picking resumes.
+  f.set({ wholeFaceDrag:null, selected:[], snap:false, showNet:true })
+  expect(f.getLayer().pointerDown?.(f.event(4,f.net.poles[0]))).toBe(true)
+  f.getHandlers().up(f.event(4,[-.9,-.85,0]))
+  const singlePole = f.finishPoleGesture.mock.lastCall![0]!
+  expect(singlePole[0]).not.toEqual(f.net.poles[0])
+  expect(singlePole.slice(1)).toEqual(f.net.poles.slice(1))
+  layer.dispose()
+})
+
 const flushBoundaryPick=async()=>{for(let i=0;i<8;i++)await Promise.resolve()}
 
 it.each(['up','escape','view','draft','navigation','dispose'] as const)('discards a late native boundary response after %s and releases only its capture',async change=>{

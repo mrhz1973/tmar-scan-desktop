@@ -261,6 +261,13 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         {state.wholeBoundaryDrag && <p>Puoi afferrare uno qualsiasi dei quattro bordi naturali. Il bordo indicato nel pannello segue quello scelto nella vista. Il gesto usa direzione e intensità del reticolo, senza magnete. Fuori dai bordi puoi navigare; Escape annulla il gesto. Il comando numerico usa invece l’asse XYZ qui sopra.</p>}
         <p>Un polo bloccato impedisce il movimento di tutto il bordo. Il risultato richiede la verifica CAD e si annulla con un solo Undo. Non viene aggiunta una striscia.</p>
       </fieldset>}
+      {state.canFreeBoundary && <fieldset data-test="surface-whole-face">
+        <legend>Sposta intera faccia aperta</legend>
+        <label className="inline"><input data-test="surface-whole-face-drag" type="checkbox"
+          checked={state.wholeFaceDrag} disabled={disabled || (!state.wholeFaceDrag && !state.canMoveWholeFace)}
+          onChange={e => attempt(() => controller.setWholeFaceDrag(e.target.checked))} />Trascina la faccia nella vista</label>
+        <p>Attiva i bordi liberi su una singola faccia naturale e sblocca tutti i poli. Scegli Schermo o Assi XYZ, poi afferra la superficie per traslarla senza magnete. Il trascinamento richiede la verifica CAD e si annulla in un solo passaggio.</p>
+      </fieldset>}
       <label>Selezione del reticolo
         <select data-test="surface-selection-mode" value={state.selectionMode} disabled={disabled}
           onChange={e => attempt(() => controller.setSelectionMode(e.target.value as NetSelectionMode))}>
