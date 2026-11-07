@@ -136,13 +136,14 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
   const getLayer = () => layer as unknown as NonNullable<typeof layer>
   const getHandlers = () => handlers as unknown as NonNullable<typeof handlers>
   return { view, owner, set, net, group, rect, client, event, getLayer, getHandlers, counts: () => ({ maskCount, restoreCount, captured }),
-    selectPoints, requestFaceSelection, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError, referenceGeometry, beforePosition, claimEditDrag,
+    selectPoints, requestFaceSelection, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError, reference, referenceGeometry, beforePosition, claimEditDrag,
     beginStripGesture, beginDirectStripGesture, previewStripDelta, finishStripGesture,
     overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
 it('uses the visible face interior for whole-face translation and leaves space outside it to navigation', () => {
   const f = fixture({ reference:'scan' })
+  f.reference.partFromGeometry = new THREE.Matrix4().makeTranslation(0,0,-1).toArray()
   f.set({ wholeFaceDrag:{ canStart:true }, showNet:false, dragMode:'screen' })
   f.owner.beginWholeFaceGesture = vi.fn(() => true)
   const layer = createWorkspaceLayer(f.view, f.owner)
@@ -186,6 +187,81 @@ it('uses the visible face interior for whole-face translation and leaves space o
 })
 
 const flushBoundaryPick=async()=>{for(let i=0;i<8;i++)await Promise.resolve()}
+
+it.each([
+  ['screen','scan','front',1,true,false],
+  ['axis','cad-face','front',1,true,false],
+  ['local','scan','front',1,true,false],
+  ['screen','cad-face','behind',-1,true,true],
+  ['axis','scan','hidden',1,false,true],
+  ['screen','scan','clipped',1,true,true],
+  ['local','cad-face','behind',-1,true,true],
+  ['local','scan','hidden',1,false,true],
+  ['screen','scan','nearly coincident',-0.000001,true,false],
+] as const)('checks %s whole-face occlusion with %s %s and snap disabled', async (dragMode, referenceKind, placement, z, visible, accepted) => {
+  const f = fixture({ reference:referenceKind })
+  f.reference.partFromGeometry = new THREE.Matrix4().makeTranslation(0,0,z).toArray()
+  f.reference.visible = visible
+  f.set({ wholeFaceDrag:{canStart:true}, dragMode, snap:false })
+  f.owner.beginWholeFaceGesture = vi.fn(() => true)
+  f.owner.prepareWholeFacePick = vi.fn(async () => ({point:[0,0,0] as Point,direction:[1,0,0] as Point}))
+  f.owner.beginVerifiedWholeFaceGesture = vi.fn(() => true)
+  f.owner.cancelPreparedWholeFacePick = vi.fn()
+  const layer = createWorkspaceLayer(f.view, f.owner), press = f.event(1,[0,0,0])
+  if (placement === 'clipped') f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,0,-1),.5)],false)
+  expect(f.getLayer().pointerDown?.(press)).toBe(accepted)
+  await flushBoundaryPick()
+  if (accepted) {
+    if (dragMode === 'local') expect(f.owner.beginVerifiedWholeFaceGesture).toHaveBeenCalledTimes(1)
+    else expect(f.owner.beginWholeFaceGesture).toHaveBeenCalledTimes(1)
+    f.getHandlers().up(press)
+  } else {
+    expect(f.owner.prepareWholeFacePick).not.toHaveBeenCalled()
+    expect(f.owner.beginWholeFaceGesture).not.toHaveBeenCalled()
+    expect(f.reportViewError).toHaveBeenCalledWith(expect.stringContaining('coperta'))
+  }
+  expect(f.counts().captured).toBeNull()
+  layer.dispose()
+})
+
+it('fails closed before capturing a whole-face press when a visible reference has no triangles', () => {
+  const f = fixture({reference:'scan'})
+  f.reference.geometry = new THREE.BufferGeometry() as THREE.PlaneGeometry
+  f.set({ wholeFaceDrag:{canStart:true}, dragMode:'screen', snap:false })
+  f.owner.beginWholeFaceGesture = vi.fn(() => true)
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,0,0]))).toBe(false)
+  expect(f.counts().captured).toBeNull()
+  expect(f.owner.beginWholeFaceGesture).not.toHaveBeenCalled()
+  layer.dispose()
+})
+
+it.each(['reference moved','visibility changed','CAD hit is deeper'] as const)('refuses pending Local whole-face promotion when %s', async cause => {
+  const f = fixture({reference:'cad-face'})
+  f.reference.partFromGeometry = new THREE.Matrix4().makeTranslation(0,0,-.05).toArray()
+  f.set({ wholeFaceDrag:{canStart:true}, dragMode:'local', snap:false })
+  let resolve!: (value: VerifiedWholeFacePick) => void
+  f.owner.prepareWholeFacePick = vi.fn(() => new Promise<VerifiedWholeFacePick>(r => { resolve = r }))
+  f.owner.beginVerifiedWholeFaceGesture = vi.fn(() => true)
+  f.owner.cancelPreparedWholeFacePick = vi.fn()
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,0,0]))).toBe(true)
+  expect(f.counts().captured).toBe(1)
+  if (cause === 'reference moved') f.reference.partFromGeometry = new THREE.Matrix4().makeTranslation(0,0,.05).toArray()
+  if (cause === 'visibility changed') {
+    f.reference.visible = false
+    f.notifyReferences()
+    expect(f.counts().captured).toBeNull()
+    f.reference.visible = true
+    f.notifyReferences()
+  }
+  resolve({ point:[0,0,cause === 'CAD hit is deeper' ? -.1 : 0], direction:[1,0,0] })
+  await flushBoundaryPick()
+  expect(f.owner.beginVerifiedWholeFaceGesture).not.toHaveBeenCalled()
+  expect(f.owner.cancelPreparedWholeFacePick).toHaveBeenCalledTimes(1)
+  expect(f.counts().captured).toBeNull()
+  layer.dispose()
+})
 
 it('uses the verified Local axis and translates every pole after the CAD reply', async () => {
   const f = fixture()

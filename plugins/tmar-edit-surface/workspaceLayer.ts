@@ -29,6 +29,12 @@ const ZebraRenderer = Object.values(zebraModules)[0]
 type Target = { mesh: THREE.Mesh; geometry: THREE.BufferGeometry; ownsGeometry: boolean; current: () => boolean;
   reference?: { id: unknown; revision: unknown; source: THREE.BufferGeometry; matrix: THREE.Matrix4; kind: string; bodyId: unknown };
   neighbour?: { mesh: THREE.Mesh; source: THREE.BufferGeometry; face: number } }
+type FaceOccluder = NonNullable<Target['reference']>
+const sameFaceOccluder = (a: FaceOccluder, b: FaceOccluder): boolean =>
+  a.id === b.id && a.revision === b.revision && a.source === b.source && a.kind === b.kind &&
+  a.bodyId === b.bodyId && a.matrix.equals(b.matrix)
+const sameFaceOccluders = (a: FaceOccluder[], b: FaceOccluder[]): boolean =>
+  a.length === b.length && a.every(ref => b.some(next => sameFaceOccluder(ref, next)))
 type Capture = {
   kind: 'pole' | 'strip'
   pointerId: number
@@ -47,6 +53,7 @@ type DirectSelection = { paths: readonly (readonly Point[])[]; revision: number;
 type CadPickPending=Pick<Capture,'pointerId'|'camera'|'projection'|'cameraWorld'|'partWorld'|'rect'>&{
   kind:'boundary'|'face';net:Net;preview:WorkspaceSurfaceViewState['preview'];face:number;locked:readonly number[];hidden:readonly number[];
   start:SurfacePointer;last:SurfacePointer|null;dragMode:WorkspaceSurfaceViewState['dragMode'];axis:number;strength:number
+  occluders?: FaceOccluder[]
 }
 
 const finitePoint = (p: readonly number[]): p is Point => p.length === 3 && p.every(Number.isFinite)
@@ -241,7 +248,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const refreshReferences = () => {
     const state = owner.getViewState()
     const pickingReference = state.surfaceTarget?.kind === 'scan' || state.surfaceTarget?.kind === 'cad'
-    if (!referencesDirty || disposed || (!state.snap && !pickingReference)) return
+    if (!referencesDirty || disposed || (!state.snap && !pickingReference && !state.wholeFaceDrag)) return
     if (Date.now() < retryReferencesAt) return
     // Only an automatic partial retry may reuse existing wrappers. A host
     // notification resets retryReferencesAt and forces a fresh enumeration.
@@ -516,8 +523,13 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // state. In either case this invocation must not apply its stale state.
       if (disposed || layerDisposed || revision !== syncRevision) return
       positionStripHandle()
-      if ((state.snap || state.surfaceTarget?.kind === 'scan' || state.surfaceTarget?.kind === 'cad') && !state.strip) { refreshReferences(); refreshNeighbours() }
-      else { disposeTargets(referenceTargets); referenceTargets = []; disposeTargets(neighbourTargets); neighbourTargets = []; referencesDirty = neighboursDirty = true; retryNeighboursAt = 0; hideFeedback() }
+      const pickingReference = state.snap || state.surfaceTarget?.kind === 'scan' || state.surfaceTarget?.kind === 'cad'
+      if (pickingReference && !state.strip) { refreshReferences(); refreshNeighbours() }
+      else {
+        if (state.wholeFaceDrag && !state.strip) refreshReferences()
+        else { disposeTargets(referenceTargets); referenceTargets = []; referencesDirty = true; retryReferencesAt = 0 }
+        disposeTargets(neighbourTargets); neighbourTargets = []; neighboursDirty = true; hideFeedback()
+      }
       syncZebra(state)
       syncOpacity(state)
       view.invalidate()
@@ -596,6 +608,46 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     localCamera.matrixWorldInverse.copy(localCamera.matrixWorld).invert()
     return localCamera
   }
+  const wholeFaceOccluders = (): FaceOccluder[] => {
+    const visible: FaceOccluder[] = []
+    for (const ref of view.references() as readonly ReferenceDescriptor[]) {
+      if (!ref.visible) continue
+      const matrix = new THREE.Matrix4().fromArray([...ref.partFromGeometry])
+      const determinant = matrix.determinant(), position = ref.geometry.getAttribute('position')
+      const vertexCount = ref.geometry.getIndex()?.count ?? position?.count ?? 0
+      if (!ref.isCurrent() || !position || position.itemSize !== 3 || vertexCount < 3 || visible.some(item => item.id === ref.id) ||
+          !matrix.elements.every(Number.isFinite) || !Number.isFinite(determinant) || determinant === 0)
+        throw new Error('Visibilità dei riferimenti non verificabile.')
+      visible.push({ id:ref.id, revision:ref.revision, source:ref.geometry, matrix,
+        kind:ref.kind === 'scan' ? 'scan' : 'cad', bodyId:ref.bodyId })
+    }
+    return visible
+  }
+
+  const checkWholeFaceDepth = (caster: THREE.Raycaster & {firstHitOnly?:boolean}, hit: Readonly<Point>,
+    matrix: THREE.Matrix4, before?: FaceOccluder[]): FaceOccluder[] => {
+    const visible = wholeFaceOccluders()
+    if (before && !sameFaceOccluders(before, visible))
+      throw new Error('I riferimenti visibili sono cambiati durante la selezione CAD.')
+    refreshReferences()
+    const meshes = visible.map(ref => {
+      const target = referenceTargets.find(item => item.reference && sameFaceOccluder(ref, item.reference))
+      if (!target || !target.current()) throw new Error('Visibilità dei riferimenti non verificabile.')
+      return target.mesh
+    })
+    const hitDepth = new THREE.Vector3(...hit).sub(caster.ray.origin).dot(caster.ray.direction)
+    const tolerance = 1e-5 + 64 * Number.EPSILON * Math.max(1, Math.abs(hitDepth), ...hit.map(Math.abs),
+      ...caster.ray.origin.toArray().map(Math.abs))
+    if (!Number.isFinite(caster.near) || !Number.isFinite(hitDepth) || hitDepth < caster.near)
+      throw new Error('Profondità della faccia non verificabile.')
+    caster.far = hitDepth + tolerance
+    caster.firstHitOnly = !clipping.planes?.length
+    const obstructed = caster.intersectObjects(meshes, false).some(item =>
+      !clipping.planes?.some(plane => plane.distanceToPoint(item.point.clone().applyMatrix4(matrix)) < 0))
+    if (obstructed) throw new Error('La faccia è coperta da un riferimento visibile.')
+    return visible
+  }
+
   const pickFace = (x: number, y: number) => {
     if (!displayed) return null
     const rect = view.bounds()
@@ -808,19 +860,28 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       if (!net) return false
       const faceHit = state.wholeFaceDrag?.canStart ? pickFace(event.clientX, event.clientY) : null
       if (state.wholeFaceDrag && faceHit?.face !== state.face) return false
-      if (faceHit && state.dragMode === 'local') {
+      const faceRay = faceHit && (() => {
+        const rect = view.bounds(), localCamera = cameraInPart(faceHit.point), matrix = partMatrix(faceHit.point)
+        const caster = new THREE.Raycaster()
+        const ndc = new THREE.Vector2((event.clientX-rect.left)*2/rect.width-1, 1-(event.clientY-rect.top)*2/rect.height)
+        caster.setFromCamera(ndc, localCamera)
+        const near = new THREE.Vector3(ndc.x, ndc.y, -1).unproject(localCamera)
+        caster.near = Math.max(0, near.sub(caster.ray.origin).dot(caster.ray.direction))
+        try { return { rect, matrix, caster, references:checkWholeFaceDepth(caster, faceHit.point, matrix) } }
+        catch (error) { report(errorText(error)); return null }
+      })()
+      if (faceHit && !faceRay) return false
+      if (faceHit && faceRay && state.dragMode === 'local') {
         if (!owner.prepareWholeFacePick || !owner.beginVerifiedWholeFaceGesture || !owner.cancelPreparedWholeFacePick) return false
         if (clipping.planes?.length) { report('Con un piano di sezione attivo, scegli Schermo o Assi XYZ.'); return false }
-        const camera = view.camera(), matrix = partMatrix(faceHit.point), rect = view.bounds()
-        const caster = new THREE.Raycaster()
-        caster.setFromCamera(new THREE.Vector2((event.clientX-rect.left)*2/rect.width-1, 1-(event.clientY-rect.top)*2/rect.height), cameraInPart(faceHit.point))
+        const camera = view.camera(), { matrix, rect, caster, references } = faceRay
         if (!view.capturePointer(event.pointerId)) { view.releasePointer(event.pointerId); return false }
         claimed = true
         view.claimEditDrag(true)
         const pending: CadPickPending = { kind:'face', pointerId:event.pointerId, net, preview:state.preview, face:state.face,
           locked:state.locked, hidden:state.hiddenPoles, start:mousePoint(event), last:null, dragMode:state.dragMode,
           axis:state.axis, strength:state.dragStrength, camera, projection:camera.projectionMatrix.clone(), cameraWorld:camera.matrixWorld.clone(),
-          partWorld:matrix, rect:{left:rect.left, top:rect.top, width:rect.width, height:rect.height} }
+          partWorld:matrix, rect:{left:rect.left, top:rect.top, width:rect.width, height:rect.height}, occluders:references }
         pickPending = pending
         let promoted: Capture | null = null
         void owner.prepareWholeFacePick(net, { seed:faceHit.point, origin:point(caster.ray.origin), direction:point(caster.ray.direction) }).then(pick => {
@@ -837,6 +898,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
             report('Il punto CAD non coincide con il clic nella vista.')
             return
           }
+          checkWholeFaceDepth(caster, pick.point, matrix, references)
           const frame = createDragFrame({ camera, partWorld:matrix, rect, anchor:[...pick.point], clientX:pending.start.clientX,
             clientY:pending.start.clientY, mode:'axis', direction:[...pick.direction], allowViewAlignedDepth:true })
           const gesture = frame && createSurfaceGesture({ frame, poles:net.poles, selected:net.poles.map((_, i) => i),
@@ -1091,6 +1153,11 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     }))
     cleanups.push(view.subscribeReferences(() => {
       referencesDirty=true;retryReferencesAt=0
+      if (pickPending?.occluders) {
+        try {
+          if (!sameFaceOccluders(pickPending.occluders, wholeFaceOccluders())) cancelPendingPick()
+        } catch { cancelPendingPick() }
+      }
       if(!capture)sync(true)
     }))
     cleanups.push(owner.subscribe(sync))
