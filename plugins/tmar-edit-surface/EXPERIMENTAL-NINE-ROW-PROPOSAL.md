@@ -158,6 +158,14 @@ without partial grids; it does not prove that no grid exists. Coverage does
 not establish fit rank, geometric continuity or CAD validity. It has not been
 used to repeat the refused Tube diagnostic.
 
+An experimental coordinator now composes independent grids, the pair joint
+diagnostic and full-domain normal comparison on both lateral coefficient nets.
+It returns no candidate if a sampling, joint or interior check fails. A
+synthetic second-side inversion is caught despite passing sampled joints.
+The positive integration fixture uses affine-equivalent U bases; arbitrary
+non-nested integration remains unqualified. CAD and continuous joint quality
+remain separate, and this coordinator has not been used on a real part.
+
 The experimental interval normal-dot proof now accepts Bernstein patches up
 to degree three in U and five in V. It remains a patch-level proof only:
 extracting corresponding periodic spline patches and checking all cells is
