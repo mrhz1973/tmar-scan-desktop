@@ -3,6 +3,7 @@ import { expect, it } from 'vitest'
 import { mapPeriodicKnotsAffineRounded } from '../experimentalPeriodicAffineKnotMap'
 import { generateExperimentalPeriodicIndependentSamples } from '../experimentalPeriodicIndependentSamples'
 import { prepareExperimentalPeriodicUBasis } from '../experimentalPeriodicUBasis'
+import { certifyExperimentalPeriodicUFitCoefficients } from '../experimentalPeriodicUFitCertificate'
 import { boundExperimentalPeriodicUObservationGram } from '../experimentalPeriodicUObservationGram'
 import { fitExperimentalPeriodicUVectorSamplesWithFixedFirst,
   fitExperimentalPeriodicUVectorSamplesWithScaledFreeColumns } from '../experimentalPeriodicUVectorFit'
@@ -104,4 +105,12 @@ it('certifies 237/95-span synthetic observations even though the scaled QR refus
   expect(legacy.maxSampleResidual).toBeLessThan(1e-13)
   for (const [axis, index] of coefficients.entries())
     expect(legacy.coefficients[index][axis]).toBeCloseTo(factors[axis], 13)
+
+  const certificate = certifyExperimentalPeriodicUFitCoefficients({
+    degree, knots, multiplicities, samples, fixedFirst: fixed, coefficients: legacy.coefficients,
+    maxCoefficientError: [1e-12, 1e-12, 1e-12], maxRows: 1000, maxFreeColumns: 250,
+  })
+  if (certificate.status !== 'certified') throw new Error(certificate.reason)
+  for (const [axis, index] of coefficients.entries())
+    expect(certificate.coefficientErrorInfinityUpper[axis]).toBeGreaterThanOrEqual(Math.abs(legacy.coefficients[index][axis] - factors[axis]))
 })

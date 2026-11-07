@@ -151,6 +151,12 @@ subnormal fill-in even for a full-rank, exactly representable fit. The Gram
 certificate is not a solver, a bound for the exact spline evaluation, or a
 CAD acceptance check; no QR guard is relaxed.
 
+A separate experimental a-posteriori certificate bounds the normal-equation
+residual with outward arithmetic and combines it with the certified Gram
+inverse bound. It bounds coefficient error relative to the least-squares
+solution for the evaluated binary64 sample matrix with fixed U0. It is not a
+continuous spline or CAD bound and is not connected to an operational solver.
+
 The experimental quintic-side diagnostic composes the fixed-first fit for one
 moving side with explicit gap, pivot, residual, displacement and seam checks.
 It measures the stored proposal on separate holdout samples, including both
