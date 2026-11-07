@@ -1,27 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { generateExperimentalPeriodicIndependentSamples,
   type ExperimentalPeriodicIndependentSamplesRequest } from './experimentalPeriodicIndependentSamples'
-import { measureExperimentalPeriodicQuinticPair,
-  type ExperimentalPeriodicQuinticPairDiagnosticRequest } from './experimentalPeriodicQuinticPairDiagnostic'
+import { measureExperimentalPeriodicQuinticPair, measureExperimentalPeriodicQuinticPairScaled,
+  type ExperimentalPeriodicQuinticPairDiagnosticRequest,
+  type ExperimentalPeriodicQuinticPairDiagnosticResult } from './experimentalPeriodicQuinticPairDiagnostic'
+import type { ExperimentalPeriodicQuinticScaledBudgets } from './experimentalPeriodicQuinticSideDiagnostic'
 import { boundExperimentalPeriodicQuinticSurfaceNormals } from './experimentalPeriodicQuinticSurfaceNormals'
 
-type PairRequest = ExperimentalPeriodicQuinticPairDiagnosticRequest
+type DefaultBudgets = ExperimentalPeriodicQuinticPairDiagnosticRequest['atCentralV0']['budgets']
+type PairRequest<Limits> = ExperimentalPeriodicQuinticPairDiagnosticRequest<Limits>
 type Side = 'V0' | 'V1'
 type NormalResult = ReturnType<typeof boundExperimentalPeriodicQuinticSurfaceNormals>
 type SampleResult = ReturnType<typeof generateExperimentalPeriodicIndependentSamples>
-type PairResult = ReturnType<typeof measureExperimentalPeriodicQuinticPair>
-type JointStop = Extract<PairResult, { stop: unknown }>['stop']
+type PairResult<FitEvidence> = ExperimentalPeriodicQuinticPairDiagnosticResult<FitEvidence>
+type JointStop = Extract<PairResult<unknown>, { stop: unknown }>['stop']
 type NotRun = { status: 'not-run' }
 
-type SideRequest = Omit<PairRequest['atCentralV0'], 'training' | 'holdout'> & {
+type SideRequest<Limits> = Omit<PairRequest<Limits>['atCentralV0'], 'training' | 'holdout'> & {
   sampleSearch: Pick<ExperimentalPeriodicIndependentSamplesRequest, 'training' | 'holdout' | 'searchDepth' | 'maxAttempts'>
   normalBudget: Parameters<typeof boundExperimentalPeriodicQuinticSurfaceNormals>[2]
 }
 
-export interface ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest {
-  central: PairRequest['central']
-  atCentralV0: SideRequest
-  atCentralV1: SideRequest
+export interface ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<Limits = DefaultBudgets> {
+  central: PairRequest<Limits>['central']
+  atCentralV0: SideRequest<Limits>
+  atCentralV1: SideRequest<Limits>
 }
 
 type Stop = { stage: 'preflight'; reasonCode: 'pair-missing-input' | 'pair-aliased-input' } |
@@ -41,11 +44,30 @@ type Stop = { stage: 'preflight'; reasonCode: 'pair-missing-input' | 'pair-alias
  * global injectivity and CAD validation to separate checks.
  */
 export function measureExperimentalPeriodicQuinticPairFullDomain(request: ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest) {
+  return measurePeriodicQuinticPairFullDomain(request, measureExperimentalPeriodicQuinticPair)
+}
+
+/**
+ * Run the same joint and full-domain checks with the equilibrated solver.
+ * Require separate per-side minimum RMS weight, raw norm ratio and scaled
+ * pivot ratio, plus separate fitted and stored holdout limits. Those fit
+ * diagnostics and holdout observations do not certify the continuous joint.
+ */
+export function measureExperimentalPeriodicQuinticPairFullDomainScaled(
+  request: ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<ExperimentalPeriodicQuinticScaledBudgets>,
+) {
+  return measurePeriodicQuinticPairFullDomain(request, measureExperimentalPeriodicQuinticPairScaled)
+}
+
+function measurePeriodicQuinticPairFullDomain<Limits, FitEvidence>(
+  request: ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<Limits>,
+  diagnosePair: (input: PairRequest<Limits>) => PairResult<FitEvidence>,
+) {
   type SamplingReceipt = Omit<Extract<SampleResult, { status: 'generated' }>, 'training' | 'holdout'> |
     Extract<SampleResult, { status: 'inconclusive' }> | { status: 'declined' }
   const receipts = {
     sampling: { V0: { status: 'not-run' }, V1: { status: 'not-run' } } as Record<Side, SamplingReceipt | NotRun>,
-    joint: { V0: { status: 'not-run' }, V1: { status: 'not-run' } } as PairResult['receipts'],
+    joint: { V0: { status: 'not-run' }, V1: { status: 'not-run' } } as PairResult<FitEvidence>['receipts'],
     normals: { V0: { status: 'not-run' }, V1: { status: 'not-run' } } as Record<Side, NormalResult | NotRun>,
   }
   const evidenceScope = 'two-lateral-coefficients-sampled-joints-and-full-domain-normal-comparison' as const
@@ -58,7 +80,7 @@ export function measureExperimentalPeriodicQuinticPairFullDomain(request: Experi
   if (sources.V0 === sources.V1 || sources.V0 === central || sources.V1 === central)
     return stopped('declined', { stage: 'preflight', reasonCode: 'pair-aliased-input' })
 
-  const prepared: Partial<Record<Side, PairRequest['atCentralV0']>> = {}
+  const prepared: Partial<Record<Side, PairRequest<Limits>['atCentralV0']>> = {}
   const sides = [['V0', atCentralV0], ['V1', atCentralV1]] as const
   for (const [side, { sampleSearch, normalBudget: _normalBudget, ...input }] of sides) {
     let result: SampleResult
@@ -79,7 +101,7 @@ export function measureExperimentalPeriodicQuinticPairFullDomain(request: Experi
     receipts.sampling[side] = receipt
     prepared[side] = { ...input, training, holdout }
   }
-  const joint = measureExperimentalPeriodicQuinticPair({ central, atCentralV0: prepared.V0!, atCentralV1: prepared.V1! })
+  const joint = diagnosePair({ central, atCentralV0: prepared.V0!, atCentralV1: prepared.V1! })
   receipts.joint = joint.receipts
   if (joint.status !== 'diagnostic-only') return stopped(joint.status, { stage: 'joint-diagnostic', ...joint.stop })
 

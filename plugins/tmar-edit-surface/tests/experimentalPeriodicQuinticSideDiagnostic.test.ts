@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, it } from 'vitest'
 import type { Net, Point } from '../brep'
-import { measureExperimentalPeriodicQuinticSide,
+import { measureExperimentalPeriodicQuinticSide, measureExperimentalPeriodicQuinticSideScaled,
+  type ExperimentalPeriodicQuinticScaledBudgets,
   type ExperimentalPeriodicQuinticSideDiagnosticRequest } from '../experimentalPeriodicQuinticSideDiagnostic'
 
 // Exact first-span insertion at 1/2 in the saturated quadratic U basis,
@@ -142,4 +143,86 @@ it('declines an unproved fixed-support seam before fitting', () => {
   })
   expect(result.evidence.fit).toBeUndefined()
   expect('candidate' in result).toBe(false)
+})
+
+function scaledFixture(): ExperimentalPeriodicQuinticSideDiagnosticRequest<ExperimentalPeriodicQuinticScaledBudgets> {
+  const request = fixture()
+  const { minimumPivotRatio: _minimumPivotRatio, ...budgets } = request.budgets
+  return { ...request, budgets: { ...budgets,
+    minimumRawColumnRmsWeight: 1e-3, minimumRawColumnNormRatio: 0.1, minimumScaledPivotRatio: 0.1,
+    storedHoldoutDerivativeResidual: 1e-11,
+  } }
+}
+
+it('keeps the raw absolute and relative support gates distinct even with healthy scaled pivots', () => {
+  const request = scaledFixture(), step = 2 ** -14
+  request.training = [0, 0.25, 0.5, 0.75, 1, 1 + step, 1 + 2 * step, 1 + 3 * step, 4]
+  const rms = measureExperimentalPeriodicQuinticSideScaled(request)
+  expect(rms).toMatchObject({ status: 'declined', phase: 'fit', reasonCode: 'raw-column-rms-below-budget' })
+  expect(rms.evidence.fit!.scaledPivotRatio).toBeGreaterThan(0.1)
+  expect(rms.evidence.fit!.rawColumnNorms.minRmsWeight).toBeLessThan(1e-8)
+
+  request.budgets.minimumRawColumnRmsWeight = 1e-20
+  const ratio = measureExperimentalPeriodicQuinticSideScaled(request)
+  expect(ratio).toMatchObject({ status: 'declined', phase: 'fit', reasonCode: 'raw-column-norm-ratio-below-budget' })
+  expect(ratio.evidence.fit!.rawColumnNorms.minOverMax).toBeLessThan(1e-7)
+  for (const result of [rms, ratio]) expect(result).not.toHaveProperty('candidate')
+})
+
+it('uses the scaled pivot gate for correlated columns with enough raw support and stops on solver errors', () => {
+  const request = scaledFixture()
+  request.training = [0, ...Array.from({ length: 7 }, (_, i) => 1.5 + (i - 3) * 2 ** -13), 4]
+  const correlated = measureExperimentalPeriodicQuinticSideScaled(request)
+  expect(correlated).toMatchObject({ status: 'declined', phase: 'fit', reasonCode: 'scaled-pivot-ratio-below-budget' })
+  expect(correlated.evidence.fit!.rawColumnNorms.minOverMax).toBeGreaterThan(0.1)
+  expect(correlated.evidence.fit!.scaledPivotRatio).toBeLessThan(1e-6)
+
+  request.training = [0, 0.25, 0.5, 0.75, 4]
+  const unobserved = measureExperimentalPeriodicQuinticSideScaled(request)
+  expect(unobserved).toMatchObject({ status: 'declined', phase: 'fit', reasonCode: 'fit-refused' })
+  expect(unobserved.evidence.fit).toBeUndefined()
+  for (const result of [correlated, unobserved]) expect(result).not.toHaveProperty('candidate')
+})
+
+it('checks training, fitted holdout and stored holdout against separate thresholds', () => {
+  const request = scaledFixture()
+  // This variation changes the support field in its refined U basis while
+  // keeping the protected boundary positions exactly the same. Explicit
+  // synthetic seam and displacement limits isolate the residual gates.
+  request.support.net.poles[6][2] -= 2 ** -8
+  request.budgets.seamDerivativeGap = 1 / 8
+  request.budgets.displacement = 12
+  request.budgets.storedHoldoutDerivativeResidual = 1e-9
+  const training = measureExperimentalPeriodicQuinticSideScaled(request)
+  expect(training).toMatchObject({ status: 'declined', phase: 'fit', reasonCode: 'training-residual-exceeds-budget' })
+
+  request.budgets.trainingDerivativeResidual = 1
+  const fitted = measureExperimentalPeriodicQuinticSideScaled(request)
+  expect(fitted).toMatchObject({ status: 'declined', phase: 'fit', reasonCode: 'fitted-holdout-residual-exceeds-budget' })
+
+  request.budgets.holdoutDerivativeResidual = 1
+  const stored = measureExperimentalPeriodicQuinticSideScaled(request)
+  expect(stored, JSON.stringify(stored.evidence.candidateSeam)).toMatchObject({
+    status: 'declined', phase: 'holdout', reasonCode: 'stored-holdout-residual-exceeds-budget',
+  })
+  expect(stored.evidence.proposal).toBeDefined()
+  expect(stored.evidence.maxFittedHoldoutResidual!.value).toBeLessThan(1)
+  expect(stored.evidence.maxStoredHoldoutResidual!.value).toBeGreaterThan(1e-9)
+  expect(stored.evidence.maxStoredHoldoutResidual!.at.seamSide).toBeUndefined()
+  for (const result of [training, fitted, stored]) expect(result).not.toHaveProperty('candidate')
+})
+
+it('refuses missing or coercible fit thresholds while keeping the original threshold validation', () => {
+  const request = scaledFixture()
+  for (const key of ['minimumRawColumnRmsWeight', 'minimumRawColumnNormRatio', 'minimumScaledPivotRatio',
+    'storedHoldoutDerivativeResidual'] as const) {
+    const result = measureExperimentalPeriodicQuinticSideScaled({ ...request,
+      budgets: { ...request.budgets, [key]: undefined as unknown as number },
+    })
+    expect(result).toMatchObject({ status: 'declined', phase: 'preflight', reasonCode: 'invalid-input' })
+    expect(result).not.toHaveProperty('candidate')
+  }
+  const legacy = fixture()
+  legacy.budgets.minimumPivotRatio = '0.1' as unknown as number
+  expect(measureExperimentalPeriodicQuinticSide(legacy)).toMatchObject({ status: 'declined', phase: 'preflight', reasonCode: 'invalid-input' })
 })

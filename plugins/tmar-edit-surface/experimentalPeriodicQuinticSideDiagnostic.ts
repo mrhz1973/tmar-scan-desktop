@@ -6,7 +6,8 @@ import { boundExperimentalPeriodicSeamDerivativeGap } from './experimentalPeriod
 import { validateExperimentalPeriodicSurfaceU } from './experimentalPeriodicSurfaceRefinement'
 import { sampleExperimentalPeriodicTransverseDerivatives } from './experimentalPeriodicTransverseSamples'
 import { prepareExperimentalPeriodicUBasis } from './experimentalPeriodicUBasis'
-import { fitExperimentalPeriodicUVectorSamplesWithFixedFirst } from './experimentalPeriodicUVectorFit'
+import { fitExperimentalPeriodicUVectorSamplesWithFixedFirst,
+  fitExperimentalPeriodicUVectorSamplesWithScaledFreeColumns } from './experimentalPeriodicUVectorFit'
 
 type Sampler = Parameters<typeof sampleExperimentalPeriodicTransverseDerivatives>[0]
 type Sample = ReturnType<typeof sampleExperimentalPeriodicTransverseDerivatives>['samples'][number]
@@ -27,13 +28,13 @@ const phaseFailures = {
 type ReasonCode = typeof phaseFailures[Phase] | 'seam-gap-exceeds-budget' | 'seam-gap-unrepresentable' |
   'training-gap-exceeds-budget' | 'holdout-gap-exceeds-budget' | 'training-holdout-overlap' |
   'mapped-training-holdout-alias' | 'free-rank-deficient' | 'pivot-ratio-below-budget' |
+  'raw-column-rms-below-budget' | 'raw-column-norm-ratio-below-budget' | 'scaled-pivot-ratio-below-budget' |
   'training-residual-exceeds-budget' | 'fitted-holdout-residual-exceeds-budget' |
   'displacement-bound-exceeds-budget' | 'stored-holdout-residual-exceeds-budget' | 'joint-normals-refused'
 
-interface Budgets {
+export interface ExperimentalPeriodicQuinticCommonBudgets {
   sampledPositionGap: number
   seamDerivativeGap: number
-  minimumPivotRatio: number
   trainingDerivativeResidual: number
   holdoutDerivativeResidual: number
   storageDerivativeResidual: number
@@ -43,14 +44,24 @@ interface Budgets {
   jointNormalChord: number
 }
 
-export interface ExperimentalPeriodicQuinticSideDiagnosticRequest {
+interface Budgets extends ExperimentalPeriodicQuinticCommonBudgets { minimumPivotRatio: number }
+
+export interface ExperimentalPeriodicQuinticScaledBudgets extends ExperimentalPeriodicQuinticCommonBudgets {
+  minimumRawColumnRmsWeight: number
+  minimumRawColumnNormRatio: number
+  minimumScaledPivotRatio: number
+  // In this mode holdoutDerivativeResidual applies to the fitted field only.
+  storedHoldoutDerivativeResidual: number
+}
+
+export interface ExperimentalPeriodicQuinticSideDiagnosticRequest<Limits = Budgets> {
   lateral: Sampler['strip']
   support: Sampler['support']
   edgePeriod: Sampler['edgePeriod']
   training: readonly number[]
   holdout: readonly number[]
   lambda: number
-  budgets: Budgets
+  budgets: Limits
   lockIndices?: readonly number[]
 }
 
@@ -58,6 +69,53 @@ class GateFailure extends Error {
   constructor(message: string, readonly reasonCode?: ReasonCode) { super(message) }
 }
 const fail = (reason: string, reasonCode?: ReasonCode): never => { throw new GateFailure(reason, reasonCode) }
+
+type FitInputs = Parameters<typeof fitExperimentalPeriodicUVectorSamplesWithFixedFirst>
+type FitResult = Pick<ReturnType<typeof fitExperimentalPeriodicUVectorSamplesWithFixedFirst>, 'coefficients' | 'residuals' | 'rank'>
+type FitMode<Limits, FitEvidence> = {
+  valid: (limits: Limits) => boolean
+  solve: (inputs: FitInputs) => { fit: FitResult; evidence: FitEvidence }
+  check: (evidence: FitEvidence, limits: Limits) => void
+  storedHoldoutLimit: (limits: Limits) => number
+}
+
+type FitRankEvidence = { fixedFirst: Point; freeRank: number; expectedFreeRank: number }
+type UnscaledFitEvidence = { pivotRatio: number }
+type ScaledFitEvidence = Pick<
+  ReturnType<typeof fitExperimentalPeriodicUVectorSamplesWithScaledFreeColumns>, 'scaledPivotRatio' | 'rawColumnNorms'>
+
+const positiveRatio = (value: number) => Number.isFinite(value) && value > 0 && value <= 1
+const unscaledFit: FitMode<Budgets, UnscaledFitEvidence> = {
+  valid: limits => positiveRatio(limits.minimumPivotRatio),
+  solve: inputs => {
+    const fit = fitExperimentalPeriodicUVectorSamplesWithFixedFirst(...inputs)
+    return { fit, evidence: { pivotRatio: fit.pivotRatio } }
+  },
+  check: (evidence, limits) => {
+    if (!(evidence.pivotRatio >= limits.minimumPivotRatio)) fail('rapporto dei pivot sotto budget', 'pivot-ratio-below-budget')
+  },
+  storedHoldoutLimit: limits => limits.holdoutDerivativeResidual,
+}
+
+const scaledFit: FitMode<ExperimentalPeriodicQuinticScaledBudgets, ScaledFitEvidence> = {
+  valid: limits => positiveRatio(limits.minimumRawColumnRmsWeight) && positiveRatio(limits.minimumRawColumnNormRatio) &&
+    positiveRatio(limits.minimumScaledPivotRatio) && Number.isFinite(limits.storedHoldoutDerivativeResidual) &&
+    limits.storedHoldoutDerivativeResidual >= 0,
+  solve: inputs => {
+    const fit = fitExperimentalPeriodicUVectorSamplesWithScaledFreeColumns(...inputs)
+    return { fit, evidence: { scaledPivotRatio: fit.scaledPivotRatio,
+      rawColumnNorms: fit.rawColumnNorms } }
+  },
+  check: ({ rawColumnNorms, scaledPivotRatio }, limits) => {
+    if (!(rawColumnNorms.minRmsWeight >= limits.minimumRawColumnRmsWeight))
+      fail('peso RMS minimo delle colonne originali sotto budget', 'raw-column-rms-below-budget')
+    if (!(rawColumnNorms.minOverMax >= limits.minimumRawColumnNormRatio))
+      fail('rapporto delle norme delle colonne originali sotto budget', 'raw-column-norm-ratio-below-budget')
+    if (!(scaledPivotRatio >= limits.minimumScaledPivotRatio))
+      fail('rapporto dei pivot equilibrati sotto budget', 'scaled-pivot-ratio-below-budget')
+  },
+  storedHoldoutLimit: limits => limits.storedHoldoutDerivativeResidual,
+}
 const seamReasonCode = (reason: 'bound-exceeds-tolerance' | 'unrepresentable-bound'): ReasonCode =>
   reason === 'bound-exceeds-tolerance' ? 'seam-gap-exceeds-budget' : 'seam-gap-unrepresentable'
 const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
@@ -103,13 +161,29 @@ function originalFirstDerivative({ net, edge }: Sampler['strip']): Point {
  * pcurves and CAD validity require separate verification.
  */
 export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeriodicQuinticSideDiagnosticRequest) {
+  return measurePeriodicQuinticSide(request, unscaledFit)
+}
+
+/** Use separate support and equilibrated-pivot thresholds with the same coefficient and joint checks. */
+export function measureExperimentalPeriodicQuinticSideScaled(
+  request: ExperimentalPeriodicQuinticSideDiagnosticRequest<ExperimentalPeriodicQuinticScaledBudgets>,
+) {
+  return measurePeriodicQuinticSide(request, scaledFit)
+}
+
+export type ExperimentalPeriodicQuinticSideDiagnosticResult<FitEvidence> =
+  ReturnType<typeof measurePeriodicQuinticSide<ExperimentalPeriodicQuinticCommonBudgets, FitEvidence>>
+
+function measurePeriodicQuinticSide<Limits extends ExperimentalPeriodicQuinticCommonBudgets, FitEvidence>(
+  request: ExperimentalPeriodicQuinticSideDiagnosticRequest<Limits>, fitMode: FitMode<Limits, FitEvidence>,
+) {
   const evidence: {
     sourceSeam?: ReturnType<typeof boundExperimentalPeriodicSeamDerivativeGap>
     supportSeam?: ReturnType<typeof boundExperimentalPeriodicSeamDerivativeGap> | { status: 'structurally-c1' }
     candidateSeam?: ReturnType<typeof boundExperimentalPeriodicSeamDerivativeGap>
     maxTrainingGap?: Metric; maxHoldoutGap?: Metric
     trainingCount?: number; holdoutInteriorCount?: number
-    fit?: { fixedFirst: Point; freeRank: number; expectedFreeRank: number; pivotRatio: number }
+    fit?: FitRankEvidence & FitEvidence
     maxTrainingResidual?: Metric; maxFittedHoldoutResidual?: Metric; maxStoredHoldoutResidual?: Metric
     proposal?: { changedIndices: number[]; maxDerivativeResidualBound: number;
       maxSecondDerivativeChangeBound: number; maxPositionDisplacementBound: number }
@@ -123,11 +197,11 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
     if (!request?.lateral?.net || !request.support?.net || !request.budgets) fail('richiesta diagnostica incompleta')
     const { lateral, support, edgePeriod, training, holdout, lambda, budgets, lockIndices } = request
     if (lateral.net.dv !== 5 || (lateral.edge !== 'V0' && lateral.edge !== 'V1')) fail('lato quintico non valido')
-    const limits = [budgets.sampledPositionGap, budgets.seamDerivativeGap, budgets.minimumPivotRatio,
+    const limits = [budgets.sampledPositionGap, budgets.seamDerivativeGap,
       budgets.trainingDerivativeResidual, budgets.holdoutDerivativeResidual, budgets.storageDerivativeResidual,
       budgets.secondDerivativeChange, budgets.displacement, budgets.minimumSampledNormalNorm, budgets.jointNormalChord]
     if (limits.some(value => !Number.isFinite(value) || value < 0) ||
-        !(budgets.minimumPivotRatio > 0 && budgets.minimumPivotRatio <= 1) || budgets.jointNormalChord > 2 ||
+        !fitMode.valid(budgets) || budgets.jointNormalChord > 2 ||
         budgets.storageDerivativeResidual === 0 || budgets.secondDerivativeChange === 0 || budgets.minimumSampledNormalNorm === 0)
       fail('budget diagnostici non validi')
 
@@ -181,10 +255,10 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
     phase = 'fit'
     const fixedFirst = originalFirstDerivative(lateral)
     const { du, ku, mu, nu } = lateral.net
-    const fit = fitExperimentalPeriodicUVectorSamplesWithFixedFirst(du, ku, mu, trainSamples, fixedFirst)
-    evidence.fit = { fixedFirst, freeRank: fit.rank, expectedFreeRank: nu - 1, pivotRatio: fit.pivotRatio }
+    const { fit, evidence: fitEvidence } = fitMode.solve([du, ku, mu, trainSamples, fixedFirst])
+    evidence.fit = { fixedFirst, freeRank: fit.rank, expectedFreeRank: nu - 1, ...fitEvidence }
     if (fit.rank !== nu - 1) fail('rango libero insufficiente', 'free-rank-deficient')
-    if (!(fit.pivotRatio >= budgets.minimumPivotRatio)) fail('rapporto dei pivot sotto budget', 'pivot-ratio-below-budget')
+    fitMode.check(fitEvidence, budgets)
     for (const [i, value] of fit.residuals.entries())
       evidence.maxTrainingResidual = maximum(evidence.maxTrainingResidual, value, locationOf(trainSamples[i]))
     if (evidence.maxTrainingResidual!.value > budgets.trainingDerivativeResidual) {
@@ -249,7 +323,7 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
         const residual = distance(inward, target)
         if (!Number.isFinite(residual)) fail('residuo del candidato non rappresentabile')
         evidence.maxStoredHoldoutResidual = maximum(evidence.maxStoredHoldoutResidual, residual, location)
-        if (residual > budgets.holdoutDerivativeResidual)
+        if (!(residual <= fitMode.storedHoldoutLimit(budgets)))
           fail('residuo campionato del candidato oltre budget', 'stored-holdout-residual-exceeds-budget')
 
         const reference = unit(fixed.normal, -supportU * supportV, budgets.minimumSampledNormalNorm)

@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Net } from './brep'
-import { measureExperimentalPeriodicQuinticSide,
-  type ExperimentalPeriodicQuinticSideDiagnosticRequest } from './experimentalPeriodicQuinticSideDiagnostic'
+import { measureExperimentalPeriodicQuinticSide, measureExperimentalPeriodicQuinticSideScaled,
+  type ExperimentalPeriodicQuinticScaledBudgets, type ExperimentalPeriodicQuinticSideDiagnosticRequest,
+  type ExperimentalPeriodicQuinticSideDiagnosticResult } from './experimentalPeriodicQuinticSideDiagnostic'
 
-type SideRequest = Omit<ExperimentalPeriodicQuinticSideDiagnosticRequest, 'support'> & {
+type DefaultBudgets = ExperimentalPeriodicQuinticSideDiagnosticRequest['budgets']
+type SideRequest<Limits> = Omit<ExperimentalPeriodicQuinticSideDiagnosticRequest<Limits>, 'support'> & {
   centralUAtEdgeEnds: ExperimentalPeriodicQuinticSideDiagnosticRequest['support']['uAtEdgeEnds']
 }
-type SideResult = ReturnType<typeof measureExperimentalPeriodicQuinticSide>
-type SideReceipt = Exclude<SideResult, { status: 'diagnostic-only' }> |
-  Omit<Extract<SideResult, { status: 'diagnostic-only' }>, 'candidate'> | { status: 'not-run' }
+type SideResult<FitEvidence> = ExperimentalPeriodicQuinticSideDiagnosticResult<FitEvidence>
+type SideReceipt<FitEvidence> = Exclude<SideResult<FitEvidence>, { status: 'diagnostic-only' }> |
+  Omit<Extract<SideResult<FitEvidence>, { status: 'diagnostic-only' }>, 'candidate'> | { status: 'not-run' }
 
-export interface ExperimentalPeriodicQuinticPairDiagnosticRequest {
+export interface ExperimentalPeriodicQuinticPairDiagnosticRequest<Limits = DefaultBudgets> {
   central: Net
-  atCentralV0: SideRequest
-  atCentralV1: SideRequest
+  atCentralV0: SideRequest<Limits>
+  atCentralV1: SideRequest<Limits>
 }
 
 /**
@@ -29,7 +31,22 @@ export interface ExperimentalPeriodicQuinticPairDiagnosticRequest {
  * solid validity require separate checks.
  */
 export function measureExperimentalPeriodicQuinticPair(request: ExperimentalPeriodicQuinticPairDiagnosticRequest) {
-  const receipts: { V0: SideReceipt; V1: SideReceipt } = { V0: { status: 'not-run' }, V1: { status: 'not-run' } }
+  return measurePeriodicQuinticPair(request, measureExperimentalPeriodicQuinticSide)
+}
+
+export function measureExperimentalPeriodicQuinticPairScaled(
+  request: ExperimentalPeriodicQuinticPairDiagnosticRequest<ExperimentalPeriodicQuinticScaledBudgets>,
+) {
+  return measurePeriodicQuinticPair(request, measureExperimentalPeriodicQuinticSideScaled)
+}
+
+export type ExperimentalPeriodicQuinticPairDiagnosticResult<FitEvidence> =
+  ReturnType<typeof measurePeriodicQuinticPair<unknown, FitEvidence>>
+
+function measurePeriodicQuinticPair<Limits, FitEvidence>(request: ExperimentalPeriodicQuinticPairDiagnosticRequest<Limits>,
+  diagnose: (input: ExperimentalPeriodicQuinticSideDiagnosticRequest<Limits>) => SideResult<FitEvidence>,
+) {
+  const receipts: Record<'V0' | 'V1', SideReceipt<FitEvidence>> = { V0: { status: 'not-run' }, V1: { status: 'not-run' } }
   const evidenceScope = 'two-lateral-coefficient-and-sampled-joint-diagnostics' as const
   const declineInput = (reason: string, reasonCode: 'pair-missing-input' | 'pair-aliased-input') => ({
     status: 'declined' as const, phase: 'preflight' as const, reason,
@@ -42,9 +59,9 @@ export function measureExperimentalPeriodicQuinticPair(request: ExperimentalPeri
   if (firstNet === lastNet || firstNet === central || lastNet === central)
     return declineInput('i laterali e la fascia centrale devono essere ingressi distinti', 'pair-aliased-input')
 
-  const run = ({ centralUAtEdgeEnds, ...side }: SideRequest, edge: 'V0' | 'V1') =>
-    measureExperimentalPeriodicQuinticSide({ ...side, support: { net: central, edge, uAtEdgeEnds: centralUAtEdgeEnds } })
-  const stopped = (edge: 'V0' | 'V1', result: Exclude<SideResult, { status: 'diagnostic-only' }>) => {
+  const run = ({ centralUAtEdgeEnds, ...side }: SideRequest<Limits>, edge: 'V0' | 'V1') =>
+    diagnose({ ...side, support: { net: central, edge, uAtEdgeEnds: centralUAtEdgeEnds } })
+  const stopped = (edge: 'V0' | 'V1', result: Exclude<SideResult<FitEvidence>, { status: 'diagnostic-only' }>) => {
     receipts[edge] = result
     return { status: result.status, phase: result.phase, stoppedAt: edge,
       stop: { phase: result.phase, reasonCode: result.reasonCode, side: edge }, receipts, evidenceScope }

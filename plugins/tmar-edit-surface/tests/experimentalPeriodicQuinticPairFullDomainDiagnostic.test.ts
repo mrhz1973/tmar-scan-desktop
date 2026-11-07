@@ -2,8 +2,9 @@
 import { expect, it } from 'vitest'
 import type { Net, Point } from '../brep'
 import { mapPeriodicKnotsAffineRounded } from '../experimentalPeriodicAffineKnotMap'
-import { measureExperimentalPeriodicQuinticPairFullDomain,
+import { measureExperimentalPeriodicQuinticPairFullDomain, measureExperimentalPeriodicQuinticPairFullDomainScaled,
   type ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest } from '../experimentalPeriodicQuinticPairFullDomainDiagnostic'
+import type { ExperimentalPeriodicQuinticScaledBudgets } from '../experimentalPeriodicQuinticSideDiagnostic'
 
 function fixture(targetSlope = 8): ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest {
   const ring = [[0, 0], [1, 2 ** -35], [2, 2], [-2, 0]]
@@ -136,4 +137,59 @@ it('rejects a shared lateral input before any work', () => {
     stop: { stage: 'preflight', reasonCode: 'pair-aliased-input' },
     receipts: { sampling: { V0: { status: 'not-run' }, V1: { status: 'not-run' } } },
   })
+})
+
+function scaledFixture(slope?: number): ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<ExperimentalPeriodicQuinticScaledBudgets> {
+  const { central, atCentralV0, atCentralV1 } = fixture(slope)
+  const scaled = (side: typeof atCentralV0) => {
+    const { minimumPivotRatio: _minimumPivotRatio, ...budgets } = side.budgets
+    return { ...side, budgets: { ...budgets,
+      minimumRawColumnRmsWeight: 0.01, minimumRawColumnNormRatio: 0.1, minimumScaledPivotRatio: 0.1,
+      storedHoldoutDerivativeResidual: budgets.holdoutDerivativeResidual,
+    } }
+  }
+  return { central, atCentralV0: scaled(atCentralV0), atCentralV1: scaled(atCentralV1) }
+}
+
+it('returns both candidates only after both scaled fits and native normal checks pass', () => {
+  const request = scaledFixture(), before = structuredClone(request)
+  const result = measureExperimentalPeriodicQuinticPairFullDomainScaled(request)
+  expect(result).toMatchObject({ status: 'diagnostic-only', receipts: {
+    sampling: { V0: { status: 'generated' }, V1: { status: 'generated' } },
+    joint: { V0: { status: 'diagnostic-only' }, V1: { status: 'diagnostic-only' } },
+    normals: { V0: { status: 'certified-positive' }, V1: { status: 'certified-positive' } },
+  } })
+  if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
+  for (const joint of [result.receipts.joint.V0, result.receipts.joint.V1]) {
+    if (joint.status !== 'diagnostic-only') throw new Error(JSON.stringify(joint))
+    expect(joint.evidence.fit!.scaledPivotRatio).toBeGreaterThan(0.1)
+    expect(joint.evidence.fit!.rawColumnNorms.minRmsWeight).toBeGreaterThan(0.01)
+    expect(joint.evidence.fit).not.toHaveProperty('pivotRatio')
+  }
+  expect(result.candidates.V1.poles[2 * 9 + 1][2]).toBeCloseTo(9.6, 12)
+  expect(request).toEqual(before)
+})
+
+it('withholds both candidates on a scaled-fit stop at the second lateral or an interior normal witness', () => {
+  const request = scaledFixture()
+  request.atCentralV1.budgets.minimumRawColumnRmsWeight = 1
+  const stopped = measureExperimentalPeriodicQuinticPairFullDomainScaled(request)
+  expect(stopped).toMatchObject({ status: 'declined',
+    stop: { stage: 'joint-diagnostic', phase: 'fit', side: 'V1', reasonCode: 'raw-column-rms-below-budget' },
+    receipts: { joint: { V0: { status: 'diagnostic-only' }, V1: { status: 'declined' } },
+      normals: { V0: { status: 'not-run' }, V1: { status: 'not-run' } } },
+  })
+
+  const witness = measureExperimentalPeriodicQuinticPairFullDomainScaled(scaledFixture(45))
+  expect(witness).toMatchObject({ status: 'nonpositive-witness',
+    stop: { stage: 'surface-normals', side: 'V1', reasonCode: 'nonpositive-normal-dot-witness' },
+    receipts: { joint: { V0: { status: 'diagnostic-only' }, V1: { status: 'diagnostic-only' } },
+      normals: { V0: { status: 'certified-positive' }, V1: { status: 'nonpositive-witness',
+        nativeParameter: { u: { enclosure: [43, 43] }, v: { enclosure: [1, 1] } } } } },
+  })
+  for (const result of [stopped, witness]) {
+    expect(result).not.toHaveProperty('candidates')
+    expect(result.receipts.joint.V0).not.toHaveProperty('candidate')
+    expect(result.receipts.joint.V1).not.toHaveProperty('candidate')
+  }
 })

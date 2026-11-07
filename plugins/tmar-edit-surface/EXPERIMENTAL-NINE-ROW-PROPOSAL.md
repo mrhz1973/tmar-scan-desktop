@@ -138,6 +138,12 @@ weak-column and correlated-column cases show why these metrics must remain
 separate. A caller still needs explicit observation, pivot and independent
 holdout gates. None of these metrics is a condition number or CAD certificate.
 
+Separate scaled-fit entry points now compose the side, pair and full-domain
+diagnostics with explicit per-side observation, raw ratio, scaled pivot, and
+training/fitted/stored holdout budgets. The legacy entry points keep their
+original solver and thresholds. The scaled path remains synthetic only and
+does not qualify an imported solid, trim or continuous joint quality.
+
 The experimental quintic-side diagnostic composes the fixed-first fit for one
 moving side with explicit gap, pivot, residual, displacement and seam checks.
 It measures the stored proposal on separate holdout samples, including both
