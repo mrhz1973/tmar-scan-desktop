@@ -601,8 +601,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       }
       if(pickPending && (state.net!==pickPending.net||state.preview!==pickPending.preview||state.face!==pickPending.face||
         state.locked!==pickPending.locked||state.hiddenPoles!==pickPending.hidden||state.navigationOnly||state.busy||state.placingNote||state.surfaceTarget||
-        (pickPending.kind==='boundary' ? !state.wholeBoundaryDrag
-          : !state.wholeFaceDrag||state.dragMode!=='local'||state.axis!==pickPending.axis||state.dragStrength!==pickPending.strength)))cancelPendingPick()
+        (pickPending.kind==='boundary' ? !state.wholeBoundaryDrag?.canStart||state.dragMode!==pickPending.dragMode||state.axis!==pickPending.axis||state.dragStrength!==pickPending.strength
+          : !state.wholeFaceDrag?.canStart||state.dragMode!=='local'||state.axis!==pickPending.axis||state.dragStrength!==pickPending.strength)))cancelPendingPick()
       if (state.navigationOnly && capture) { cancelGesture(); if (revision !== syncRevision) return }
       if (directSelection && (state.strip || state.placingNote || !state.directStrip ||
           state.directStrip.paths !== directSelection.paths || state.directStrip.revision !== directSelection.revision)) directSelection = null
@@ -1101,7 +1101,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
           if(!frameUnchanged(pending)){cancelPendingPick();return}
           const current=owner.getViewState()
           if(current.net!==pending.net||current.preview!==pending.preview||current.face!==pending.face||current.locked!==pending.locked||current.hiddenPoles!==pending.hidden||
-            !current.wholeBoundaryDrag||!current.wholeBoundaryDrag.canStart||current.navigationOnly||current.busy||clipping.planes?.length){cancelPendingPick();return}
+            !current.wholeBoundaryDrag||!current.wholeBoundaryDrag.canStart||current.dragMode!==pending.dragMode||current.axis!==pending.axis||current.dragStrength!==pending.strength||
+            current.navigationOnly||current.busy||clipping.planes?.length){cancelPendingPick();return}
           const visible=picks.flatMap(pick=>{
             if(!finitePoint(pick.point)||!candidates.some(c=>c.side===pick.side))return []
             const projected=view.projectPartPoint(pick.point),distance=Math.hypot(projected.clientX-pending.start.clientX,projected.clientY-pending.start.clientY)

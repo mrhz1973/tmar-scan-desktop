@@ -74,6 +74,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     dragStrength: 1, showNet: true, snap: !!options.reference, snapDistance: 0.25, busy: false, placingNote: false,
     notePins: [], stripes: null }
   const set = (patch: Partial<WorkspaceSurfaceViewState>) => { state = { ...state, ...patch }; for (const listener of listeners) listener() }
+  const setQuiet = (patch: Partial<WorkspaceSurfaceViewState>) => { state = { ...state, ...patch } }
   const selectPoints = vi.fn((ids: readonly number[]) => set({ selected: [...ids] }))
   const requestFaceSelection = vi.fn(async () => {})
   const beginPoleGesture = vi.fn(() => { if (state.directStrip) set({ directStrip: null }); return true })
@@ -136,7 +137,7 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     altKey, ...client(p) } as unknown as PointerEvent)
   const getLayer = () => layer as unknown as NonNullable<typeof layer>
   const getHandlers = () => handlers as unknown as NonNullable<typeof handlers>
-  return { view, owner, set, net, group, rect, client, event, getLayer, getHandlers, counts: () => ({ maskCount, restoreCount, captured }),
+  return { view, owner, set, setQuiet, net, group, rect, client, event, getLayer, getHandlers, counts: () => ({ maskCount, restoreCount, captured }),
     selectPoints, requestFaceSelection, beginPoleGesture, previewPoles, finishPoleGesture, placeNote, reportViewError, reference, referenceGeometry, beforePosition, claimEditDrag,
     beginStripGesture, beginDirectStripGesture, previewStripDelta, finishStripGesture,
     overlay, frame: () => frameCallback?.(), notifyReferences: () => notifyReference?.(),
@@ -337,7 +338,7 @@ it('uses the verified Local axis and translates every pole after the CAD reply',
 })
 
 it.each([
-  'up','escape','lostCapture','camera','clipping','axis','dragMode','strength','lock','hidden','resize','projection',
+  'up','escape','lostCapture','camera','clipping','axis','dragMode','strength','canStart','lock','hidden','resize','projection',
 ] as const)('ignores a pending Local face hit after %s', async change => {
   const f = fixture()
   f.set({wholeFaceDrag:{canStart:true}, dragMode:'local'})
@@ -355,6 +356,7 @@ it.each([
   if (change === 'axis') f.set({axis:2})
   if (change === 'dragMode') f.set({dragMode:'screen'})
   if (change === 'strength') f.set({dragStrength:.5})
+  if (change === 'canStart') f.set({wholeFaceDrag:{canStart:false}})
   if (change === 'lock') f.set({locked:[0]})
   if (change === 'hidden') f.set({hiddenPoles:[0]})
   if (change === 'resize') { f.rect.width -= 20; f.frame() }
@@ -417,6 +419,41 @@ it.each(['up','escape','view','draft','navigation','dispose'] as const)('discard
   resolve([{side:'U0',point:[-1,0,0]}]);await flushBoundaryPick()
   expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled();expect(f.previewPoles).not.toHaveBeenCalled()
   expect(f.counts().captured).toBeNull();expect(f.owner.cancelPreparedWholeBoundaryPicks).toHaveBeenCalled()
+  layer.dispose()
+})
+
+it.each(['dragMode','axis','strength','canStart'] as const)('cancels a pending boundary pick immediately when %s changes',async change=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  let resolve!:(value:readonly VerifiedBoundaryPick[])=>void
+  f.owner.prepareWholeBoundaryPicks=vi.fn(()=>new Promise<readonly VerifiedBoundaryPick[]>(r=>{resolve=r}))
+  const layer=createWorkspaceLayer(f.view,f.owner);f.set({wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(true)
+  if(change==='dragMode')f.set({dragMode:'screen'})
+  if(change==='axis')f.set({axis:1})
+  if(change==='strength')f.set({dragStrength:.5})
+  if(change==='canStart')f.set({wholeBoundaryDrag:{side:'U0',canStart:false}})
+  expect(f.counts().captured).toBeNull()
+  expect(f.owner.cancelPreparedWholeBoundaryPicks).toHaveBeenCalledOnce()
+  resolve([{side:'U0',point:[-1,0,0]}]);await flushBoundaryPick()
+  expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled()
+  expect(f.previewPoles).not.toHaveBeenCalled()
+  layer.dispose()
+})
+
+it.each(['dragMode','axis','strength'] as const)('rejects a late boundary reply if %s changed without a sync notification',async change=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  let resolve!:(value:readonly VerifiedBoundaryPick[])=>void
+  f.owner.prepareWholeBoundaryPicks=vi.fn(()=>new Promise<readonly VerifiedBoundaryPick[]>(r=>{resolve=r}))
+  const layer=createWorkspaceLayer(f.view,f.owner);f.set({wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(true)
+  if(change==='dragMode')f.setQuiet({dragMode:'screen'})
+  if(change==='axis')f.setQuiet({axis:1})
+  if(change==='strength')f.setQuiet({dragStrength:.5})
+  resolve([{side:'U0',point:[-1,0,0]}]);await flushBoundaryPick()
+  expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled()
+  expect(f.previewPoles).not.toHaveBeenCalled()
+  expect(f.owner.cancelPreparedWholeBoundaryPicks).toHaveBeenCalledOnce()
+  expect(f.counts().captured).toBeNull()
   layer.dispose()
 })
 
