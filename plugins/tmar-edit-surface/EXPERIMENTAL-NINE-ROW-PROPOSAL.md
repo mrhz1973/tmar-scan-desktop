@@ -265,3 +265,7 @@ A separate experimental path solves projected tangent-plane targets across free 
 ### Augmented QR solve
 
 An explicit experimental augmented sparse QR solves the same regularized full-column objective without changing the default PCG path or stored-geometry guards. On a synthetic 741-row system with rotating normals and 711 unknowns, the independent NumPy least-squares result agreed within 5.18e-11 in the solution; the old iterative method reached its 128-iteration limit in that fixture. Synthetic convergence does not establish real geometry, cross-face continuity or CAD validity.
+
+### Stored-surface displacement bound
+
+The separate experimental bound subdivides stored quintic displacement patches in V using outward intervals and bounds all U columns. A synthetic case with a 0.10 mm pole displacement is certified below 0.05 mm surface displacement; the 0.049775 mm bound is above the analytic maximum 0.049383 mm. It can return inconclusive where U subdivision would be needed. This bounds corresponding parametric points only; it neither changes existing guards nor verifies thickness, pcurves, topology or a real STEP.

@@ -72,6 +72,33 @@ function restrictAxis(points: V[], axis: ReturnType<typeof localAxis>): V[] {
   return work.at(-1)!
 }
 
+function validateCommonBasis(original: Net, candidate: Net) {
+  validateExperimentalPeriodicSurfaceU(original)
+  validateExperimentalPeriodicSurfaceU(candidate)
+  const { du, dv, nu, nv, ku, kv, mu, mv } = original
+  if (du > 3 || dv !== 5 || mu[0] !== du ||
+      original.weights.some(weight => weight !== 1) || candidate.weights.some(weight => weight !== 1))
+    fail('richiesti pesi unitari, V quintica e cucitura U satura con grado fino a tre')
+  if (du !== candidate.du || dv !== candidate.dv || nu !== candidate.nu || nv !== candidate.nv ||
+      !equal(ku, candidate.ku) || !equal(kv, candidate.kv) || !equal(mu, candidate.mu) || !equal(mv, candidate.mv))
+    fail('basi U/V sorgente e candidato diverse')
+}
+
+/** Restrict the stored pole differences directly, without subtracting two restricted position fields. */
+export function extractExperimentalPeriodicQuinticVDifferenceColumns(original: Net, candidate: Net, vSpan: number) {
+  validateCommonBasis(original, candidate)
+  const { nu, nv, dv, kv, mv } = original
+  if (!Number.isInteger(vSpan) || vSpan < 0 || vSpan >= kv.length - 1) fail('indice della campata V fuori dal dominio')
+  const axis = localAxis(dv, kv, mv, vSpan, false)
+  return Array.from({ length: nu }, (_, i) => {
+    const differences = axis.indices.map(j => {
+      const index = i * nv + j
+      return candidate.poles[index].map((value, k) => delta(value, original.poles[index][k])) as V
+    })
+    return differences.every(point => point.every(([lo, hi]) => lo === 0 && hi === 0)) ? differences : restrictAxis(differences, axis)
+  })
+}
+
 /**
  * Extract a pair of Bernstein patches on one common native knot cell.
  * Both models use the same basis, unit weights, a saturated periodic U
@@ -88,15 +115,8 @@ function restrictAxis(points: V[], axis: ReturnType<typeof localAxis>): V[] {
 export function extractExperimentalPeriodicQuinticBernsteinCell(
   original: Net, candidate: Net, uSpan: number, vSpan: number,
 ) {
-  validateExperimentalPeriodicSurfaceU(original)
-  validateExperimentalPeriodicSurfaceU(candidate)
-  const { du, dv, nu, nv, ku, kv, mu, mv } = original
-  if (du > 3 || dv !== 5 || mu[0] !== du ||
-      original.weights.some(weight => weight !== 1) || candidate.weights.some(weight => weight !== 1))
-    fail('richiesti pesi unitari, V quintica e cucitura U satura con grado fino a tre')
-  if (du !== candidate.du || dv !== candidate.dv || nu !== candidate.nu || nv !== candidate.nv ||
-      !equal(ku, candidate.ku) || !equal(kv, candidate.kv) || !equal(mu, candidate.mu) || !equal(mv, candidate.mv))
-    fail('basi U/V sorgente e candidato diverse')
+  validateCommonBasis(original, candidate)
+  const { du, dv, nv, ku, kv, mu, mv } = original
   if (!Number.isInteger(uSpan) || uSpan < 0 || uSpan >= ku.length - 1 ||
       !Number.isInteger(vSpan) || vSpan < 0 || vSpan >= kv.length - 1)
     fail('indice della cella fuori dal dominio')
