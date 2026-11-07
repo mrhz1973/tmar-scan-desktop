@@ -44,6 +44,20 @@ function upperMagnitude(numerator: bigint, denominator: bigint): number {
  * relative error, G1, regularity and OCCT evaluation are separate checks.
  */
 export function boundExperimentalPeriodicSeamDerivativeGap(net: Net, tolerance: number) {
+  return boundGap(net, tolerance, 'absolute-periodic-seam-derivative-coefficient-bound')
+}
+
+/** Bound the change in the signed jump field between two models on the same basis. */
+export function boundExperimentalPeriodicSeamJumpChange(original: Net, candidate: Net, tolerance: number) {
+  validateExperimentalPeriodicSurfaceU(original)
+  if (original.du !== candidate.du || original.dv !== candidate.dv || original.nu !== candidate.nu || original.nv !== candidate.nv ||
+      (['ku', 'kv', 'mu', 'mv'] as const).some(key => original[key].length !== candidate[key].length ||
+        original[key].some((value, i) => value !== candidate[key][i])) || original.weights.some(w => w !== 1))
+    throw new Error('Limite variazione salto alla cucitura: basi polinomiali comuni richieste')
+  return boundGap(candidate, tolerance, 'periodic-seam-jump-change-coefficient-bound', original)
+}
+
+function boundGap<Scope extends string>(net: Net, tolerance: number, evidenceScope: Scope, original?: Net) {
   if (!Number.isFinite(tolerance) || tolerance < 0)
     throw new Error('Limite derivata alla cucitura: tolleranza assoluta finita e non negativa richiesta')
   validateExperimentalPeriodicSurfaceU(net)
@@ -54,21 +68,21 @@ export function boundExperimentalPeriodicSeamDerivativeGap(net: Net, tolerance: 
   const firstSpan = binary64Units(ku[1]) - binary64Units(ku[0])
   const lastSpan = binary64Units(ku.at(-1)!) - binary64Units(ku.at(-2)!)
   const denominator = firstSpan * lastSpan
+  const coordinate = (i: number, axis: number) => binary64Units(poles[i][axis]) -
+    (original ? binary64Units(original.poles[i][axis]) : 0n)
   let maxNumerator = 0n
   for (let v = 0; v < nv; v++) {
-    const previous = poles[(nu - 1) * nv + v], boundary = poles[v], next = poles[nv + v]
     let numerator = 0n
     for (const axis of [0, 1, 2] as const) {
-      const atSeam = binary64Units(boundary[axis])
-      const incoming = atSeam - binary64Units(previous[axis])
-      const outgoing = binary64Units(next[axis]) - atSeam
+      const atSeam = coordinate(v, axis)
+      const incoming = atSeam - coordinate((nu - 1) * nv + v, axis)
+      const outgoing = coordinate(nv + v, axis) - atSeam
       numerator += abs(outgoing * lastSpan - incoming * firstSpan)
     }
     if (numerator > maxNumerator) maxNumerator = numerator
   }
 
   const upper = upperMagnitude(BigInt(du) * maxNumerator, denominator)
-  const evidenceScope = 'absolute-periodic-seam-derivative-coefficient-bound' as const
   if (!Number.isFinite(upper)) return { status: 'inconclusive' as const, reason: 'unrepresentable-bound' as const,
     maxDerivativeDifferenceBound: null, checkedVCoefficients: nv, evidenceScope }
   const result = { maxDerivativeDifferenceBound: upper, checkedVCoefficients: nv, evidenceScope }

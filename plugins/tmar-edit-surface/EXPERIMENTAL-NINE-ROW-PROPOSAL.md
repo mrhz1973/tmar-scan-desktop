@@ -277,3 +277,7 @@ An opt-in ADMM experiment reuses an augmented QR factorization and enforces a pe
 ### Separate physical-surface storage experiment
 
 An additive storage-only path for precomputed targets replaces the sufficient pole-hull refusal with independent outward bounds on stored surface and seam-curve displacement. Legacy entry points retain their existing checks. Exact U jump, D1/D2, locks, source-to-candidate normal and sampled stored joint checks remain separate. Synthetic tests show cases with a 0.10 mm pole movement but both physical bounds below 0.05 mm. These tests do not establish wall thickness, pcurves, topology or CAD validity.
+
+### Periodic seam change and normal bound
+
+An independent experimental interval diagnostic bounds the absolute seam derivative jump, signed jump change and normal chord separately, including nonzero baseline jumps and refusal of degenerate normals. This is not connected to storage and does not replace source-to-candidate full-domain normals, pcurve, wall or CAD verification. Existing exact-seam paths remain unchanged.
