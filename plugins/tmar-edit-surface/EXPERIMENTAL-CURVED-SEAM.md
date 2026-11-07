@@ -100,3 +100,14 @@ checks topology and orientation, preserves both source BREPs byte for byte,
 and measures seam normals and gaps at 73 samples. This fixture uses the same
 degree, parameter interval and phase; it does not qualify the tube, a closed
 solid, different parameterizations, global G1 or editor integration.
+
+Another synthetic fixture closes two compatible periodic sides with end caps.
+Conversion and basis refinement retain the existing OCCT volume check; the
+intentional tangency edit changes volume and is compared separately with a
+converging section-based estimate. STEP reimport preserves the reported volume
+within the original tolerance and the tested solid topology. Seam geometry and
+G1 are sampled; the test does not qualify arbitrary solids or the tube.
+
+A separate non-affine correspondence test proves an exact identity for four
+explicit polynomial Bezier spans under a supplied monotone quadratic map.
+It does not find a map automatically or qualify general periodic B-splines.
