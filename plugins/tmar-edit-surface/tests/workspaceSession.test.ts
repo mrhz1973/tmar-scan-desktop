@@ -537,6 +537,26 @@ describe('whole natural boundary movement',()=>{
   })
 })
 
+describe('rendered face selection state',()=>{
+  it('disables face selection while calculating and re-enables it when validation finishes',async()=>{
+    const {createElement}=await import('react'),{renderToStaticMarkup}=await import('react-dom/server')
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const t=await setup();await selectFace(t)
+    const s=t.session
+    const render=()=>renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:s}))
+    s.selectPoints([12],false);s.moveSelected(.1)
+    expect(s.getPanelState().calculating).toBe(true)
+    expect(render()).toMatch(/<select[^>]*data-test="surface-face"[^>]*disabled/)
+    await vi.advanceTimersByTimeAsync(90)
+    const request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('evaluate')
+    t.worker.reply(request.id,preview(2));await flush()
+    expect(s.getPanelState().calculating).toBe(false)
+    expect(render()).toMatch(/<select[^>]*data-test="surface-face"(?![^>]*disabled)/)
+    await s.dispose('cancelled')
+  })
+})
+
 describe('experimental simultaneous surface-point controller',()=>{
   const pins=()=>[[.3,.4],[.7,.6]].map(([u,v])=>({anchor:{face:0,selectionRevision:1,u,v},
     at:targetSurfacePoint(plane(),{u,v,target:[0,0,0],editablePoles:Array.from({length:25},(_,i)=>i),maxPoleDisplacement:10,minInfluence:.01,residualTolerance:1e-9}).before,normal:[0,0,1]}))

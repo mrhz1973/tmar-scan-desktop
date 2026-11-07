@@ -115,7 +115,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
     <p>Seleziona una faccia nella vista oppure nell’elenco. La modifica resta una bozza CAD fino ad Applica.</p>
     <p>Esporta STEP crea un file locale della geometria CAD convalidata; il file STEP non contiene le note.</p>
     <label>Faccia CAD
-      <select data-test="surface-face" value={state.face < 0 ? '' : String(state.face)} disabled={disabled || !!strip}
+      <select data-test="surface-face" value={state.face < 0 ? '' : String(state.face)} disabled={disabled || state.calculating || !!strip}
         onChange={e => { if (e.target.value !== '') chooseFace(Number(e.target.value)) }}>
         <option value="">Scegli una faccia…</option>
         {state.faces.map(face => <option key={face.index} value={face.index} disabled={!!face.reason && !face.experimentalCylinder && !(face.kind==='plane' && face.reason==='Tutti i poli influenzano un contorno ritagliato.')}>
