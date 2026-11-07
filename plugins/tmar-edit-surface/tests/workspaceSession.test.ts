@@ -117,6 +117,38 @@ describe('whole natural boundary movement',()=>{
   const ready=async(t:Awaited<ReturnType<typeof setup>>,revision:number)=>{
     await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.filter(r=>r.action==='evaluate').at(-1)!.id,preview(revision));await flush()
   }
+  it('previews the complete natural boundary without history and commits one cancellable drag',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.setWholeBoundaryDrag('U0')
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    expect(t.session.beginWholeBoundaryGesture('U1')).toBe(false)
+    expect(t.session.beginWholeBoundaryGesture('U0')).toBe(true)
+    const moved=structuredClone(before.poles);for(let i=0;i<before.nv;i++)moved[i][2]+=.3
+    t.session.previewPoles(moved)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getPanelState().net!.poles).toEqual(moved)
+    t.session.finishPoleGesture(moved)
+    expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    await ready(t,3);t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    await ready(t,4);expect(t.session.beginWholeBoundaryGesture('U0')).toBe(true)
+    t.session.previewPoles(moved);t.session.finishPoleGesture(null)
+    expect(t.session.getPanelState().net).toEqual(before)
+    await t.session.dispose('cancelled')
+  })
+  it('rejects partial or unrelated pole edits and restores the last committed net after an invalid drag commit',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.setWholeBoundaryDrag('U0');const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    t.session.beginWholeBoundaryGesture('U0')
+    const partial=structuredClone(before.poles);partial[0][2]=.2
+    expect(()=>t.session.previewPoles(partial)).toThrow(/tutto il bordo/)
+    const valid=structuredClone(before.poles);for(let i=0;i<before.nv;i++)valid[i][2]=.2
+    t.session.previewPoles(valid)
+    const unrelated=structuredClone(valid);unrelated[12][2]=.1
+    expect(()=>t.session.finishPoleGesture(unrelated)).toThrow(/altri poli/)
+    expect(t.session.getPanelState().net).toEqual(before)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    await t.session.dispose('cancelled')
+  })
   it.each(['U0','U1','V0','V1'] as const)('moves every pole of %s once, with no added strip and one geometry Undo step',async side=>{
     const t=await setup({sheet:true});await selectFace(t)
     expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)

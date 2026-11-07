@@ -39,7 +39,13 @@ it('moves the complete natural CAD edge without duplication through session/disp
     session=await createWorkspaceSurfaceSession(context as never,vi.fn() as never,{runtime,sha256:async b=>sha(b)})
     await session.chooseFace(0);await ready();session.setFreeBoundary(true);await ready()
     const original=session.getPanelState().net!,before=await edgeSamples()
-    session.moveWholeBoundary('U0',[0,0,.2]);await ready()
+    const drag=process.env.WHOLE_BOUNDARY_QA_DRAG==='1'
+    if(drag){
+      session.setWholeBoundaryDrag('U0');expect(session.beginWholeBoundaryGesture('U0')).toBe(true)
+      const poles=structuredClone(original.poles);for(let i=0;i<original.nv;i++)poles[i][2]+=.2
+      session.previewPoles(poles);session.finishPoleGesture(poles)
+    }else session.moveWholeBoundary('U0',[0,0,.2])
+    await ready()
     const after=await edgeSamples(),maxEdgeTranslationError=Math.max(...after.map((p,i)=>Math.hypot(...p.map((x,d)=>x-before[i][d]-(d===2?.2:0)))))
     expect(maxEdgeTranslationError).toBeLessThan(1e-8)
     const changed=session.getPanelState().net!,moved=changed.poles.flatMap((p,i)=>p.some((x,d)=>x!==original.poles[i][d])?[i]:[])
@@ -65,7 +71,7 @@ it('moves the complete natural CAD edge without duplication through session/disp
     const undo=await edgeSamples(),maxUndoError=Math.max(...undo.map((p,i)=>Math.hypot(...p.map((x,d)=>x-before[i][d]))))
     expect(maxUndoError).toBeLessThan(1e-9)
     expect(sha(bytes)).toBe(hash);expect(context.reportFatal).not.toHaveBeenCalled()
-    const evidence={scope:'Single natural open STEP sheet, complete U0 boundary moved without duplication',
+    const evidence={scope:'Single natural open STEP sheet, complete U0 boundary moved without duplication',route:drag?'Whole-boundary gesture controller preview/commit':'Numeric boundary command',
       transport:'Real session, editor.worker dispatcher and OCCT; in-memory transport and simulated host',browser:'NOT_RUN',
       deltaMm:[0,0,.2],samples:33,movedPoles:moved,maxEdgeTranslationErrorMm:maxEdgeTranslationError,
       maxStepEdgeTranslationErrorMm:maxStepEdgeTranslationError,stepValid:true,faceCount,edgeCount,maxUndoErrorMm:maxUndoError,inputHash:hash}

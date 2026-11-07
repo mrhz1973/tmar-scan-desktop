@@ -15,8 +15,8 @@ one geometry Undo commit; no strip or second face is created.
 
 This addresses the documented QS observation below: with Edges only and the
 DUPLICATE handle disabled, moving the top edge changed the existing surface,
-and Undo restored it. This first integration uses an explicit numeric panel
-command rather than claiming the same direct edge-click gesture or QS parity.
+and Undo restored it. The numeric checkpoint `60757f8` uses an explicit panel
+command and does not by itself establish the same direct gesture or QS parity.
 The existing control-net segment operation still moves its two endpoint poles;
 the new operation translates the complete natural boundary curve.
 
@@ -34,6 +34,29 @@ boundaries, shared edges, solid faces and the packaged UI are not qualified by
 this new command's test. Earlier `freeBoundaryProof.test.ts`,
 `freeBoundaryRational.test.ts` and `e2e-free-boundary.mjs` establish separate
 reconstruction foundations and do not replace this command's GUI acceptance.
+
+The optional **Trascina il bordo scelto nella vista** mode now picks the actual
+natural NURBS boundary curve, sampled at 65 positions for display-space picking,
+and moves its entire outer control row. It uses the existing viewport capture,
+drag threshold, direction/strength, preview queue, cancellation and geometry
+Undo. The controller rejects nonuniform movement of the row or any change to
+unrelated poles. Off-edge input remains available for navigation; navigation-only
+mode still takes precedence. Click without a drag, Escape, pointer cancellation
+and a camera change restore the previous committed draft. This gesture has no
+magnet; the ordinary pole-drag magnet is unchanged. The D handle is not offered
+while the whole-boundary tool is armed.
+
+Seven new layer cases and two controller cases passed, covering perspective and
+rotated-part input, second-pointer exclusion, lock refusal, cancellation and
+restoration after a malformed commit. Four independent Bernstein tests compare
+all rational boundary pick paths with their actual curves. With
+`WHOLE_BOUNDARY_QA_DRAG=1`, the existing real session/dispatcher/OCCT test also
+passed through boundary preview/commit, with the same measured complete-edge
+translation and one-face/four-edge STEP readback described above. Evidence:
+`evidence/whole-boundary/direct-drag-kernel/result.json`. Layer pointer input is
+simulated and host/transport remain in memory; no browser, exact-host GUI or
+physical-pointer qualification is claimed. General trimmed/shared/solid edges
+remain excluded. This is the first bounded direct-drag checkpoint.
 
 ### Surface-point alignment, source integration checkpoint
 

@@ -132,6 +132,62 @@ function fixture(options: { reference?: 'scan' | 'cad-face'; rotated?: boolean; 
     invalidateReference: () => { referenceCurrent = false; notifyReference?.() }, interrupt: () => interrupted?.() }
 }
 
+it.each([false,true])('drags the chosen complete natural boundary and leaves off-edge navigation unclaimed (rotated: %s)',rotated=>{
+  const f=fixture({rotated,perspective:true}),begin=vi.fn(()=>true)
+  f.owner.beginWholeBoundaryGesture=begin
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  expect(f.getLayer().pointerDown?.(f.event(1,[.5,0,0]))).toBe(false)
+  expect(begin).not.toHaveBeenCalled()
+  const press=f.event(2,[-1,0,0])
+  expect(f.getLayer().pointerDown?.(press)).toBe(true)
+  expect(begin).toHaveBeenCalledWith('U0')
+  expect(f.claimEditDrag).toHaveBeenLastCalledWith(true)
+  f.getHandlers().move(f.event(3,[0,0,0]));expect(f.previewPoles).not.toHaveBeenCalled()
+  f.getHandlers().move(f.event(2,[0,0,0]))
+  const poles=f.previewPoles.mock.lastCall![0]
+  expect(poles[0][0]).toBeCloseTo(0,8);expect(poles[1][0]).toBeCloseTo(0,8)
+  expect(poles[2]).toEqual(f.net.poles[2]);expect(poles[3]).toEqual(f.net.poles[3])
+  f.getHandlers().up(f.event(2,[0,0,0]))
+  expect(f.finishPoleGesture.mock.lastCall![0]).toEqual(poles)
+  expect(f.counts().captured).toBeNull();expect(f.claimEditDrag).toHaveBeenLastCalledWith(false)
+  expect(f.beginDirectStripGesture).not.toHaveBeenCalled()
+  layer.dispose()
+})
+
+it.each(['click','escape','cancel','camera'] as const)('restores a whole-boundary gesture on %s without a geometry commit',mode=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  const press=f.event(1,[-1,0,0]);f.getLayer().pointerDown?.(press)
+  if(mode==='click')f.getHandlers().up(press)
+  else{
+    f.getHandlers().move(f.event(1,[-.5,0,0]))
+    if(mode==='escape')layer.cancelGesture()
+    if(mode==='cancel')f.getHandlers().cancel(press)
+    if(mode==='camera'){
+      f.view.camera().position.x+=1;f.view.camera().updateMatrixWorld(true)
+      f.getHandlers().move(f.event(1,[0,0,0]))
+    }
+  }
+  expect(f.finishPoleGesture).toHaveBeenLastCalledWith(null)
+  expect(f.counts().captured).toBeNull();layer.dispose()
+})
+
+it('refuses a locked whole edge, preserves navigation-only mode and does not select cells while the tool is armed',()=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({wholeBoundaryDrag:{side:'U0',canStart:true},locked:[0]})
+  expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(true)
+  expect(f.owner.beginWholeBoundaryGesture).not.toHaveBeenCalled()
+  f.set({locked:[],navigationOnly:true})
+  expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(false)
+  f.set({navigationOnly:false,wholeBoundaryDrag:{side:'U0',canStart:false}})
+  expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(false)
+  const at=f.client([0,0,0]);f.getLayer().click?.(at.clientX,at.clientY,false)
+  expect(f.selectPoints).not.toHaveBeenCalled();layer.dispose()
+})
+
 it.each(['scan','cad'] as const)('resolves a surface target from external %s references in part coordinates, with snap disabled',async kind=>{
   const f=fixture({reference:kind==='scan'?'scan':'cad-face',rotated:true})
   let found:import('../workspaceBridge').WorkspacePointTarget|null=null

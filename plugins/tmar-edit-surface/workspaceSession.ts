@@ -19,6 +19,8 @@ import { readAdaptiveLockedRecipe, type AdaptiveLockedRecipe } from './adaptiveL
 import type { AdaptiveSelection } from './editor.worker'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
 import type { WorkspacePointTargetResolver } from './workspaceBridge'
+import { wholeBoundaryIndices, type WholeBoundarySide } from './wholeBoundary'
+export type { WholeBoundarySide } from './wholeBoundary'
 
 export interface WorkspaceSurfaceNote {
   readonly id: string
@@ -53,7 +55,6 @@ export interface HistoryFreeze {
 }
 interface Note extends WorkspaceSurfaceNote { readonly anchor: DraftAnchor }
 export type WorkspaceG1Candidate = (G1SupportCandidate & { readonly kind?: never }) | CompatibleCurvedSupportCandidate
-export type WholeBoundarySide = 'U0' | 'U1' | 'V0' | 'V1'
 export interface WorkspaceSurfacePanelState {
   readonly faces: readonly FaceInfo[]
   readonly face: number
@@ -65,6 +66,7 @@ export interface WorkspaceSurfacePanelState {
   readonly freeBoundary: boolean
   readonly canFreeBoundary: boolean
   readonly canMoveWholeBoundary: boolean
+  readonly wholeBoundaryDrag: WholeBoundarySide | null
   readonly canRefineNet: boolean
   readonly g1Candidates: readonly WorkspaceG1Candidate[]
   readonly g1Choice: string | null
@@ -188,6 +190,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private cylinderValidated: {net:Net;session:number;historyRevision:number;selectionEpoch:number;requestId:number;previewRevision:number;step:string}|null = null
   private gesture: 'idle' | 'pole' | 'strip' = 'idle'
   private gestureNet: Net | null = null
+  private wholeBoundaryDrag: {side:WholeBoundarySide;face:number} | null = null
+  private wholeBoundaryGesture: readonly number[] | null = null
   private strip: StripMode | null = null
   private stripPending = false
   private stripGeneration = 0
@@ -455,9 +459,42 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.change(() => { this.gesture = 'pole'; this.gestureNet = this.draft.getSnapshot().committedNet })
     return true
   }
+  setWholeBoundaryDrag(side:WholeBoundarySide|null):void {
+    this.change(()=>{
+      if(side===null){this.wholeBoundaryDrag=null;return}
+      if(!this.panel.canMoveWholeBoundary)throw Error('Attiva i bordi liberi e attendi una singola faccia CAD valida.')
+      const ids=wholeBoundaryIndices(this.requireNet(),side),d=this.draft.getSnapshot()
+      if(ids.some(i=>d.locks.includes(i)||d.trimLocks.includes(i)||d.hiddenPoles.includes(i)))throw Error('Il bordo contiene un polo bloccato.')
+      this.draft.setSelection(ids);this.wholeBoundaryDrag={side,face:this.face}
+    })
+  }
+  beginWholeBoundaryGesture(side:WholeBoundarySide):boolean {
+    this.assertMutable()
+    if(this.wholeBoundaryDrag?.side!==side || !this.panel.canMoveWholeBoundary)return false
+    const d=this.draft.getSnapshot(),ids=wholeBoundaryIndices(this.requireNet(),side)
+    if(ids.some(i=>d.locks.includes(i)||d.trimLocks.includes(i)||d.hiddenPoles.includes(i)))throw Error('Il bordo contiene un polo bloccato.')
+    this.change(()=>{
+      this.draft.setSelection(ids);this.gesture='pole';this.gestureNet=d.committedNet;this.wholeBoundaryGesture=ids
+    })
+    return true
+  }
+  private checkWholeBoundaryGesture(poles:Point[]):void {
+    const ids=this.wholeBoundaryGesture,base=this.gestureNet
+    if(!ids || !base)return
+    if(poles.length!==base.poles.length || poles.some(p=>!finitePoint(p)))throw Error('Coordinate del bordo non valide.')
+    const delta=poles[ids[0]].map((x,d)=>x-base.poles[ids[0]][d])
+    if(Math.hypot(...delta)>1000)throw Error('Spostamento del bordo oltre 1000 mm.')
+    const selected=new Set(ids)
+    for(let i=0;i<poles.length;i++)for(let d=0;d<3;d++){
+      const expected=base.poles[i][d]+(selected.has(i)?delta[d]:0)
+      if(selected.has(i)?Math.abs(poles[i][d]-expected)>1e-8:poles[i][d]!==base.poles[i][d])
+        throw Error('Il trascinamento deve traslare tutto il bordo, senza cambiare altri poli.')
+    }
+  }
   previewPoles(poles: Point[]): void {
     this.change(() => {
       if (this.gesture !== 'pole' || !this.gestureNet) throw new Error('Nessun trascinamento attivo.')
+      this.checkWholeBoundaryGesture(poles)
       this.draft.preview({ ...this.gestureNet, poles: this.mirroredPoles(this.gestureNet, poles) })
     }, false, true)
   }
@@ -465,14 +502,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     // The layer can release a captured pointer while the host revokes the
     // session. Closing discards the gesture; it must not attempt a CAD write.
     if (!poles && (this.disposed || this.context.signal.aborted || !this.runtime.active)) {
-      this.gesture = 'idle'; this.gestureNet = null
+      this.gesture = 'idle'; this.gestureNet = null; this.wholeBoundaryGesture=null
       return
     }
     this.change(() => {
       if (this.gesture !== 'pole' || !this.gestureNet) return
       const net = this.gestureNet
-      try { if (poles) this.draft.commit({ ...net, poles: this.mirroredPoles(net, poles) }); else this.draft.cancelDraft() }
-      finally { this.gesture = 'idle'; this.gestureNet = null }
+      try { if (poles) {this.checkWholeBoundaryGesture(poles);this.draft.commit({ ...net, poles: this.mirroredPoles(net, poles) })} else this.draft.cancelDraft() }
+      catch(error){if(this.wholeBoundaryGesture)this.draft.cancelDraft();throw error}
+      finally { this.gesture = 'idle'; this.gestureNet = null;this.wholeBoundaryGesture=null }
     }, false, true)
   }
   cancelGesture(): boolean {
@@ -803,9 +841,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (!['U0','U1','V0','V1'].includes(side) || !finitePoint(delta) || Math.hypot(...delta)<=1e-7 || Math.hypot(...delta)>1000)
         throw new Error('Bordo o spostamento non valido (limite 1000 mm).')
       const d=this.draft.getSnapshot(),net=this.requireNet()
-      const ids=side==='U0' || side==='U1'
-        ? Array.from({length:net.nv},(_,v)=>(side==='U0'?0:net.nu-1)*net.nv+v)
-        : Array.from({length:net.nu},(_,u)=>u*net.nv+(side==='V0'?0:net.nv-1))
+      const ids=wholeBoundaryIndices(net,side)
       const locked=new Set([...d.locks,...d.trimLocks,...d.hiddenPoles])
       if(ids.some(i=>locked.has(i))) throw new Error('Il bordo contiene un polo bloccato: nessuno spostamento parziale consentito.')
       const selected=new Set(ids)
@@ -1674,6 +1710,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   private refresh(): void {
     const d: SurfaceDraftSnapshot = this.draft.getSnapshot()
+    if(this.wholeBoundaryDrag && (this.wholeBoundaryDrag.face!==this.face || !d.freeBoundary || this.symmetry || this.notes.length || this.placingNote || this.surfaceTarget ||
+      d.planeTangency || d.curvedTangency || d.cylinderSession!==null || this.strip))this.wholeBoundaryDrag=null
     if(this.surfaceTarget && (this.surfaceTarget.snapshot!==d || this.symmetry)) this.surfaceTarget=null
     const tangency = d.planeTangency ?? d.curvedTangency
     if (this.g1Basis && (this.g1Basis.selectionEpoch !== this.selectionEpoch || this.g1Basis.refinements !== d.refinements)) {
@@ -1778,7 +1816,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       canApplyG1: canLoadG1 && !!this.g1Choice && this.g1Candidates.some(candidate => candidate.id === this.g1Choice),
       planeTangencyActive: !!d.planeTangency,
       curvedTangencyActive: !!d.curvedTangency,
-      canFreeBoundary: !adaptive && !!face?.freeBoundary && !tangency, canMoveWholeBoundary, canRefineNet: !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
+      canFreeBoundary: !adaptive && !!face?.freeBoundary && !tangency, canMoveWholeBoundary, wholeBoundaryDrag:this.wholeBoundaryDrag?.side??null, canRefineNet: !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
         !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,
@@ -1791,6 +1829,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       canExportStep, strip:stripView })
     this.viewState = Object.freeze({ reticleStamp: current, net: strip ? null : d.net, preview, provisionalPreview:d.cylinderPreview?.faceMeshes ? {kind:'provisional' as const,faceMeshes:d.cylinderPreview.faceMeshes} : null, face: stripResult ? -1 : this.face, selected: strip ? [] : d.selected, locked,
       hiddenPoles: d.hiddenPoles, selectionMode: this.selectionMode, navigationOnly: this.navigationOnly, dragMode: this.dragMode,
+      wholeBoundaryDrag:this.wholeBoundaryDrag ? {side:this.wholeBoundaryDrag.side,canStart:canMoveWholeBoundary}:null,
       axis: this.axis, dragStrength: this.dragStrength, showNet: this.showNet, snap: this.snap,
       snapDistance: this.snapDistance, busy: this.busy || !!this.frozen, placingNote: this.placingNote,
       surfaceTarget:this.surfaceTarget ? {kind:this.surfaceTarget.kind,sourceBodyId:this.source.bodyId}:null,

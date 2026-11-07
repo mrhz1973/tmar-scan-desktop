@@ -16,6 +16,7 @@ import { createDragFrame } from './dragFrame'
 import { createSurfaceGesture, type SurfaceGesture, type SurfacePointer } from './surfaceGesture'
 import { drawStrip, pickSheetEdge } from './sheetDrag'
 import { snapAlong, type SnapHit } from './snap'
+import { wholeBoundaryPath,wholeBoundaryIndices } from './wholeBoundary'
 import { WorkspacePreview, type WorkspacePreviewClipping } from './workspacePreview'
 import type { WorkspaceReticleFrame, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState } from './workspaceBridge'
 
@@ -208,7 +209,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (disposed || layerDisposed) return
     try {
       const state = owner.getViewState(), anchor = stripAnchor(state)
-      if (!anchor || state.placingNote || state.surfaceTarget || state.navigationOnly) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
+      if (!anchor || state.placingNote || state.surfaceTarget || state.wholeBoundaryDrag || state.navigationOnly) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
       const direct = !state.strip && state.directStrip && directSelection &&
         state.directStrip.paths === directSelection.paths && state.directStrip.revision === directSelection.revision ? directSelection : null
       stripHandle.dataset.edge = String(state.strip ? state.strip.selectedEdge : direct?.edge ?? -1)
@@ -628,7 +629,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     try {
       const state = owner.getViewState()
       if (disposed || layerDisposed || capture || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey ||
-          state.busy || state.placingNote || state.surfaceTarget || state.navigationOnly || !displayed || !owner.previewStripDelta || !owner.finishStripGesture) return false
+          state.busy || state.placingNote || state.surfaceTarget || state.wholeBoundaryDrag || state.navigationOnly || !displayed || !owner.previewStripDelta || !owner.finishStripGesture) return false
       if (direct) {
         if (state.strip || !state.directStrip || state.directStrip.paths !== direct.paths ||
             state.directStrip.revision !== direct.revision || !owner.beginDirectStripGesture) return false
@@ -696,6 +697,29 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (state.busy || state.placingNote || state.surfaceTarget || state.navigationOnly || !displayed || event.ctrlKey || event.metaKey) return false
     let claimed = false, begun = false
     try {
+      if(state.wholeBoundaryDrag) {
+        if(!net || !state.wholeBoundaryDrag.canStart || !owner.beginWholeBoundaryGesture)return false
+        const side=state.wholeBoundaryDrag.side,path=wholeBoundaryPath(net,side)
+        const hit=pickPaths([path],-1,event.clientX,event.clientY)
+        if(!hit)return false // Orbit/pan anywhere away from this chosen CAD rim.
+        const ids=wholeBoundaryIndices(net,side)
+        if(ids.some(i=>state.locked.includes(i)||state.hiddenPoles.includes(i))) {report('Il bordo contiene un polo bloccato.');return true}
+        const direction=dragDirection(net,ids[Math.floor(ids.length/2)],state.dragMode,state.axis)
+        if(state.dragMode!=='screen' && !direction)return true
+        const camera=view.camera(),matrix=partMatrix(hit.anchor),rect=view.bounds()
+        const frame=createDragFrame({camera,partWorld:matrix,rect,anchor:hit.anchor,clientX:event.clientX,clientY:event.clientY,
+          ...(state.dragMode==='screen'?{mode:'screen' as const}:{mode:'axis' as const,direction:direction!,allowViewAlignedDepth:true})})
+        if(!frame)return true
+        const gesture=createSurfaceGesture({frame,poles:net.poles,selected:ids,start:mousePoint(event),strength:state.dragStrength})
+        if(!gesture)return true
+        if(!view.capturePointer(event.pointerId)){view.releasePointer(event.pointerId);return true}
+        claimed=true
+        if(!owner.beginWholeBoundaryGesture(side)){view.releasePointer(event.pointerId);claimed=false;return true}
+        begun=true;view.claimEditDrag(true)
+        capture={kind:'pole',pointerId:event.pointerId,gesture,camera,projection:camera.projectionMatrix.clone(),cameraWorld:camera.matrixWorld.clone(),
+          partWorld:matrix,rect:{left:rect.left,top:rect.top,width:rect.width,height:rect.height}}
+        return true
+      }
       if (state.strip) {
         if (state.strip.pending || !owner.beginStripGesture || !owner.previewStripDelta || !owner.finishStripGesture) return false
         const picked = pickStrip(event.clientX, event.clientY)
@@ -787,6 +811,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (state.navigationOnly && !state.placingNote && !state.surfaceTarget) return false
     if (state.busy || faceRequest) return true
     if (state.strip) return true
+    if (state.wholeBoundaryDrag) return false // No cell/point selection side effects while the rim tool is armed.
     try {
       if(state.surfaceTarget && owner.pickSurfaceTarget) {
         const hit=pickFace(x,y)

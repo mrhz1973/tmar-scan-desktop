@@ -8,6 +8,7 @@ import type { Preview } from './editorKernel'
 import type { Mesh } from 'occt-wasm'
 import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
+import type { WholeBoundarySide } from './wholeBoundary'
 
 export interface WorkspaceStripeSettings {
   readonly orientation: 'horizontal' | 'vertical'
@@ -60,6 +61,7 @@ export interface WorkspaceSurfaceViewState {
   readonly hiddenPoles: readonly number[]
   readonly selectionMode: NetSelectionMode
   readonly navigationOnly?: boolean
+  readonly wholeBoundaryDrag?: {readonly side:WholeBoundarySide;readonly canStart:boolean} | null
   readonly dragMode: DragMode
   readonly axis: number
   readonly dragStrength: number
@@ -91,6 +93,7 @@ export interface WorkspaceSurfaceLayerOwner {
   requestFaceSelection(index: number): Promise<void>
   selectPoints(ids: readonly number[], additive: boolean): void
   beginPoleGesture(): boolean
+  beginWholeBoundaryGesture?(side:WholeBoundarySide): boolean
   previewPoles(poles: Point[]): void
   /** null cancels and restores the previous committed net. */
   finishPoleGesture(poles: Point[] | null): void

@@ -207,7 +207,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       {state.canFreeBoundary && <fieldset data-test="surface-whole-boundary"><legend>Sposta intero bordo senza duplicarlo</legend>
         <p>Disponibile su una sola faccia aperta con quattro bordi naturali. Attiva prima il movimento dei bordi liberi. Il comando muove l’intero bordo; i suoi estremi modificano anche i bordi adiacenti.</p>
         <label>Bordo naturale<select data-test="surface-whole-boundary-side" value={wholeBoundary} disabled={disabled}
-          onChange={e=>setWholeBoundary(e.target.value as WholeBoundarySide)}>
+          onChange={e=>{const side=e.target.value as WholeBoundarySide;setWholeBoundary(side);if(state.wholeBoundaryDrag)attempt(()=>controller.setWholeBoundaryDrag(side))}}>
           <option value="U0">U iniziale</option><option value="U1">U finale</option><option value="V0">V iniziale</option><option value="V1">V finale</option>
         </select></label>
         <label>Direzione XYZ del corpo<select data-test="surface-whole-boundary-axis" value={boundaryAxis} disabled={disabled}
@@ -219,6 +219,10 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <button type="button" data-test="surface-whole-boundary-move" disabled={disabled || !state.canMoveWholeBoundary ||
           !Number.isFinite(boundaryDistance) || Math.abs(boundaryDistance)<=1e-7 || Math.abs(boundaryDistance)>1000}
           onClick={()=>attempt(()=>{const delta:[number,number,number]=[0,0,0];delta[boundaryAxis]=boundaryDistance;controller.moveWholeBoundary(wholeBoundary,delta)})}>Sposta intero bordo</button>
+        <label className="inline"><input data-test="surface-whole-boundary-drag" type="checkbox" checked={!!state.wholeBoundaryDrag}
+          disabled={disabled || (!state.wholeBoundaryDrag && !state.canMoveWholeBoundary)}
+          onChange={e=>attempt(()=>controller.setWholeBoundaryDrag(e.target.checked?wholeBoundary:null))} />Trascina il bordo scelto nella vista</label>
+        {state.wholeBoundaryDrag && <p>Trascina sulla curva del bordo scelto. Il gesto usa direzione e intensità del reticolo, senza magnete. Fuori dal bordo puoi navigare; Escape annulla il gesto. Il comando numerico usa invece l’asse XYZ qui sopra.</p>}
         <p>Un polo bloccato impedisce il movimento di tutto il bordo. Il risultato richiede la verifica CAD e si annulla con un solo Undo. Non viene aggiunta una striscia.</p>
       </fieldset>}
       <label>Selezione del reticolo
