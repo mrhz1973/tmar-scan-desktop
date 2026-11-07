@@ -120,9 +120,6 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
   }
   const editorSessionId = session.editorSessionId
   const [noteError,setNoteError] = useState('')
-  const cancel = () => {
-    if (!notes.length || window.confirm('Chiudere e scartare le note della bozza?')) close()
-  }
   const [stripPaths,setStripPaths]=useState<Point[][]|null>(null)
   const stripPathsRef=useRef<Point[][]|null>(null); stripPathsRef.current=stripPaths
   const stripPending=useRef(false)
@@ -131,6 +128,12 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
   const [stripResult,setStripResult]=useState<StripState|null>(null)
   const stripHistory=useRef<(StripState|null)[]>([])
   const stripAt=useRef(0)
+  const cancel = () => {
+    const hasStripChanges = stripPathsRef.current !== null && stripHistory.current.length > 1
+    if ((notes.length || draft.hasUnappliedChanges() || hasStripChanges) &&
+      !window.confirm('Chiudere Edit Surface e scartare la bozza non applicata?')) return
+    close()
+  }
   const stripUndo=(direction:number)=>{
     if(stripPending.current)return
     const next=stripAt.current+direction
@@ -272,10 +275,7 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
     const selectedFace = faces[index]
     if (!selectedFace || busy || draft.getSnapshot().calculating || (net && face === index)) return
     if (selectedFace.reason) { setError(selectedFace.reason); return }
-    const currentDraft = draft.getSnapshot()
-    const geometryChanged = currentDraft.canUndo || !!(currentDraft.net && currentDraft.net !== currentDraft.committedNet) ||
-      !!(currentDraft.net && currentDraft.originalNet && JSON.stringify(currentDraft.net.poles) !== JSON.stringify(currentDraft.originalNet.poles))
-    if (face !== index && (notes.length || geometryChanged) &&
+    if (face !== index && (notes.length || draft.hasUnappliedChanges()) &&
         !window.confirm('Cambiare faccia e scartare le modifiche e le note non applicate?')) return
     const generation = ++session.generation
     const chosenContinuity = draft.getSnapshot().continuity

@@ -153,6 +153,13 @@ export class SurfaceDraft {
   }
 
   getSnapshot = (): SurfaceDraftSnapshot => this.snapshot
+
+  hasUnappliedChanges(): boolean {
+    const { net, committedNet, originalNet, canUndo, canRedo } = this.snapshot
+    return canUndo || canRedo || (net !== null && (net !== committedNet ||
+      (originalNet !== null && !sameExact(net.poles, originalNet.poles))))
+  }
+
   get adaptiveHistoryPending(): boolean { return this.historyTransition }
 
   subscribe = (listener: () => void): (() => void) => {

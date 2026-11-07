@@ -42,6 +42,31 @@ const cadPreview = (revision: number) => ({ valid: true, previewRevision: revisi
 afterEach(() => vi.useRealTimers())
 
 describe('SurfaceDraft', () => {
+  it('identifies preview, committed geometry and redo history as unapplied work', () => {
+    const { runtime, draft } = setup()
+    try {
+      expect(draft.hasUnappliedChanges()).toBe(false)
+      draft.install(plane())
+      draft.setSelection([12])
+      expect(draft.hasUnappliedChanges()).toBe(false)
+
+      const edit = moved(draft.getSnapshot().net!, 12, 0.2)
+      draft.preview(edit)
+      expect(draft.hasUnappliedChanges()).toBe(true)
+      draft.cancelDraft()
+      expect(draft.hasUnappliedChanges()).toBe(false)
+
+      draft.commit(edit)
+      expect(draft.hasUnappliedChanges()).toBe(true)
+      expect(draft.undo()).toBe(true)
+      expect(draft.getSnapshot().net?.poles[12][2]).toBe(0)
+      expect(draft.getSnapshot().canRedo).toBe(true)
+      expect(draft.hasUnappliedChanges()).toBe(true)
+      draft.reset()
+      expect(draft.hasUnappliedChanges()).toBe(false)
+    } finally { draft.dispose(); runtime.dispose() }
+  })
+
   it('keeps periodicity metadata immutable across draft ownership and history', () => {
     const { runtime, draft } = setup()
     const input = { ...plane(), periodic: [0, 0] as [number, number] }
