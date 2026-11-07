@@ -77,3 +77,10 @@ An independent review observed an unsampled gap exceeding that tolerance on a
 large-coordinate synthetic support that passed the sampled check. Topology,
 trims, STEP, interior regularity and solid validity remain
 unqualified. The experiment has no editor integration.
+
+The periodic proposal has also been materialized on a synthetic open two-face
+shell with matching polynomial periodic bases. A STEP roundtrip preserved the
+expected shell topology and orientation, and 65 sampled seam positions and
+normals remained close. Source face BREP was unchanged. This fixture does not
+qualify a closed solid, different bases, global continuity, the tube, or an
+editor operation; it is not a general-purpose CAD edit implementation.
