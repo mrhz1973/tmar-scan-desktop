@@ -151,6 +151,13 @@ detailed receipts may contain locations or error text and must not be serialized
 as an aggregate private receipt. These codes cannot recover the omitted reason
 from a past run.
 
+The experimental independent-sample generator seeks separate training and
+holdout grids after both affine U maps, with explicit per-span coverage and
+shared seam endpoints. A bounded unsuccessful search returns inconclusive
+without partial grids; it does not prove that no grid exists. Coverage does
+not establish fit rank, geometric continuity or CAD validity. It has not been
+used to repeat the refused Tube diagnostic.
+
 The experimental interval normal-dot proof now accepts Bernstein patches up
 to degree three in U and five in V. It remains a patch-level proof only:
 extracting corresponding periodic spline patches and checking all cells is
