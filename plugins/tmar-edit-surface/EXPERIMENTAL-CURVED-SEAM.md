@@ -148,6 +148,13 @@ separately on the natural V borders. It uses Greville abscissae of the stored
 knots, not ideal unrounded fractions. It does not validate OCCT evaluation,
 trims, normals, self-intersection, a closed solid, wall thickness or volume.
 
+An experimental cubic periodic-U Bezier strip proposal adjusts only the two
+interior V rows to attain caller-supplied inward derivative coefficients in
+the strip's existing U basis. It retains the two boundary rows and bounds the
+coefficient residual separately for editable and locked poles. It neither
+derives targets from adjacent surfaces nor demonstrates G1, topology, or
+solid validity. It is not wired into the editor.
+
 An isolated follow-up searches seam phase, parameter direction and the local
 quadratic maps automatically for polynomial quadratic/quartic periodic curves
 with matching Bezier-span counts and knot-to-knot correspondence. It compares
