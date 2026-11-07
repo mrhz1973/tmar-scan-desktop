@@ -145,6 +145,12 @@ despite accepted sampled joint normals and a coarse interior grid. Therefore
 pair diagnostic success cannot qualify a side, authorize a real-part run, or
 replace a continuous interior regularity and orientation check.
 
+Pair stops now provide a separate stable, whitelisted code that distinguishes
+shared input parameters from collisions after mapping on either side. Existing
+detailed receipts may contain locations or error text and must not be serialized
+as an aggregate private receipt. These codes cannot recover the omitted reason
+from a past run.
+
 The experimental interval normal-dot proof now accepts Bernstein patches up
 to degree three in U and five in V. It remains a patch-level proof only:
 extracting corresponding periodic spline patches and checking all cells is

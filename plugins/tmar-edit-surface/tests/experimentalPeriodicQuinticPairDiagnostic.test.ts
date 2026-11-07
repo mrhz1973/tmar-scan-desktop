@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, it } from 'vitest'
 import type { Net, Point } from '../brep'
+import { mapPeriodicKnotsAffineRounded } from '../experimentalPeriodicAffineKnotMap'
 import { measureExperimentalPeriodicQuinticPair,
   type ExperimentalPeriodicQuinticPairDiagnosticRequest } from '../experimentalPeriodicQuinticPairDiagnostic'
 
@@ -59,6 +60,7 @@ it('returns two independent lateral diagnostics against an unchanged central net
   expect(request).toEqual(before)
   expect(result.status).toBe('diagnostic-only')
   if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result.receipts))
+  expect('stop' in result).toBe(false)
   expect(result.receipts.V0).toMatchObject({ status: 'diagnostic-only', evidence: {
     fit: { fixedFirst: [0, 0, -5], freeRank: 3 },
     proposal: { maxPositionDisplacementBound: expect.closeTo(7.2, 10) },
@@ -89,6 +91,7 @@ it('stops at V0 using its own displacement budget and leaves V1 unrun', () => {
     V0: { status: 'inconclusive', reason: expect.stringMatching(/spostamento/) },
     V1: { status: 'not-run' },
   } })
+  expect(result).toHaveProperty('stop', { phase: 'proposal', reasonCode: 'displacement-bound-exceeds-budget', side: 'V0' })
   expect('candidates' in result).toBe(false)
   expect(request).toEqual(before)
 })
@@ -102,6 +105,7 @@ it('retains the first receipt and withholds both candidates when V1 stops', () =
     V0: { status: 'diagnostic-only' },
     V1: { status: 'declined', reason: expect.stringMatching(/rango/) },
   } })
+  expect(result).toHaveProperty('stop', { phase: 'fit', reasonCode: 'fit-refused', side: 'V1' })
   expect('candidates' in result).toBe(false)
   expect('candidate' in result.receipts.V0).toBe(false)
   expect(request).toEqual(before)
@@ -111,6 +115,50 @@ it('rejects aliased lateral inputs before either side is evaluated', () => {
   const request = fixture()
   request.atCentralV1.lateral.net = request.atCentralV0.lateral.net
   expect(measureExperimentalPeriodicQuinticPair(request)).toMatchObject({
-    status: 'declined', phase: 'preflight', receipts: { V0: { status: 'not-run' }, V1: { status: 'not-run' } },
+    status: 'declined', phase: 'preflight', stop: { phase: 'preflight', reasonCode: 'pair-aliased-input' },
+    receipts: { V0: { status: 'not-run' }, V1: { status: 'not-run' } },
   })
+})
+
+it('distinguishes a mapped alias from a shared input observation in the safe stop receipt', () => {
+  const request = fixture()
+  const trainingParameter = -1.75, adjacentParameter = trainingParameter + 2 ** -52
+  expect(request.atCentralV0.training.includes(trainingParameter)).toBe(true)
+  expect(request.atCentralV0.training.includes(adjacentParameter)).toBe(false)
+  // These distinct t values map to the same binary64 U on the reversed
+  // central support. The safe stop carries only labels.
+  request.atCentralV0.holdout = [-2, adjacentParameter, 2]
+  const mapped = measureExperimentalPeriodicQuinticPair(request)
+  expect(mapped).toHaveProperty('stop', {
+    phase: 'sampling', reasonCode: 'mapped-training-holdout-alias', side: 'V0',
+  })
+  expect(mapped.receipts.V1.status).toBe('not-run')
+  expect('candidates' in mapped).toBe(false)
+
+  request.atCentralV0.holdout = [-2, trainingParameter, 2]
+  expect(measureExperimentalPeriodicQuinticPair(request)).toHaveProperty('stop', {
+    phase: 'sampling', reasonCode: 'training-holdout-overlap', side: 'V0',
+  })
+
+  const t = 0.5, neighbor = t + 9 * 2 ** -52
+  const lateralU = (parameter: number) => mapPeriodicKnotsAffineRounded([0, parameter, 8], 40, 52).knots[1]
+  const supportU = (parameter: number) => -mapPeriodicKnotsAffineRounded([0, parameter, 8], -28, -20).knots[1]
+  expect(lateralU(neighbor)).toBe(lateralU(t))
+  expect(supportU(neighbor)).not.toBe(supportU(t))
+  request.atCentralV0.holdout = fixture().atCentralV0.holdout
+  request.atCentralV1.holdout = [0, neighbor, 8]
+  expect(measureExperimentalPeriodicQuinticPair(request)).toHaveProperty('stop', {
+    phase: 'sampling', reasonCode: 'mapped-training-holdout-alias', side: 'V1',
+  })
+})
+
+it('uses a generic whitelist code for an unexpected error without exposing its text in stop', () => {
+  const request = fixture()
+  const samples = [...request.atCentralV0.training]
+  const diagnosticText = 'unstructured synthetic error detail'
+  Object.defineProperty(samples, 1, { get() { throw new Error(diagnosticText) } })
+  request.atCentralV0.training = samples
+  const result = measureExperimentalPeriodicQuinticPair(request)
+  expect(result).toHaveProperty('stop', { phase: 'sampling', reasonCode: 'sampling-refused', side: 'V0' })
+  expect(result.receipts.V0).toMatchObject({ reason: diagnosticText })
 })

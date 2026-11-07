@@ -14,6 +14,21 @@ type Side = 'left' | 'right'
 type Phase = 'preflight' | 'source-seam' | 'support-seam' | 'sampling' | 'fit' | 'proposal' | 'candidate-seam' | 'holdout'
 type Location = { t: number; lateralU: number; supportU: number; seamSide?: Side }
 type Metric = { value: number; at: Location }
+const phaseFailures = {
+  preflight: 'invalid-input',
+  'source-seam': 'source-seam-refused',
+  'support-seam': 'support-seam-refused',
+  sampling: 'sampling-refused',
+  fit: 'fit-refused',
+  proposal: 'proposal-refused',
+  'candidate-seam': 'candidate-seam-refused',
+  holdout: 'holdout-refused',
+} as const satisfies Record<Phase, string>
+type ReasonCode = typeof phaseFailures[Phase] | 'seam-gap-exceeds-budget' | 'seam-gap-unrepresentable' |
+  'training-gap-exceeds-budget' | 'holdout-gap-exceeds-budget' | 'training-holdout-overlap' |
+  'mapped-training-holdout-alias' | 'free-rank-deficient' | 'pivot-ratio-below-budget' |
+  'training-residual-exceeds-budget' | 'fitted-holdout-residual-exceeds-budget' |
+  'displacement-bound-exceeds-budget' | 'stored-holdout-residual-exceeds-budget' | 'joint-normals-refused'
 
 interface Budgets {
   sampledPositionGap: number
@@ -39,7 +54,12 @@ export interface ExperimentalPeriodicQuinticSideDiagnosticRequest {
   lockIndices?: readonly number[]
 }
 
-const fail = (reason: string): never => { throw new Error(reason) }
+class GateFailure extends Error {
+  constructor(message: string, readonly reasonCode?: ReasonCode) { super(message) }
+}
+const fail = (reason: string, reasonCode?: ReasonCode): never => { throw new GateFailure(reason, reasonCode) }
+const seamReasonCode = (reason: 'bound-exceeds-tolerance' | 'unrepresentable-bound'): ReasonCode =>
+  reason === 'bound-exceeds-tolerance' ? 'seam-gap-exceeds-budget' : 'seam-gap-unrepresentable'
 const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
 const signV = (edge: Sampler['strip']['edge']) => edge === 'V0' ? 1 : -1
 const signU = ([a, b]: Sampler['strip']['uAtEdgeEnds']) => a < b ? 1 : -1
@@ -97,8 +117,8 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
   } = {}
   const evidenceScope = 'quintic-side-coefficient-and-sampled-joint-diagnostics' as const
   let phase: Phase = 'preflight', location: Location | undefined
-  const stop = (status: 'declined' | 'inconclusive', reason: string) =>
-    ({ status, phase, location, reason, evidence, evidenceScope })
+  const stop = (status: 'declined' | 'inconclusive', reason: string, reasonCode: ReasonCode = phaseFailures[phase]) =>
+    ({ status, phase, location, reason, reasonCode, evidence, evidenceScope })
   try {
     if (!request?.lateral?.net || !request.support?.net || !request.budgets) fail('richiesta diagnostica incompleta')
     const { lateral, support, edgePeriod, training, holdout, lambda, budgets, lockIndices } = request
@@ -114,7 +134,7 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
     phase = 'source-seam'
     const seam = boundExperimentalPeriodicSeamDerivativeGap(lateral.net, budgets.seamDerivativeGap)
     evidence.sourceSeam = seam
-    if (seam.status === 'inconclusive') return stop('inconclusive', seam.reason)
+    if (seam.status === 'inconclusive') return stop('inconclusive', seam.reason, seamReasonCode(seam.reason))
     if (lateral.net.mu.slice(1, -1).some(m => m >= lateral.net.du))
       fail('richiesti nodi U interni strutturalmente C1 sul lato quintico')
 
@@ -125,7 +145,7 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
     if (support.net.mu[0] === support.net.du) {
       const fixedSeam = boundExperimentalPeriodicSeamDerivativeGap(support.net, budgets.seamDerivativeGap)
       evidence.supportSeam = fixedSeam
-      if (fixedSeam.status === 'inconclusive') return stop('inconclusive', fixedSeam.reason)
+      if (fixedSeam.status === 'inconclusive') return stop('inconclusive', fixedSeam.reason, seamReasonCode(fixedSeam.reason))
     } else evidence.supportSeam = { status: 'structurally-c1' }
 
     phase = 'sampling'
@@ -136,7 +156,7 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
       evidence.maxTrainingGap = maximum(evidence.maxTrainingGap, sample.sampledGap, locationOf(sample))
     if (evidence.maxTrainingGap!.value > budgets.sampledPositionGap) {
       location = evidence.maxTrainingGap!.at
-      fail('gap campionato del fit oltre budget')
+      fail('gap campionato del fit oltre budget', 'training-gap-exceeds-budget')
     }
     const holdoutSamples = sampleExperimentalPeriodicTransverseDerivatives({ ...sampler, edgeParameters: holdout })
       .samples.slice(0, -1)
@@ -144,14 +164,16 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
       evidence.maxHoldoutGap = maximum(evidence.maxHoldoutGap, sample.sampledGap, locationOf(sample))
     if (evidence.maxHoldoutGap!.value > budgets.sampledPositionGap) {
       location = evidence.maxHoldoutGap!.at
-      fail('gap campionato holdout oltre budget')
+      fail('gap campionato holdout oltre budget', 'holdout-gap-exceeds-budget')
     }
     const trainedLateral = new Set(trainSamples.map(sample => sample.parameter))
     const trainedSupport = new Set(trainSamples.map(sample => sample.supportParameter))
+    const trainedEdge = new Set(trainSamples.map(sample => sample.edgeParameter))
     const interior = holdoutSamples.slice(1)
     for (const sample of interior) if (trainedLateral.has(sample.parameter) || trainedSupport.has(sample.supportParameter)) {
       location = locationOf(sample)
-      fail('holdout sovrapposto ai campioni del fit dopo la mappatura')
+      fail('holdout sovrapposto ai campioni del fit dopo la mappatura',
+        trainedEdge.has(sample.edgeParameter) ? 'training-holdout-overlap' : 'mapped-training-holdout-alias')
     }
     evidence.trainingCount = trainSamples.length
     evidence.holdoutInteriorCount = interior.length
@@ -161,13 +183,13 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
     const { du, ku, mu, nu } = lateral.net
     const fit = fitExperimentalPeriodicUVectorSamplesWithFixedFirst(du, ku, mu, trainSamples, fixedFirst)
     evidence.fit = { fixedFirst, freeRank: fit.rank, expectedFreeRank: nu - 1, pivotRatio: fit.pivotRatio }
-    if (fit.rank !== nu - 1) fail('rango libero insufficiente')
-    if (!(fit.pivotRatio >= budgets.minimumPivotRatio)) fail('rapporto dei pivot sotto budget')
+    if (fit.rank !== nu - 1) fail('rango libero insufficiente', 'free-rank-deficient')
+    if (!(fit.pivotRatio >= budgets.minimumPivotRatio)) fail('rapporto dei pivot sotto budget', 'pivot-ratio-below-budget')
     for (const [i, value] of fit.residuals.entries())
       evidence.maxTrainingResidual = maximum(evidence.maxTrainingResidual, value, locationOf(trainSamples[i]))
     if (evidence.maxTrainingResidual!.value > budgets.trainingDerivativeResidual) {
       location = evidence.maxTrainingResidual!.at
-      fail('residuo campionato del fit oltre budget')
+      fail('residuo campionato del fit oltre budget', 'training-residual-exceeds-budget')
     }
     const basis = prepareExperimentalPeriodicUBasis(du, ku, mu)
     for (const sample of interior) {
@@ -181,7 +203,7 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
     }
     if (evidence.maxFittedHoldoutResidual!.value > budgets.holdoutDerivativeResidual) {
       location = evidence.maxFittedHoldoutResidual!.at
-      fail('residuo holdout del fit oltre budget')
+      fail('residuo holdout del fit oltre budget', 'fitted-holdout-residual-exceeds-budget')
     }
 
     phase = 'proposal'
@@ -194,13 +216,15 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
     if (result.status === 'inconclusive') {
       phase = result.phase
       if (result.phase === 'candidate-seam') evidence.candidateSeam = result.after
-      return stop('inconclusive', result.phase === 'source-seam' ? result.before.reason : result.after.reason)
+      const reason = result.phase === 'source-seam' ? result.before.reason : result.after.reason
+      return stop('inconclusive', reason, seamReasonCode(reason))
     }
     const { net: candidate, changedIndices, maxDerivativeResidualBound, maxSecondDerivativeChangeBound,
       maxPositionDisplacementBound } = result.proposal
     evidence.candidateSeam = result.after
     evidence.proposal = { changedIndices, maxDerivativeResidualBound, maxSecondDerivativeChangeBound, maxPositionDisplacementBound }
-    if (maxPositionDisplacementBound > budgets.displacement) return stop('inconclusive', 'limite di spostamento oltre budget')
+    if (maxPositionDisplacementBound > budgets.displacement)
+      return stop('inconclusive', 'limite di spostamento oltre budget', 'displacement-bound-exceeds-budget')
 
     phase = 'holdout'
     // The stored proposal preserves the boundary curve exactly, retaining
@@ -225,7 +249,8 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
         const residual = distance(inward, target)
         if (!Number.isFinite(residual)) fail('residuo del candidato non rappresentabile')
         evidence.maxStoredHoldoutResidual = maximum(evidence.maxStoredHoldoutResidual, residual, location)
-        if (residual > budgets.holdoutDerivativeResidual) fail('residuo campionato del candidato oltre budget')
+        if (residual > budgets.holdoutDerivativeResidual)
+          fail('residuo campionato del candidato oltre budget', 'stored-holdout-residual-exceeds-budget')
 
         const reference = unit(fixed.normal, -supportU * supportV, budgets.minimumSampledNormalNorm)
         const original = unit(old.normal, lateralU * lateralV, budgets.minimumSampledNormalNorm)
@@ -236,11 +261,13 @@ export function measureExperimentalPeriodicQuinticSide(request: ExperimentalPeri
         evidence.candidateJointNormalChord = maximum(evidence.candidateJointNormalChord, chord, location)
         if (evidence.minimumCandidateNormalDot === undefined || dot < evidence.minimumCandidateNormalDot.value)
           evidence.minimumCandidateNormalDot = { value: dot, at: location }
-        if (!(dot > 0) || chord > budgets.jointNormalChord) fail('normali campionate al giunto oltre budget o discordi')
+        if (!(dot > 0) || chord > budgets.jointNormalChord)
+          fail('normali campionate al giunto oltre budget o discordi', 'joint-normals-refused')
       }
     }
     return { status: 'diagnostic-only' as const, evidence, evidenceScope, candidate }
   } catch (error) {
-    return stop('declined', error instanceof Error ? error.message : 'diagnostica non completata')
+    return stop('declined', error instanceof Error ? error.message : 'diagnostica non completata',
+      error instanceof GateFailure ? error.reasonCode : undefined)
   }
 }
