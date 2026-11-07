@@ -20,7 +20,8 @@ import type { AdaptiveSelection } from './editor.worker'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
 import type { WorkspacePointTargetResolver,WorkspacePointTarget,WorkspaceSurfaceTargetPair,WorkspaceSurfacePickKind } from './workspaceBridge'
 import { wholeBoundaryIndices, type WholeBoundarySide } from './wholeBoundary'
-import type { VerifiedWholeFacePick } from './workspaceBridge'
+import type { VerifiedDirectStripPick, VerifiedWholeFacePick } from './workspaceBridge'
+import type { SheetEdgeVisibilityCandidate } from './sheetEdgeVisibilityCad'
 import { WHOLE_FACE_PICK_SEED_TOLERANCE_MM, type WholeFaceRayPick, type WholeFaceRayPickInput } from './wholeFaceRayPickCad'
 import type {BoundaryCadCandidate,VerifiedBoundaryPick,BoundaryVisibilityCadResult} from './boundaryVisibilityCad'
 import {SurfacePointTargetsCandidateRefusal} from './surfacePointTargetsExperimental'
@@ -218,6 +219,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private stripAbort: AbortController | null = null
   private directStripAxis: 0 | 1 | 2 = 2
   private directCache: DirectCache | null = null
+  private directPickSerial = 0
+  private readonly directPickReceipts = new WeakMap<VerifiedDirectStripPick,{ cache:DirectCache; draftEpoch:number; serial:number }>()
   private directPending: DirectPending | null = null
   private directGeneration = 0
   private directFailedKey: string | null = null
@@ -817,6 +820,46 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.directGestureOrigin = true; this.gesture = 'strip'; this.message = null
     })
     return true
+  }
+
+  async prepareDirectStripPick(revision:number,candidates:SheetEdgeVisibilityCandidate[],
+    origin:Point,parallelDirection?:Point):Promise<VerifiedDirectStripPick|null> {
+    this.assertMutable()
+    const cache=this.directCache, serial=++this.directPickSerial, draftEpoch=this.draftEpoch
+    if (!cache || !this.matchesDirect(cache,this.directIdentity()) || cache.revision!==revision ||
+        !candidates.length || candidates.some(candidate=>cache.paths[candidate.edge]!==candidate.path))
+      throw new Error('La selezione del bordo libero è cambiata.')
+    const requested=structuredClone(candidates)
+    const refinements=this.draft.getSnapshot().refinements.map(knot=>({...knot}))
+    const result=await this.runtime.worker.ask<{face:number;previewRevision:number;pick:{edge:number;point:Point}|null}>({
+      action:'verifySheetEdgeVisibility',previewRevision:revision,selection:{face:cache.face,refinements},
+      candidates:requested,origin:pointCopy(origin),
+      ...(parallelDirection?{parallelDirection:pointCopy(parallelDirection)}:{}),
+    },this.context.signal)
+    this.assertMutable()
+    if (serial!==this.directPickSerial || draftEpoch!==this.draftEpoch || cache!==this.directCache ||
+        !this.matchesDirect(cache,this.directIdentity()))
+      throw new Error('La richiesta CAD del bordo libero è scaduta.')
+    if (result?.face!==cache.face || result.previewRevision!==revision)
+      throw new Error('Risposta CAD del bordo libero non coerente.')
+    if (result.pick===null) return null
+    if (!result.pick || !requested.some(candidate=>candidate.edge===result.pick!.edge) || !finitePoint(result.pick.point))
+      throw new Error('Il bordo libero non corrisponde ai candidati.')
+    const pick=Object.freeze({edge:result.pick.edge,point:freezePoint(result.pick.point)})
+    this.directPickReceipts.set(pick,{cache,draftEpoch,serial})
+    return pick
+  }
+
+  cancelPreparedDirectStripPick():void { this.directPickSerial++ }
+
+  beginVerifiedDirectStripGesture(pick:VerifiedDirectStripPick):boolean {
+    this.assertMutable()
+    const receipt=this.directPickReceipts.get(pick)
+    this.directPickReceipts.delete(pick)
+    if (!receipt || receipt.serial!==this.directPickSerial || receipt.draftEpoch!==this.draftEpoch ||
+        receipt.cache!==this.directCache || !this.matchesDirect(receipt.cache,this.directIdentity())) return false
+    this.directPickSerial++
+    return this.beginDirectStripGesture(pick.edge,receipt.cache.revision)
   }
 
   /** The layer may show the delta immediately; only finish requests CAD validation. */

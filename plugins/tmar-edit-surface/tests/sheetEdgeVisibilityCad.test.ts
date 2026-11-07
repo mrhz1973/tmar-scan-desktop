@@ -56,6 +56,7 @@ it('certifies the front free edge of a folded shell independent of candidate ord
         expect(cadPick?.point[2]).toBeCloseTo(frontZ,10)
       }
       expect(queryVisibleSheetEdge(k,source,[rearRim],[-2,0,5],[0,0,-1])).toBeNull()
+      expect(queryVisibleSheetEdge(k,source,[frontRim],[-2,0,5],[0,0,-1])?.edge).toBe(frontRim.edge)
       const anotherFront = at([0,-2,frontZ],p=>Math.abs(p[1]+2)<1e-8 && Math.abs(p[2]-frontZ)<1e-8)
       expect(queryVisibleSheetEdge(k,source,[frontRim,anotherFront],[-2,0,5],[0,0,-1])).toBeNull()
       expect(queryVisibleSheetEdge(k,source,[frontRim,{...rearRim,path:frontRim.path}],[-2,0,5],[0,0,-1])).toBeNull()

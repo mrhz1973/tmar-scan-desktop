@@ -2050,6 +2050,31 @@ describe('workspace free-edge strip',()=>{
     await t.session.dispose('cancelled')
   })
 
+  it('fences a direct CAD pick by selection and consumes its receipt only once',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    t.worker.reply(t.worker.sent.at(-1)!.id,structuredClone(stripPaths));await flush()
+    const s=t.session, direct=s.getViewState().directStrip!, history=s.getSnapshot().historyRevision
+    const candidates=[{edge:0,path:direct.paths[0],seed:[0,0,0] as Point}]
+    const prepare=()=>s.prepareDirectStripPick(direct.revision,candidates,[0,0,10],[0,0,-1])
+    const reply={face:0,previewRevision:1,pick:{edge:0,point:[0,0,0]}}
+    const old=prepare(), rejected=expect(old).rejects.toThrow(/scaduta/)
+    expect(t.worker.sent.at(-1)).toMatchObject({action:'verifySheetEdgeVisibility',selection:{face:0,refinements:[]},previewRevision:1})
+    s.selectPoints([12],false)
+    t.worker.reply(t.worker.sent.at(-1)!.id,reply)
+    await rejected
+    const verified=prepare()
+    t.worker.reply(t.worker.sent.at(-1)!.id,reply)
+    const pick=(await verified)!
+    expect(Object.isFrozen(pick)).toBe(true)
+    expect(s.beginVerifiedDirectStripGesture(structuredClone(pick))).toBe(false)
+    expect(s.beginVerifiedDirectStripGesture(pick)).toBe(true)
+    expect(s.getSnapshot().gesture).toBe('strip')
+    expect(s.beginVerifiedDirectStripGesture(pick)).toBe(false)
+    await s.finishStripGesture(null)
+    expect(s.getSnapshot().historyRevision).toBe(history)
+    await s.dispose('cancelled')
+  })
+
   it('commits direct D through the existing validated strip history',async()=>{
     const t=await setup({sheet:true});await selectFace(t)
     let request=t.worker.sent.at(-1)!

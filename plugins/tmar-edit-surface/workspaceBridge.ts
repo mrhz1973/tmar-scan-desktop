@@ -100,6 +100,10 @@ export interface VerifiedWholeFacePick {
   readonly point: Readonly<Point>
   readonly direction: Readonly<Point>
 }
+export interface VerifiedDirectStripPick {
+  readonly edge: number
+  readonly point: Readonly<Point>
+}
 
 /** The layer never owns the session or edits project stores. */
 export interface WorkspaceSurfaceLayerOwner {
@@ -128,6 +132,10 @@ export interface WorkspaceSurfaceLayerOwner {
   beginStripGesture?(edge: number): boolean
   /** Promote the matching cached boundary and begin its gesture synchronously. */
   beginDirectStripGesture?(edge: number, revision: number): boolean
+  prepareDirectStripPick?(revision:number, candidates:import('./sheetEdgeVisibilityCad').SheetEdgeVisibilityCandidate[],
+    origin:Point, parallelDirection?:Point):Promise<VerifiedDirectStripPick|null>
+  beginVerifiedDirectStripGesture?(pick:VerifiedDirectStripPick):boolean
+  cancelPreparedDirectStripPick?():void
   previewStripDelta?(delta: Point): void
   finishStripGesture?(delta: Point | null): Promise<void>
 }

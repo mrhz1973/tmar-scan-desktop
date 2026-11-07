@@ -43,7 +43,7 @@ export function pickSheetEdge(paths:Point[][],camera:THREE.Camera,rect:DOMRect,
       }
     }
   })
-  return edge<0?null:{edge,hit,anchor,segment:segmentIndex}
+  return edge<0?null:{edge,hit,anchor,segment:segmentIndex,distance:best}
 }
 
 export function drawStrip(tool:StripDrag) {

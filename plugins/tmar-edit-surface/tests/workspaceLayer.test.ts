@@ -1380,6 +1380,147 @@ it.each([false, true])('rejects an axis aligned or almost aligned to the view (%
   layer.dispose()
 })
 
+function overlappingDirectEdges(backFirst:boolean) {
+  const f=fixture(), layer=createWorkspaceLayer(f.view,f.owner)
+  const front:Point[]=[[-1,-1,.02],[1,-1,.02]], back:Point[]=[[-1,-1,0],[1,-1,0]]
+  const paths=backFirst?[back,front]:[front,back], edge=backFirst?1:0
+  const winner={edge,point:[0,-1,.02] as Point}
+  const prepare=vi.fn().mockResolvedValueOnce(winner)
+  f.owner.prepareDirectStripPick=prepare
+  const begin=vi.fn((pick:{readonly edge:number})=>f.beginDirectStripGesture(pick.edge,9))
+  f.owner.beginVerifiedDirectStripGesture=begin
+  f.owner.cancelPreparedDirectStripPick=vi.fn()
+  f.set({directStrip:{paths,revision:9,axis:0}})
+  const handle=f.overlay.children.find(item=>item.dataset.test==='surface-strip-handle')!
+  const press=()=>({pointerId:7,button:0,shiftKey:false,ctrlKey:false,metaKey:false,altKey:false,
+    clientX:parseFloat(handle.style.left),clientY:parseFloat(handle.style.top),
+    preventDefault:vi.fn(),stopPropagation:vi.fn()} as unknown as PointerEvent)
+  return {f,layer,winner,prepare,begin,handle,press}
+}
+
+it.each([true,false])('uses the CAD winner for overlapping D edges in either order (rear first %s)',async backFirst=>{
+  const {f,layer,winner,prepare,begin,handle,press}=overlappingDirectEdges(backFirst)
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,-1,0]))).toBe(true)
+  expect(handle.style.display).toBe('none')
+  await flushBoundaryPick()
+  expect(prepare.mock.calls[0][1]).toHaveLength(2)
+  expect(handle.dataset.edge).toBe(String(winner.edge))
+  expect(handle.style.display).toBe('block')
+  let complete!:(pick:typeof winner)=>void
+  prepare.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve}))
+  const down=press()
+  handle.dispatch('pointerdown',down)
+  expect(prepare).toHaveBeenCalledTimes(2)
+  expect(begin).not.toHaveBeenCalled()
+  expect(f.counts().captured).toBe(7)
+  const moved={...down,clientX:down.clientX+50}
+  f.getHandlers().move(moved)
+  complete(winner);await flushBoundaryPick()
+  expect(begin).toHaveBeenCalledWith(winner)
+  expect(f.previewStripDelta.mock.lastCall?.[0][0]).toBeCloseTo(.5)
+  f.getHandlers().up(moved)
+  expect(f.finishStripGesture.mock.lastCall?.[0]?.[0]).toBeCloseTo(.5)
+  layer.dispose()
+})
+
+it.each(['release','camera','viewport','part transform','section','selection','references','winner changed'])(
+  'refuses stale D recertification after %s',async reason=>{
+    const {f,layer,winner,prepare,begin,handle,press}=overlappingDirectEdges(true)
+    f.getLayer().pointerDown?.(f.event(1,[0,-1,0]))
+    await flushBoundaryPick()
+    let complete!:(pick:typeof winner)=>void
+    prepare.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve}))
+    const down=press()
+    handle.dispatch('pointerdown',down)
+    if (reason==='release') f.getHandlers().up(down)
+    if (reason==='camera') { f.view.camera().position.z+=1;f.frame() }
+    if (reason==='viewport') { f.rect.width+=1;f.frame() }
+    if (reason==='part transform') { f.group.position.x+=1;f.frame() }
+    if (reason==='section') f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,0,1),1)],false)
+    if (reason==='selection') f.set({selected:[0]})
+    if (reason==='references') f.notifyReferences()
+    complete(reason==='winner changed'?{edge:0,point:[0,-1,0]}:winner)
+    await flushBoundaryPick()
+    expect(begin).not.toHaveBeenCalled()
+    expect(f.finishStripGesture).not.toHaveBeenCalled()
+    expect(f.counts().captured).toBeNull()
+    layer.dispose()
+  })
+
+it('does not offer an ambiguous D selection with an active clipping plane',()=>{
+  const {f,layer,prepare,handle}=overlappingDirectEdges(true)
+  f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,0,1),1)],false)
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,-1,0]))).toBe(false)
+  expect(prepare).not.toHaveBeenCalled()
+  expect(handle.style.display).toBe('none')
+  layer.dispose()
+})
+
+it('does not offer D when the initial CAD result leaves overlapping edges ambiguous',async()=>{
+  const {f,layer,prepare,handle}=overlappingDirectEdges(true)
+  prepare.mockReset().mockResolvedValue(null)
+  f.getLayer().pointerDown?.(f.event(1,[0,-1,0]))
+  await flushBoundaryPick()
+  expect(prepare).toHaveBeenCalledOnce()
+  expect(handle.style.display).toBe('none')
+  expect(f.counts().captured).toBeNull()
+  layer.dispose()
+})
+
+it.each([
+  ['shell',false],['shell',true],['reference',false],['reference',true],['front',false],['front',true],
+] as const)('checks a single straight D candidate against %s in either order (decoy first %s)',async (kind,decoyFirst)=>{
+  const f=fixture({reference:kind==='shell'?undefined:'scan'})
+  const selected:Point[]=[[-1,-1,.02],[1,-1,.02]], decoy:Point[]=[[-1,1,0],[1,1,0]]
+  const paths=decoyFirst?[decoy,selected]:[selected,decoy], edge=decoyFirst?1:0
+  const winner={edge,point:[0,-1,.02] as Point}
+  f.reference.partFromGeometry=new THREE.Matrix4().makeTranslation(0,0,kind==='reference'?.2:-.2).toArray()
+  f.set({snap:false,directStrip:{paths,revision:9,axis:0}})
+  const prepare=vi.fn().mockResolvedValue(kind==='shell'?null:winner)
+  f.owner.prepareDirectStripPick=prepare
+  const begin=vi.fn((pick:{readonly edge:number})=>f.beginDirectStripGesture(pick.edge,9))
+  f.owner.beginVerifiedDirectStripGesture=begin
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  const handle=f.overlay.children.find(item=>item.dataset.test==='surface-strip-handle')!
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,-1,.02]))).toBe(true)
+  await flushBoundaryPick()
+  expect(prepare.mock.calls[0][1]).toEqual([{edge,path:selected,seed:[expect.closeTo(0,8),-1,.02]}])
+  if (kind==='front') {
+    expect(handle.dataset.edge).toBe(String(edge))
+    expect(handle.style.display).toBe('block')
+    const down={pointerId:7,button:0,clientX:parseFloat(handle.style.left),clientY:parseFloat(handle.style.top),
+      preventDefault:vi.fn(),stopPropagation:vi.fn()} as unknown as PointerEvent
+    handle.dispatch('pointerdown',down)
+    await flushBoundaryPick()
+    expect(prepare).toHaveBeenCalledTimes(2)
+    expect(begin).toHaveBeenCalledWith(winner)
+    f.getHandlers().up(down)
+  } else {
+    expect(handle.style.display).toBe('none')
+    expect(begin).not.toHaveBeenCalled()
+    expect(f.counts().captured).toBeNull()
+  }
+  layer.dispose()
+})
+
+it('keeps the existing direct D path for one curved edge even with native visibility available',()=>{
+  const f=fixture(), layer=createWorkspaceLayer(f.view,f.owner)
+  const paths:Point[][]=[[[-1,-1,0],[0,-1,.1],[1,-1,0]]]
+  f.set({directStrip:{paths,revision:9,axis:0}})
+  f.owner.prepareDirectStripPick=vi.fn()
+  f.owner.beginVerifiedDirectStripGesture=vi.fn()
+  const handle=f.overlay.children.find(item=>item.dataset.test==='surface-strip-handle')!
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,-1,.1]))).toBe(true)
+  expect(handle.style.display).toBe('block')
+  const down={pointerId:7,button:0,clientX:parseFloat(handle.style.left),clientY:parseFloat(handle.style.top),
+    preventDefault:vi.fn(),stopPropagation:vi.fn()} as unknown as PointerEvent
+  handle.dispatch('pointerdown',down)
+  expect(f.beginDirectStripGesture).toHaveBeenCalledWith(0,9)
+  expect(f.owner.prepareDirectStripPick).not.toHaveBeenCalled()
+  f.getHandlers().up(down)
+  layer.dispose()
+})
+
 it('shows D on a direct free-edge click, promotes only when D is dragged and returns to the poles on cancel', () => {
   const f = fixture(), layer = createWorkspaceLayer(f.view, f.owner)
   const direct = { paths: stripFixture().paths, revision: 123, axis: 0 as const }
