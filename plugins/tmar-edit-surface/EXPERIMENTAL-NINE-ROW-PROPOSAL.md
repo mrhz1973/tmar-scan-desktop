@@ -1,8 +1,11 @@
 # Nine-row periodic strip: proposed next qualification
 
-Status: experimental proposal, **not authorization to retry the real tube**.
-The previous coefficient-only real-data scenario was refused by its sampled
-normal-rotation gate. Its source and diagnostic remain private and unchanged.
+Status: experimental proposal; the tube coordinator has lifted the general
+hold for the distinct nine-row method only after synthetic prerequisites are
+completed and reviewed and parameters/guards are defined in advance. The
+previous four-row coefficient-only scenario failed its sampled normal-rotation
+check. It was not a client authorization refusal. Its source and diagnostic
+remain private and unchanged; a nine-row scenario is a distinct method.
 The whole-solid volume refusal is a separate, unresolved gate. No release or
 host integration is authorized by this note.
 
@@ -47,9 +50,20 @@ approximately 1.98645 mm sample is a separate observation.
    mappings. Establish non-ambiguous predeclared sampling and numerical budgets;
    report whether they are measured or continuously bounded.
 4. Require independent review of the method and retain the failed-run record.
-   Ask for explicit authorization before any new attempt on the protected copy.
+   Reconcile existing owner authorization and coordinator instructions before
+   a distinct real-data trial; do not assume another approval is required
+   without an applicable instruction or actual authorization gap.
 
-Only if separately authorized and prerequisites are met, perform one
+Progress: an experimental analytic derivative evaluator has been compared
+with OCCT on synthetic C1 unit-weight periodic fixtures. Its numerical error
+is not bounded, and C0 crease derivatives are refused. A continuous
+regularity check exists only for the restricted mathematical form
+`S(U,V)=(X(U),Y(U),Z(U,V))`; it detects the synthetic blind spot, but no
+general claim for the real tube follows from it. Continuous regularity for
+general surfaces, budgets and actual-candidate validation remain open.
+
+Only when the prerequisites are met and reviewed and parameters and guards
+are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
 without replacing the solid. Report pre/post gap and oriented tangent angles,
 fit and actual-candidate residuals, regularity/orientation, local displacement,
