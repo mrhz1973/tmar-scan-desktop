@@ -51,18 +51,18 @@ it('scales after elimination and leaves an incompatible fixed seam observation i
 })
 
 it('fixes the saturated seam coefficient for a target on a nonnested U basis', () => {
-  const knots = [0, 0.5, 1, 2, 4], multiplicities = [2, 1, 1, 1, 2]
-  // The target's quadratic basis has an extra knot at 1.5 and none at 0.5.
-  // This is 1 + N for the support basis function with knots [0,1,1.5,2].
-  const target = (u: number) => 1 + (u < 1 ? u * u / 1.5 : u < 1.5 ?
-    2 * (u * (1.5 - u) / 1.5 + (2 - u) * (u - 1)) : u < 2 ? 2 * (2 - u) ** 2 : 0)
-  const samples = Array.from({ length: 17 }, (_, i) => ({
-    parameter: i / 4, value: [target(i / 4), 0, 0] as Point,
+  const knots = [0, 1, 2, 3, 4], multiplicities = [2, 1, 1, 1, 2]
+  // The review target has knots [0,0.5,2,3,4] and Z coefficients
+  // [1,1,2,1,1]. Evaluate 1 + N analytically for N's knots [0,0.5,2,3].
+  const target = (u: number) => 1 + (u < 0.5 ? u * u : u < 2 ?
+    u * (2 - u) / 3 + 4 * (3 - u) * (u - 0.5) / 15 : u < 3 ? 2 * (3 - u) ** 2 / 5 : 0)
+  const samples = Array.from({ length: 33 }, (_, i) => ({
+    parameter: i / 8, value: [0, 0, target(i / 8)] as Point,
   }))
   const unconstrained = fitExperimentalPeriodicUVectorSamples(2, knots, multiplicities, samples)
-  expect(Math.abs(unconstrained.coefficients[0][0] - 1)).toBeGreaterThan(1e-3)
-  const result = fitFixed(2, knots, multiplicities, samples, [1, 0, 0])
-  expect(result.coefficients[0]).toEqual([1, 0, 0])
+  expect(unconstrained.coefficients[0][2]).toBeCloseTo(0.9669414339201139, 12)
+  const result = fitFixed(2, knots, multiplicities, samples, [0, 0, 1])
+  expect(result.coefficients[0]).toEqual([0, 0, 1])
   expect(result.rank).toBe(4)
   expect(result.residuals[0]).toBe(0)
   expect(result.residuals.at(-1)).toBe(0)
@@ -70,13 +70,13 @@ it('fixes the saturated seam coefficient for a target on a nonnested U basis', (
   const basis = prepareExperimentalPeriodicUBasis(2, knots, multiplicities)
   const valueAt = (coefficients: Point[], u: number) => {
     const { indices, values } = basis.evaluate(u)
-    return indices.reduce((sum, index, j) => sum + values[j] * coefficients[index][0], 0)
+    return indices.reduce((sum, index, j) => sum + values[j] * coefficients[index][2], 0)
   }
-  const overwritten: Point[] = [[1, 0, 0], ...unconstrained.coefficients.slice(1)]
+  const overwritten: Point[] = [[0, 0, 1], ...unconstrained.coefficients.slice(1)]
   const overwriteError = samples.reduce((sum, sample) =>
-    sum + (valueAt(overwritten, sample.parameter) - sample.value[0]) ** 2, 0)
+    sum + (valueAt(overwritten, sample.parameter) - sample.value[2]) ** 2, 0)
   expect(result.residuals.reduce((sum, value) => sum + value ** 2, 0)).toBeLessThan(overwriteError)
-  const holdout = 11 / 8
+  const holdout = 45 / 32
   expect(samples.some(sample => sample.parameter === holdout)).toBe(false)
   expect(Math.abs(valueAt(result.coefficients, holdout) - target(holdout))).toBeGreaterThan(1e-3)
 })

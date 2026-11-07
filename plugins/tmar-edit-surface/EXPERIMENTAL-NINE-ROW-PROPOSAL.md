@@ -130,6 +130,14 @@ residual gates, and check separate holdout samples and the stored seam bound.
 Fixing the derivative coefficient does not itself lock the surface seam.
 No production or real-part qualification follows from this solver.
 
+The experimental quintic-side diagnostic composes the fixed-first fit for one
+moving side with explicit gap, pivot, residual, displacement and seam checks.
+It measures the stored proposal on separate holdout samples, including both
+seam sides, and refuses sampled opposed joint normals. A structural C1 fixed
+support is identified separately from a bounded structural C0 seam. The
+diagnostic does not establish interior regularity, G1, trims or solid validity
+and has not been applied to a real part.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
