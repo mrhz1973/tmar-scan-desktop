@@ -84,6 +84,14 @@ binary64 coefficient arithmetic before rounding its L1 hull bound upward.
 Exceeding a caller-specified tolerance is inconclusive, not proof of a crease;
 the bound does not imply G1, regularity, OCCT precision or solid validity.
 
+The experimental nine-row diagnostic composes these bounds with explicit
+training and holdout samples for both joints. It rejects nonpositive sampled
+interior normal alignment independently of the configured chord budget, and
+records which measurements include the seam. Joint normal checks and interior
+orientation checks remain sampled: they do not establish continuity or rule
+out defects between samples. This diagnostic is not wired into the app and
+does not authorize solid replacement or export.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
