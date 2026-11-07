@@ -319,14 +319,32 @@ try {
     review.review.u[0] + u * (review.review.u[1] - review.review.u[0]),
     review.review.v[0] + v * (review.review.v[1] - review.review.v[0]),
   ]))
+  const spanIndex = (items, bounds) => items.findIndex(item =>
+    Math.abs(item.bounds[0] - bounds[0]) <= 1e-10 && Math.abs(item.bounds[1] - bounds[1]) <= 1e-10)
+  const chosenU = spanIndex(uSpans, uvChoice.uBounds), chosenV = spanIndex(vSpans, uvChoice.vBounds)
+  assert(chosenU >= 0 && chosenV >= 0, 'Reviewed UV bounds must match spans in the same source net.')
+  const adjacentSpans = [
+    ...(chosenU > 0 ? [{ side: 'u-low', uBounds: uSpans[chosenU - 1].bounds, vBounds: uvChoice.vBounds }] : []),
+    ...(chosenU + 1 < uSpans.length ? [{ side: 'u-high', uBounds: uSpans[chosenU + 1].bounds, vBounds: uvChoice.vBounds }] : []),
+    ...(chosenV > 0 ? [{ side: 'v-low', uBounds: uvChoice.uBounds, vBounds: vSpans[chosenV - 1].bounds }] : []),
+    ...(chosenV + 1 < vSpans.length ? [{ side: 'v-high', uBounds: uvChoice.uBounds, vBounds: vSpans[chosenV + 1].bounds }] : []),
+  ].map(span => ({ ...span, sampleUVs: [0.1, 0.5, 0.9].flatMap(u => [0.1, 0.5, 0.9].map(v => [
+    span.uBounds[0] + u * (span.uBounds[1] - span.uBounds[0]),
+    span.vBounds[0] + v * (span.vBounds[1] - span.vBounds[0]),
+  ])) }))
+  const adjacentUVs = adjacentSpans.flatMap(span => span.sampleUVs)
   const preApplyWitness = await page.evaluate(async () => {
     const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller
     return c.runtime.worker.ask({ action: 'finalFaceWitness', previewRevision: c.getViewState().preview.previewRevision })
   })
   const preApplyFace = kernel.fromBREP(preApplyWitness.faceBrep)
-  let samplesBefore
+  let samplesBefore, adjacentSamplesBefore
   try {
     samplesBefore = sampleUVs.map(([u, v]) => {
+      const p = kernel.pointOnSurface(preApplyFace, u, v)
+      return [p.x, p.y, p.z]
+    })
+    adjacentSamplesBefore = adjacentUVs.map(([u, v]) => {
       const p = kernel.pointOnSurface(preApplyFace, u, v)
       return [p.x, p.y, p.z]
     })
@@ -363,9 +381,13 @@ try {
     return c.runtime.worker.ask({ action: 'finalFaceWitness', previewRevision: c.getViewState().preview.previewRevision })
   })
   const afterFace = kernel.fromBREP(afterWitness.faceBrep)
-  let samplesAfter
+  let samplesAfter, adjacentSamplesAfter
   try {
     samplesAfter = sampleUVs.map(([u, v]) => {
+      const p = kernel.pointOnSurface(afterFace, u, v)
+      return [p.x, p.y, p.z]
+    })
+    adjacentSamplesAfter = adjacentUVs.map(([u, v]) => {
       const p = kernel.pointOnSurface(afterFace, u, v)
       return [p.x, p.y, p.z]
     })
@@ -374,6 +396,21 @@ try {
   assert(Math.max(...afterSampleResiduals) < 1e-6, `Applied span samples are not on the reviewed plane: ${JSON.stringify(afterSampleResiduals)}.`)
   const sampleDisplacements = samplesAfter.map((point, index) => Math.hypot(...point.map((value, axis) => value - samplesBefore[index][axis])))
   assert(Math.max(...sampleDisplacements) > 1e-4, 'CAD samples did not move measurably inside the reviewed span.')
+  const adjacentSpanEffects = adjacentSpans.map((span, spanIndex) => {
+    const offset = spanIndex * 9
+    const samples = span.sampleUVs.map((uv, sampleIndex) => {
+      const before = adjacentSamplesBefore[offset + sampleIndex], after = adjacentSamplesAfter[offset + sampleIndex]
+      return { uv, before, after, displacementMm: Math.hypot(...after.map((value, axis) => value - before[axis])) }
+    })
+    return { side: span.side, uBounds: span.uBounds, vBounds: span.vBounds, samples,
+      maxDisplacementMm: Math.max(...samples.map(sample => sample.displacementMm)) }
+  })
+  const protectedBoundaryIds = review.locked
+  const protectedBoundaryMaxDeltaMm = protectedBoundaryIds.reduce((maxDelta, id) => {
+    const before = review.net.poles[id], after = afterApply.net.poles[id]
+    return Math.max(maxDelta, Math.hypot(...after.map((value, axis) => value - before[axis])))
+  }, 0)
+  assert.equal(protectedBoundaryMaxDeltaMm, 0, 'Protected boundary poles must remain exactly unchanged through Apply.')
   const exported = await page.evaluate(async () => {
     const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller
     return (await c.exportStep()).step
@@ -389,7 +426,10 @@ try {
   report.appliedCad = { geometry: editedGeometry, sourceGeometry,
     boundsChangedAsExpected: { source: sourceBounds, edited: bounds },
     samples: sampleUVs.map((uv, i) => ({ uv, before: samplesBefore[i], after: samplesAfter[i], displacementMm: sampleDisplacements[i],
-      beforePlaneResidualMm: beforeSampleResiduals[i], afterPlaneResidualMm: afterSampleResiduals[i] })), changedPoleIds: changedIds }
+      beforePlaneResidualMm: beforeSampleResiduals[i], afterPlaneResidualMm: afterSampleResiduals[i] })),
+    adjacentSpanEffects,
+    protectedBoundary: { poleCount: protectedBoundaryIds.length, maxDisplacementMm: protectedBoundaryMaxDeltaMm },
+    changedPoleIds: changedIds }
   check(true, 'Apply moves only reviewed support poles; UV samples become planar and the exported solid remains valid')
 
   await page.click('[data-test=surface-undo]')
