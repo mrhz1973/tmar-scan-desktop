@@ -168,7 +168,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           onClick={()=>attempt(()=>controller.beginSurfaceTarget('scan',pointBudget,multipleTargets))}>{multipleTargets?'Raccogli sulla scansione':'Punto sulla scansione'}</button>
         <button type="button" data-test="surface-point-cad" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
           onClick={()=>attempt(()=>controller.beginSurfaceTarget('cad',pointBudget,multipleTargets))}>{multipleTargets?'Raccogli sul CAD esterno':'Punto sul CAD esterno'}</button></div>
-        {state.surfaceTarget && <><p role="status" aria-live="polite" aria-atomic="true" data-test="surface-point-announcement">{state.surfaceTargetBatch?
+        {state.surfaceTarget && state.surfaceTarget !== 'tangent-plane' && <><p role="status" aria-live="polite" aria-atomic="true" data-test="surface-point-announcement">{state.surfaceTargetBatch?
           `Punti raccolti: ${state.surfaceTargetBatch.length} di 8. ${state.surfaceTargetBatch.length>=2?'Puoi applicare gli agganci con una sola Undo.':'Servono almeno due punti per applicare.'} Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`:
           `Clicca un punto sulla faccia selezionata. Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`}</p>
           {state.surfaceTargetBatch && <>
@@ -369,7 +369,13 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         onChange={e => setDistance(e.target.valueAsNumber)} disabled={disabled} /></label>
       <button type="button" data-test="surface-move" disabled={disabled || state.symmetryBlocked || !editable.length || !Number.isFinite(distance)}
         onClick={() => attempt(() => controller.moveSelected(distance))}>Sposta lungo {axisNames[state.axis]}</button>
-      <button type="button" disabled={disabled || state.symmetryBlocked || !editable.length} onClick={() => attempt(() => controller.flattenSelected())}>Spiana i punti selezionati</button>
+      <button type="button" disabled={disabled || state.symmetryBlocked || !editable.length} onClick={() => attempt(() => controller.flattenSelected())}>Spiana i poli sul piano originale</button>
+      <button type="button" data-test="surface-point-tangent-plane" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint}
+        onClick={() => attempt(() => controller.beginTangentPlane())}>Spiana i poli sul piano tangente nel punto</button>
+      {state.surfaceTarget === 'tangent-plane' && <>
+        <p role="status">Clicca sulla faccia CAD selezionata per scegliere il piano. La proiezione riguarda i poli selezionati e liberi.</p>
+        <button type="button" data-test="surface-tangent-plane-cancel" onClick={() => controller.cancelSurfaceTarget()}>Annulla scelta del piano</button>
+      </>}
       <label>Levigatura · {Math.round(smooth * 100)}%<input type="range" min="0.05" max="1" step="0.05" value={smooth}
         disabled={disabled} onChange={e => setSmooth(Number(e.target.value))} /></label>
       <button type="button" data-test="surface-smooth" disabled={disabled || state.symmetryBlocked || !editable.length}

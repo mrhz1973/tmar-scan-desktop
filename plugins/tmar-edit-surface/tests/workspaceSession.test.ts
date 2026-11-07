@@ -32,7 +32,7 @@ const preview = (revision: number) => ({ valid:true, previewRevision:revision, m
 const info = { index:0,kind:'plane',reason:null,converted:true,enriched:false,
   openSheet:false,freeBoundary:false,trimLocks:[],hiddenPoles:[] }
 async function flush() { for (let i=0;i<8;i++) await Promise.resolve() }
-async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number;blockedPlane?:boolean} = {}) {
+async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number;blockedPlane?:boolean;trimLocks?:number[];hiddenPoles?:number[]} = {}) {
   vi.useFakeTimers()
   const worker = new FakeWorker(), runtime = new SurfaceRuntime(() => worker as unknown as Worker)
   const abort = new AbortController(), hash = 'a'.repeat(64)
@@ -54,7 +54,8 @@ async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number;
     bytes.length===3 && bytes[0]===1 && bytes[1]===2 && bytes[2]===3 ? hash : createHash('sha256').update(bytes).digest('hex')})
   await flush()
   expect(worker.sent[0]?.action).toBe('open')
-  const first = options.blockedPlane ? {...info,reason:'Tutti i poli influenzano un contorno ritagliato.'} : info
+  const first = {...info,trimLocks:options.trimLocks??[],hiddenPoles:options.hiddenPoles??[],
+    ...(options.blockedPlane?{reason:'Tutti i poli influenzano un contorno ritagliato.'}:{})}
   const faces = options.sheet ? [{...first,openSheet:true,freeBoundary:true}] : [first,{...info,index:1}]
   worker.reply(worker.sent[0].id,{faces,preview:{...preview(0),faceMeshes:faces.map(()=>({}))}})
   const session = await creating
@@ -375,6 +376,48 @@ describe('experimental simultaneous surface-point controller',()=>{
     t.worker.reply(last.id,points[1]);expect(await pending).toBeInstanceOf(Error)
     expect(t.session.getPanelState().net).toBe(before);expect(t.session.getPanelState().canUndo).toBe(false)
     await t.session.dispose('cancelled')
+  })
+})
+
+describe('selected-pole tangent plane projection',()=>{
+  const pin={anchor:{face:0,selectionRevision:1,u:.45,v:.5},at:[1.8,2,0],normal:[1,0,1]}
+  it.each(['G0','G1'] as const)('projects only selected authorized poles under %s and creates one Undo',async continuity=>{
+    const t=await setup({trimLocks:[7],hiddenPoles:[18]});await selectFace(t)
+    if(continuity==='G0'){
+      t.session.setContinuity('G0')
+      await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    }
+    t.session.selectPoints([6],false);t.session.lockSelected(true)
+    t.session.selectPoints([0,6,7,12,13,18,24],false)
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    t.session.beginTangentPlane()
+    const pending=t.session.pickTangentPlane([1.8,2,0])
+    expect(t.worker.sent.at(-1)?.action).toBe('notePick')
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    const after=t.session.getPanelState().net!
+    const changed=after.poles.flatMap((p,i)=>p.some((x,d)=>x!==before.poles[i][d])?[i]:[])
+    expect(changed).toEqual(continuity==='G0'?[12,13]:[12])
+    changed.forEach(i=>expect(after.poles[i][0]+after.poles[i][2]).toBeCloseTo(1.8,12))
+    expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await vi.advanceTimersByTimeAsync(90)
+    expect(t.worker.sent.at(-1)?.action).toBe('evaluate')
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(3));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    await t.session.dispose('cancelled')
+  })
+  it.each(['cancel','source','other face','degenerate normal'] as const)('refuses tangent plane pick after %s without a commit',async mode=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    t.session.beginTangentPlane()
+    const pending=t.session.pickTangentPlane([1.8,2,0]).catch(error=>error)
+    if(mode==='cancel')t.session.cancelSurfaceTarget()
+    if(mode==='source')t.invalidate()
+    t.worker.reply(t.worker.sent.at(-1)!.id,{...pin,anchor:{...pin.anchor,face:mode==='other face'?1:0},normal:mode==='degenerate normal'?[0,0,0]:pin.normal})
+    expect(await pending).toBeInstanceOf(Error)
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getPanelState().surfaceTarget).toBeNull();await t.session.dispose('cancelled')
   })
 })
 

@@ -502,6 +502,17 @@ it('shows collected CAD/target pairs and clears them on reference invalidation a
   expect(f.previewPoles).not.toHaveBeenCalled();expect(f.finishPoleGesture).not.toHaveBeenCalled();layer.dispose()
 })
 
+it('routes a tangent plane pick from the CAD face and Escape cancels the mode',async()=>{
+  const f=fixture();f.owner.pickTangentPlane=vi.fn(async()=>{})
+  f.owner.cancelSurfaceTarget=vi.fn(()=>f.set({surfaceTarget:null}))
+  const layer=createWorkspaceLayer(f.view,f.owner)
+  f.set({snap:false,surfaceTarget:{kind:'tangent-plane',sourceBodyId:4}})
+  const client=f.client([0,0,0]);f.getLayer().click?.(client.clientX,client.clientY,false)
+  expect(f.owner.pickTangentPlane).toHaveBeenCalledWith([0,0,0]);expect(f.selectPoints).not.toHaveBeenCalled()
+  expect(layer.cancelGesture()).toBe(true);expect(f.owner.cancelSurfaceTarget).toHaveBeenCalledOnce()
+  layer.dispose()
+})
+
 it('never uses the edited CAD body or neighbouring preview faces as an external point target',async()=>{
   const f=fixture({reference:'cad-face'})
   let found:unknown='not called'

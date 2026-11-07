@@ -18,7 +18,7 @@ import { readRecipe, readCurvedRecipe, type SurfaceEditRecipe, type SurfaceEditR
 import { readAdaptiveLockedRecipe, type AdaptiveLockedRecipe } from './adaptiveLockedRecipe'
 import type { AdaptiveSelection } from './editor.worker'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
-import type { WorkspacePointTargetResolver,WorkspacePointTarget,WorkspaceSurfaceTargetPair } from './workspaceBridge'
+import type { WorkspacePointTargetResolver,WorkspacePointTarget,WorkspaceSurfaceTargetPair,WorkspaceSurfacePickKind } from './workspaceBridge'
 import { wholeBoundaryIndices, type WholeBoundarySide } from './wholeBoundary'
 import type {BoundaryCadCandidate,VerifiedBoundaryPick,BoundaryVisibilityCadResult} from './boundaryVisibilityCad'
 import {SurfacePointTargetsCandidateRefusal} from './surfacePointTargetsExperimental'
@@ -84,7 +84,7 @@ export interface WorkspaceSurfacePanelState {
   readonly message: string | null
   readonly snap: boolean
   readonly snapDistance: number
-  readonly surfaceTarget: 'scan' | 'cad' | null
+  readonly surfaceTarget: WorkspaceSurfacePickKind | null
   readonly surfaceTargetBatch:readonly WorkspaceSurfaceTargetPair[]|null
   readonly canTargetPoint: boolean
   readonly dragMode: DragMode
@@ -227,8 +227,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private message: string | null = null
   private snap = true
   private snapDistance = 1
-  private surfaceTarget: { kind:'scan'|'cad'; snapshot:SurfaceDraftSnapshot; budget:number; distance:number; epoch:number;
-    points?:{anchor:DraftAnchor;at:Point;reference:WorkspacePointTarget}[] } | null = null
+  private surfaceTarget: ({snapshot:SurfaceDraftSnapshot;epoch:number} & (
+    {kind:'scan'|'cad';budget:number;distance:number;points?:{anchor:DraftAnchor;at:Point;reference:WorkspacePointTarget}[]}
+    | {kind:'tangent-plane';points?:never}
+  )) | null = null
   private dragMode: DragMode = 'local'
   private axis = 2
   private dragStrength = 1
@@ -930,6 +932,55 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       })
     })
   }
+  beginTangentPlane(): void {
+    this.change(() => {
+      const snapshot = this.draft.getSnapshot()
+      if (this.surfaceTarget || !this.panel.canTargetPoint || !Number.isSafeInteger(snapshot.preview?.previewRevision))
+        throw new Error('Seleziona poli liberi su una faccia CAD valida, senza simmetria o tangenze aggiunte.')
+      this.surfaceTarget = { kind:'tangent-plane', snapshot, epoch:this.selectionEpoch }
+      this.message = 'Clicca sulla faccia CAD selezionata per scegliere il piano tangente.'
+    })
+  }
+  async pickTangentPlane(point: Point): Promise<void> {
+    this.assertMutable()
+    const operation = this.surfaceTarget
+    if (operation?.kind !== 'tangent-plane' || !finitePoint(point)) throw new Error('Scegli un punto sulla faccia CAD selezionata.')
+    const before = operation.snapshot, revision = before.preview?.previewRevision
+    if (!before.net || revision === undefined || this.draft.getSnapshot() !== before)
+      throw new Error('La bozza del piano tangente è cambiata.')
+    this.busy = true
+    this.refresh()
+    try {
+      const pin = await this.runtime.worker.ask<{anchor:DraftAnchor;at:Point;normal:Point}>({
+        action:'notePick', point:pointCopy(point), previewRevision:revision,
+      }, this.context.signal)
+      this.assertLive()
+      if (this.surfaceTarget !== operation || this.draft.getSnapshot() !== before || this.selectionEpoch !== operation.epoch ||
+          this.frozen || this.symmetry || !pin || pin.anchor?.face !== this.face || !finitePoint(pin.at) || !finitePoint(pin.normal))
+        throw new Error('Il punto CAD o la bozza del piano tangente è cambiato.')
+      const length = Math.hypot(...pin.normal)
+      if (!Number.isFinite(length) || length < 1e-12) throw new Error('Normale CAD non determinabile nel punto scelto.')
+      const normal = pin.normal.map(value => value / length)
+      const offset = (pole: Point) => pole.reduce((sum, value, axis) => sum + (value-pin.at[axis])*normal[axis], 0)
+      const ids = this.editable().filter(id => !before.hiddenPoles.includes(id))
+      if (!ids.length) throw new Error('Seleziona almeno un polo libero.')
+      if (ids.every(id => Math.abs(offset(before.net!.poles[id])) <= 1e-9)) {
+        this.message = 'I poli selezionati sono già sul piano tangente.'
+        return
+      }
+      this.change(() => {
+        this.transform(before.net!, ids, pole => {
+          const distance = offset(pole)
+          return pole.map((value, axis) => value-distance*normal[axis]) as Point
+        })
+        this.message = 'Poli proiettati sul piano tangente. Attendi la verifica CAD.'
+      }, true)
+    } finally {
+      if (this.surfaceTarget === operation) this.surfaceTarget = null
+      this.busy = false
+      if (!this.disposed) { this.refresh(); this.resolveNotes() }
+    }
+  }
   stretchSelected(factor: number): void {
     this.change(() => {
       if (!Number.isFinite(factor) || factor <= 0 || factor > 3) throw new Error('Fattore non valido.')
@@ -985,6 +1036,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   cancelSurfaceTarget(): void {
     if(this.surfaceTarget) {this.surfaceTarget=null;this.message=null;this.refresh()}
   }
+  private referenceTarget() {
+    const operation = this.surfaceTarget
+    return operation?.kind === 'tangent-plane' ? null : operation
+  }
   removeSurfaceTarget(index:number):void{
     this.assertMutable()
     const operation=this.surfaceTarget
@@ -992,8 +1047,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     operation.points=operation.points.filter((_,i)=>i!==index);this.refresh()
   }
   private async collectSurfaceTarget(point:Point,resolve:WorkspacePointTargetResolver):Promise<void>{
-    const operation=this.surfaceTarget!,before=operation.snapshot,revision=before.preview?.previewRevision
-    if(!operation.points||operation.points.length>=8||revision===undefined)throw Error('Puoi raccogliere al massimo otto punti.')
+    const operation=this.referenceTarget()
+    if(!operation?.points||operation.points.length>=8)throw Error('Puoi raccogliere al massimo otto punti.')
+    const before=operation.snapshot,revision=before.preview?.previewRevision
+    if(revision===undefined)throw Error('Anteprima CAD non disponibile.')
     const current=()=>{
       this.assertLive()
       return this.surfaceTarget===operation&&this.draft.getSnapshot()===before&&this.selectionEpoch===operation.epoch&&
@@ -1019,7 +1076,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   async applySurfaceTargets():Promise<void>{
     this.assertMutable()
-    const operation=this.surfaceTarget,points=operation?.points
+    const operation=this.referenceTarget(),points=operation?.points
     if(!operation||!points||points.length<2)throw Error('Raccogli almeno due punti prima di applicare.')
     const current=()=>{
       this.assertLive()
@@ -1042,7 +1099,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   async pickSurfaceTarget(point: Point | null, resolve: WorkspacePointTargetResolver): Promise<void> {
     this.assertMutable()
-    const operation=this.surfaceTarget
+    const operation=this.referenceTarget()
     if(!operation || !point || !finitePoint(point)) throw new Error('Clicca sulla faccia CAD selezionata.')
     if(operation.points)return this.collectSurfaceTarget(point,resolve)
     const before=operation.snapshot,revision=before.preview?.previewRevision
@@ -1081,7 +1138,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if(this.surfaceTarget||!Array.isArray(input)||input.length<2||input.length>8||input.some(p=>!finitePoint(p)))
       throw Error('Sono richiesti da due a otto punti superficie e nessun aggancio già attivo.')
     this.beginSurfaceTarget(kind,budget)
-    const operation=this.surfaceTarget!,before=operation.snapshot,revision=before.preview!.previewRevision!
+    const operation=this.referenceTarget()
+    if(!operation)throw Error('Raccolta dei riferimenti non disponibile.')
+    const before=operation.snapshot,revision=before.preview!.previewRevision!
     const references:ReturnType<WorkspacePointTargetResolver>[]=[]
     const current=()=>{
       this.assertLive()

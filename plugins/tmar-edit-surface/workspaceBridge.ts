@@ -25,6 +25,7 @@ export interface WorkspacePointTarget {
 }
 export type WorkspacePointTargetResolver = (point: Point, normal: Point, distance: number,
   kind: 'scan' | 'cad') => WorkspacePointTarget | null
+export type WorkspaceSurfacePickKind = 'scan' | 'cad' | 'tangent-plane'
 export interface WorkspaceSurfaceTargetPair {
   readonly at:Point
   readonly target:Point
@@ -76,7 +77,7 @@ export interface WorkspaceSurfaceViewState {
   readonly snapDistance: number
   readonly busy: boolean
   readonly placingNote: boolean
-  readonly surfaceTarget?: { readonly kind:'scan'|'cad'; readonly sourceBodyId:number;readonly pairs?:readonly WorkspaceSurfaceTargetPair[] } | null
+  readonly surfaceTarget?: { readonly kind:WorkspaceSurfacePickKind; readonly sourceBodyId:number;readonly pairs?:readonly WorkspaceSurfaceTargetPair[] } | null
   /** Only anchors resolved against the currently displayed valid preview. */
   readonly notePins: readonly Point[]
   readonly stripes: WorkspaceStripeSettings | null
@@ -108,6 +109,7 @@ export interface WorkspaceSurfaceLayerOwner {
   finishPoleGesture(poles: Point[] | null): void
   placeNote(point: Point | null): Promise<void>
   pickSurfaceTarget?(point: Point | null, resolve: WorkspacePointTargetResolver): Promise<void>
+  pickTangentPlane?(point: Point): Promise<void>
   cancelSurfaceTarget?(): void
   reportViewError(message: string): void
   /** Optional hooks for a future shared-view strip handle. */
