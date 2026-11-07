@@ -7,7 +7,7 @@ import type { Request } from '../editor.worker'
 import { SurfaceRuntime } from '../surfaceRuntime'
 import { createWorkspaceSurfaceSession, type WorkspaceSurfaceSession } from '../workspaceSession'
 
-it('translates a whole open face through the CAD dispatcher and preserves its STEP rim', async () => {
+it('translates a whole open face along the picked Local CAD normal and preserves its STEP rim', async () => {
   vi.resetModules()
   const { SurfaceEditorKernel } = await import('../editorKernel')
   const editor = await SurfaceEditorKernel.load(), k = editor.kernel
@@ -51,11 +51,19 @@ it('translates a whole open face through the CAD dispatcher and preserves its ST
     session.setFreeBoundary(true)
     await ready()
     const before = session.getPanelState().net!, history = session.getSnapshot().historyRevision
-    const delta: Point = [.25, -.5, .125]
-    const moved = before.poles.map(([x,y,z]): Point => [x + delta[0], y + delta[1], z + delta[2]])
-    session.setDragMode('axis')
+    const bounds = k.uvBounds(originalFace)
+    const u = bounds.uMin + .29 * (bounds.uMax - bounds.uMin), v = bounds.vMin + .63 * (bounds.vMax - bounds.vMin)
+    const point = k.pointOnSurface(originalFace, u, v), normal = k.surfaceNormal(originalFace, u, v)
+    session.setDragMode('local')
+    session.setAxis(2)
     session.setWholeFaceDrag(true)
-    expect(session.beginWholeFaceGesture(before)).toBe(true)
+    const pick = await session.prepareWholeFacePick(before, { seed:[point.x,point.y,point.z],
+      origin:[point.x,point.y,point.z+10], direction:[0,0,-1] })
+    expect(pick.direction[0]*normal.x + pick.direction[1]*normal.y + pick.direction[2]*normal.z).toBeGreaterThan(1-1e-8)
+    expect(Math.hypot(pick.direction[0],pick.direction[1])).toBeGreaterThan(1e-4)
+    const delta = pick.direction.map(x => x * .5) as Point
+    const moved = before.poles.map(([x,y,z]): Point => [x + delta[0], y + delta[1], z + delta[2]])
+    expect(session.beginVerifiedWholeFaceGesture(pick)).toBe(true)
     session.finishPoleGesture(moved)
     await ready()
     expect(session.getSnapshot().historyRevision).toBe(history + 1)

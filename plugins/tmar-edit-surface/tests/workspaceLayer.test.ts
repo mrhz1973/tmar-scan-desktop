@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Net, Point } from '../brep'
 import type {BoundaryCadCandidate,VerifiedBoundaryPick} from '../boundaryVisibilityCad'
 import type { Preview } from '../editorKernel'
-import type { WorkspaceStripViewState, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState } from '../workspaceBridge'
+import type { VerifiedWholeFacePick, WorkspaceStripViewState, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState } from '../workspaceBridge'
 import { createWorkspaceLayer } from '../workspaceLayer'
 import { selectNetPoints } from '../netSelection'
 import { SurfaceEditorKernel } from '../editorKernel'
@@ -186,6 +186,96 @@ it('uses the visible face interior for whole-face translation and leaves space o
 })
 
 const flushBoundaryPick=async()=>{for(let i=0;i<8;i++)await Promise.resolve()}
+
+it('uses the verified Local axis and translates every pole after the CAD reply', async () => {
+  const f = fixture()
+  f.set({ wholeFaceDrag:{canStart:true}, dragMode:'local' })
+  const pick = {point:[0,0,0] as Point, direction:[0,1,0] as Point}
+  f.owner.prepareWholeFacePick = vi.fn(async () => pick)
+  f.owner.beginVerifiedWholeFaceGesture = vi.fn(() => true)
+  f.owner.cancelPreparedWholeFacePick = vi.fn()
+  const layer = createWorkspaceLayer(f.view, f.owner)
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,0,0]))).toBe(true)
+  expect(f.owner.beginVerifiedWholeFaceGesture).not.toHaveBeenCalled()
+  f.getHandlers().move(f.event(1,[.2,.15,0]))
+  expect(f.previewPoles).not.toHaveBeenCalled()
+  await flushBoundaryPick()
+  expect(f.owner.prepareWholeFacePick).toHaveBeenCalledWith(f.net, {seed:[0,0,0],origin:[0,0,expect.closeTo(10,12)],direction:[0,0,-1]})
+  expect(f.owner.beginVerifiedWholeFaceGesture).toHaveBeenCalledWith(pick)
+  expect(f.previewPoles).toHaveBeenCalledTimes(1)
+  f.getHandlers().up(f.event(1,[.2,.15,0]))
+  const moved = f.finishPoleGesture.mock.lastCall![0]!
+  moved.forEach(([x,y,z], i) => {
+    expect(x).toBeCloseTo(f.net.poles[i][0])
+    expect(y).toBeCloseTo(f.net.poles[i][1]+.15)
+    expect(z).toBeCloseTo(f.net.poles[i][2])
+  })
+  expect(f.counts().captured).toBeNull()
+  layer.dispose()
+})
+
+it.each([
+  'up','escape','lostCapture','camera','clipping','axis','dragMode','strength','lock','hidden','resize','projection',
+] as const)('ignores a pending Local face hit after %s', async change => {
+  const f = fixture()
+  f.set({wholeFaceDrag:{canStart:true}, dragMode:'local'})
+  let resolve!: (pick:VerifiedWholeFacePick) => void
+  f.owner.prepareWholeFacePick = vi.fn(() => new Promise<VerifiedWholeFacePick>(r => { resolve = r }))
+  f.owner.beginVerifiedWholeFaceGesture = vi.fn(() => true)
+  f.owner.cancelPreparedWholeFacePick = vi.fn()
+  const layer = createWorkspaceLayer(f.view, f.owner), down = f.event(1,[0,0,0])
+  expect(f.getLayer().pointerDown?.(down)).toBe(true)
+  if (change === 'up') f.getHandlers().up(down)
+  if (change === 'escape') layer.cancelGesture()
+  if (change === 'lostCapture') f.getHandlers().lostCapture(down)
+  if (change === 'camera') { f.view.camera().position.x++; f.view.camera().updateMatrixWorld(true); f.frame() }
+  if (change === 'clipping') f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,1,0),0)],false)
+  if (change === 'axis') f.set({axis:2})
+  if (change === 'dragMode') f.set({dragMode:'screen'})
+  if (change === 'strength') f.set({dragStrength:.5})
+  if (change === 'lock') f.set({locked:[0]})
+  if (change === 'hidden') f.set({hiddenPoles:[0]})
+  if (change === 'resize') { f.rect.width -= 20; f.frame() }
+  if (change === 'projection') {
+    const camera = f.view.camera() as THREE.OrthographicCamera
+    camera.zoom *= 1.1
+    camera.updateProjectionMatrix()
+    f.frame()
+  }
+  expect(f.counts().captured).toBeNull()
+  resolve({point:[0,0,0],direction:[0,1,0]})
+  await flushBoundaryPick()
+  expect(f.owner.beginVerifiedWholeFaceGesture).not.toHaveBeenCalled()
+  expect(f.finishPoleGesture).not.toHaveBeenCalled()
+  expect(f.owner.cancelPreparedWholeFacePick).toHaveBeenCalledTimes(1)
+  layer.dispose()
+})
+
+it('ignores a rejected old Local pick while the same mouse holds a newer request', async () => {
+  const f = fixture()
+  f.set({wholeFaceDrag:{canStart:true}, dragMode:'local'})
+  let rejectOld!: (error:Error) => void
+  let resolveNew!: (pick:VerifiedWholeFacePick) => void
+  f.owner.prepareWholeFacePick = vi.fn()
+    .mockImplementationOnce(() => new Promise<VerifiedWholeFacePick>((_resolve,reject) => { rejectOld = reject }))
+    .mockImplementationOnce(() => new Promise<VerifiedWholeFacePick>(resolve => { resolveNew = resolve }))
+  f.owner.beginVerifiedWholeFaceGesture = vi.fn(() => true)
+  f.owner.cancelPreparedWholeFacePick = vi.fn()
+  const layer = createWorkspaceLayer(f.view, f.owner), down = f.event(1,[0,0,0])
+  expect(f.getLayer().pointerDown?.(down)).toBe(true)
+  f.getHandlers().up(down)
+  expect(f.getLayer().pointerDown?.(down)).toBe(true)
+  rejectOld(new Error('old CAD request'))
+  await flushBoundaryPick()
+  expect(f.counts().captured).toBe(1)
+  expect(f.reportViewError).not.toHaveBeenCalled()
+  resolveNew({point:[0,0,0],direction:[0,1,0]})
+  await flushBoundaryPick()
+  expect(f.owner.beginVerifiedWholeFaceGesture).toHaveBeenCalledTimes(1)
+  f.getHandlers().up(f.event(1,[0,.15,0]))
+  expect(f.finishPoleGesture).toHaveBeenCalledTimes(1)
+  layer.dispose()
+})
 
 it.each(['up','escape','view','draft','navigation','dispose'] as const)('discards a late native boundary response after %s and releases only its capture',async change=>{
   const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)

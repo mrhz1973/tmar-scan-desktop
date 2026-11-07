@@ -7,7 +7,7 @@ import { boundaryLocked, type Net, type Point } from './brep'
 import type { DraftAnchor, FaceInfo, Preview, G1SupportCandidates, G1CurvedSupportCandidates } from './editorKernel'
 import type { G1SupportCandidate } from './g1SupportTopology'
 import type { CompatibleCurvedSupportCandidate } from './compatibleCurvedSupportTopology'
-import { dragDirection, type DragMode } from './localFrame'
+import { dragDirection, localFrameAtUv, type DragMode } from './localFrame'
 import { selectNetPoints, type NetSelectionMode } from './netSelection'
 import { SurfaceDraft, type SurfaceDraftSnapshot } from './surfaceDraft'
 import { SurfaceRuntime } from './surfaceRuntime'
@@ -20,6 +20,8 @@ import type { AdaptiveSelection } from './editor.worker'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
 import type { WorkspacePointTargetResolver,WorkspacePointTarget,WorkspaceSurfaceTargetPair,WorkspaceSurfacePickKind } from './workspaceBridge'
 import { wholeBoundaryIndices, type WholeBoundarySide } from './wholeBoundary'
+import type { VerifiedWholeFacePick } from './workspaceBridge'
+import { WHOLE_FACE_PICK_SEED_TOLERANCE_MM, type WholeFaceRayPick, type WholeFaceRayPickInput } from './wholeFaceRayPickCad'
 import type {BoundaryCadCandidate,VerifiedBoundaryPick,BoundaryVisibilityCadResult} from './boundaryVisibilityCad'
 import {SurfacePointTargetsCandidateRefusal} from './surfacePointTargetsExperimental'
 import {planTangentSpan,type TangentSpanReview} from './tangentSpan'
@@ -200,7 +202,9 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private wholeBoundaryDrag: {side:WholeBoundarySide;face:number} | null = null
   private wholeFaceDrag = false
   private wholeFaceSelection: readonly number[] | null = null
-  private uniformGesture: { readonly ids: readonly number[]; readonly scope: 'bordo' | 'faccia' } | null = null
+  private wholeFacePickSerial = 0
+  private wholeFacePickReceipt: { pick: VerifiedWholeFacePick; net: Net; axis: number; draftEpoch: number; snapshot: SurfaceDraftSnapshot } | null = null
+  private uniformGesture: { readonly ids: readonly number[]; readonly scope: 'bordo' | 'faccia'; readonly direction?: Readonly<Point> } | null = null
   private boundaryPickSerial=0
   private readonly boundaryPickReceipts=new WeakMap<VerifiedBoundaryPick,{snapshot:SurfaceDraftSnapshot;serial:number}>()
   private strip: StripMode | null = null
@@ -492,8 +496,6 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
   setWholeFaceDrag(active: boolean): void {
     this.change(() => {
-      if (active && this.dragMode === 'local')
-        throw new Error('Scegli Schermo o Assi XYZ per trascinare l’intera faccia.')
       if (active && !this.panel.canMoveWholeFace)
         throw new Error('Attiva i bordi liberi su una singola faccia aperta valida con tutti i poli modificabili.')
       if (!active) {
@@ -506,12 +508,62 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     })
   }
   private disarmWholeFaceDrag(): void {
+    this.cancelPreparedWholeFacePick()
     this.wholeFaceDrag = false
     const owned = this.wholeFaceSelection
     this.wholeFaceSelection = null
     if (owned && owned === this.draft.getSnapshot().selected) this.draft.setSelection([])
   }
   beginWholeFaceGesture(net: Net): boolean {
+    return this.dragMode !== 'local' && this.startWholeFaceGesture(net)
+  }
+
+  async prepareWholeFacePick(net: Net, input: WholeFaceRayPickInput): Promise<VerifiedWholeFacePick> {
+    this.assertMutable()
+    const snapshot = this.draft.getSnapshot(), revision = snapshot.preview?.previewRevision
+    if (!this.wholeFaceDrag || !this.panel.canMoveWholeFace || this.dragMode !== 'local' ||
+        snapshot.committedNet !== net || revision === undefined)
+      throw new Error('Bozza della faccia non verificabile.')
+    this.cancelPreparedWholeFacePick()
+    const serial = this.wholeFacePickSerial, draftEpoch = this.draftEpoch, axis = this.axis
+    const result = await this.runtime.worker.ask<WholeFaceRayPick & {face:number;previewRevision:number;selectionRevision:number}>({
+      action:'wholeFaceRayPick', previewRevision:revision, input:structuredClone(input),
+    }, this.context.signal)
+    this.assertMutable()
+    if (serial !== this.wholeFacePickSerial || draftEpoch !== this.draftEpoch || snapshot !== this.draft.getSnapshot() ||
+        !this.wholeFaceDrag || !this.panel.canMoveWholeFace || this.dragMode !== 'local' || this.axis !== axis)
+      throw new Error('Selezione CAD della faccia superata.')
+    if (!result || result.face !== this.face || result.previewRevision !== revision ||
+        !Number.isSafeInteger(result.selectionRevision) || result.intersectionCount !== 1 ||
+        !finitePoint(result.point) || !finitePoint(result.normal) ||
+        !Number.isFinite(result.rayDistanceMm) || result.rayDistanceMm <= 0 ||
+        !Number.isFinite(result.seedDistanceMm) || result.seedDistanceMm < 0 ||
+        result.seedDistanceMm > WHOLE_FACE_PICK_SEED_TOLERANCE_MM)
+      throw new Error('Risposta CAD della faccia non coerente.')
+    const direction = localFrameAtUv(net, result.u, result.v, result.normal)?.[axis]
+    if (!direction) throw new Error('Direzione locale CAD non determinata nel punto scelto.')
+    const pick = Object.freeze({ point:freezePoint(result.point), direction:freezePoint(direction) })
+    this.wholeFacePickReceipt = { pick, net, axis, draftEpoch, snapshot }
+    return pick
+  }
+
+  cancelPreparedWholeFacePick(): void {
+    this.wholeFacePickSerial++
+    this.wholeFacePickReceipt = null
+  }
+
+  beginVerifiedWholeFaceGesture(pick: VerifiedWholeFacePick): boolean {
+    this.assertMutable()
+    const receipt = this.wholeFacePickReceipt
+    if (receipt?.pick !== pick) return false
+    this.cancelPreparedWholeFacePick()
+    if (receipt.draftEpoch !== this.draftEpoch || receipt.snapshot !== this.draft.getSnapshot() ||
+        receipt.axis !== this.axis || this.dragMode !== 'local')
+      return false
+    return this.startWholeFaceGesture(receipt.net, receipt.pick.direction)
+  }
+
+  private startWholeFaceGesture(net: Net, direction?: Readonly<Point>): boolean {
     this.assertMutable()
     const draft = this.draft.getSnapshot()
     if (!this.wholeFaceDrag || !this.panel.canMoveWholeFace || draft.committedNet !== net) return false
@@ -522,7 +574,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       if (selected !== draft.selected) this.wholeFaceSelection = selected
       this.gesture = 'pole'
       this.gestureNet = net
-      this.uniformGesture = { ids, scope: 'faccia' }
+      this.uniformGesture = { ids, scope: 'faccia', direction }
     })
     return true
   }
@@ -577,6 +629,11 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       throw Error('Coordinate dei poli non valide.')
     const delta=poles[ids[0]].map((x,d)=>x-base.poles[ids[0]][d])
     if(Math.hypot(...delta)>1000)throw Error(scope === 'faccia' ? 'Spostamento della faccia oltre 1000 mm.' : 'Spostamento del bordo oltre 1000 mm.')
+    if (gesture.direction) {
+      const [x,y,z] = gesture.direction, [a,b,c] = delta
+      if (Math.hypot(y*c-z*b, z*a-x*c, x*b-y*a) > 1e-8)
+        throw Error('Lo spostamento non segue la direzione CAD locale verificata.')
+    }
     const selected=new Set(ids)
     for(let i=0;i<poles.length;i++)for(let d=0;d<3;d++){
       const expected=base.poles[i][d]+(selected.has(i)?delta[d]:0)
@@ -1248,10 +1305,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.change(() => {
       if (!['axis','screen','local'].includes(value)) throw new Error('Modalità non valida.')
       this.dragMode = value
-      if (value === 'local' && this.wholeFaceDrag) {
-        this.disarmWholeFaceDrag()
-        this.message = 'Trascinamento dell’intera faccia disattivato. Per usarlo, scegli Schermo o Assi XYZ.'
-      }
+      this.cancelPreparedWholeFacePick()
     })
   }
   setAxis(value: number): void { this.change(() => { if (![0,1,2].includes(value)) throw new Error('Asse non valido.'); this.axis = value }) }
@@ -2086,7 +2140,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       !this.surfaceTarget && !this.notes.length && !strip && !this.stripPending && this.gesture==='idle' && this.faces.length===1 &&
       !!face?.freeBoundary && d.freeBoundary && !tangency && d.cylinderSession===null && !!d.net &&
       d.net===d.committedNet && d.validNet===d.net && !d.calculating && !d.previewStale
-    const canMoveWholeFace = canMoveWholeBoundary && this.dragMode !== 'local' && !this.navigationOnly && !locked.length && !d.hiddenPoles.length
+    const canMoveWholeFace = canMoveWholeBoundary && !this.navigationOnly && !locked.length && !d.hiddenPoles.length
     const surfaceTargetBatch=this.surfaceTarget?.points?Object.freeze(this.surfaceTarget.points.map(p=>Object.freeze({at:freezePoint(p.at),target:freezePoint(p.reference.point),label:p.reference.label}))):null
     const canTargetPoint=!adaptive && !this.wholeFaceDrag && !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
       this.gesture==='idle' && !this.symmetry && !tangency && d.cylinderSession===null && !!d.net && d.net===d.committedNet &&

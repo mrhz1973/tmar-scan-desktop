@@ -233,28 +233,90 @@ describe('whole natural boundary movement',()=>{
     await s.dispose('cancelled')
   })
 
-  it('requires Screen or XYZ for whole-face drag and disarms it when switching to Local', async () => {
+  const faceRay = { seed:[2,2,0], origin:[2,2,10], direction:[0,0,-1] } as import('../wholeFaceRayPickCad').WholeFaceRayPickInput
+  const faceRayReply = {face:0, previewRevision:2, selectionRevision:1, point:[2,2,0], u:.3, v:.6,
+    normal:[0,0,1], rayDistanceMm:10, seedDistanceMm:0, intersectionCount:1}
+
+  it('requires a current CAD receipt for Local whole-face drag and makes one Undo entry', async () => {
     const t = await setup({sheet:true})
     await selectFace(t)
     const s = t.session
     s.setFreeBoundary(true)
     await ready(t, 2)
     const net = s.getPanelState().net!, history = s.getSnapshot().historyRevision
-    expect(s.getPanelState().dragMode).toBe('local')
-    expect(s.getPanelState().canMoveWholeFace).toBe(false)
-    expect(() => s.setWholeFaceDrag(true)).toThrow(/Schermo o Assi XYZ/)
-    s.setDragMode('axis')
     s.setWholeFaceDrag(true)
-    expect(s.beginWholeFaceGesture(net)).toBe(true)
-    s.finishPoleGesture(null)
-    s.setDragMode('local')
-    expect(s.getPanelState()).toMatchObject({ wholeFaceDrag:false, canMoveWholeFace:false, selected:[] })
-    expect(s.getPanelState().message).toMatch(/disattivato/)
+    s.setAxis(1)
     expect(s.beginWholeFaceGesture(net)).toBe(false)
+    const pending = s.prepareWholeFacePick(net, faceRay), request = t.worker.sent.at(-1)!
+    expect(request).toMatchObject({ action:'wholeFaceRayPick', previewRevision:2, input:faceRay })
+    expect(s.getPanelState().busy).toBe(false)
+    expect(s.getSnapshot().gesture).toBe('idle')
+    t.worker.reply(request.id, faceRayReply)
+    const receipt = await pending
+    expect(receipt.direction).toEqual([expect.closeTo(0,12),expect.closeTo(1,12),expect.closeTo(0,12)])
+    expect(s.beginVerifiedWholeFaceGesture({...receipt})).toBe(false)
+    expect(s.beginVerifiedWholeFaceGesture(receipt)).toBe(true)
+    expect(s.beginVerifiedWholeFaceGesture(receipt)).toBe(false)
+    expect(() => s.previewPoles(net.poles.map(([x,y,z]): Point => [x+.2,y,z]))).toThrow(/direzione CAD locale/)
+    const moved = net.poles.map(p => p.map((x,i) => x + .2*receipt.direction[i]) as Point)
+    s.finishPoleGesture(moved)
+    expect(s.getSnapshot().historyRevision).toBe(history+1)
+    await ready(t, 3)
+    expect(s.getPanelState().net!.poles).toEqual(moved)
+    s.undo()
+    expect(s.getPanelState().net).toEqual(net)
+    await s.dispose('cancelled')
+  })
+
+  it('invalidates a verified whole-face receipt after changing the axis and accepts a fresh receipt', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    s.setWholeFaceDrag(true)
+    s.setAxis(0)
+    const net = s.getPanelState().net!, history = s.getSnapshot().historyRevision
+    const verify = () => {
+      const pending = s.prepareWholeFacePick(net, faceRay)
+      t.worker.reply(t.worker.sent.at(-1)!.id, faceRayReply)
+      return pending
+    }
+    const old = await verify()
+    expect(old.direction).toEqual([expect.closeTo(1,12),expect.closeTo(0,12),expect.closeTo(0,12)])
+    s.setAxis(2)
+    expect(s.beginVerifiedWholeFaceGesture(old)).toBe(false)
+    expect(s.getSnapshot().gesture).toBe('idle')
     expect(s.getSnapshot().historyRevision).toBe(history)
-    s.setDragMode('screen')
-    expect(s.getPanelState().canMoveWholeFace).toBe(true)
-    expect(s.getPanelState().wholeFaceDrag).toBe(false)
+    const current = await verify()
+    expect(current.direction).toEqual([expect.closeTo(0,12),expect.closeTo(0,12),expect.closeTo(1,12)])
+    expect(s.beginVerifiedWholeFaceGesture(current)).toBe(true)
+    s.finishPoleGesture(null)
+    await s.dispose('cancelled')
+  })
+
+  it.each(['cancel','axis','mode','strength','lock','undo','source'] as const)('refuses a Local whole-face pick superseded by %s', async change => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    s.setWholeFaceDrag(true)
+    const net = s.getPanelState().net!
+    if (change === 'lock') s.selectPoints([12], false)
+    const pending = s.prepareWholeFacePick(net, faceRay), request = t.worker.sent.at(-1)!
+    const rejected = expect(pending).rejects.toThrow()
+    if (change === 'cancel') s.cancelPreparedWholeFacePick()
+    if (change === 'axis') s.setAxis((s.getPanelState().axis + 1) % 3)
+    if (change === 'mode') s.setDragMode('screen')
+    if (change === 'strength') s.setDragStrength(.5)
+    if (change === 'lock') s.lockSelected(true)
+    if (change === 'undo') s.undo()
+    if (change === 'source') t.invalidate()
+    t.worker.reply(request.id, faceRayReply)
+    await rejected
+    expect(s.getSnapshot().gesture).toBe('idle')
+    expect(s.getPanelState().net!.poles).toEqual(net.poles)
     await s.dispose('cancelled')
   })
 

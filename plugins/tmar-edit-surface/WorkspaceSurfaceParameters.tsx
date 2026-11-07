@@ -266,7 +266,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <label className="inline"><input data-test="surface-whole-face-drag" type="checkbox"
           checked={state.wholeFaceDrag} disabled={disabled || (!state.wholeFaceDrag && !state.canMoveWholeFace)}
           onChange={e => attempt(() => controller.setWholeFaceDrag(e.target.checked))} />Trascina la faccia nella vista</label>
-        <p>Attiva i bordi liberi su una singola faccia naturale e sblocca tutti i poli. Scegli Schermo o Assi XYZ, poi afferra la superficie per traslarla senza magnete. Il trascinamento richiede la verifica CAD e si annulla in un solo passaggio.</p>
+        <p>Attiva i bordi liberi su una singola faccia naturale e sblocca tutti i poli. Afferra la superficie per traslarla senza magnete. In modalità Locale, gli assi U, V e N si calcolano nel punto CAD cliccato. Con un piano di sezione attivo, usa Schermo o Assi XYZ. Il trascinamento richiede la verifica CAD e si annulla in un solo passaggio.</p>
       </fieldset>}
       <label>Selezione del reticolo
         <select data-test="surface-selection-mode" value={state.selectionMode} disabled={disabled}

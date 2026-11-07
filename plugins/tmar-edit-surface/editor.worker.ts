@@ -12,6 +12,7 @@ import { readRecipe, readCurvedRecipe, sha256 } from './recipe'
 import type { AdaptiveLocks } from './adaptiveLockSnapshot'
 import { readAdaptiveLockedRecipe } from './adaptiveLockedRecipe'
 import { ExperimentalSharedPlane } from './experimentalSharedPlane'
+import type { WholeFaceRayPickInput } from './wholeFaceRayPickCad'
 export type AdaptiveSelection = { face:number; refinements:KnotInsertion[]; trimPolicy:'circular-fine-v1'; generation:number; trimLocks:number[]; hiddenPoles:number[] }
 export type ExperimentalSharedPlaneIdentity = { version:1; face:number; sourceHash:string; baseHash:string }
 export type Request = { id: number } & (
@@ -43,6 +44,7 @@ export type Request = { id: number } & (
   | { action: 'notePick'; point: Point; previewRevision: number }
   | { action: 'noteResolve'; anchor: DraftAnchor; previewRevision: number }
   | {action:'verifyBoundaryVisibility';previewRevision:number;candidates:import('./boundaryVisibilityCad').BoundaryCadCandidate[];origin:Point;parallelDirection?:Point}
+  | {action:'wholeFaceRayPick';previewRevision:number;input:WholeFaceRayPickInput}
   | { action: 'evaluate'; net: Net; continuity: 'G0' | 'G1'; exportStep?: boolean; freeBoundary?: boolean; selection?: {face:number;refinements:KnotInsertion[]} }
   // Experimental display only; this is not an evaluate/Apply result.
   | { action: 'prepareCylinder'; face:number }
@@ -198,6 +200,9 @@ self.onmessage = (event: MessageEvent<Request>) => {
         case 'verifyBoundaryVisibility':
           if(cylinder || adaptiveSelectionKey!==null)throw Error('Preparazione non qualificata per la verifica del bordo.')
           result=editor.verifyBoundaryVisibility(req.previewRevision,req.candidates,req.origin,req.parallelDirection);break
+        case 'wholeFaceRayPick':
+          if(cylinder || adaptiveSelectionKey!==null)throw Error('Preparazione non qualificata per la selezione della faccia.')
+          result=editor.pickWholeFaceFromRay(req.previewRevision,req.input);break
         case 'evaluate': {
           if(adaptiveSelectionKey!==null) throw new Error('La preparazione adattiva richiede una valutazione esplicita.')
           if(req.selection && selectionKey!==JSON.stringify(req.selection)) {

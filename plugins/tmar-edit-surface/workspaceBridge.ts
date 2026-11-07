@@ -94,6 +94,12 @@ export interface WorkspaceSurfaceViewState {
   readonly directStrip?: { readonly paths: readonly (readonly Point[])[]; readonly revision: number; readonly axis: 0 | 1 | 2 } | null
 }
 
+/** An immutable confirmation of the local axis at one CAD hit. */
+export interface VerifiedWholeFacePick {
+  readonly point: Readonly<Point>
+  readonly direction: Readonly<Point>
+}
+
 /** The layer never owns the session or edits project stores. */
 export interface WorkspaceSurfaceLayerOwner {
   getViewState(): WorkspaceSurfaceViewState
@@ -102,6 +108,9 @@ export interface WorkspaceSurfaceLayerOwner {
   selectPoints(ids: readonly number[], additive: boolean): void
   beginPoleGesture(): boolean
   beginWholeFaceGesture?(net: Net): boolean
+  prepareWholeFacePick?(net: Net, input: import('./wholeFaceRayPickCad').WholeFaceRayPickInput): Promise<VerifiedWholeFacePick>
+  beginVerifiedWholeFaceGesture?(pick: VerifiedWholeFacePick): boolean
+  cancelPreparedWholeFacePick?(): void
   beginWholeBoundaryGesture?(side:WholeBoundarySide): boolean
   prepareWholeBoundaryPicks?(net:Net,candidates:BoundaryCadCandidate[],origin:Point,parallelDirection?:Point):Promise<readonly VerifiedBoundaryPick[]>
   beginVerifiedWholeBoundaryGesture?(pick:VerifiedBoundaryPick):boolean
