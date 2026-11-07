@@ -1,5 +1,20 @@
 # Edit Surface — CAD prototype checkpoint
 
+### Experimental cylindrical faces — scope clarification
+
+The shared workspace has a separate experimental path for certain simple
+cylindrical STEP faces identified as `experimentalCylinder`. It prepares a
+periodic B-spline control net, with CAD and sampled geometry checks, and
+supports a local draft, preview and explicit CAD verification. After a
+successful verification the session can attach notes and export or apply a
+CAD copy. Added G1 tangency and whole-natural-boundary movement are not
+available in this mode. Unsupported source topology is refused; sampled
+checks do not certify arbitrary STEP cylinders or global geometry. Existing
+tests include `cylinder-preparation.test.ts`, `cylinder-evaluation.test.ts`
+and `cylinder-notes.test.ts`; their presence does not establish integrated
+desktop GUI acceptance or QuickSurface parity. Statements later in this file
+about cylinders outside the original prototype describe that earlier scope.
+
 ### Section-aware free-edge picking — plugin checkpoint
 
 The direct D-handle edge picker now sends the current world-space section planes
@@ -440,7 +455,7 @@ an annotated CAD copy, not that recipe as parametric history. The project
 reopened with the copy and note. Evidence: `run-i7IkaX/result.json` in the
 same local QA folder. The source STEP hash was unchanged.
 
-- Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Periodic cylinders, arbitrary trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
+- Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Certain simple cylindrical faces have a separate experimental preparation path described above; arbitrary periodic cylinders, trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
 - One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.
 - OCCT validity, face/solid counts, positive volume, original boundary preservation, sampled normals and face intersections are checked. This is not exhaustive certification against every possible self-intersection; intersection edges and normals have sampled checks.
 - No qualification yet on arbitrary production STEP parts, touch input, multi-face continuity creation or full QUICKSURFACE equivalence. Project save/reopen is qualified on the recorded fixture only.
