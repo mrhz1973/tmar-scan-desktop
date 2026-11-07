@@ -109,6 +109,13 @@ the Tube supports with a structurally C0 seam. The target correspondence,
 continuous regularity, wall thickness and CAD validity remain unproved.
 The helper has only synthetic coverage and is not connected to the app.
 
+A separate quintic-side entry point handles a saturated structural C0 U seam
+only when an absolute derivative-gap bound passes both before and after the
+coefficient proposal. It keeps the whole seam column fixed; an incompatible
+target is refused and no proposal is returned on an inconclusive seam bound.
+The original C1 guard remains in place. This preserves seam position only in
+the coefficient model and does not validate pcurves, trims, G1 or a solid.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,

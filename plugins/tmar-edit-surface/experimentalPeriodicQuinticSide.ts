@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Net, Point } from './brep'
+import { boundExperimentalPeriodicSeamDerivativeGap } from './experimentalPeriodicSeamDerivativeGap'
 import { validateExperimentalPeriodicSurfaceU } from './experimentalPeriodicSurfaceRefinement'
 import { divide, l1, scalar, sub, times, type V } from './tangencyCoefficientIntervals'
 
@@ -38,11 +39,50 @@ const norm = (value: V) => value.every(([lo, hi]) => lo === 0 && hi === 0) ? 0 :
  * topology and OCCT evaluation require separate checks.
  */
 export function proposeExperimentalPeriodicQuinticSide(request: QuinticSideRequest) {
-  const { net, edge, targetInward, derivativeTolerance, secondDerivativeTolerance, lockIndices = [] } = request
+  validateQuinticSide(request)
+  if (request.net.mu.some(m => m >= request.net.du))
+    fail('richiesta una base U strutturalmente C1 alla cucitura e ai nodi interni')
+  return proposeQuinticRows(request)
+}
+
+/**
+ * Separate coefficient experiment for a structurally C0 U seam. A bound
+ * on the absolute derivative gap is required for the source and for the
+ * stored proposal. The full U0 column stays fixed, preserving the seam
+ * position in the coefficient model. Pcurves and trims are separate.
+ * The tolerance is in coordinate units per native U unit. An accepted gap
+ * alone gives no result on exact C1, G1, normal orientation or CAD.
+ */
+export function proposeExperimentalPeriodicAlmostC1QuinticSide(
+  request: QuinticSideRequest & { seamDerivativeTolerance: number },
+) {
+  validateQuinticSide(request)
+  const { net, seamDerivativeTolerance, lockIndices = [] } = request
+  if (net.mu.slice(1, -1).some(m => m >= net.du))
+    fail('richiesti nodi U interni strutturalmente C1')
+  const evidenceScope = 'quintic-side-seam-coefficient-diagnostics' as const
+  const before = boundExperimentalPeriodicSeamDerivativeGap(net, seamDerivativeTolerance)
+  if (before.status === 'inconclusive')
+    return { status: 'inconclusive' as const, phase: 'source-seam' as const, before, evidenceScope }
+  if (!Array.isArray(lockIndices)) fail('indice bloccato non valido')
+  const seamIndices = Array.from({ length: net.nv }, (_, v) => v)
+  const proposal = proposeQuinticRows({ ...request, lockIndices: [...lockIndices, ...seamIndices] })
+  if (seamIndices.some(i => net.poles[i].some((x, axis) => !Object.is(x, proposal.net.poles[i][axis]))))
+    fail('colonna di posizione della cucitura modificata')
+  const after = boundExperimentalPeriodicSeamDerivativeGap(proposal.net, seamDerivativeTolerance)
+  if (after.status === 'inconclusive')
+    return { status: 'inconclusive' as const, phase: 'candidate-seam' as const, before, after, evidenceScope }
+  return { status: 'coefficient-proposal' as const, before, after, proposal, evidenceScope }
+}
+
+function validateQuinticSide({ net, edge }: QuinticSideRequest) {
   validateExperimentalPeriodicSurfaceU(net)
   if (net.dv !== 5 || net.weights.some(w => w !== 1) || (edge !== 'V0' && edge !== 'V1'))
     fail('serve una fascia V clamped di grado cinque a pesi unitari e un bordo naturale')
-  if (net.mu.some(m => m >= net.du)) fail('richiesta una base U strutturalmente C1 alla cucitura e ai nodi interni')
+}
+
+function proposeQuinticRows(request: QuinticSideRequest) {
+  const { net, edge, targetInward, derivativeTolerance, secondDerivativeTolerance, lockIndices = [] } = request
   if (![derivativeTolerance, secondDerivativeTolerance].every(x => Number.isFinite(x) && x > 0))
     fail('tolleranze delle derivate finite e positive richieste')
   if (!Array.isArray(targetInward) || targetInward.length !== net.nu || !Array.from(targetInward).every(finitePoint))
