@@ -34,6 +34,7 @@ export type Request = { id: number } & (
   | ({ action: 'publishG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneValidationRequest)
   | ({ action: 'evaluateG1PlaneTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1PlaneEvaluationRequest)
   | { action: 'g1CurvedSupportCandidates' }
+  | { action: 'g1CurvedSupportGeometry'; choice: G1CurvedProposalRequest['choice']; previewRevision: number; selection: {face:number;refinements:KnotInsertion[]} }
   | ({ action: 'proposeG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedProposalRequest)
   | ({ action: 'validateG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedValidationRequest)
   | ({ action: 'publishG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedValidationRequest)
@@ -158,6 +159,12 @@ self.onmessage = (event: MessageEvent<Request>) => {
         }
         case 'g1SupportCandidates': result = await editor.g1SupportCandidates(); break
         case 'g1CurvedSupportCandidates': result = await editor.g1CurvedSupportCandidates(); break
+        case 'g1CurvedSupportGeometry':
+          if (cylinder || adaptiveSelectionKey !== null || !req.selection || selectionKey === null ||
+              selectionKey !== JSON.stringify(req.selection) || req.choice?.stamp?.faceIndex !== req.selection.face)
+            throw new Error('Selezione G1 scaduta: seleziona di nuovo la faccia.')
+          result = await editor.g1CurvedSupportGeometry(req.choice, req.previewRevision)
+          break
         case 'proposeG1PlaneTangency': case 'validateG1PlaneTangency': case 'publishG1PlaneTangency': case 'evaluateG1PlaneTangency': {
           // Never auto-reselect for G1: that would discard preview, anchors
           // and kernel-owned constraint identity instead of rejecting stale work.

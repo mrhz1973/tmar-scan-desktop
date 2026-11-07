@@ -2,7 +2,7 @@
 // Exact polynomial fixture for future variable-normal support work; no GUI.
 import {expect,it,vi} from 'vitest'
 import type {ShapeHandle} from 'occt-wasm'
-import {SurfaceEditorKernel,type FaceInfo,type Preview,type G1CurvedResult,type G1PublishedCurvedResult,type G1CurvedSupportCandidates} from '../editorKernel'
+import {SurfaceEditorKernel,type FaceInfo,type Preview,type G1CurvedResult,type G1PublishedCurvedResult,type G1CurvedSupportCandidates,type G1CurvedSupportGeometry} from '../editorKernel'
 import type {Request} from '../editor.worker'
 import {SurfaceRuntime} from '../surfaceRuntime'
 import {replaceSurface,surfaceTable,boundaryLocked,type Net,type Point} from '../brep'
@@ -68,6 +68,25 @@ it('dispatches curved G1 candidates/proposal/publication/evaluation with exact s
     const witness=await ask({action:'finalFaceWitness',previewRevision:preview.previewRevision!})
     const choices=await ask<G1CurvedSupportCandidates>({action:'g1CurvedSupportCandidates'}),choice=choices.candidates.find(c=>c.supportFaceIndex===support)!
     expect(choice).toBeDefined()
+    const geometryRequest = {action:'g1CurvedSupportGeometry' as const, choice, selection, previewRevision:preview.previewRevision!}
+    const sourceHandle = (editor as unknown as {source:ShapeHandle}).source
+    const beforeGeometry = k.toBREP(sourceHandle)
+    const geometry = await ask<G1CurvedSupportGeometry>(geometryRequest)
+    expect(geometry.choice).toEqual(choice)
+    expect(geometry.previewRevision).toBe(preview.previewRevision)
+    const vertices = geometry.supportMesh.positions
+    const xCoordinates = vertices.filter((_, i) => i % 3 === 0)
+    expect(Math.min(...xCoordinates)).toBeCloseTo(10, 6)
+    expect(Math.max(...xCoordinates)).toBeCloseTo(20, 6)
+    expect(vertices.some((z, i) => i % 3 === 2 && z > .1)).toBe(true)
+    const seam = [...geometry.seam].sort((a,b) => a[1]-b[1])
+    expect(seam).toEqual([[expect.closeTo(10,8),expect.closeTo(0,8),expect.closeTo(0,8)],
+      [expect.closeTo(10,8),expect.closeTo(10,8),expect.closeTo(0,8)]])
+    expect(k.toBREP(sourceHandle)).toBe(beforeGeometry)
+    expect(await ask({action:'finalFaceWitness',previewRevision:preview.previewRevision!})).toEqual(witness)
+    await expect(ask({...geometryRequest,choice:{...choice,supportFaceIndex:face}})).rejects.toThrow(/scaduta o alterata/)
+    await expect(ask({...geometryRequest,selection:{face:support,refinements:[]}})).rejects.toThrow(/scaduta/)
+
     const proposalRequest={action:'proposeG1CurvedTangency' as const,net,choice,selection,exportStep:true}
     const proposal=await ask<G1CurvedResult>(proposalRequest)
     expect(proposal.changedIndices).toEqual([17]);expect(proposal.preview.previewRevision).toBeUndefined()
@@ -85,6 +104,8 @@ it('dispatches curved G1 candidates/proposal/publication/evaluation with exact s
     const published=await ask<G1PublishedCurvedResult>(publication)
     expect(published.constraintKind).toBe('compatible-bspline')
     expect(published.preview.previewRevision).toBe(preview.previewRevision!+1)
+    await expect(ask(geometryRequest)).rejects.toThrow(/Anteprima cambiata/)
+    expect((await ask<G1CurvedSupportGeometry>({...geometryRequest,previewRevision:published.preview.previewRevision})).seam).toEqual(geometry.seam)
     const publishedWitness=await ask({action:'finalFaceWitness',previewRevision:published.preview.previewRevision})
     const moved=structuredClone(published.net);moved.poles[12][2]+=.08
     const evaluation={action:'evaluateG1CurvedTangency' as const,constraintId:published.constraintId,net:moved,selection,exportStep:true}

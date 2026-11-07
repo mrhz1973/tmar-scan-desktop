@@ -24,6 +24,12 @@ import { proposeCompatibleCurvedTangency, validateCompatibleCurvedTangencyResult
 export interface FaceInfo { index: number; kind: string; reason: string | null; converted: boolean; enriched: boolean; openSheet: boolean; freeBoundary: boolean; trimLocks: number[]; hiddenPoles: number[]; experimentalCylinder?: boolean }
 export interface G1SupportCandidates { stamp: G1SourceStamp; candidates: G1SupportCandidate[] }
 export interface G1CurvedSupportCandidates { stamp: G1SourceStamp; candidates: CompatibleCurvedSupportCandidate[] }
+export interface G1CurvedSupportGeometry {
+  choice: CompatibleCurvedSupportCandidate
+  previewRevision: number
+  supportMesh: Mesh
+  seam: [Point, Point]
+}
 export interface G1CurvedProposalRequest {
   net: Net
   choice: CompatibleCurvedSupportCandidate
@@ -588,6 +594,67 @@ export class SurfaceEditorKernel {
       throw new Error('Scelta del supporto curvo G1 scaduta.')
     return result
   }
+  async g1CurvedSupportGeometry(choice: CompatibleCurvedSupportCandidate, previewRevision: number): Promise<G1CurvedSupportGeometry> {
+    const brep = this.brep, source = this.source, validatedFace = this.noteFace(previewRevision)
+    const selection = this.g1SelectionRevision, sourceRevision = this.g1SourceRevision
+    if (this.adaptiveSelection) throw new Error('Preparazione non qualificata per la geometria del supporto G1.')
+    const resolved = await this.resolveG1CurvedSupportCandidate(choice)
+    if (source === null || this.source !== source || this.brep !== brep ||
+        selection !== this.g1SelectionRevision || sourceRevision !== this.g1SourceRevision ||
+        this.noteFace(previewRevision) !== validatedFace)
+      throw new Error('Geometria del supporto curvo G1 scaduta.')
+
+    // Never tessellate the live model for a display-only query. The resolver
+    // certified exact, distinct own-support records in these same BREP bytes.
+    const k = this.kernel, owned: ShapeHandle[] = []
+    const collect = (handles: ShapeHandle[]) => { owned.push(...handles); return handles }
+    const copy = k.fromBREP(brep)
+    owned.push(copy)
+    try {
+      const faces = collect(k.getSubShapes(copy, 'face'))
+      if (!k.isValid(copy) || faces.length !== this.faces.length ||
+          faces.some((face, index) => faces.slice(0,index).some(other => k.isSame(face, other))))
+        throw new Error('Occorrenze G1 non univoche nel BREP sorgente.')
+      const records = faces.map(face => this.ownFaceSupport(face))
+      const signatures = records.map(record => record && signature(record))
+      if (signatures.includes(undefined) || new Set(signatures).size !== faces.length)
+        throw new Error('Supporti G1 propri condivisi o non identificabili.')
+      const bind = (witness: ResolvedCompatibleCurvedSupport['selectedWitness']) => {
+        const index = signatures.indexOf(witness.surfaceSignature), face = faces[index]
+        if (!face || index !== witness.faceIndex || k.shapeOrientation(face) !== witness.orientation)
+          throw new Error('Identità della faccia G1 non univoca nel BREP sorgente.')
+        const { uMin, uMax, vMin, vMax } = k.uvBounds(face)
+        if ([uMin,uMax,vMin,vMax].some((x, i) => !Number.isFinite(x) || Math.abs(x-witness.domain[i]) > witness.parameterBudget) ||
+            collect(k.getSubShapes(face, 'wire')).length !== 1)
+          throw new Error('Dominio naturale della faccia G1 non corrispondente.')
+        return face
+      }
+      const selected = bind(resolved.selectedWitness), support = bind(resolved.supportWitness)
+      const shared = collect(k.sharedEdges(selected, support))
+      const selectedEdges = collect(k.getSubShapes(selected, 'edge')), supportEdges = collect(k.getSubShapes(support, 'edge'))
+      const supportSide = resolved.supportWitness.sides.find(side => side.side === resolved.candidate.supportSide)
+      const selectedEdge = selectedEdges[resolved.candidate.edgeIndex], supportEdge = supportSide && supportEdges[supportSide.edgeIndex]
+      if (shared.length !== 1 || selectedEdges.length !== 4 || supportEdges.length !== 4 ||
+          !selectedEdge || !supportEdge || k.isSame(selected, support) ||
+          !k.isSame(shared[0], selectedEdge) || !k.isSame(shared[0], supportEdge) || k.curveType(shared[0]) !== 'line')
+        throw new Error('Bordo condiviso del supporto curvo G1 non univoco.')
+      const edge = shared[0], { first, last } = k.curveParameters(edge)
+      if (![first, last].every(Number.isFinite) || !(first < last))
+        throw new Error('Intervallo del bordo curvo G1 non rappresentabile.')
+      const seam: [Point, Point] = [tuple(k.curvePointAtParam(edge, first)), tuple(k.curvePointAtParam(edge, last))]
+      if (seam.some(p => !p.every(Number.isFinite)) || Math.abs(dist(...seam) - resolved.candidate.lengthMm) > 1e-8)
+        throw new Error('Bordo condiviso del supporto curvo G1 non rappresentabile.')
+      const supportMesh = k.tessellate(support, { linearDeflection: .08, angularDeflection: .15 })
+      if (supportMesh.vertexCount < 3 || supportMesh.triangleCount < 1 ||
+          supportMesh.positions.length !== 3 * supportMesh.vertexCount || supportMesh.normals.length !== supportMesh.positions.length ||
+          supportMesh.indices.length !== 3 * supportMesh.triangleCount ||
+          !supportMesh.positions.every(Number.isFinite) || !supportMesh.normals.every(Number.isFinite) ||
+          supportMesh.indices.some(index => index >= supportMesh.vertexCount))
+        throw new Error('Triangolazione del supporto curvo G1 non disponibile.')
+      return { choice:resolved.candidate, previewRevision, supportMesh, seam }
+    } finally { owned.reverse().forEach(shape => k.release(shape)) }
+  }
+
   async proposeG1CurvedTangency(request: G1CurvedProposalRequest): Promise<G1CurvedResult> {
     return this.curvedTangency(request, true)
   }
@@ -882,18 +949,20 @@ export class SurfaceEditorKernel {
       return published
     } finally {isolated.clear()}
   }
+  private ownFaceSupport(face: ShapeHandle): RecordSpan | undefined {
+    const text = this.kernel.toBREP(face)
+    const headers = [...text.matchAll(/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/gm)]
+    return headers.length === 1 ? surfaceTable(text)[Number(headers[0][1])-1] : undefined
+  }
+
   private checkUnselectedTangencyFaces(shape: ShapeHandle) {
     const k=this.kernel, fs=k.getSubShapes(shape,'face')
     const close=(a:number,b:number)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=1e-12*Math.max(1,Math.abs(a),Math.abs(b))
-    const ownSupport=(face:ShapeHandle)=>{
-      const text=k.toBREP(face),header=/^Fa\s*\n\s*[01]\s+[\deE+.-]+\s+(\d+)\s+0\s*$/m.exec(text)
-      return header?surfaceTable(text)[Number(header[1])-1]:undefined
-    }
     try {
       if (fs.length!==this.faces.length || this.count(shape,'solid')!==this.solids || !k.isValid(shape))
         throw new Error('Topologia della tangenza alterata.')
       for(let i=0;i<fs.length;i++) if(i!==this.chosen) {
-        const before=ownSupport(this.faces[i]),after=ownSupport(fs[i])
+        const before=this.ownFaceSupport(this.faces[i]),after=this.ownFaceSupport(fs[i])
         if(!before || !after || before.kind!==after.kind || before.values.length!==after.values.length ||
             before.values.some((x,d)=>!close(x,after.values[d])) ||
             k.shapeOrientation(this.faces[i])!==k.shapeOrientation(fs[i]))
