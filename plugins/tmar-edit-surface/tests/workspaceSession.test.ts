@@ -121,6 +121,83 @@ describe('whole natural boundary movement',()=>{
   }
   const nativeReply=()=>({face:0,previewRevision:2,results:[{side:'U1',visible:true,point:[4,2,0],pickerSegment:31,
     reason:'native-section-and-clear-front',frontDistanceMm:1e-5,intersectionCount:1}]})
+  it('locks a full natural side and its shared corners without changing the opposite side or prior locks', async()=>{
+    const t=await setup({sheet:true})
+    await selectFace(t)
+    const s=t.session
+    expect(()=>s.lockWholeBoundary('U0')).toThrow(/bordi liberi/)
+    s.setFreeBoundary(true)
+    await ready(t,2)
+    s.selectPoints([0,12],false)
+    s.lockSelected(true)
+    const before=s.getPanelState().net!, history=s.getSnapshot().historyRevision
+    const selection=s.getPanelState().selected, requests=t.worker.sent.length
+    s.lockWholeBoundary('U0')
+    expect(s.getPanelState().manualLocks).toEqual([0,1,2,3,4,12])
+    expect(s.getPanelState().selected).toEqual(selection)
+    expect(s.getPanelState().net).toEqual(before)
+    expect(s.getSnapshot().historyRevision).toBe(history+1)
+    expect(s.getSnapshot().validation.kind).toBe('valid')
+    expect(t.worker.sent).toHaveLength(requests)
+    s.lockWholeBoundary('U0')
+    expect(s.getSnapshot().historyRevision).toBe(history+1)
+    for (const side of ['U0','V0','V1'] as const)
+      expect(()=>s.moveWholeBoundary(side,[0,0,.1])).toThrow(/polo bloccato/)
+    s.moveWholeBoundary('U1',[0,0,.1])
+    await ready(t,3)
+    expect(s.getSnapshot().validation.kind).toBe('valid')
+    expect(s.getPanelState().net!.poles).toEqual(before.poles.map(([x,y,z],i)=>[x,y,z+(i>=20?.1:0)]))
+    s.undo()
+    await ready(t,4)
+    expect(s.getPanelState().manualLocks).toEqual([0,1,2,3,4,12])
+    s.undo()
+    expect(s.getPanelState().manualLocks).toEqual([0,12])
+    expect(s.getPanelState().net).toEqual(before)
+    expect(s.getSnapshot().validation.kind).toBe('valid')
+    await s.dispose('cancelled')
+  })
+
+  it('refuses a natural-side lock on a solid even with a valid CAD preview',async()=>{
+    const t=await setup()
+    await selectFace(t)
+    const history=t.session.getSnapshot().historyRevision
+    expect(()=>t.session.lockWholeBoundary('U0')).toThrow(/faccia naturale/)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getPanelState().manualLocks).toEqual([])
+    await t.session.dispose('cancelled')
+  })
+
+  it('disarms an affected boundary and releases only the drag-owned selection after locking', async()=>{
+    const t=await setup({sheet:true})
+    await selectFace(t)
+    const s=t.session
+    s.setFreeBoundary(true)
+    await ready(t,2)
+    s.setWholeBoundaryDrag('U0')
+    expect(s.getPanelState().selected).toEqual([0,1,2,3,4])
+    expect(s.beginWholeBoundaryGesture('U0')).toBe(true)
+    const history=s.getSnapshot().historyRevision
+    expect(()=>s.lockWholeBoundary('U0')).toThrow(/trascinamento/)
+    expect(s.getSnapshot().gesture).toBe('pole')
+    expect(s.getSnapshot().historyRevision).toBe(history)
+    expect(s.getPanelState().manualLocks).toEqual([])
+    s.finishPoleGesture(null)
+    s.lockWholeBoundary('U0')
+    expect(s.getPanelState().wholeBoundaryDrag).toBeNull()
+    expect(s.getPanelState().selected).toEqual([])
+    expect(s.beginWholeBoundaryGesture('U0')).toBe(false)
+    s.undo()
+
+    s.setWholeBoundaryDrag('V0')
+    s.selectPoints([12],false)
+    s.lockWholeBoundary('U0')
+    expect(s.getPanelState().wholeBoundaryDrag).toBeNull()
+    expect(s.getPanelState().selected).toEqual([12])
+    s.setWholeBoundaryDrag('U1')
+    expect(s.getPanelState().wholeBoundaryDrag).toBe('U1')
+    await s.dispose('cancelled')
+  })
+
   it('selects the whole open face, refuses partial movement and makes one Undo entry', async () => {
     const t = await setup({sheet:true})
     await selectFace(t)

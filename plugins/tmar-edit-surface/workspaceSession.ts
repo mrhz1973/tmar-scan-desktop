@@ -203,7 +203,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private cylinderValidated: {net:Net;session:number;historyRevision:number;selectionEpoch:number;requestId:number;previewRevision:number;step:string}|null = null
   private gesture: 'idle' | 'pole' | 'strip' = 'idle'
   private gestureNet: Net | null = null
-  private wholeBoundaryDrag: {side:WholeBoundarySide;face:number} | null = null
+  private wholeBoundaryDrag: {side:WholeBoundarySide;face:number;ownedSelection:readonly number[]|null} | null = null
   private wholeFaceDrag = false
   private wholeFaceSelection: readonly number[] | null = null
   private wholeFacePickSerial = 0
@@ -500,8 +500,15 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const ids=wholeBoundaryIndices(this.requireNet(),side),d=this.draft.getSnapshot()
       if(ids.some(i=>d.locks.includes(i)||d.trimLocks.includes(i)||d.hiddenPoles.includes(i)))throw Error('Il bordo contiene un polo bloccato.')
       this.disarmWholeFaceDrag()
-      this.draft.setSelection(ids);this.wholeBoundaryDrag={side,face:this.face}
+      this.armWholeBoundary(side,ids)
     })
+  }
+  private armWholeBoundary(side: WholeBoundarySide, ids: readonly number[]): void {
+    const previous = this.draft.getSnapshot().selected
+    this.draft.setSelection(ids)
+    const selected = this.draft.getSnapshot().selected
+    this.wholeBoundaryDrag = { side, face:this.face,
+      ownedSelection:selected === previous ? this.wholeBoundaryDrag?.ownedSelection ?? null : selected }
   }
   setWholeFaceDrag(active: boolean): void {
     this.change(() => {
@@ -593,7 +600,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     const d=this.draft.getSnapshot(),ids=wholeBoundaryIndices(this.requireNet(),side)
     if(ids.some(i=>d.locks.includes(i)||d.trimLocks.includes(i)||d.hiddenPoles.includes(i)))throw Error('Il bordo contiene un polo bloccato.')
     this.change(()=>{
-      this.draft.setSelection(ids);this.wholeBoundaryDrag={side,face:this.face}
+      this.armWholeBoundary(side,ids)
       this.gesture='pole';this.gestureNet=d.committedNet;this.uniformGesture={ids,scope:'bordo'}
     })
     return true
@@ -1018,6 +1025,18 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.change(() => {
       const state = this.draft.getSnapshot()
       this.draft.setLocks(locked ? [...state.locks, ...state.selected] : state.locks.filter(i => !state.selected.includes(i)))
+    })
+  }
+  /** Add the complete rim to the existing manual pole locks in one Undo step. */
+  lockWholeBoundary(side: WholeBoundarySide): void {
+    this.change(() => {
+      if (!this.panel.canMoveWholeBoundary)
+        throw new Error('Attiva i bordi liberi su una singola faccia naturale CAD valida.')
+      const state = this.draft.getSnapshot()
+      const ids = wholeBoundaryIndices(this.requireNet(),side)
+      if (ids.every(id => state.locks.includes(id))) return
+      this.draft.setLocks([...state.locks, ...ids])
+      this.message = 'Poli del bordo bloccati, compresi gli angoli condivisi con i bordi adiacenti.'
     })
   }
   restoreOriginal(): void { this.change(() => this.draft.restoreOriginal()) }
@@ -2106,8 +2125,18 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
 
   private refresh(): void {
     let d: SurfaceDraftSnapshot = this.draft.getSnapshot()
-    if(this.wholeBoundaryDrag && (this.wholeBoundaryDrag.face!==this.face || !d.freeBoundary || this.symmetry || this.notes.length || this.placingNote || this.surfaceTarget ||
-      d.planeTangency || d.curvedTangency || d.cylinderSession!==null || this.strip))this.wholeBoundaryDrag=null
+    const armedBoundary = this.wholeBoundaryDrag
+    if (armedBoundary && (armedBoundary.face!==this.face || !d.freeBoundary || this.symmetry || this.notes.length || this.placingNote || this.surfaceTarget ||
+      d.planeTangency || d.curvedTangency || d.cylinderSession!==null || this.strip)) this.wholeBoundaryDrag=null
+    else if (armedBoundary && d.net && wholeBoundaryIndices(d.net,armedBoundary.side)
+      .some(id => d.locks.includes(id) || d.trimLocks.includes(id) || d.hiddenPoles.includes(id))) {
+      this.wholeBoundaryDrag = null
+      this.cancelPreparedWholeBoundaryPicks()
+      if (armedBoundary.ownedSelection === d.selected) {
+        this.draft.setSelection([])
+        d = this.draft.getSnapshot()
+      }
+    }
     if (this.wholeFaceDrag && (!d.freeBoundary || this.symmetry || this.notes.length || this.placingNote ||
         this.surfaceTarget || d.planeTangency || d.curvedTangency || d.cylinderSession !== null || this.strip ||
         d.locks.length || d.trimLocks.length || d.hiddenPoles.length)) {

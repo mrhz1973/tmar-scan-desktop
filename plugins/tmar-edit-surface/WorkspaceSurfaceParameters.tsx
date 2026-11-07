@@ -5,6 +5,7 @@ import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
 import { hasSurfaceZebra } from './SurfaceViewport'
 import { formatTangentSpanDisplacement } from './tangentSpan'
+import { wholeBoundaryIndices } from './wholeBoundary'
 import './workspaceSurface.css'
 
 /** The host owns Apply and Cancel; this panel edits only the session draft. */
@@ -46,6 +47,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const editable = state.selected.filter(i => !state.locked.includes(i))
   const hiddenPoles = controller.getViewState().hiddenPoles
   const activeWholeBoundary=state.wholeBoundaryDrag ?? wholeBoundary
+  const boundaryPoles = state.canFreeBoundary && state.net ? wholeBoundaryIndices(state.net,activeWholeBoundary) : []
+  const boundaryManuallyLocked = boundaryPoles.length > 0 && boundaryPoles.every(id => state.manualLocks.includes(id))
   const hasFreeVisiblePoint = !!state.net?.poles.some((_, index) => !state.locked.includes(index) && !hiddenPoles.includes(index))
   const axisNames = state.dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']
   const strip = state.strip
@@ -248,12 +251,21 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       {state.canFreeBoundary && <label className="inline"><input data-test="surface-free-boundary" type="checkbox"
         checked={state.freeBoundary} disabled={disabled} onChange={e => attempt(() => controller.setFreeBoundary(e.target.checked))} />
         Consenti movimento dei bordi liberi</label>}
-      {state.canFreeBoundary && <fieldset data-test="surface-whole-boundary"><legend>Sposta intero bordo senza duplicarlo</legend>
+      {state.canFreeBoundary && <fieldset data-test="surface-whole-boundary"><legend>Sposta o blocca un bordo naturale</legend>
         <p>Disponibile su una sola faccia aperta con quattro bordi naturali. Attiva prima il movimento dei bordi liberi. Il comando muove l’intero bordo; i suoi estremi modificano anche i bordi adiacenti.</p>
         <label>Bordo naturale<select data-test="surface-whole-boundary-side" value={activeWholeBoundary} disabled={disabled}
           onChange={e=>{const side=e.target.value as WholeBoundarySide;setWholeBoundary(side);if(state.wholeBoundaryDrag)attempt(()=>controller.setWholeBoundaryDrag(side))}}>
           <option value="U0">U iniziale</option><option value="U1">U finale</option><option value="V0">V iniziale</option><option value="V1">V finale</option>
         </select></label>
+        <button type="button" data-test="surface-whole-boundary-lock"
+          disabled={disabled || !state.canMoveWholeBoundary || boundaryManuallyLocked}
+          onClick={() => attempt(() => {
+            controller.lockWholeBoundary(activeWholeBoundary)
+            setWholeBoundary(activeWholeBoundary)
+          })}>
+          {boundaryManuallyLocked ? 'Poli del bordo bloccati' : 'Blocca i poli del bordo'}
+        </button>
+        <p>Il blocco include gli angoli condivisi. Puoi annullarlo con Undo o gestire i singoli poli con i comandi di blocco.</p>
         <label>Direzione XYZ del corpo<select data-test="surface-whole-boundary-axis" value={boundaryAxis} disabled={disabled}
           onChange={e=>setBoundaryAxis(Number(e.target.value) as 0|1|2)}>
           <option value={0}>X</option><option value={1}>Y</option><option value={2}>Z</option>
@@ -261,6 +273,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <label>Spostamento · mm<input data-test="surface-whole-boundary-distance" type="number" step="any" value={Number.isFinite(boundaryDistance)?boundaryDistance:''}
           disabled={disabled} onChange={e=>setBoundaryDistance(e.target.valueAsNumber)} /></label>
         <button type="button" data-test="surface-whole-boundary-move" disabled={disabled || !state.canMoveWholeBoundary ||
+          boundaryPoles.some(id => state.locked.includes(id) || hiddenPoles.includes(id)) ||
           !Number.isFinite(boundaryDistance) || Math.abs(boundaryDistance)<=1e-7 || Math.abs(boundaryDistance)>1000}
           onClick={()=>attempt(()=>{const delta:[number,number,number]=[0,0,0];delta[boundaryAxis]=boundaryDistance;controller.moveWholeBoundary(activeWholeBoundary,delta)})}>Sposta intero bordo</button>
         <label className="inline"><input data-test="surface-whole-boundary-drag" type="checkbox" checked={!!state.wholeBoundaryDrag}
