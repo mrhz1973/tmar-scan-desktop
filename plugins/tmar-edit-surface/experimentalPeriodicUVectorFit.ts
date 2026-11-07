@@ -18,10 +18,35 @@ const fail = (reason: string): never => { throw new Error(`Fit vettoriale period
 export function fitExperimentalPeriodicUVectorSamples(
   degree: number, knots: readonly number[], multiplicities: readonly number[], samples: readonly VectorSample[],
 ) {
+  return fitPeriodicUVectorSamples(degree, knots, multiplicities, samples)
+}
+
+/**
+ * Constrained fit with coefficient U0 fixed. Remove its column and
+ * subtract its contribution from each right-hand side before the QR.
+ * Rank and pivot ratio describe only the free columns. Residuals use
+ * the reconstructed full coefficients and the original training data.
+ * The subtraction, solve and sampled residuals use binary64 arithmetic.
+ * Rounding during elimination can obscure a small exact difference.
+ */
+export function fitExperimentalPeriodicUVectorSamplesWithFixedFirst(
+  degree: number, knots: readonly number[], multiplicities: readonly number[], samples: readonly VectorSample[],
+  fixedFirst: readonly [number, number, number],
+) {
+  if (!Array.isArray(fixedFirst) || fixedFirst.length !== 3 || !Array.from(fixedFirst).every(Number.isFinite))
+    fail('coefficiente U0 fissato non valido')
+  return { ...fitPeriodicUVectorSamples(degree, knots, multiplicities, samples, fixedFirst), fixedCoefficientIndex: 0 as const }
+}
+
+function fitPeriodicUVectorSamples(
+  degree: number, knots: readonly number[], multiplicities: readonly number[], samples: readonly VectorSample[],
+  fixedFirst?: readonly [number, number, number],
+) {
   if (!Array.isArray(knots) || !Array.isArray(multiplicities) || !Array.isArray(samples))
     fail('nodi, molteplicità e campioni devono essere array')
   const basis = prepareExperimentalPeriodicUBasis(degree, knots, multiplicities)
-  const columns = basis.poleCount, rows = samples.length, width = columns + 3
+  const firstFree = fixedFirst === undefined ? 0 : 1
+  const columns = basis.poleCount - firstFree, rows = samples.length, width = columns + 3
   if (rows < columns) fail('campioni insufficienti per il rango pieno')
   if (rows > 4096 || rows * columns ** 2 > 125_000_000) fail('dimensione del fit oltre il limite sperimentale')
 
@@ -30,15 +55,26 @@ export function fitExperimentalPeriodicUVectorSamples(
     if (!sample || !Number.isFinite(sample.parameter) || !Array.isArray(sample.value) ||
         sample.value.length !== 3 || !Array.from(sample.value).every(Number.isFinite))
       fail('campione non finito o incompleto')
-    for (let axis = 0; axis < 3; axis++) scales[axis] = Math.max(scales[axis], Math.abs(sample.value[axis]))
-    return basis.evaluate(sample.parameter)
+    const local = basis.evaluate(sample.parameter)
+    const fixedWeight = fixedFirst === undefined ? 0 : local.values[local.indices.indexOf(0)] ?? 0
+    const rightHandSide = fixedFirst === undefined ? sample.value : sample.value.map((value, axis) => {
+      const contribution = fixedWeight * fixedFirst[axis]
+      const reduced = value - contribution
+      if (!Number.isFinite(reduced) || (fixedWeight !== 0 && fixedFirst[axis] !== 0 && contribution === 0))
+        fail('sottrazione del coefficiente U0 fissato non rappresentabile')
+      return reduced
+    })
+    for (let axis = 0; axis < 3; axis++) scales[axis] = Math.max(scales[axis], Math.abs(rightHandSide[axis]))
+    return { ...local, rightHandSide }
   })
 
   const matrix = new Float64Array(rows * width)
-  for (const [row, { indices, values }] of active.entries()) {
-    for (const [j, index] of indices.entries()) matrix[row * width + index] = values[j]
+  for (const [row, { indices, values, rightHandSide }] of active.entries()) {
+    for (const [j, index] of indices.entries()) {
+      if (index >= firstFree) matrix[row * width + index - firstFree] = values[j]
+    }
     for (let axis = 0; axis < 3; axis++) {
-      const value = samples[row].value[axis]
+      const value = rightHandSide[axis]
       if (value === 0) continue
       const scaled = value / scales[axis]
       if (scaled === 0) fail('scala dei campioni non rappresentabile')
@@ -102,7 +138,8 @@ export function fitExperimentalPeriodicUVectorSamples(
     }
   }
 
-  const coefficients = Array<Point>(columns)
+  const coefficients = Array<Point>(basis.poleCount)
+  if (fixedFirst !== undefined) coefficients[0] = [...fixedFirst]
   for (let step = columns - 1; step >= 0; step--) {
     const offset = step * width
     const coefficient = Array.from({ length: 3 }, (_, axis) => {
@@ -115,7 +152,7 @@ export function fitExperimentalPeriodicUVectorSamples(
       return scales[axis] === 0 ? 0 : scaled * scales[axis]
     }) as Point
     if (!coefficient.every(Number.isFinite)) fail('coefficiente non rappresentabile')
-    coefficients[permutation[step]] = coefficient
+    coefficients[permutation[step] + firstFree] = coefficient
   }
 
   const residuals = active.map(({ indices, values }, row) => {

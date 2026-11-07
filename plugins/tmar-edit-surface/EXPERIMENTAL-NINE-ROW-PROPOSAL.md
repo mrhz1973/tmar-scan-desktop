@@ -123,6 +123,13 @@ fit residuals are low. This demonstrates a narrow representable case; general
 targets require fitting with the seam coefficient constrained during the solve.
 The sampled joint normals are not a continuous interior regularity proof.
 
+A separate experimental U-vector fit fixes coefficient zero during QR by
+eliminating it from the unknowns. It reports reduced rank, pivot ratio and
+training residuals; callers must independently apply their own pivot and
+residual gates, and check separate holdout samples and the stored seam bound.
+Fixing the derivative coefficient does not itself lock the surface seam.
+No production or real-part qualification follows from this solver.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
