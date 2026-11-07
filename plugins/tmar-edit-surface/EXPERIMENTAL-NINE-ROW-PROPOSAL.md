@@ -100,6 +100,15 @@ and protected-row changes have synthetic coverage. This is not connected to
 the diagnostic gate and has not been evaluated on the rejected Tube proposal.
 It does not establish thickness, continuity or solid validity.
 
+An independent quintic-side prototype explores distributing an inward
+derivative change over the first two interior V rows while keeping both
+boundary rows and the opposite first interior row fixed. It checks the selected
+edge's second-derivative change and coefficient displacement with outward
+bounds. It requires a structurally C1 periodic U basis and therefore refuses
+the Tube supports with a structurally C0 seam. The target correspondence,
+continuous regularity, wall thickness and CAD validity remain unproved.
+The helper has only synthetic coverage and is not connected to the app.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
