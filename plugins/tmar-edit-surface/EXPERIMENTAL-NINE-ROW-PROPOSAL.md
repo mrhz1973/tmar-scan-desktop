@@ -78,6 +78,12 @@ prove only parametric C1 at that seam in the coefficient model; zero fields,
 geometric G1, orientation, regularity and CAD topology remain separate. The
 existing C1-only evaluator and all operational guards are unchanged.
 
+A separate seam diagnostic gives an absolute upper bound on the difference
+of the two U derivative fields across the entire V domain. It uses exact
+binary64 coefficient arithmetic before rounding its L1 hull bound upward.
+Exceeding a caller-specified tolerance is inconclusive, not proof of a crease;
+the bound does not imply G1, regularity, OCCT precision or solid validity.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
