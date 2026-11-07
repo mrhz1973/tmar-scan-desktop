@@ -31,14 +31,14 @@ An additional read-only topology experiment identifies a shared curved edge
 on a synthetic two-face STEP after export and reimport. It checks actual shared
 edge identity, face incidence and natural pcurves, then requires the 3D curve
 coefficients to match both surface sides exactly. It deliberately does not
-claim G1 or expose an editable candidate: a stamped resolver and reverse-direction
-coverage remain necessary. Only nonperiodic polynomial curves with complete
-natural sides and matching increasing parameterizations are supported. It
+claim G1 or expose an editable candidate. Only nonperiodic polynomial curves with complete
+natural sides and exactly compatible parameterizations are supported. It
 does not qualify a closed solid or the periodic, differently parameterized tube.
 
 The experimental edge selection now includes a source-stamped identity and a
 resolver that reimports and rechecks the complete evidence. A separate natural
 side matcher supports exact reversed coefficients and knot reflection, rejecting
-reflections not representable in binary64. The topology recognizer still refuses
-reversed pcurves until they have been qualified on an OCCT/STEP fixture; the
-matcher alone is not evidence of topological orientation or G1 continuity.
+reflections not representable in binary64. A synthetic OCCT/STEP roundtrip now
+demonstrates a shared edge with opposite parameter directions on the two faces.
+That fixture covers nonrational single-span clamped surfaces; the matcher alone
+is not evidence of topological orientation or G1 continuity.

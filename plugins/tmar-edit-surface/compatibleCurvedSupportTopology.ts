@@ -349,8 +349,6 @@ function exactSharedBSplineDegree(edgeBrep: string, selectedNet: Net, supportNet
   try {
     const { curve, pcurveCount } = associateSerializedEdgeCurve(edgeBrep)
     if (pcurveCount !== 2 || curve.rational || !hasNoncollinearPoles(curve.poles)) return null
-    // Reversed pcurves need an OCCT/STEP topology fixture before recognition.
-    if (selectedSide.direction !== 1 || supportSide.direction !== 1) return null
     const a = matchNaturalSideCurve(selectedNet, selectedSide.side, curve, selectedSide.direction)
     const b = matchNaturalSideCurve(supportNet, supportSide.side, curve, supportSide.direction)
     return a.comparison.exact && b.comparison.exact ? curve.degree : null
