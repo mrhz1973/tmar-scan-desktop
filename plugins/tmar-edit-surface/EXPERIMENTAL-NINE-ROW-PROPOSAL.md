@@ -138,6 +138,13 @@ support is identified separately from a bounded structural C0 seam. The
 diagnostic does not establish interior regularity, G1, trims or solid validity
 and has not been applied to a real part.
 
+An experimental pair coordinator evaluates two distinct quintic sides against
+one unchanged center, with separate budgets and no candidate on a failed side.
+A synthetic counterexample also demonstrates an interior normal inversion
+despite accepted sampled joint normals and a coarse interior grid. Therefore
+pair diagnostic success cannot qualify a side, authorize a real-part run, or
+replace a continuous interior regularity and orientation check.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
