@@ -245,3 +245,7 @@ roundtrip, volume and the existing host release gate remain separate.
 ### Pointwise geometric joint diagnostic
 
 `experimentalPeriodicGeometricJoint.ts` examines corresponding samples with oriented tangents and inward derivatives. It separates tangent-plane agreement from equal derivative magnitudes, reports floating-point scale and tangential components, and refuses degenerate or numerically unresolved cases. Synthetic tests and independent review cover scaling, orientation and near-parallel inputs. This is a pointwise diagnostic, not an edit, a continuous G1 certificate, a solid-validity check, or a result on the Tube STEP. Existing CAD guards and integration HOLD remain in force.
+
+### Sampled geometric side targets
+
+The separate experimental side-target generator projects sampled inward derivatives onto a support tangent plane with a positive, variable transverse scale and free tangential component. A fixed U0 seam incompatible at either one-sided limit refuses the proposal; this is a restriction of this experiment, not a requirement that a real periodic seam remain fixed. A synthetic quintic fit with independent holdout reduces its sampled out-of-plane residual below 1e-10 and passes its separate full-domain source-to-candidate orientation check. Target residuals and scale-floor comparisons are floating-point sample diagnostics: they do not establish continuous cross-face G1, pcurve coherence, solid validity or suitability for the real Tube. No real STEP was used. Existing production guards and integration HOLD remain unchanged.

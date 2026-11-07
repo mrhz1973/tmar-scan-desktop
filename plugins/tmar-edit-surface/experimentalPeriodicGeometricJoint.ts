@@ -84,6 +84,11 @@ const dotEnclosure = (a: V, b: V) =>
  * orientation and chord of the supplied derivatives at the sample.
  */
 export function diagnoseExperimentalPeriodicGeometricJoint(request: ExperimentalPeriodicGeometricJointRequest) {
+  const result = analyzeGeometricJoint(request)
+  return result.status === 'sample-diagnostic' ? result.receipt : result
+}
+
+function analyzeGeometricJoint(request: ExperimentalPeriodicGeometricJointRequest) {
   const evidenceScope = 'pointwise-floating-geometric-joint-diagnostic' as const
   const stop = (reason: 'invalid-input' | 'degenerate-tangent' | 'incompatible-tangents' |
     'degenerate-transverse' | 'unrepresentable-diagnostic') => ({ status: 'inconclusive' as const, reason, evidenceScope })
@@ -157,6 +162,38 @@ export function diagnoseExperimentalPeriodicGeometricJoint(request: Experimental
       }
     }
   } catch { return stop('unrepresentable-diagnostic') }
-  return { status: 'sample-diagnostic' as const, classification, tangentChord, normalChord, normalDot, normalAngleRadians,
+  const receipt = { status: 'sample-diagnostic' as const, classification, tangentChord, normalChord, normalDot, normalAngleRadians,
     lambda, mu, signedNormalResidual, derivativeEqualityDistance, minimumDerivativeChange, evidenceScope }
+  return { status: 'sample-diagnostic' as const, receipt, planeNormal, q, lateralPerpendicular, floor,
+    lateralNormalEnclosure: lateralNormal.enclosure }
+}
+
+/** Form a pointwise target in the reference plane and recheck the stored vector. */
+export function projectExperimentalPeriodicGeometricJoint(request: ExperimentalPeriodicGeometricJointRequest, fixed: boolean) {
+  const stop = (reason: 'invalid-lock-mode' | 'source-diagnostic-inconclusive' | 'source-orientation-mismatch' |
+    'fixed-derivative-incompatible' | 'projected-target-unverified') => ({ status: 'inconclusive' as const, reason })
+  if (typeof fixed !== 'boolean') return stop('invalid-lock-mode')
+  const source = analyzeGeometricJoint(request)
+  if (source.status !== 'sample-diagnostic') return { ...stop('source-diagnostic-inconclusive'), source }
+  const before = source.receipt
+  if (fixed) {
+    if (before.classification !== 'within-sampled-normal-budget' || !(before.lambda >= request.minimumPositiveScale))
+      return { ...stop('fixed-derivative-incompatible'), before }
+    return { status: 'target' as const, value: [...request.lateralInward] as Point, before, after: before }
+  }
+  if (before.classification === 'orientation-mismatch') return { ...stop('source-orientation-mismatch'), before }
+  const { planeNormal, q, lateralPerpendicular, floor } = source
+  const transverseAdjustment = Math.max(0, floor - lateralPerpendicular)
+  const value = request.lateralInward.map((component, axis) => {
+    const adjustment = -before.signedNormalResidual * planeNormal[axis] + transverseAdjustment * q[axis]
+    return adjustment === 0 ? component : component + adjustment
+  }) as Point
+  const projected = analyzeGeometricJoint({ ...request, lateralInward: value })
+  if (projected.status !== 'sample-diagnostic' || projected.receipt.classification !== 'within-sampled-normal-budget' ||
+      !(projected.receipt.lambda >= request.minimumPositiveScale)) return { ...stop('projected-target-unverified'), before }
+  try {
+    if (!(dotEnclosure(source.lateralNormalEnclosure, projected.lateralNormalEnclosure)[0] > 0))
+      return { ...stop('projected-target-unverified'), before }
+  } catch { return { ...stop('projected-target-unverified'), before } }
+  return { status: 'target' as const, value, before, after: projected.receipt }
 }
