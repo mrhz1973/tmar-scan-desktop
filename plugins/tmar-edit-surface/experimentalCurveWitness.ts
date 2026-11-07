@@ -29,9 +29,9 @@ function validateRecord(r: Curve3dRecord): void {
   if (r.periodic) fail('curve periodiche non supportate')
   const p = r.poles.length, k = r.knots.length
   if (p < r.degree + 1 || p > 25000 || k < 2 || k > 25000 || r.weights.length !== p || r.multiplicities.length !== k) fail('lunghezze curva incoerenti')
-  if (r.poles.some(v => !Array.isArray(v) || v.length !== 3 || v.some(x => !Number.isFinite(x))) ||
-      r.weights.some(w => !Number.isFinite(w) || w <= 0) || r.knots.some(x => !Number.isFinite(x)) ||
-      r.multiplicities.some(m => !Number.isSafeInteger(m) || m < 1 || m > r.degree + 1)) fail('coefficienti curva non finiti o fuori limite')
+  if (Array.from(r.poles).some(v => !Array.isArray(v) || v.length !== 3 || Array.from(v).some(x => !Number.isFinite(x))) ||
+      Array.from(r.weights).some(w => !Number.isFinite(w) || w <= 0) || Array.from(r.knots).some(x => !Number.isFinite(x)) ||
+      Array.from(r.multiplicities).some(m => !Number.isSafeInteger(m) || m < 1 || m > r.degree + 1)) fail('coefficienti curva non finiti o fuori limite')
   if (!r.rational && r.weights.some(w => w !== 1)) fail('curva non razionale con pesi non unitari')
   if (r.knots.some((x, i) => i > 0 && x <= r.knots[i - 1])) fail('nodi non strettamente crescenti')
   if (!r.periodic) {
