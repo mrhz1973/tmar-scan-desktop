@@ -26,3 +26,12 @@ Periodic seams, general rational surfaces, trimmed edges and STEP solids are
 not qualified by this experiment. A real tube case remains blocked by a volume
 guard and must not be inferred from the synthetic fixture. The next step is a
 separate CAD topology and shared-edge identity proof before integration.
+
+An additional read-only topology experiment identifies a shared curved edge
+on a synthetic two-face STEP after export and reimport. It checks actual shared
+edge identity, face incidence and natural pcurves, then requires the 3D curve
+coefficients to match both surface sides exactly. It deliberately does not
+claim G1 or expose an editable candidate: a stamped resolver and reverse-direction
+coverage remain necessary. Only nonperiodic polynomial curves with complete
+natural sides and matching increasing parameterizations are supported. It
+does not qualify a closed solid or the periodic, differently parameterized tube.

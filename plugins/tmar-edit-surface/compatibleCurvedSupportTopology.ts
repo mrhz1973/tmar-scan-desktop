@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { OcctKernel, ShapeHandle } from 'occt-wasm'
 import { signature, surfaceTable, type Net, type Point } from './brep'
+import { associateSerializedEdgeCurve } from './experimentalEdgeCurveAssociation'
+import { matchNaturalSideCurve } from './experimentalNaturalSideCurveMatch'
 import type { G1SourceStamp, NaturalSide } from './g1SupportTopology'
 import { refineClampedNet } from './refineClampedNet'
 import { sha256 } from './recipe'
@@ -32,6 +34,16 @@ export interface ResolvedCompatibleCurvedSupport {
   candidate: CompatibleCurvedSupportCandidate
   selectedNet: Net
   supportNet: Net
+  selectedWitness: NaturalPcurveWitness
+  supportWitness: NaturalPcurveWitness
+}
+export interface ExperimentalSharedBSplineEdge {
+  kind: 'experimental-shared-bspline-edge'
+  stamp: G1SourceStamp
+  edgeIndex: number
+  supportEdgeIndex: number
+  lengthMm: number
+  degree: number
   selectedWitness: NaturalPcurveWitness
   supportWitness: NaturalPcurveWitness
 }
@@ -316,7 +328,34 @@ function straightSeam(k: OcctKernel, edge: ShapeHandle, points: Point[]): boolea
     (agrees(points[0], endpoints[1]) && agrees(points.at(-1)!, endpoints[0]))
 }
 
-async function identify(k: OcctKernel, sourceBrep: string, inputStamp: G1SourceStamp): Promise<ResolvedCompatibleCurvedSupport[]> {
+/** A clamped polynomial curve is straight only if its control points lie on
+ * a line. Use outward-rounded intervals so near-collinear data fail closed. */
+function hasNoncollinearPoles(points: Point[]): boolean {
+  const offset = (p: Point) => p.map((x, i) => sub(scalar(x), scalar(points[0][i]))) as V
+  const end = offset(points.at(-1)!)
+  return points.slice(1, -1).some(point => {
+    const delta = offset(point)
+    return [[0, 1], [0, 2], [1, 2]].some(([i, j]) => {
+      const component = sub(mul(end[i], delta[j]), mul(end[j], delta[i]))
+      return component[0] > 0 || component[1] < 0
+    })
+  })
+}
+
+function exactSharedBSplineDegree(edgeBrep: string, selectedNet: Net, supportNet: Net,
+  selectedSide: NaturalPcurveWitness['sides'][number], supportSide: NaturalPcurveWitness['sides'][number]): number | null {
+  try {
+    const { curve, pcurveCount } = associateSerializedEdgeCurve(edgeBrep)
+    if (pcurveCount !== 2 || curve.rational || !hasNoncollinearPoles(curve.poles)) return null
+    const a = matchNaturalSideCurve(selectedNet, selectedSide.side, curve, selectedSide.direction)
+    const b = matchNaturalSideCurve(supportNet, supportSide.side, curve, supportSide.direction)
+    return a.comparison.exact && b.comparison.exact ? curve.degree : null
+  } catch {
+    return null // Unsupported curve representation or parameter direction.
+  }
+}
+
+async function identify(k: OcctKernel, sourceBrep: string, inputStamp: G1SourceStamp, curveKind: 'line' | 'bspline') {
   const stamp = structuredClone(inputStamp)
   if (typeof sourceBrep !== 'string' || !sourceBrep || sourceBrep.length > 128_000_000 || !stamp ||
       ![stamp.sourceRevision, stamp.selectionRevision, stamp.faceIndex].every(x => Number.isSafeInteger(x) && x >= 0)) fail('identità sorgente non valida')
@@ -340,11 +379,12 @@ async function identify(k: OcctKernel, sourceBrep: string, inputStamp: G1SourceS
       const net = nativeNet(k.toBREP(face))
       return { net, witness: naturalWitness(k, face, index, edges, net, signatures[index]) }
     }
-    const chosen = certify(stamp.faceIndex), result: ResolvedCompatibleCurvedSupport[] = []
+    const chosen = certify(stamp.faceIndex)
+    const compatible: ResolvedCompatibleCurvedSupport[] = [], curved: ExperimentalSharedBSplineEdge[] = []
     for (let edgeIndex = 0; edgeIndex < perFace[stamp.faceIndex].length; edgeIndex++) {
       const edge = perFace[stamp.faceIndex][edgeIndex], incidence = perFace.flatMap((es, i) => es.some(e => k.isSame(e, edge)) ? [i] : [])
       if (incidence.length > 2) fail('bordo non manifold')
-      if (incidence.length !== 2 || k.curveType(edge) !== 'line') continue
+      if (incidence.length !== 2 || k.curveType(edge) !== curveKind) continue
       const supportFaceIndex = incidence.find(i => i !== stamp.faceIndex)!
       const shared = many(k.sharedEdges(selected, faces[supportFaceIndex]))
       if (shared.length !== 1 || !k.isSame(shared[0], edge)) fail('adiacenza multipla o incoerente')
@@ -354,6 +394,16 @@ async function identify(k: OcctKernel, sourceBrep: string, inputStamp: G1SourceS
         fail('orientazione del bordo condiviso incoerente')
       let support: ReturnType<typeof certify>
       try { support = certify(supportFaceIndex) } catch { continue } // Explicitly unsupported neighbors are never candidates.
+      if (curveKind === 'bspline') {
+        const degree = exactSharedBSplineDegree(k.toBREP(edge), chosen.net, support.net,
+          chosen.witness.sides[edgeIndex], support.witness.sides[supportEdgeIndex])
+        if (degree === null) continue
+        const lengthMm = k.curveLength(edge)
+        if (!Number.isFinite(lengthMm) || lengthMm <= 1e-8) continue
+        curved.push({ kind: 'experimental-shared-bspline-edge', stamp: { ...stamp }, edgeIndex, supportEdgeIndex,
+          lengthMm, degree, selectedWitness: chosen.witness, supportWitness: support.witness })
+        continue
+      }
       const side = chosen.witness.sides[edgeIndex].side, supportSide = support.witness.sides[supportEdgeIndex].side
       const a = boundary(chosen.net, side), b = boundary(support.net, supportSide)
       if (!straightSeam(k, edge, a) || !straightSeam(k, edge, b)) continue
@@ -365,20 +415,27 @@ async function identify(k: OcctKernel, sourceBrep: string, inputStamp: G1SourceS
       const candidate: CompatibleCurvedSupportCandidate = { kind: 'compatible-bspline',
         id: JSON.stringify([stamp.sourceId, stamp.sourceRevision, stamp.selectionRevision, stamp.faceIndex, 'compatible-bspline', supportFaceIndex, edgeIndex, side, supportSide, reverseSupport]),
         stamp: { ...stamp }, supportFaceIndex, edgeIndex, side, supportSide, reverseSupport, lengthMm }
-      result.push({ candidate, selectedNet: chosen.net, supportNet: support.net, selectedWitness: chosen.witness, supportWitness: support.witness })
+      compatible.push({ candidate, selectedNet: chosen.net, supportNet: support.net, selectedWitness: chosen.witness, supportWitness: support.witness })
     }
-    return structuredClone(result)
+    return structuredClone({ compatible, curved })
   } finally { owned.reverse().forEach(h => k.release(h)) }
 }
 
 /** Immutable source text is imported privately; no caller-owned handle is modified. */
 export async function listCompatibleCurvedSupportCandidates(k: OcctKernel, sourceBrep: string, stamp: G1SourceStamp): Promise<CompatibleCurvedSupportCandidate[]> {
-  return (await identify(k, sourceBrep, stamp)).map(item => item.candidate)
+  return (await identify(k, sourceBrep, stamp, 'line')).compatible.map(item => item.candidate)
 }
 export async function resolveCompatibleCurvedSupportCandidate(k: OcctKernel, sourceBrep: string, stamp: G1SourceStamp,
   choice: CompatibleCurvedSupportCandidate): Promise<ResolvedCompatibleCurvedSupport> {
-  const requested = structuredClone(choice), current = await identify(k, sourceBrep, stamp)
+  const requested = structuredClone(choice), { compatible: current } = await identify(k, sourceBrep, stamp, 'line')
   const found = current.find(item => item.candidate.id === requested?.id)
   if (!found || JSON.stringify(found.candidate) !== JSON.stringify(requested)) fail('scelta del supporto scaduta o alterata')
   return found
+}
+
+/** Read-only adjacency and curve/side coefficient evidence. G1 continuity
+ * requires an independent check of the two surface tangent fields. */
+export async function listExperimentalSharedBSplineEdges(k: OcctKernel, sourceBrep: string,
+  stamp: G1SourceStamp): Promise<ExperimentalSharedBSplineEdge[]> {
+  return (await identify(k, sourceBrep, stamp, 'bspline')).curved
 }
