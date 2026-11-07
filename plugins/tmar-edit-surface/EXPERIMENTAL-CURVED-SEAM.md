@@ -160,6 +160,15 @@ indices and values for future fitting, with synthetic OCCT comparisons and
 guards against unrepresentable intervals. Its floating-point results are
 diagnostic inputs, not certified geometric or derivative error bounds.
 
+An experimental path samples opposing inward derivatives on two unit-weight
+periodic surfaces using explicit full-period affine maps, fits the samples in
+the strip U basis with pivoted QR, and feeds those coefficients to the strip
+proposal. A synthetic two-junction test covers distinct nested bases, reverse
+traversal, unchanged boundary rows and independent holdout points. The test
+rejects a sampled gap and a rank-deficient fit. Samples and holdouts do not
+prove continuous G1, regularity, correspondence on arbitrary trimmed faces,
+kernel validity, wall thickness or volume. This is not wired into the editor.
+
 An isolated follow-up searches seam phase, parameter direction and the local
 quadratic maps automatically for polynomial quadratic/quartic periodic curves
 with matching Bezier-span counts and knot-to-knot correspondence. It compares
