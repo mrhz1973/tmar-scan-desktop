@@ -130,6 +130,14 @@ residual gates, and check separate holdout samples and the stored seam bound.
 Fixing the derivative coefficient does not itself lock the surface seam.
 No production or real-part qualification follows from this solver.
 
+An additional experimental fixed-first QR path scales free columns by powers
+of two and reports raw minimum, maximum, ratio and RMS column observations
+separately from the scaled pivot ratio. It rejects nonrepresentable scaling and
+dangerous underflow; residuals are recomputed on original samples. Synthetic
+weak-column and correlated-column cases show why these metrics must remain
+separate. A caller still needs explicit observation, pivot and independent
+holdout gates. None of these metrics is a condition number or CAD certificate.
+
 The experimental quintic-side diagnostic composes the fixed-first fit for one
 moving side with explicit gap, pivot, residual, displacement and seam checks.
 It measures the stored proposal on separate holdout samples, including both

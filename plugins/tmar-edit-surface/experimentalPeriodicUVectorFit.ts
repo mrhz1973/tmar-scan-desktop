@@ -8,6 +8,48 @@ interface VectorSample {
 }
 
 const fail = (reason: string): never => { throw new Error(`Fit vettoriale periodico U rifiutato: ${reason}`) }
+const minimumNormal = 2 ** -1022
+
+function validateFixedFirst(fixedFirst: readonly [number, number, number]) {
+  if (!Array.isArray(fixedFirst) || fixedFirst.length !== 3 || !Array.from(fixedFirst).every(Number.isFinite))
+    fail('coefficiente U0 fissato non valido')
+}
+
+function powerOfTwoExponent(magnitude: number) {
+  return Math.min(1023, Math.floor(Math.log2(magnitude)))
+}
+
+function normalizeExactly(value: number, scale: number) {
+  const scaled = value / scale
+  if (!Number.isFinite(scaled) || scaled * scale !== value) fail('equilibratura non rappresentabile')
+  // A subnormal input can lose its entire contribution when multiplied by
+  // a Householder reflector, even when scaling itself round-trips exactly.
+  if (scaled !== 0 && Math.abs(scaled) < minimumNormal) fail('ingresso equilibrato subnormale')
+  return scaled
+}
+
+function checkEquilibratedTerm(value: number, nonzero: boolean) {
+  if (!Number.isFinite(value) || (nonzero && Math.abs(value) < minimumNormal))
+    fail('termine QR equilibrato non rappresentabile')
+}
+
+function restoreCoefficient(value: number, exponent: number) {
+  // Combine both scales before restoring the coefficient. Split exponents
+  // outside binary64's range into factors in the same direction.
+  let remaining = exponent
+  let restored = value
+  while (remaining > 1023) {
+    restored *= 2 ** 1023
+    remaining -= 1023
+  }
+  while (remaining < -1074) {
+    restored *= 2 ** -1022
+    remaining += 1022
+  }
+  restored *= 2 ** remaining
+  if (!Number.isFinite(restored) || (restored === 0 && value !== 0)) fail('coefficiente de-equilibrato non rappresentabile')
+  return restored
+}
 
 /**
  * Unweighted least squares for samples of a vector field over one U period.
@@ -18,7 +60,7 @@ const fail = (reason: string): never => { throw new Error(`Fit vettoriale period
 export function fitExperimentalPeriodicUVectorSamples(
   degree: number, knots: readonly number[], multiplicities: readonly number[], samples: readonly VectorSample[],
 ) {
-  return fitPeriodicUVectorSamples(degree, knots, multiplicities, samples)
+  return fitPeriodicUVectorSamples(degree, knots, multiplicities, samples).fit
 }
 
 /**
@@ -33,14 +75,35 @@ export function fitExperimentalPeriodicUVectorSamplesWithFixedFirst(
   degree: number, knots: readonly number[], multiplicities: readonly number[], samples: readonly VectorSample[],
   fixedFirst: readonly [number, number, number],
 ) {
-  if (!Array.isArray(fixedFirst) || fixedFirst.length !== 3 || !Array.from(fixedFirst).every(Number.isFinite))
-    fail('coefficiente U0 fissato non valido')
-  return { ...fitPeriodicUVectorSamples(degree, knots, multiplicities, samples, fixedFirst), fixedCoefficientIndex: 0 as const }
+  validateFixedFirst(fixedFirst)
+  return { ...fitPeriodicUVectorSamples(degree, knots, multiplicities, samples, fixedFirst).fit, fixedCoefficientIndex: 0 as const }
+}
+
+/**
+ * Experimental fixed-U0 fit with the remaining columns equilibrated by
+ * powers of two selected from their largest entry. This preserves the
+ * unweighted objective in exact arithmetic.
+ * The scaled pivot ratio uses the equilibrated matrix and cannot substitute
+ * for the original pivot ratio. Raw L2 column norms and minimum RMS weight
+ * describe sample support before scaling. The ratios can both be one when
+ * all free weights are tiny. These diagnostics give neither a condition
+ * number nor coefficient or holdout error bounds. Residuals use the original
+ * samples. Subnormal normalized inputs and out-of-range QR products or
+ * quotients are refused. Elimination and the QR still round in binary64.
+ */
+export function fitExperimentalPeriodicUVectorSamplesWithScaledFreeColumns(
+  degree: number, knots: readonly number[], multiplicities: readonly number[], samples: readonly VectorSample[],
+  fixedFirst: readonly [number, number, number],
+) {
+  validateFixedFirst(fixedFirst)
+  const { fit: { pivotRatio: scaledPivotRatio, ...fit }, rawColumnNorms } =
+    fitPeriodicUVectorSamples(degree, knots, multiplicities, samples, fixedFirst, true)
+  return { ...fit, fixedCoefficientIndex: 0 as const, scaledPivotRatio, rawColumnNorms: rawColumnNorms! }
 }
 
 function fitPeriodicUVectorSamples(
   degree: number, knots: readonly number[], multiplicities: readonly number[], samples: readonly VectorSample[],
-  fixedFirst?: readonly [number, number, number],
+  fixedFirst?: readonly [number, number, number], scaleFreeColumns = false,
 ) {
   if (!Array.isArray(knots) || !Array.isArray(multiplicities) || !Array.isArray(samples))
     fail('nodi, molteplicità e campioni devono essere array')
@@ -68,6 +131,7 @@ function fitPeriodicUVectorSamples(
     return { ...local, rightHandSide }
   })
 
+  const rhsExponents = scaleFreeColumns ? scales.map(scale => scale === 0 ? 0 : powerOfTwoExponent(scale)) : undefined
   const matrix = new Float64Array(rows * width)
   for (const [row, { indices, values, rightHandSide }] of active.entries()) {
     for (const [j, index] of indices.entries()) {
@@ -76,14 +140,42 @@ function fitPeriodicUVectorSamples(
     for (let axis = 0; axis < 3; axis++) {
       const value = rightHandSide[axis]
       if (value === 0) continue
-      const scaled = value / scales[axis]
+      const scaled = rhsExponents === undefined ? value / scales[axis] : normalizeExactly(value, 2 ** rhsExponents[axis])
       if (scaled === 0) fail('scala dei campioni non rappresentabile')
       matrix[row * width + columns + axis] = scaled
     }
   }
 
+  let rawColumnNorms: { min: number; max: number; minOverMax: number; minRmsWeight: number } | undefined
+  let columnExponents: number[] | undefined
+  if (scaleFreeColumns) {
+    columnExponents = []
+    let min = Infinity, max = 0
+    for (let column = 0; column < columns; column++) {
+      let magnitude = 0
+      for (let row = 0; row < rows; row++) magnitude = Math.max(magnitude, Math.abs(matrix[row * width + column]))
+      if (!(magnitude > 0) || !Number.isFinite(magnitude)) fail('rango numerico insufficiente: colonna libera nulla o non finita')
+      const exponent = powerOfTwoExponent(magnitude)
+      const scale = 2 ** exponent
+      columnExponents.push(exponent)
+      let squaredNorm = 0
+      for (let row = 0; row < rows; row++) {
+        const offset = row * width + column
+        const value = normalizeExactly(matrix[offset], scale)
+        matrix[offset] = value
+        squaredNorm += value ** 2
+      }
+      const norm = Math.sqrt(squaredNorm) * scale
+      min = Math.min(min, norm)
+      max = Math.max(max, norm)
+    }
+    rawColumnNorms = { min, max, minOverMax: min / max, minRmsWeight: min / Math.sqrt(rows) }
+  }
+
   // Householder QR with column pivoting. Recompute the trailing column
   // norms to avoid cancellation from subtractive norm updates near rank loss.
+  // In the equilibrated path a first pivot of order one keeps squared
+  // terms near underflow far below the rank tolerance, even summed over all rows.
   const permutation = Array.from({ length: columns }, (_, i) => i)
   let firstPivot = 0, smallestPivot = Infinity, rankTolerance = 0
   for (let step = 0; step < columns; step++) {
@@ -118,7 +210,12 @@ function fitPeriodicUVectorSamples(
     const diagonal = leading >= 0 ? -norm : norm
     const denominator = leading - diagonal
     const tau = -denominator / diagonal
-    for (let row = step + 1; row < rows; row++) matrix[row * width + step] /= denominator
+    for (let row = step + 1; row < rows; row++) {
+      const index = row * width + step
+      const tail = matrix[index] / denominator
+      if (scaleFreeColumns) checkEquilibratedTerm(tail, matrix[index] !== 0)
+      matrix[index] = tail
+    }
     matrix[start + step] = diagonal
 
     // Store the reflector tail under the diagonal. Apply it to the remaining
@@ -127,13 +224,20 @@ function fitPeriodicUVectorSamples(
       let product = matrix[start + column]
       for (let row = step + 1; row < rows; row++) {
         const offset = row * width
-        product += matrix[offset + step] * matrix[offset + column]
+        const a = matrix[offset + step], b = matrix[offset + column]
+        const term = a * b
+        if (scaleFreeColumns) checkEquilibratedTerm(term, a !== 0 && b !== 0)
+        product += term
       }
+      const nonzero = product !== 0
       product *= tau
+      if (scaleFreeColumns) checkEquilibratedTerm(product, nonzero)
       matrix[start + column] -= product
       for (let row = step + 1; row < rows; row++) {
         const offset = row * width
-        matrix[offset + column] -= matrix[offset + step] * product
+        const tail = matrix[offset + step], correction = tail * product
+        if (scaleFreeColumns) checkEquilibratedTerm(correction, tail !== 0 && product !== 0)
+        matrix[offset + column] -= correction
       }
     }
   }
@@ -142,17 +246,26 @@ function fitPeriodicUVectorSamples(
   if (fixedFirst !== undefined) coefficients[0] = [...fixedFirst]
   for (let step = columns - 1; step >= 0; step--) {
     const offset = step * width
+    const column = permutation[step]
     const coefficient = Array.from({ length: 3 }, (_, axis) => {
       let value = matrix[offset + columns + axis]
       for (let column = step + 1; column < columns; column++) {
-        value -= matrix[offset + column] * matrix[column * width + columns + axis]
+        const a = matrix[offset + column], b = matrix[column * width + columns + axis]
+        const term = a * b
+        if (scaleFreeColumns) checkEquilibratedTerm(term, a !== 0 && b !== 0)
+        value -= term
       }
       const scaled = value / matrix[offset + step]
       matrix[offset + columns + axis] = scaled
+      if (columnExponents !== undefined && rhsExponents !== undefined) {
+        checkEquilibratedTerm(scaled, value !== 0)
+        if (scaled === 0) return 0
+        return restoreCoefficient(scaled, rhsExponents[axis] - columnExponents[column])
+      }
       return scales[axis] === 0 ? 0 : scaled * scales[axis]
     }) as Point
     if (!coefficient.every(Number.isFinite)) fail('coefficiente non rappresentabile')
-    coefficients[permutation[step] + firstFree] = coefficient
+    coefficients[column + firstFree] = coefficient
   }
 
   const residuals = active.map(({ indices, values }, row) => {
@@ -168,8 +281,8 @@ function fitPeriodicUVectorSamples(
   const rmsSampleResidual = maxSampleResidual === 0 ? 0 : maxSampleResidual *
     Math.sqrt(residuals.reduce((sum, residual) => sum + (residual / maxSampleResidual) ** 2, 0) / rows)
   return {
-    coefficients, sampleCount: rows, rank: columns, pivotRatio: smallestPivot / firstPivot,
-    residuals, maxSampleResidual, rmsSampleResidual,
-    evidenceScope: 'sampled-residual-only' as const,
+    fit: { coefficients, sampleCount: rows, rank: columns, pivotRatio: smallestPivot / firstPivot,
+      residuals, maxSampleResidual, rmsSampleResidual, evidenceScope: 'sampled-residual-only' as const },
+    rawColumnNorms,
   }
 }
