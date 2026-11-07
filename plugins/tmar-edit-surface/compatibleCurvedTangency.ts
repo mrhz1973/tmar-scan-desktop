@@ -39,6 +39,18 @@ export interface CompatibleCurvedTangencyResult {
   changedIndices: number[]
   validation: CompatibleCurvedTangencyValidation
 }
+/** Experimental coefficient-only path for a shared natural boundary.
+ * It proves no CAD edge ownership, geometry identity or topology. */
+export type ExperimentalCurvedSeamRequest = CompatibleCurvedTangencyRequest
+export interface ExperimentalCurvedSeamValidation extends Omit<CompatibleCurvedTangencyValidation, 'maxStraightnessResidual'> {
+  /** Coefficient-based upper bound on departure from the endpoint chord; not a curvature proof. */
+  maxSeamDepartureUpperBound: number
+}
+export interface ExperimentalCurvedSeamResult {
+  net: Net
+  changedIndices: number[]
+  validation: ExperimentalCurvedSeamValidation
+}
 const edges: NaturalEdge[] = ['U0', 'U1', 'V0', 'V1']
 const fail = (why: string): never => { throw new Error(`Tangenza curva compatibile rifiutata: ${why}`) }
 const equal = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((x, i) => Object.is(x, b[i]))
@@ -123,7 +135,7 @@ function inward(n: Net, edge: NaturalEdge, reverse = false): V[] {
 function along(n: Net, edge: NaturalEdge) {
   return edge[0] === 'U' ? { p: n.dv, k: n.kv, m: n.mv } : { p: n.du, k: n.ku, m: n.mu }
 }
-function prepare(request: CompatibleCurvedTangencyRequest) {
+function prepare(request: CompatibleCurvedTangencyRequest, requireStraight = true) {
   if (!request || !edges.includes(request.edge) || !edges.includes(request.supportEdge)) fail('bordo naturale non valido')
   if (request.reverseSupport !== undefined && typeof request.reverseSupport !== 'boolean') fail('verso del supporto non valido')
   const n = validNet(request.net), support = validNet(request.supportNet)
@@ -151,11 +163,12 @@ function prepare(request: CompatibleCurvedTangencyRequest) {
     if (i && !(chord.reduce((s, x, d) => add(s, mul(x, difference(c[i], c[i - 1])[d])), scalar(0))[0] > 0))
       fail('bordo non strettamente monotono')
   }
-  if (straightness > distance) fail('bordo naturale non rettilineo entro il limite dei coefficienti')
+  if (requireStraight && straightness > distance) fail('bordo naturale non rettilineo entro il limite dei coefficienti')
   const full = a.k.flatMap((x, i) => Array<number>(a.m[i]).fill(x))
   const tangent = c.slice(1).map((p, i) => times(difference(p, c[i]), divide(scalar(a.p), sub(scalar(full[i + a.p + 1]), scalar(full[i + 1])))))
   const supportDerivative = inward(support, request.supportEdge, reversed), inner = row(n, request.edge, true)
   if (tangent.length * supportDerivative.length > 65536) fail('limite di 65536 coppie per la prova continua superato')
+  if (!requireStraight && tangent.some(t => l1(t) <= distance)) fail('derivata del seam non comprovabilmente regolare')
   const fixed = new Set([...locks, ...edges.flatMap(e => row(n, e)), ...protectedEdges.flatMap(e => row(n, e, true))])
   return { n, support, inner, boundary, scale, distance, derivative, straightness, tangent, supportDerivative, fixed }
 }
@@ -168,8 +181,8 @@ function validateStructure(base: Net, n: Net): void {
 }
 
 /** Nonmutating validation of the supplied coefficients, not a regenerated proposal. */
-export function validateCompatibleCurvedTangencyResult(request: CompatibleCurvedTangencyRequest, finalNet: Net): CompatibleCurvedTangencyValidation {
-  const p = prepare(request), final = validNet(finalNet)
+function validateResult(request: CompatibleCurvedTangencyRequest, finalNet: Net, requireStraight: boolean): CompatibleCurvedTangencyValidation {
+  const p = prepare(request, requireStraight), final = validNet(finalNet)
   validateStructure(p.n, final)
   const editable = new Set(p.inner)
   let protectedPoleCount = 0
@@ -206,8 +219,12 @@ export function validateCompatibleCurvedTangencyResult(request: CompatibleCurved
     protectedPoleCount, globalG1Certified: false }
 }
 
-export function proposeCompatibleCurvedTangency(request: CompatibleCurvedTangencyRequest): CompatibleCurvedTangencyResult {
-  const p = prepare(request), net = structuredClone(p.n), a = coefficientFactor(p.n, request.edge)
+export function validateCompatibleCurvedTangencyResult(request: CompatibleCurvedTangencyRequest, finalNet: Net): CompatibleCurvedTangencyValidation {
+  return validateResult(request, finalNet, true)
+}
+
+function propose(request: CompatibleCurvedTangencyRequest, requireStraight: boolean): CompatibleCurvedTangencyResult {
+  const p = prepare(request, requireStraight), net = structuredClone(p.n), a = coefficientFactor(p.n, request.edge)
   const b = coefficientFactor(p.support, request.supportEdge)
   const ratio = p.scale * (b[0] + (b[1] - b[0]) / 2) / (a[0] + (a[1] - a[0]) / 2)
   if (!Number.isFinite(ratio) || ratio <= 0) fail('scala della proposta non rappresentabile')
@@ -221,7 +238,27 @@ export function proposeCompatibleCurvedTangency(request: CompatibleCurvedTangenc
     net.poles[p.inner[j]] = net.poles[p.boundary[j]].map((x, d) => x - ratio *
       (p.support.poles[otherInner[j]][d] - p.support.poles[otherBoundary[j]][d])) as Point
   }
-  const validation = validateCompatibleCurvedTangencyResult(request, net)
+  const validation = validateResult(request, net, requireStraight)
   const changedIndices = net.poles.flatMap((point, i) => equal(point, p.n.poles[i]) ? [] : [i])
   return { net, changedIndices, validation }
+}
+
+export function proposeCompatibleCurvedTangency(request: CompatibleCurvedTangencyRequest): CompatibleCurvedTangencyResult {
+  return propose(request, true)
+}
+
+/** Experimental and deliberately disconnected from CAD topology, UI and workers.
+ * Inputs must be nonrational, unit-weight, clamped, nonperiodic C1 nets whose
+ * shared seam (straight or curved) has exactly identical coefficients and basis.
+ * The reported chord departure is an upper bound, not proof of curvature. */
+export function proposeExperimentalCurvedSeamTangency(request: ExperimentalCurvedSeamRequest): ExperimentalCurvedSeamResult {
+  const result = propose(request, false)
+  const { maxStraightnessResidual, ...validation } = result.validation
+  return { ...result, validation: { ...validation, maxSeamDepartureUpperBound: maxStraightnessResidual } }
+}
+
+export function validateExperimentalCurvedSeamTangencyResult(request: ExperimentalCurvedSeamRequest,
+  finalNet: Net): ExperimentalCurvedSeamValidation {
+  const { maxStraightnessResidual, ...validation } = validateResult(request, finalNet, false)
+  return { ...validation, maxSeamDepartureUpperBound: maxStraightnessResidual }
 }
