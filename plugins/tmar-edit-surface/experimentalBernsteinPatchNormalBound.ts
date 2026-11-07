@@ -14,7 +14,7 @@ const fail = (reason: string): never => { throw new Error(`Prova normale Bernste
 
 function validate(patch: ExperimentalBernsteinSurfacePatch) {
   if (!patch || !Number.isInteger(patch.degreeU) || patch.degreeU < 1 || patch.degreeU > 3 ||
-      !Number.isInteger(patch.degreeV) || patch.degreeV < 1 || patch.degreeV > 3 ||
+      !Number.isInteger(patch.degreeV) || patch.degreeV < 1 || patch.degreeV > 5 ||
       !Array.isArray(patch.controls) || patch.controls.length !== (patch.degreeU + 1) * (patch.degreeV + 1))
     fail('gradi o dimensioni della patch non validi')
   for (const point of patch.controls) {
@@ -128,7 +128,7 @@ interface Cell {
  * Check two Bernstein surface patches on the same normalized parameter
  * square and in the same coordinate frame. Their axes already express the
  * intended correspondence and orientation. Intervals enclose their real
- * coefficients, and degrees may differ up to cubic in each axis.
+ * coefficients. Degrees may differ up to cubic in U and quintic in V.
  *
  * A positive bound on the normal dot product proves relative orientation
  * and excludes degenerate normals everywhere on the square. A nonpositive

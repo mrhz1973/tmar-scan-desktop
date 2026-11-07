@@ -73,9 +73,24 @@ it('declines a zero-dot enclosure without presenting an unproved witness', () =>
   expect(result.status).toBe('inconclusive')
 })
 
-it('refuses noncubic degrees, sparse controls and invalid intervals', () => {
+it('certifies or rejects quintic V patch orientations', () => {
+  const controls = [0, 1].flatMap(x => [0, 1, 2, 3, 4, 5].map(z => vector([x, 0, z])))
+  const candidate = { degreeU: 1, degreeV: 5, controls }
+  const result = boundExperimentalBernsteinPatchNormals(candidate, plane())
+  expect(result.status).toBe('certified-positive')
+  if (result.status !== 'certified-positive') throw new Error('Expected a positive certificate')
+  expect(result.minNormalDot).toBeGreaterThan(0)
+  expect(result.minNormalDot).toBeLessThanOrEqual(5)
+  const reversed = { ...candidate, controls: [0, 1].flatMap(x => [5, 4, 3, 2, 1, 0].map(z => vector([x, 0, z]))) }
+  expect(boundExperimentalBernsteinPatchNormals(reversed, plane()).status).toBe('nonpositive-witness')
+  const slanted = { ...candidate, controls: [0, 1].flatMap(x =>
+    [0, 1, 2, 3, 4, 5].map((z, i) => vector([x, i * x / 5, z]))) }
+  expect(boundExperimentalBernsteinPatchNormals(slanted, candidate).status).toBe('certified-positive')
+})
+
+it('refuses unsupported degrees, sparse controls and invalid intervals', () => {
   const candidate = plane(), reference = plane()
-  expect(() => boundExperimentalBernsteinPatchNormals({ ...candidate, degreeV: 4 }, reference)).toThrow(/gradi/)
+  expect(() => boundExperimentalBernsteinPatchNormals({ ...candidate, degreeV: 6 }, reference)).toThrow(/gradi/)
   const sparse = candidate.controls.slice()
   delete sparse[0]
   expect(() => boundExperimentalBernsteinPatchNormals({ ...candidate, controls: sparse }, reference))

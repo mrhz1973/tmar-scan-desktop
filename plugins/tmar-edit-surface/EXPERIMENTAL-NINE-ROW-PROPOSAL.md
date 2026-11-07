@@ -145,6 +145,11 @@ despite accepted sampled joint normals and a coarse interior grid. Therefore
 pair diagnostic success cannot qualify a side, authorize a real-part run, or
 replace a continuous interior regularity and orientation check.
 
+The experimental interval normal-dot proof now accepts Bernstein patches up
+to degree three in U and five in V. It remains a patch-level proof only:
+extracting corresponding periodic spline patches and checking all cells is
+separate, and no result here qualifies trims, thickness or a CAD solid.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
