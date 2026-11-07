@@ -92,6 +92,14 @@ orientation checks remain sampled: they do not establish continuity or rule
 out defects between samples. This diagnostic is not wired into the app and
 does not authorize solid replacement or export.
 
+An independent experimental localized displacement bound handles the special
+case where only V rows 1 and 7 change. It bounds each row's V basis weight by
+interval Bernstein subdivision and includes the original refinement error;
+it also preserves the independent coefficient-hull bound. Nonuniform knots
+and protected-row changes have synthetic coverage. This is not connected to
+the diagnostic gate and has not been evaluated on the rejected Tube proposal.
+It does not establish thickness, continuity or solid validity.
+
 Only when the prerequisites are met and reviewed and parameters and guards
 are specified in advance, perform one
 coefficient-only candidate evaluation in memory, preserving the original hash,
