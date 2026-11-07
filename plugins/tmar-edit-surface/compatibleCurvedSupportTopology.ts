@@ -39,7 +39,9 @@ export interface ResolvedCompatibleCurvedSupport {
 }
 export interface ExperimentalSharedBSplineEdge {
   kind: 'experimental-shared-bspline-edge'
+  id: string
   stamp: G1SourceStamp
+  supportFaceIndex: number
   edgeIndex: number
   supportEdgeIndex: number
   lengthMm: number
@@ -347,6 +349,8 @@ function exactSharedBSplineDegree(edgeBrep: string, selectedNet: Net, supportNet
   try {
     const { curve, pcurveCount } = associateSerializedEdgeCurve(edgeBrep)
     if (pcurveCount !== 2 || curve.rational || !hasNoncollinearPoles(curve.poles)) return null
+    // Reversed pcurves need an OCCT/STEP topology fixture before recognition.
+    if (selectedSide.direction !== 1 || supportSide.direction !== 1) return null
     const a = matchNaturalSideCurve(selectedNet, selectedSide.side, curve, selectedSide.direction)
     const b = matchNaturalSideCurve(supportNet, supportSide.side, curve, supportSide.direction)
     return a.comparison.exact && b.comparison.exact ? curve.degree : null
@@ -395,12 +399,19 @@ async function identify(k: OcctKernel, sourceBrep: string, inputStamp: G1SourceS
       let support: ReturnType<typeof certify>
       try { support = certify(supportFaceIndex) } catch { continue } // Explicitly unsupported neighbors are never candidates.
       if (curveKind === 'bspline') {
-        const degree = exactSharedBSplineDegree(k.toBREP(edge), chosen.net, support.net,
-          chosen.witness.sides[edgeIndex], support.witness.sides[supportEdgeIndex])
+        const selectedSide = chosen.witness.sides[edgeIndex], supportSide = support.witness.sides[supportEdgeIndex]
+        const degree = exactSharedBSplineDegree(k.toBREP(edge), chosen.net, support.net, selectedSide, supportSide)
         if (degree === null) continue
         const lengthMm = k.curveLength(edge)
         if (!Number.isFinite(lengthMm) || lengthMm <= 1e-8) continue
-        curved.push({ kind: 'experimental-shared-bspline-edge', stamp: { ...stamp }, edgeIndex, supportEdgeIndex,
+        const kind = 'experimental-shared-bspline-edge'
+        const { sourceId, sourceRevision, selectionRevision, faceIndex } = stamp
+        const id = JSON.stringify([sourceId, sourceRevision, selectionRevision, faceIndex, kind,
+          supportFaceIndex, edgeIndex, supportEdgeIndex, degree, lengthMm,
+          selectedSide.side, selectedSide.direction, selectedSide.parameterRange,
+          supportSide.side, supportSide.direction, supportSide.parameterRange])
+        curved.push({ kind, id, stamp: { sourceId, sourceRevision, selectionRevision, faceIndex },
+          supportFaceIndex, edgeIndex, supportEdgeIndex,
           lengthMm, degree, selectedWitness: chosen.witness, supportWitness: support.witness })
         continue
       }
@@ -438,4 +449,25 @@ export async function resolveCompatibleCurvedSupportCandidate(k: OcctKernel, sou
 export async function listExperimentalSharedBSplineEdges(k: OcctKernel, sourceBrep: string,
   stamp: G1SourceStamp): Promise<ExperimentalSharedBSplineEdge[]> {
   return (await identify(k, sourceBrep, stamp, 'bspline')).curved
+}
+
+// Compare the complete fresh record, including both witnesses, independent of property order.
+function sameEvidence(expected: unknown, requested: unknown): boolean {
+  if (Object.is(expected, requested)) return true
+  if (expected === null || requested === null || typeof expected !== 'object' || typeof requested !== 'object') return false
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(requested) || expected.length !== requested.length) return false
+  } else if (Array.isArray(requested)) return false
+  const entries = Object.entries(expected), fields = requested as Record<string, unknown>
+  return entries.length === Object.keys(fields).length && entries.every(([key, value]) =>
+    Object.hasOwn(fields, key) && sameEvidence(value, fields[key]))
+}
+
+/** Reimport the source and recheck adjacency, pcurves and curve coefficients. */
+export async function resolveExperimentalSharedBSplineEdge(k: OcctKernel, sourceBrep: string, stamp: G1SourceStamp,
+  choice: ExperimentalSharedBSplineEdge): Promise<ExperimentalSharedBSplineEdge> {
+  const requested = structuredClone(choice), { curved } = await identify(k, sourceBrep, stamp, 'bspline')
+  const found = curved.find(item => item.id === requested?.id)
+  if (!found || !sameEvidence(found, requested)) fail('scelta del bordo sperimentale scaduta o alterata')
+  return found
 }

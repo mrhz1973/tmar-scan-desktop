@@ -35,3 +35,10 @@ claim G1 or expose an editable candidate: a stamped resolver and reverse-directi
 coverage remain necessary. Only nonperiodic polynomial curves with complete
 natural sides and matching increasing parameterizations are supported. It
 does not qualify a closed solid or the periodic, differently parameterized tube.
+
+The experimental edge selection now includes a source-stamped identity and a
+resolver that reimports and rechecks the complete evidence. A separate natural
+side matcher supports exact reversed coefficients and knot reflection, rejecting
+reflections not representable in binary64. The topology recognizer still refuses
+reversed pcurves until they have been qualified on an OCCT/STEP fixture; the
+matcher alone is not evidence of topological orientation or G1 continuity.

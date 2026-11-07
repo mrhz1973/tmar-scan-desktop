@@ -2,7 +2,8 @@
 import { OcctKernel, type ShapeHandle } from 'occt-wasm'
 import { expect, it } from 'vitest'
 import { replaceSurface, surfaceTable, type Net, type Point } from '../brep'
-import { listCompatibleCurvedSupportCandidates, listExperimentalSharedBSplineEdges } from '../compatibleCurvedSupportTopology'
+import { listCompatibleCurvedSupportCandidates, listExperimentalSharedBSplineEdges,
+  resolveExperimentalSharedBSplineEdge } from '../compatibleCurvedSupportTopology'
 import { sha256 } from '../recipe'
 
 const xyz = ([x, y, z]: Point) => ({ x, y, z })
@@ -47,7 +48,25 @@ it('identifies a real STEP shared curved edge and requires topology, pcurves and
     const matches = await listExperimentalSharedBSplineEdges(k, brep, stamp)
     expect(matches).toHaveLength(1)
     const match = matches[0]
-    expect(match).toMatchObject({ kind: 'experimental-shared-bspline-edge', stamp, degree: 2 })
+    expect(match).toMatchObject({ kind: 'experimental-shared-bspline-edge', stamp, supportFaceIndex: 1, degree: 2 })
+    expect(match.id).toBeTruthy()
+    expect(await listExperimentalSharedBSplineEdges(k, brep, stamp)).toEqual(matches)
+    const { id, ...evidence } = match
+    const resolved = await resolveExperimentalSharedBSplineEdge(k, brep, stamp, { id, ...evidence })
+    expect(resolved).toEqual(match)
+    expect(resolved).not.toBe(match)
+    const tamperedWitness = structuredClone(match)
+    tamperedWitness.supportWitness.sides[match.supportEdgeIndex].parameterRange[0] += 1
+    for (const choice of [{ ...match, id: 'altro' }, { ...match, supportFaceIndex: 0 },
+      { ...match, supportEdgeIndex: -1 }, { ...match, degree: 3 }, tamperedWitness]) {
+      await expect(resolveExperimentalSharedBSplineEdge(k, brep, stamp, choice)).rejects.toThrow('scaduta o alterata')
+    }
+    for (const nextStamp of [{ ...stamp, sourceRevision: 2 }, { ...stamp, selectionRevision: 3 }, { ...stamp, faceIndex: 1 }]) {
+      const next = await listExperimentalSharedBSplineEdges(k, brep, nextStamp)
+      expect(next).toHaveLength(1)
+      expect(next[0].id).not.toBe(match.id)
+      await expect(resolveExperimentalSharedBSplineEdge(k, brep, nextStamp, match)).rejects.toThrow('scaduta o alterata')
+    }
     expect(match.lengthMm).toBeGreaterThan(8)
     const a = match.selectedWitness.sides[match.edgeIndex], b = match.supportWitness.sides[match.supportEdgeIndex]
     expect(a).toMatchObject({ side: 'uMax', direction: 1 })
@@ -66,9 +85,12 @@ it('identifies a real STEP shared curved edge and requires topology, pcurves and
 
     const unsewn = own(k.makeCompound([left, right]))
     const unsewnFaces = many(k.getSubShapes(unsewn, 'face')), unsewnBrep = k.toBREP(unsewn)
+    const unsewnStamp = await stampFor(unsewnBrep)
     expect(unsewnFaces).toHaveLength(2)
     expect(many(k.sharedEdges(unsewnFaces[0], unsewnFaces[1]))).toEqual([])
-    expect(await listExperimentalSharedBSplineEdges(k, unsewnBrep, await stampFor(unsewnBrep))).toEqual([])
+    expect(await listExperimentalSharedBSplineEdges(k, unsewnBrep, unsewnStamp)).toEqual([])
+    await expect(resolveExperimentalSharedBSplineEdge(k, unsewnBrep, unsewnStamp, match)).rejects.toThrow('scaduta o alterata')
+    await expect(resolveExperimentalSharedBSplineEdge(k, unsewnBrep, stamp, match)).rejects.toThrow('fingerprint')
     await expect(listExperimentalSharedBSplineEdges(k, brep, { ...stamp, sourceId: 'brep-sha256:' + '0'.repeat(64) }))
       .rejects.toThrow('fingerprint')
 
@@ -90,6 +112,7 @@ it('identifies a real STEP shared curved edge and requires topology, pcurves and
     const mismatchedCurve = testRead(text => text.replace(curveHeader, (_match, before: string, after: string) => `${before}3${after}`))
     expect(await listExperimentalSharedBSplineEdges(mismatchedCurve.kernel, brep, stamp)).toEqual([])
     expect(mismatchedCurve.changed()).toBeGreaterThan(0)
+    await expect(resolveExperimentalSharedBSplineEdge(mismatchedCurve.kernel, brep, stamp, match)).rejects.toThrow('scaduta o alterata')
     const wrongPcurveRange = testRead(text => text.replace(/(^2\s+\d+\s+\d+\s+0\s+)-4( 4\s*$)/m, '$1-3$2'))
     await expect(listExperimentalSharedBSplineEdges(wrongPcurveRange.kernel, brep, stamp)).rejects.toThrow('intervalli')
     expect(wrongPcurveRange.changed()).toBeGreaterThan(0)
