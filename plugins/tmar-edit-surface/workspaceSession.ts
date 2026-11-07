@@ -53,6 +53,7 @@ export interface HistoryFreeze {
 }
 interface Note extends WorkspaceSurfaceNote { readonly anchor: DraftAnchor }
 export type WorkspaceG1Candidate = (G1SupportCandidate & { readonly kind?: never }) | CompatibleCurvedSupportCandidate
+export type WholeBoundarySide = 'U0' | 'U1' | 'V0' | 'V1'
 export interface WorkspaceSurfacePanelState {
   readonly faces: readonly FaceInfo[]
   readonly face: number
@@ -63,6 +64,7 @@ export interface WorkspaceSurfacePanelState {
   readonly continuity: 'G0' | 'G1'
   readonly freeBoundary: boolean
   readonly canFreeBoundary: boolean
+  readonly canMoveWholeBoundary: boolean
   readonly canRefineNet: boolean
   readonly g1Candidates: readonly WorkspaceG1Candidate[]
   readonly g1Choice: string | null
@@ -789,6 +791,29 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.change(() => {
       if (value && !this.faces[this.face]?.freeBoundary) throw new Error('Il bordo di questa faccia non è libero.')
       this.draft.setFreeBoundary(value)
+    })
+  }
+  /** Translate one entire natural CAD boundary, without creating another face.
+   * Positive fixed weights and a clamped basis make the whole rim translate by
+   * delta, including its endpoints and the incident adjacent boundary endpoints.
+   */
+  moveWholeBoundary(side: WholeBoundarySide, delta: Point): void {
+    this.change(() => {
+      if (!this.panel.canMoveWholeBoundary) throw new Error('Attiva i bordi liberi su una singola faccia naturale CAD valida, senza note, simmetria o vincoli.')
+      if (!['U0','U1','V0','V1'].includes(side) || !finitePoint(delta) || Math.hypot(...delta)<=1e-7 || Math.hypot(...delta)>1000)
+        throw new Error('Bordo o spostamento non valido (limite 1000 mm).')
+      const d=this.draft.getSnapshot(),net=this.requireNet()
+      const ids=side==='U0' || side==='U1'
+        ? Array.from({length:net.nv},(_,v)=>(side==='U0'?0:net.nu-1)*net.nv+v)
+        : Array.from({length:net.nu},(_,u)=>u*net.nv+(side==='V0'?0:net.nv-1))
+      const locked=new Set([...d.locks,...d.trimLocks,...d.hiddenPoles])
+      if(ids.some(i=>locked.has(i))) throw new Error('Il bordo contiene un polo bloccato: nessuno spostamento parziale consentito.')
+      const selected=new Set(ids)
+      const poles=net.poles.map((p,i)=>selected.has(i)?p.map((x,d)=>x+delta[d]) as Point:pointCopy(p))
+      if(poles.some(p=>!finitePoint(p))) throw new Error('Spostamento del bordo non rappresentabile.')
+      this.draft.commit({...net,poles})
+      this.draft.setSelection(ids)
+      this.message='Bordo intero spostato nella bozza. Attendi la verifica CAD; gli estremi modificano anche i bordi adiacenti.'
     })
   }
   lockSelected(locked: boolean): void {
@@ -1737,6 +1762,10 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       redoLabel: canRedo ? (strip ? 'Ripeti striscia' : 'Ripeti modifica superficie') : null, historyRevision: this.historyRevision,
       draftNoteCount: this.notes.length, notesRevision:this.notesRevision, message })
     const adaptive = !!this.runtime.history.current?.preparation?.adaptiveSelection
+    const canMoveWholeBoundary=!adaptive && !this.disposed && !this.busy && !this.frozen && !this.symmetry && !this.placingNote &&
+      !this.surfaceTarget && !this.notes.length && !strip && !this.stripPending && this.gesture==='idle' && this.faces.length===1 &&
+      !!face?.freeBoundary && d.freeBoundary && !tangency && d.cylinderSession===null && !!d.net &&
+      d.net===d.committedNet && d.validNet===d.net && !d.calculating && !d.previewStale
     const canTargetPoint=!adaptive && !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
       this.gesture==='idle' && !this.symmetry && !tangency && d.cylinderSession===null && !!d.net && d.net===d.committedNet &&
       d.validNet===d.net && !d.calculating && !d.previewStale && d.selected.some(i=>!locked.includes(i) && !d.hiddenPoles.includes(i))
@@ -1749,7 +1778,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       canApplyG1: canLoadG1 && !!this.g1Choice && this.g1Candidates.some(candidate => candidate.id === this.g1Choice),
       planeTangencyActive: !!d.planeTangency,
       curvedTangencyActive: !!d.curvedTangency,
-      canFreeBoundary: !adaptive && !!face?.freeBoundary && !tangency, canRefineNet: !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
+      canFreeBoundary: !adaptive && !!face?.freeBoundary && !tangency, canMoveWholeBoundary, canRefineNet: !!d.net && !tangency && d.cylinderSession===null && !d.calculating && d.validNet===d.net && d.net===d.committedNet &&
         !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,

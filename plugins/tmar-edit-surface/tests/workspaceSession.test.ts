@@ -113,6 +113,66 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 }
 afterEach(()=>vi.useRealTimers())
 
+describe('whole natural boundary movement',()=>{
+  const ready=async(t:Awaited<ReturnType<typeof setup>>,revision:number)=>{
+    await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.filter(r=>r.action==='evaluate').at(-1)!.id,preview(revision));await flush()
+  }
+  it.each(['U0','U1','V0','V1'] as const)('moves every pole of %s once, with no added strip and one geometry Undo step',async side=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)
+    t.session.setFreeBoundary(true);await ready(t,2)
+    const before=t.session.getPanelState().net!
+    t.session.moveWholeBoundary(side,[0,0,.2])
+    const after=t.session.getPanelState().net!
+    const ids=before.poles.flatMap((_,i)=>((side==='U0' && i<before.nv)||(side==='U1' && i>=before.poles.length-before.nv)||
+      (side==='V0' && i%before.nv===0)||(side==='V1' && i%before.nv===before.nv-1))?[i]:[])
+    after.poles.forEach((p,i)=>expect(p).toEqual(ids.includes(i)?[before.poles[i][0],before.poles[i][1],.2]:before.poles[i]))
+    expect(t.session.getPanelState().selected).toEqual(ids)
+    expect(t.session.getPanelState().strip).toBeNull()
+    expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await ready(t,3)
+    expect(t.worker.sent.filter(r=>r.action==='evaluate').at(-1)).toMatchObject({action:'evaluate',net:after})
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    t.session.redo();expect(t.session.getPanelState().net).toEqual(after)
+    await t.session.dispose('cancelled')
+  })
+  it('refuses a locked corner rather than moving only the unblocked part of a whole boundary',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.selectPoints([0],false);t.session.lockSelected(true);await ready(t,3)
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    expect(()=>t.session.moveWholeBoundary('U0',[0,0,.2])).toThrow(/nessuno spostamento parziale/)
+    expect(t.session.getPanelState().net).toBe(before)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    await t.session.dispose('cancelled')
+  })
+  it('refuses protected mode, solids, symmetry, malformed motion and pending CAD',async()=>{
+    const solid=await setup();await selectFace(solid)
+    expect(()=>solid.session.moveWholeBoundary('U0',[0,0,.2])).toThrow()
+    await solid.session.dispose('cancelled')
+    const t=await setup({sheet:true});await selectFace(t)
+    expect(()=>t.session.moveWholeBoundary('U0',[0,0,.2])).toThrow()
+    t.session.setFreeBoundary(true)
+    expect(()=>t.session.moveWholeBoundary('U0',[0,0,.2])).toThrow()
+    await ready(t,2)
+    for(const delta of [[0,0,0],[0,0,Infinity],[1001,0,0]] as Point[])expect(()=>t.session.moveWholeBoundary('U0',delta)).toThrow()
+    expect(()=>t.session.moveWholeBoundary('invalid' as never,[0,0,.1])).toThrow()
+    t.session.setSymmetry(true);expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)
+    expect(()=>t.session.moveWholeBoundary('U0',[0,0,.2])).toThrow()
+    await t.session.dispose('cancelled')
+  })
+  it('keeps CAD-refused whole-boundary movement invalid and recoverable with Undo',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    const before=t.session.getPanelState().net!
+    t.session.moveWholeBoundary('V1',[0,0,.2]);await vi.advanceTimersByTimeAsync(90)
+    t.worker.fail(t.worker.sent.at(-1)!.id,'Bordo CAD non valido.');await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('invalid')
+    expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    await t.session.dispose('cancelled')
+  })
+})
+
 describe('explicit surface-point reference alignment',()=>{
   const pin={anchor:{face:0,selectionRevision:1,u:.5,v:.5},at:[2,2,0],normal:[0,0,1]}
   it('keeps pole snapping independent, resolves a clicked surface point, and commits one validated Undo step',async()=>{

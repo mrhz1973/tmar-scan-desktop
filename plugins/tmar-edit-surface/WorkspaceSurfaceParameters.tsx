@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState, useSyncExternalStore } from 'react'
-import type { WorkspaceSurfaceSession } from './workspaceSession'
+import type { WorkspaceSurfaceSession, WholeBoundarySide } from './workspaceSession'
 import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
 import { hasSurfaceZebra } from './SurfaceViewport'
@@ -14,6 +14,9 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const [smooth, setSmooth] = useState(0.5)
   const [factor, setFactor] = useState(1.1)
   const [pointBudget, setPointBudget] = useState(1)
+  const [wholeBoundary,setWholeBoundary] = useState<WholeBoundarySide>('U0')
+  const [boundaryAxis,setBoundaryAxis] = useState<0|1|2>(2)
+  const [boundaryDistance,setBoundaryDistance] = useState(.1)
   const [stripDistance, setStripDistance] = useState(0.1)
   const [g1Pending, setG1Pending] = useState<'load' | 'apply' | null>(null)
   const [g1Error, setG1Error] = useState('')
@@ -201,6 +204,23 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       {state.canFreeBoundary && <label className="inline"><input data-test="surface-free-boundary" type="checkbox"
         checked={state.freeBoundary} disabled={disabled} onChange={e => attempt(() => controller.setFreeBoundary(e.target.checked))} />
         Consenti movimento dei bordi liberi</label>}
+      {state.canFreeBoundary && <fieldset data-test="surface-whole-boundary"><legend>Sposta intero bordo senza duplicarlo</legend>
+        <p>Disponibile su una sola faccia aperta con quattro bordi naturali. Attiva prima il movimento dei bordi liberi. Il comando muove l’intero bordo; i suoi estremi modificano anche i bordi adiacenti.</p>
+        <label>Bordo naturale<select data-test="surface-whole-boundary-side" value={wholeBoundary} disabled={disabled}
+          onChange={e=>setWholeBoundary(e.target.value as WholeBoundarySide)}>
+          <option value="U0">U iniziale</option><option value="U1">U finale</option><option value="V0">V iniziale</option><option value="V1">V finale</option>
+        </select></label>
+        <label>Direzione XYZ del corpo<select data-test="surface-whole-boundary-axis" value={boundaryAxis} disabled={disabled}
+          onChange={e=>setBoundaryAxis(Number(e.target.value) as 0|1|2)}>
+          <option value={0}>X</option><option value={1}>Y</option><option value={2}>Z</option>
+        </select></label>
+        <label>Spostamento · mm<input data-test="surface-whole-boundary-distance" type="number" step="any" value={Number.isFinite(boundaryDistance)?boundaryDistance:''}
+          disabled={disabled} onChange={e=>setBoundaryDistance(e.target.valueAsNumber)} /></label>
+        <button type="button" data-test="surface-whole-boundary-move" disabled={disabled || !state.canMoveWholeBoundary ||
+          !Number.isFinite(boundaryDistance) || Math.abs(boundaryDistance)<=1e-7 || Math.abs(boundaryDistance)>1000}
+          onClick={()=>attempt(()=>{const delta:[number,number,number]=[0,0,0];delta[boundaryAxis]=boundaryDistance;controller.moveWholeBoundary(wholeBoundary,delta)})}>Sposta intero bordo</button>
+        <p>Un polo bloccato impedisce il movimento di tutto il bordo. Il risultato richiede la verifica CAD e si annulla con un solo Undo. Non viene aggiunta una striscia.</p>
+      </fieldset>}
       <label>Selezione del reticolo
         <select data-test="surface-selection-mode" value={state.selectionMode} disabled={disabled}
           onChange={e => attempt(() => controller.setSelectionMode(e.target.value as NetSelectionMode))}>

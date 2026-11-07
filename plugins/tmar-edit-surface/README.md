@@ -1,5 +1,40 @@
 # Edit Surface — CAD prototype checkpoint
 
+### Move an entire natural CAD boundary without duplicating it
+
+The workspace panel now offers **Sposta intero bordo senza duplicarlo** on a
+single open face with four natural boundaries. First explicitly allow free
+boundary movement, then choose U initial/final or V initial/final, a body XYZ
+direction and a signed displacement. The command moves every pole of that
+boundary by the same vector, keeping weights and knots unchanged; its endpoints
+also change the adjacent boundaries. One locked, trim-protected or hidden pole
+refuses the entire operation. Solids, multi-face sheets, non-natural trims,
+active notes, symmetry, adaptive/cylinder preparation and added tangencies are
+excluded. CAD validation and the existing natural-rim reconstruction run after
+one geometry Undo commit; no strip or second face is created.
+
+This addresses the documented QS observation below: with Edges only and the
+DUPLICATE handle disabled, moving the top edge changed the existing surface,
+and Undo restored it. This first integration uses an explicit numeric panel
+command rather than claiming the same direct edge-click gesture or QS parity.
+The existing control-net segment operation still moves its two endpoint poles;
+the new operation translates the complete natural boundary curve.
+
+Seven focused session tests cover all four sides, lock refusal without partial
+movement, protected/solid/pending/symmetry refusal and recovery from a CAD
+rejection. A separate real session/dispatcher/OCCT test on a synthetic imported
+STEP sheet moved the complete U0 edge by 0.2 mm. At 33 samples, maximum
+translation error was 2.50e-15 mm; independent STEP reimport measured at most
+2.66e-15 mm. The result remained valid with one face and four edges; Undo
+restored all poles and sampled edge positions exactly in this case.
+Evidence: `evidence/whole-boundary/kernel-session/result.json`; test:
+`tests/wholeBoundary-session-occt.test.ts`. Host/transport are simulated in
+memory, and no browser was launched. Arbitrary curved/rational sheets, trimmed
+boundaries, shared edges, solid faces and the packaged UI are not qualified by
+this new command's test. Earlier `freeBoundaryProof.test.ts`,
+`freeBoundaryRational.test.ts` and `e2e-free-boundary.mjs` establish separate
+reconstruction foundations and do not replace this command's GUI acceptance.
+
 ### Surface-point alignment, source integration checkpoint
 
 The shared-workspace panel offers **Punto sulla scansione** and **Punto sul CAD

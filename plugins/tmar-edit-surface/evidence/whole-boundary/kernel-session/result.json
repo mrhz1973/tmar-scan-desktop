@@ -1,0 +1,25 @@
+{
+  "scope": "Single natural open STEP sheet, complete U0 boundary moved without duplication",
+  "transport": "Real session, editor.worker dispatcher and OCCT; in-memory transport and simulated host",
+  "browser": "NOT_RUN",
+  "deltaMm": [
+    0,
+    0,
+    0.2
+  ],
+  "samples": 33,
+  "movedPoles": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "maxEdgeTranslationErrorMm": 2.4980018054066022e-15,
+  "maxStepEdgeTranslationErrorMm": 2.651202354599825e-15,
+  "stepValid": true,
+  "faceCount": 1,
+  "edgeCount": 4,
+  "maxUndoErrorMm": 0,
+  "inputHash": "7928eb576f986bfc30bb0eb85722353911df05fbdcfc69516e462301cb76dd4f"
+}
