@@ -4,6 +4,7 @@ import type { WorkspaceSurfaceSession, WholeBoundarySide } from './workspaceSess
 import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
 import { hasSurfaceZebra } from './SurfaceViewport'
+import { formatTangentSpanDisplacement } from './tangentSpan'
 import './workspaceSurface.css'
 
 /** The host owns Apply and Cancel; this panel edits only the session draft. */
@@ -379,6 +380,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         {state.tangentSpanReview && <p role="status" data-test="surface-tangent-span-review">
           U da {state.tangentSpanReview.u[0].toPrecision(7)} a {state.tangentSpanReview.u[1].toPrecision(7)}, V da {state.tangentSpanReview.v[0].toPrecision(7)} a {state.tangentSpanReview.v[1].toPrecision(7)}.
           Verranno mossi {state.tangentSpanReview.movedCount} dei {state.tangentSpanReview.supportCount} poli di supporto. Gli altri sono già sul piano entro la tolleranza.
+          {' '}Il limite superiore stimato per lo spostamento della superficie è {formatTangentSpanDisplacement(state.tangentSpanReview.maxSurfaceDisplacementMm)} mm, calcolato dai poli. Lo spostamento effettivo può essere inferiore e variare tra punti.
         </p>}
         <button type="button" data-test="surface-tangent-span-apply" disabled={disabled || !state.tangentSpanReview}
           onClick={() => attempt(() => controller.applyTangentSpan())}>Applica alla zona UV</button>

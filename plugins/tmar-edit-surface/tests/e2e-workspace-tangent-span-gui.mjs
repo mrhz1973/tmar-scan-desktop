@@ -309,6 +309,14 @@ try {
   assert(review.pin?.pin?.at && review.pin?.pin?.normal, 'Viewport click did not resolve to a real CAD point and normal.')
   const reviewText = await page.$eval('[data-test=surface-tangent-span-review]', element => element.textContent)
   assert.match(reviewText, /Verranno mossi/i, 'Review summary is not visible in the panel.')
+  const reviewedDisplacementLimit = review.review.maxSurfaceDisplacementMm
+  assert(Number.isFinite(reviewedDisplacementLimit) && reviewedDisplacementLimit >= 0,
+    `Review must expose a finite maximum surface displacement: ${reviewedDisplacementLimit}`)
+  const displayedLimit = reviewText.match(/(?:spostamento|massimo)[^\d]*([\d.,]+)\s*mm/i)
+  assert(displayedLimit, `Review text must show the maximum surface displacement limit: ${reviewText}`)
+  const displayedLimitMm = Number(displayedLimit[1].replace(',', '.'))
+  assert(Number.isFinite(displayedLimitMm) && displayedLimitMm >= reviewedDisplacementLimit,
+    `Displayed rounded limit ${displayedLimitMm} mm must cover review value ${reviewedDisplacementLimit} mm.`)
   assert.equal(await page.$eval('[data-test=surface-tangent-span-apply]', element => element.disabled), false,
     'The explicit zone Apply control must be enabled after review.')
   report.review = { ...review.review, text: reviewText, clickedUv: [review.pin.pin.anchor.u, review.pin.pin.anchor.v],
@@ -405,6 +413,12 @@ try {
     return { side: span.side, uBounds: span.uBounds, vBounds: span.vBounds, samples,
       maxDisplacementMm: Math.max(...samples.map(sample => sample.displacementMm)) }
   })
+  const measuredSurfaceDisplacementMm = Math.max(
+    ...sampleDisplacements,
+    ...adjacentSpanEffects.flatMap(span => span.samples.map(sample => sample.displacementMm)),
+  )
+  assert(reviewedDisplacementLimit + 1e-9 >= measuredSurfaceDisplacementMm,
+    `Review limit ${reviewedDisplacementLimit} mm must cover measured span and adjacent sample displacement ${measuredSurfaceDisplacementMm} mm.`)
   const protectedBoundaryIds = review.locked
   const protectedBoundaryMaxDeltaMm = protectedBoundaryIds.reduce((maxDelta, id) => {
     const before = review.net.poles[id], after = afterApply.net.poles[id]
@@ -428,6 +442,9 @@ try {
     samples: sampleUVs.map((uv, i) => ({ uv, before: samplesBefore[i], after: samplesAfter[i], displacementMm: sampleDisplacements[i],
       beforePlaneResidualMm: beforeSampleResiduals[i], afterPlaneResidualMm: afterSampleResiduals[i] })),
     adjacentSpanEffects,
+    surfaceDisplacementLimit: { reviewedMm: reviewedDisplacementLimit, displayedMm: displayedLimitMm,
+      measuredMaxSampleMm: measuredSurfaceDisplacementMm,
+      coversMeasuredSamples: reviewedDisplacementLimit + 1e-9 >= measuredSurfaceDisplacementMm },
     protectedBoundary: { poleCount: protectedBoundaryIds.length, maxDisplacementMm: protectedBoundaryMaxDeltaMm },
     changedPoleIds: changedIds }
   check(true, 'Apply moves only reviewed support poles; UV samples become planar and the exported solid remains valid')

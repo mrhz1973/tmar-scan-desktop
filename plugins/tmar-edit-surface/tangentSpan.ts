@@ -8,6 +8,39 @@ export interface TangentSpanReview {
   readonly supportCount: number
   readonly movedCount: number
   readonly maxPoleDistanceMm: number
+  readonly maxSurfaceDisplacementMm: number
+}
+
+const floatBits = new DataView(new ArrayBuffer(8))
+
+function nextUpNonnegative(value: number) {
+  if (value === Infinity) return value
+  floatBits.setFloat64(0, value)
+  floatBits.setBigUint64(0, floatBits.getBigUint64(0) + 1n)
+  return floatBits.getFloat64(0)
+}
+
+function poleDisplacementBound(before: Point, after: Point) {
+  let squared = 0
+  for (let axis = 0; axis < before.length; axis++) {
+    if (before[axis] === after[axis]) continue
+    const difference = nextUpNonnegative(Math.abs(after[axis] - before[axis]))
+    squared = nextUpNonnegative(squared + nextUpNonnegative(difference * difference))
+  }
+  if (squared === 0) return 0
+  // A rounded square strictly above the outward sum certifies the root.
+  let bound = Math.sqrt(squared)
+  for (let step = 0; step < 4 && bound * bound <= squared; step++)
+    bound = nextUpNonnegative(bound)
+  if (!Number.isFinite(bound) || !(bound * bound > squared))
+    throw new Error('Limite di spostamento della superficie non verificabile.')
+  return bound
+}
+
+/** Round the displayed upper bound outward to whole micrometres. */
+export function formatTangentSpanDisplacement(boundMm: number) {
+  const micrometres = boundMm === 0 ? 0 : Math.ceil(nextUpNonnegative(boundMm * 1000))
+  return (micrometres / 1000).toFixed(3).replace('.', ',')
 }
 
 function interval(knots: number[], multiplicities: number[], degree: number, parameter: number) {
@@ -33,6 +66,7 @@ export function planTangentSpan(net: Net, u: number, v: number, origin: Point, n
   const distanceBound = (pole: Point) => Math.abs(signedDistance(pole)) +
     64 * Number.EPSILON * Math.max(1, ...pole.map(Math.abs), ...origin.map(Math.abs))
   let maxPoleDistanceMm = 0
+  let maxSurfaceDisplacementMm = 0
   for (let i = 0; i <= net.du; i++) {
     for (let j = 0; j <= net.dv; j++) {
       const id = (alongU.first + i) * net.nv + alongV.first + j
@@ -48,11 +82,16 @@ export function planTangentSpan(net: Net, u: number, v: number, origin: Point, n
       if (!Number.isFinite(bound) || bound > tolerance)
         throw new Error('Non è possibile verificare la planarità dello span alla precisione richiesta.')
       maxPoleDistanceMm = Math.max(maxPoleDistanceMm, bound)
+      const projected = projections.get(id)
+      if (projected)
+        maxSurfaceDisplacementMm = Math.max(maxSurfaceDisplacementMm, poleDisplacementBound(pole, projected))
     }
   }
+  // Knots and weights stay fixed. On the entire domain, the surface displacement
+  // is a convex combination of pole displacements, including across adjacent spans.
   const review: TangentSpanReview = Object.freeze({
     u: alongU.bounds, v: alongV.bounds, supportCount: (net.du + 1) * (net.dv + 1),
-    movedCount: projections.size, maxPoleDistanceMm,
+    movedCount: projections.size, maxPoleDistanceMm, maxSurfaceDisplacementMm,
   })
   return { review, projections }
 }
