@@ -1116,7 +1116,33 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
           if(pending.dragMode!=='screen'&&!direction){cancelPendingPick();return}
           const frame=createDragFrame({camera,partWorld:matrix,rect,anchor:pick.point,clientX:pending.start.clientX,clientY:pending.start.clientY,
             ...(pending.dragMode==='screen'?{mode:'screen' as const}:{mode:'axis' as const,direction:direction!,allowViewAlignedDepth:true})})
-          const gesture=frame?createSurfaceGesture({frame,poles:net.poles,selected:ids,start:pending.start,strength:pending.strength}):null
+          // The CAD-verified surface point is the translation anchor. Boundary
+          // control poles can lie off the surface, so using one as the snap
+          // origin would introduce a systematic offset on curved edges.
+          const inverse=new THREE.Matrix3().setFromMatrix4(matrix.clone().invert())
+          const snapDirection=pending.dragMode==='screen'
+            ? new THREE.Vector3(0,0,-1).transformDirection(camera.matrixWorld).applyMatrix3(inverse).normalize()
+            : new THREE.Vector3(...direction!)
+          let reportedInvalidTarget=false
+          const gesture=frame?createSurfaceGesture({frame,poles:net.poles,selected:ids,start:pending.start,strength:pending.strength,
+            resolveDelta:delta=>{
+              try {
+                refreshReferences();refreshNeighbours()
+                const targets=[...referenceTargets,...neighbourTargets].filter(target=>{
+                  try{return target.current()}
+                  catch{
+                    if(!reportedInvalidTarget){reportedInvalidTarget=true;report('Magnete: un riferimento non è più disponibile; gli eventuali altri restano utilizzabili.')}
+                    return false
+                  }
+                }).map(target=>target.mesh)
+                const anchor=new THREE.Vector3(...pick.point)
+                const hit=snapAlong(anchor.clone().add(new THREE.Vector3(...delta)),snapDirection,
+                  owner.getViewState().snapDistance,targets,snapSectionInPart(matrix))
+                if(!hit){hideFeedback();return null}
+                showFeedback(hit)
+                return point(hit.point.clone().sub(anchor))
+              }catch(error){hideFeedback();report(`Magnete non disponibile: ${errorText(error)}`);return null}
+            }}):null
           if(!gesture){cancelPendingPick();return}
           // Clear only after the guarded receipt is consumed. No geometry has
           // changed while the query was pending, and Up cannot revive it.
