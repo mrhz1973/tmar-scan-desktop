@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect,useRef,useState, useSyncExternalStore } from 'react'
 import type { WorkspaceSurfaceSession, WholeBoundarySide } from './workspaceSession'
 import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
@@ -14,6 +14,27 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const [smooth, setSmooth] = useState(0.5)
   const [factor, setFactor] = useState(1.1)
   const [pointBudget, setPointBudget] = useState(1)
+  const [multipleTargets,setMultipleTargets]=useState(false)
+  const panelRef=useRef<HTMLDivElement>(null),removedPair=useRef<number|null>(null)
+  const previousTarget=useRef<typeof state.surfaceTarget>(null)
+  useEffect(()=>{
+    const panel=panelRef.current
+    if(!panel)return
+    if(removedPair.current!==null&&state.surfaceTargetBatch){
+      const buttons=panel.querySelectorAll<HTMLButtonElement>('[data-test=surface-point-remove]')
+      const next=buttons[Math.min(removedPair.current,buttons.length-1)]??panel.querySelector<HTMLButtonElement>('[data-test=surface-point-cancel]')
+      next?.focus();removedPair.current=null
+    }
+    const previous=previousTarget.current;previousTarget.current=state.surfaceTarget
+    if(previous&&!state.surfaceTarget){
+      const active=panel.ownerDocument.activeElement
+      if(active===panel.ownerDocument.body||(active&&panel.contains(active))){
+        const start=panel.querySelector<HTMLButtonElement>(`[data-test=surface-point-${previous}]`)
+        const fallback=panel.querySelector<HTMLInputElement>('[data-test=surface-point-multiple]')
+        ;(start&&!start.disabled?start:fallback)?.focus()
+      }
+    }
+  },[state.surfaceTargetBatch,state.surfaceTarget])
   const [wholeBoundary,setWholeBoundary] = useState<WholeBoundarySide>('U0')
   const [boundaryAxis,setBoundaryAxis] = useState<0|1|2>(2)
   const [boundaryDistance,setBoundaryDistance] = useState(.1)
@@ -80,7 +101,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       setError('')
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
   }
-  return <div className="workspace-surface-panel" data-test="workspace-surface-parameters">
+  return <div ref={panelRef} className="workspace-surface-panel" data-test="workspace-surface-parameters">
     <p>Seleziona una faccia nella vista oppure nell’elenco. La modifica resta una bozza CAD fino ad Applica.</p>
     <p>Esporta STEP crea un file locale della geometria CAD convalidata; il file STEP non contiene le note.</p>
     <label>Faccia CAD
@@ -141,11 +162,24 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <p>Seleziona i poli liberi, scegli il riferimento e clicca un punto della faccia. Cerco il riferimento esterno più vicino lungo la normale CAD, nei due versi, entro {state.snapDistance} mm. Il punto della superficie si muove; i poli possono muoversi di più.</p>
         <label>Limite spostamento di ciascun polo · mm<input data-test="surface-point-budget" type="number" min="0.001" max="1000" step="any" value={Number.isFinite(pointBudget)?pointBudget:''}
           disabled={disabled || !!state.surfaceTarget} onChange={e=>setPointBudget(e.target.valueAsNumber)} /></label>
-        <div className="row"><button type="button" data-test="surface-point-scan" disabled={disabled || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
-          onClick={()=>attempt(()=>controller.beginSurfaceTarget('scan',pointBudget))}>Punto sulla scansione</button>
-        <button type="button" data-test="surface-point-cad" disabled={disabled || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
-          onClick={()=>attempt(()=>controller.beginSurfaceTarget('cad',pointBudget))}>Punto sul CAD esterno</button></div>
-        {state.surfaceTarget && <><p role="status">Clicca un punto sulla faccia selezionata. Destinazione: {state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.</p>
+        <label><input data-test="surface-point-multiple" type="checkbox" checked={multipleTargets} disabled={disabled||!!state.surfaceTarget}
+          onChange={e=>setMultipleTargets(e.target.checked)}/>Raccogli più punti prima di applicare</label>
+        <div className="row"><button type="button" data-test="surface-point-scan" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
+          onClick={()=>attempt(()=>controller.beginSurfaceTarget('scan',pointBudget,multipleTargets))}>{multipleTargets?'Raccogli sulla scansione':'Punto sulla scansione'}</button>
+        <button type="button" data-test="surface-point-cad" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || !Number.isFinite(pointBudget) || pointBudget<=0 || pointBudget>1000}
+          onClick={()=>attempt(()=>controller.beginSurfaceTarget('cad',pointBudget,multipleTargets))}>{multipleTargets?'Raccogli sul CAD esterno':'Punto sul CAD esterno'}</button></div>
+        {state.surfaceTarget && <><p role="status" aria-live="polite" aria-atomic="true" data-test="surface-point-announcement">{state.surfaceTargetBatch?
+          `Punti raccolti: ${state.surfaceTargetBatch.length} di 8. ${state.surfaceTargetBatch.length>=2?'Puoi applicare gli agganci con una sola Undo.':'Servono almeno due punti per applicare.'} Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`:
+          `Clicca un punto sulla faccia selezionata. Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`}</p>
+          {state.surfaceTargetBatch && <>
+            <p>Da 2 a 8 agganci simultanei. Nessuna geometria cambia durante la raccolta. Blu: punto CAD; arancio: destinazione. Le coordinate sono nel corpo, in mm.</p>
+            <ol data-test="surface-point-pairs">{state.surfaceTargetBatch.map((pair,index)=><li key={index}>
+              {pair.label}: ({pair.at.map(x=>x.toFixed(3)).join(', ')}) → ({pair.target.map(x=>x.toFixed(3)).join(', ')}) · {Math.hypot(...pair.at.map((x,d)=>x-pair.target[d])).toFixed(4)} mm
+              <button type="button" data-test="surface-point-remove" disabled={disabled} onClick={()=>attempt(()=>{removedPair.current=index;controller.removeSurfaceTarget(index)})}>Rimuovi punto {index+1}</button>
+            </li>)}</ol>
+            <button type="button" data-test="surface-point-apply" disabled={disabled||state.surfaceTargetBatch.length<2}
+              onClick={()=>attempt(()=>controller.applySurfaceTargets())}>Applica {state.surfaceTargetBatch.length} agganci · una Undo</button>
+          </>}
           <button type="button" data-test="surface-point-cancel" onClick={()=>controller.cancelSurfaceTarget()}>Annulla scelta punto</button></>}
         <p>Il riferimento usa i triangoli visualizzati. L’esito richiede la verifica CAD; le protezioni dei bordi restano attive. Disattiva simmetria e tangenze aggiunte per usare questo comando.</p>
       </fieldset>

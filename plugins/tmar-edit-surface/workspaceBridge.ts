@@ -25,6 +25,11 @@ export interface WorkspacePointTarget {
 }
 export type WorkspacePointTargetResolver = (point: Point, normal: Point, distance: number,
   kind: 'scan' | 'cad') => WorkspacePointTarget | null
+export interface WorkspaceSurfaceTargetPair {
+  readonly at:Point
+  readonly target:Point
+  readonly label:string
+}
 
 /** Part-frame bounds only. The optional host action owns all camera framing. */
 export interface WorkspaceReticleFrame {
@@ -71,7 +76,7 @@ export interface WorkspaceSurfaceViewState {
   readonly snapDistance: number
   readonly busy: boolean
   readonly placingNote: boolean
-  readonly surfaceTarget?: { readonly kind:'scan'|'cad'; readonly sourceBodyId:number } | null
+  readonly surfaceTarget?: { readonly kind:'scan'|'cad'; readonly sourceBodyId:number;readonly pairs?:readonly WorkspaceSurfaceTargetPair[] } | null
   /** Only anchors resolved against the currently displayed valid preview. */
   readonly notePins: readonly Point[]
   readonly stripes: WorkspaceStripeSettings | null

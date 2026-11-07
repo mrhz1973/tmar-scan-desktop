@@ -1,0 +1,20 @@
+{
+  "scope": "Experimental 2-8 simultaneous finite NURBS point constraints, not global or regional fitting",
+  "implementation": "Cyclic reuse of unchanged targetSurfacePoint; maximum 64 passes; acceptance requires every final residual on one candidate net",
+  "unitTests": {"passed": 2, "checks": ["sequential targeting can move first contact", "simultaneous constraints preserve both", "rational weights and basis unchanged", "unauthorized poles unchanged", "duplicates and conflicting UV constraints refused", "insufficient influence and movement-budget refusal", "incompatible constraints refused", "source unchanged"]},
+  "nativeDraftTest": {
+    "passed": 1,
+    "fixture": "Synthetic 20x30x10 imported STEP box, top face refined exactly to 7x7, one manually locked interior pole",
+    "transport": "Real SurfaceDraft, editor.worker dispatcher and OCCT; simulated worker transport; no host",
+    "passes": 3,
+    "maxTargetResidualMm": 3.9144895776417064e-13,
+    "boundarySamples": 68,
+    "maxBoundaryErrorMm": 1.98959896019249e-13,
+    "minimumBoundaryNormalDot": 1,
+    "firstContactUndoResidualMm": 5.5074224284821204e-14,
+    "stepValid": true, "faces": 6, "solids": 1,
+    "manualLockPreserved": true, "singleBatchUndo": true, "sourceUnchanged": true
+  },
+  "browser": "NOT_RUN",
+  "limitations": ["No batch UI, current single-target path unchanged", "Caller must verify CAD anchors, trim classification, protected poles, source/reference revisions and lifetime before a single commit", "Slow or ill-conditioned systems can refuse despite a possible solution", "Movement budget is relative to the supplied input net and enforced during every projection", "No real scan, global deviation, project persistence, physical pointer or QuickSurface parity qualification"]
+}

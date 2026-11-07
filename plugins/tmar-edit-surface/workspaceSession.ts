@@ -18,9 +18,10 @@ import { readRecipe, readCurvedRecipe, type SurfaceEditRecipe, type SurfaceEditR
 import { readAdaptiveLockedRecipe, type AdaptiveLockedRecipe } from './adaptiveLockedRecipe'
 import type { AdaptiveSelection } from './editor.worker'
 import type { WorkspaceLayerFactory, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState, WorkspaceStripeSettings, WorkspaceStripViewState } from './workspaceBridge'
-import type { WorkspacePointTargetResolver } from './workspaceBridge'
+import type { WorkspacePointTargetResolver,WorkspacePointTarget,WorkspaceSurfaceTargetPair } from './workspaceBridge'
 import { wholeBoundaryIndices, type WholeBoundarySide } from './wholeBoundary'
 import type {BoundaryCadCandidate,VerifiedBoundaryPick,BoundaryVisibilityCadResult} from './boundaryVisibilityCad'
+import {SurfacePointTargetsCandidateRefusal} from './surfacePointTargetsExperimental'
 export type { WholeBoundarySide } from './wholeBoundary'
 
 export interface WorkspaceSurfaceNote {
@@ -84,6 +85,7 @@ export interface WorkspaceSurfacePanelState {
   readonly snap: boolean
   readonly snapDistance: number
   readonly surfaceTarget: 'scan' | 'cad' | null
+  readonly surfaceTargetBatch:readonly WorkspaceSurfaceTargetPair[]|null
   readonly canTargetPoint: boolean
   readonly dragMode: DragMode
   readonly axis: number
@@ -225,7 +227,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   private message: string | null = null
   private snap = true
   private snapDistance = 1
-  private surfaceTarget: { kind:'scan'|'cad'; snapshot:SurfaceDraftSnapshot; budget:number; distance:number; epoch:number } | null = null
+  private surfaceTarget: { kind:'scan'|'cad'; snapshot:SurfaceDraftSnapshot; budget:number; distance:number; epoch:number;
+    points?:{anchor:DraftAnchor;at:Point;reference:WorkspacePointTarget}[] } | null = null
   private dragMode: DragMode = 'local'
   private axis = 2
   private dragStrength = 1
@@ -971,21 +974,77 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.change(() => { if (!Number.isFinite(value) || value < 0 || value > .9) throw new Error('Trasparenza non valida.'); this.transparency = value }, false, false, true)
   }
   setSnap(value: boolean): void { this.change(() => { this.snap = value }) }
-  beginSurfaceTarget(kind: 'scan'|'cad', budget: number): void {
+  beginSurfaceTarget(kind: 'scan'|'cad', budget: number,multiple=false): void {
     this.change(() => {
       if (!this.panel.canTargetPoint || (kind!=='scan' && kind!=='cad') || !Number.isFinite(budget) || budget<=0 || budget>1000)
         throw new Error('Seleziona poli liberi su una faccia CAD valida, senza simmetria o tangenze aggiunte.')
-      this.surfaceTarget={kind,snapshot:this.draft.getSnapshot(),budget,distance:this.snapDistance,epoch:this.selectionEpoch}
+      this.surfaceTarget={kind,snapshot:this.draft.getSnapshot(),budget,distance:this.snapDistance,epoch:this.selectionEpoch,...(multiple?{points:[]}:{})}
       this.message='Clicca un punto sulla faccia: cercherò il riferimento esterno più vicino lungo la normale CAD.'
     })
   }
   cancelSurfaceTarget(): void {
     if(this.surfaceTarget) {this.surfaceTarget=null;this.message=null;this.refresh()}
   }
+  removeSurfaceTarget(index:number):void{
+    this.assertMutable()
+    const operation=this.surfaceTarget
+    if(!operation?.points||!Number.isInteger(index)||index<0||index>=operation.points.length)throw Error('Punto raccolto non disponibile.')
+    operation.points=operation.points.filter((_,i)=>i!==index);this.refresh()
+  }
+  private async collectSurfaceTarget(point:Point,resolve:WorkspacePointTargetResolver):Promise<void>{
+    const operation=this.surfaceTarget!,before=operation.snapshot,revision=before.preview?.previewRevision
+    if(!operation.points||operation.points.length>=8||revision===undefined)throw Error('Puoi raccogliere al massimo otto punti.')
+    const current=()=>{
+      this.assertLive()
+      return this.surfaceTarget===operation&&this.draft.getSnapshot()===before&&this.selectionEpoch===operation.epoch&&
+        !this.frozen&&operation.points!.every(p=>p.reference.current())
+    }
+    this.busy=true;this.refresh()
+    try{
+      if(!current())throw Error('Bozza o riferimenti raccolti cambiati.')
+      const pin=await this.runtime.worker.ask<{anchor:DraftAnchor;at:Point;normal:Point}>({action:'notePick',point:pointCopy(point),previewRevision:revision},this.context.signal)
+      if(!current()||!pin||!finitePoint(pin.at)||!finitePoint(pin.normal)||pin.anchor?.face!==this.face)throw Error('Anchor CAD non disponibile per la raccolta.')
+      if(operation.points.some(p=>Math.hypot(...p.at.map((x,d)=>x-pin.at[d]))<=1e-7))throw Error('Questo punto CAD è già nella raccolta.')
+      const target=resolve(pointCopy(pin.at),pointCopy(pin.normal),operation.distance,operation.kind)
+      if(!target||target.kind!==operation.kind||!finitePoint(target.point)||!target.current())throw Error('Nessun riferimento esterno valido per questo punto.')
+      if(!current())throw Error('Bozza o riferimenti raccolti cambiati.')
+      // Freeze the selected destination; retain its original provenance check.
+      operation.points=[...operation.points,{anchor:structuredClone(pin.anchor),at:pointCopy(pin.at),
+        reference:{kind:target.kind,label:target.label,point:pointCopy(target.point),current:()=>target.current()}}]
+      this.message=`${operation.points.length} punti raccolti. Rivedi le coppie prima di applicare; nessuna geometria modificata.`
+    }catch(error){
+      try{if(!current()&&this.surfaceTarget===operation)this.surfaceTarget=null}catch{if(this.surfaceTarget===operation)this.surfaceTarget=null}
+      throw error
+    }finally{this.busy=false;if(!this.disposed)this.refresh()}
+  }
+  async applySurfaceTargets():Promise<void>{
+    this.assertMutable()
+    const operation=this.surfaceTarget,points=operation?.points
+    if(!operation||!points||points.length<2)throw Error('Raccogli almeno due punti prima di applicare.')
+    const current=()=>{
+      this.assertLive()
+      return this.surfaceTarget===operation&&this.selectionEpoch===operation.epoch&&!this.frozen&&points.every(p=>p.reference.current())
+    }
+    let retainBatch=false
+    this.busy=true;this.refresh()
+    try{
+      const result=await this.draft.targetPointsExperimental(operation.snapshot,points.map(p=>({anchor:p.anchor,target:p.reference.point})),
+        {maxPoleDisplacement:operation.budget,minInfluence:.01,residualTolerance:1e-7},current)
+      this.draftEpoch++;this.historyRevision++
+      this.message=`${points.length} agganci simultanei: residuo numerico massimo ${Math.max(...result.residuals).toExponential(2)} mm. Attendi la verifica CAD.`
+    }catch(error){
+      if(error instanceof SurfacePointTargetsCandidateRefusal){
+        try{retainBatch=current()&&this.draft.getSnapshot()===operation.snapshot}catch{/* Changed source or revoked reference: discard. */}
+      }
+      if(retainBatch)this.message='Agganci conservati per la revisione. Nessuna geometria modificata: rimuovi punti o annulla la raccolta.'
+      throw error
+    }finally{if(!retainBatch)this.surfaceTarget=null;this.busy=false;if(!this.disposed){this.refresh();this.resolveNotes()}}
+  }
   async pickSurfaceTarget(point: Point | null, resolve: WorkspacePointTargetResolver): Promise<void> {
     this.assertMutable()
     const operation=this.surfaceTarget
     if(!operation || !point || !finitePoint(point)) throw new Error('Clicca sulla faccia CAD selezionata.')
+    if(operation.points)return this.collectSurfaceTarget(point,resolve)
     const before=operation.snapshot,revision=before.preview?.previewRevision
     if(this.draft.getSnapshot()!==before || revision===undefined || this.gesture!=='idle' || this.strip || this.stripPending)
       throw new Error('La bozza del punto superficie è cambiata.')
@@ -1013,6 +1072,40 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     }
   }
   setSnapDistance(value: number): void { this.change(() => { if (!Number.isFinite(value) || value < .001 || value > 1000) throw new Error('Portata magnete non valida.'); this.snapDistance = value }) }
+  /** Experimental batch entry only. No viewport collection UI is mounted.
+   * Seeds are part-mm picks; CAD supplies every UV anchor and normal, and the
+   * existing resolver must supply a current external scan/CAD reference. */
+  async targetSurfacePointsExperimental(kind:'scan'|'cad',budget:number,seeds:readonly Point[],resolve:WorkspacePointTargetResolver):Promise<void>{
+    this.assertMutable()
+    const input=structuredClone(seeds)
+    if(this.surfaceTarget||!Array.isArray(input)||input.length<2||input.length>8||input.some(p=>!finitePoint(p)))
+      throw Error('Sono richiesti da due a otto punti superficie e nessun aggancio già attivo.')
+    this.beginSurfaceTarget(kind,budget)
+    const operation=this.surfaceTarget!,before=operation.snapshot,revision=before.preview!.previewRevision!
+    const references:ReturnType<WorkspacePointTargetResolver>[]=[]
+    const current=()=>{
+      this.assertLive()
+      return this.surfaceTarget===operation&&this.selectionEpoch===operation.epoch&&!this.frozen&&references.every(r=>r?.current())
+    }
+    this.busy=true;this.refresh()
+    try{
+      const points:{anchor:DraftAnchor;target:Point}[]=[]
+      for(const seed of input){
+        const pin=await this.runtime.worker.ask<{anchor:DraftAnchor;at:Point;normal:Point}>({action:'notePick',point:pointCopy(seed),previewRevision:revision},this.context.signal)
+        if(!current()||this.draft.getSnapshot()!==before||!pin||!finitePoint(pin.at)||!finitePoint(pin.normal)||!pin.anchor||pin.anchor.face!==this.face)
+          throw Error('Faccia o riferimenti cambiati durante la scelta dei punti simultanei.')
+        const target=resolve(pointCopy(pin.at),pointCopy(pin.normal),operation.distance,kind)
+        if(!target||target.kind!==kind||!finitePoint(target.point)||!target.current())throw Error('Riferimento esterno non disponibile per uno dei punti simultanei.')
+        references.push(target);points.push({anchor:structuredClone(pin.anchor),target:pointCopy(target.point)})
+      }
+      const result=await this.draft.targetPointsExperimental(before,points,{maxPoleDisplacement:budget,minInfluence:.01,residualTolerance:1e-7},current)
+      this.draftEpoch++;this.historyRevision++
+      this.message=`${points.length} punti simultanei: residuo numerico massimo ${Math.max(...result.residuals).toExponential(2)} mm. Attendi la verifica CAD.`
+    }finally{
+      this.surfaceTarget=null;this.busy=false
+      if(!this.disposed){this.refresh();this.resolveNotes()}
+    }
+  }
   setDragMode(value: DragMode): void { this.change(() => { if (!['axis','screen','local'].includes(value)) throw new Error('Modalità non valida.'); this.dragMode = value }) }
   setAxis(value: number): void { this.change(() => { if (![0,1,2].includes(value)) throw new Error('Asse non valido.'); this.axis = value }) }
   setDragStrength(value: number): void { this.change(() => { if (!Number.isFinite(value) || value < .05 || value > 1) throw new Error('Intensità non valida.'); this.dragStrength = value }) }
@@ -1840,6 +1933,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       !this.surfaceTarget && !this.notes.length && !strip && !this.stripPending && this.gesture==='idle' && this.faces.length===1 &&
       !!face?.freeBoundary && d.freeBoundary && !tangency && d.cylinderSession===null && !!d.net &&
       d.net===d.committedNet && d.validNet===d.net && !d.calculating && !d.previewStale
+    const surfaceTargetBatch=this.surfaceTarget?.points?Object.freeze(this.surfaceTarget.points.map(p=>Object.freeze({at:freezePoint(p.at),target:freezePoint(p.reference.point),label:p.reference.label}))):null
     const canTargetPoint=!adaptive && !this.disposed && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending &&
       this.gesture==='idle' && !this.symmetry && !tangency && d.cylinderSession===null && !!d.net && d.net===d.committedNet &&
       d.validNet===d.net && !d.calculating && !d.previewStale && d.selected.some(i=>!locked.includes(i) && !d.hiddenPoles.includes(i))
@@ -1856,7 +1950,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
         !d.locks.length && !this.busy && !this.frozen && !this.placingNote && !strip && !this.stripPending && this.gesture==='idle',
       canUndo, canRedo, calculating: d.calculating || this.stripPending,
       busy: this.busy || !!this.frozen, message, snap: this.snap, snapDistance: this.snapDistance,
-      surfaceTarget:this.surfaceTarget?.kind ?? null,canTargetPoint,
+      surfaceTarget:this.surfaceTarget?.kind ?? null,surfaceTargetBatch,canTargetPoint,
       dragMode: this.dragMode, axis: this.axis, dragStrength: this.dragStrength, selectionMode: this.selectionMode, navigationOnly: this.navigationOnly,
       showNet: this.showNet, stripes: this.stripes, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
       mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency,
@@ -1868,7 +1962,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       wholeBoundaryDrag:this.wholeBoundaryDrag ? {side:this.wholeBoundaryDrag.side,canStart:canMoveWholeBoundary}:null,
       axis: this.axis, dragStrength: this.dragStrength, showNet: this.showNet, snap: this.snap,
       snapDistance: this.snapDistance, busy: this.busy || !!this.frozen, placingNote: this.placingNote,
-      surfaceTarget:this.surfaceTarget ? {kind:this.surfaceTarget.kind,sourceBodyId:this.source.bodyId}:null,
+      surfaceTarget:this.surfaceTarget ? {kind:this.surfaceTarget.kind,sourceBodyId:this.source.bodyId,...(surfaceTargetBatch?{pairs:surfaceTargetBatch}:{})}:null,
       stripes: this.stripes, notePins, symmetry: this.symmetry, mirrorAxis: this.mirrorAxis,
       mirrorOffset: this.mirrorOffset, symmetryPartners, symmetryBlocked, transparency: this.transparency, strip:stripView, directStrip })
     for (const listener of this.listeners) listener()

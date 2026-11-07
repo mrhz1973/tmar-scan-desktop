@@ -115,6 +115,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   let selectedFace = -1
   let cageState: WorkspaceSurfaceViewState | null = null
   let pinState: readonly Point[] | null = null
+  let targetPairState:NonNullable<WorkspaceSurfaceViewState['surfaceTarget']>['pairs']
   let stripState: WorkspaceSurfaceViewState['strip'] = null
   let directSelection: DirectSelection | null = null
   let directDrawn: DirectSelection | null = null
@@ -478,14 +479,24 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
           mirrorPartners: state.symmetry ? state.symmetryPartners ?? null : null, radius })
         cageState = state
       }
-      if (pinState !== state.notePins) {
+      if (pinState !== state.notePins || targetPairState!==state.surfaceTarget?.pairs) {
         clearOwned(pins)
         if (displayed) for (const p of state.notePins) if (finitePoint(p)) {
           const marker = new THREE.Mesh(new THREE.OctahedronGeometry(radius * 0.026),
             new THREE.MeshBasicMaterial({ color: 0xff699b, depthTest: false, depthWrite: false }))
           marker.position.set(...p); marker.renderOrder = 8; pins.add(marker)
         }
+        if(displayed)for(const pair of state.surfaceTarget?.pairs??[]){
+          if(!finitePoint(pair.at)||!finitePoint(pair.target))continue
+          for(const [p,color] of [[pair.at,0x52baff],[pair.target,0xffa23c]] as const){
+            const marker=new THREE.Mesh(new THREE.OctahedronGeometry(radius*.026),new THREE.MeshBasicMaterial({color,depthTest:false,depthWrite:false}))
+            marker.position.set(...p);marker.renderOrder=8;pins.add(marker)
+          }
+          pins.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...pair.at),new THREE.Vector3(...pair.target)]),
+            new THREE.LineBasicMaterial({color:0xffa23c,depthTest:false,depthWrite:false})))
+        }
         pinState = state.notePins
+        targetPairState=state.surfaceTarget?.pairs
       }
       syncStrip(state)
       publishCageFrame(state)
@@ -995,7 +1006,11 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     cleanups.push(view.onCapturedPointer({ move, up, cancel: pointerCancel, lostCapture: pointerCancel }))
     cleanups.push(view.onInterruption(() => { cancelGesture(); clearDirect() }))
     cleanups.push(view.onFrame(positionStripHandle))
-    cleanups.push(view.subscribeReferences(() => { referencesDirty = true; retryReferencesAt = 0; if (!capture) sync() }))
+    cleanups.push(view.subscribeReferences(() => {
+      referencesDirty=true;retryReferencesAt=0
+      if(owner.getViewState().surfaceTarget?.pairs){owner.cancelSurfaceTarget?.();report('Raccolta annullata: i riferimenti esterni sono cambiati.')}
+      if(!capture)sync()
+    }))
     cleanups.push(owner.subscribe(sync))
     sync()
   } catch (error) {

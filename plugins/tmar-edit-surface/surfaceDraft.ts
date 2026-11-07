@@ -14,6 +14,7 @@ import type { AdaptiveSelection } from './editor.worker'
 import { readAdaptiveLockedRecipe, type AdaptiveLockedRecipe } from './adaptiveLockedRecipe'
 import { validatePlaneTangencyResult, validatePlaneTangencyConstraint, type PlaneTangencyRequest, type NaturalEdge } from './planeTangency'
 import { targetSurfacePoint, type SurfacePointTarget } from './surfacePointTarget'
+import {targetSurfacePointsExperimental,SurfacePointTargetsCandidateRefusal,type SimultaneousSurfaceTargets} from './surfacePointTargetsExperimental'
 
 export interface CylinderProvisionalPreview { kind: 'provisional'; mesh: Mesh; faceMeshes?: Mesh[] }
 
@@ -860,6 +861,47 @@ export class SurfaceDraft {
       throw new Error('Il punto CAD non coincide con il riferimento della superficie.')
     this.commit(candidate.net)
     return candidate
+  }
+
+  /** Experimental batch: every anchor and reference must remain valid before
+   * the one geometry/history commit. CAD validation still follows normally. */
+  async targetPointsExperimental(expected:SurfaceDraftSnapshot,points:readonly {anchor:DraftAnchor;target:Point}[],
+    options:Omit<SimultaneousSurfaceTargets,'points'|'editablePoles'>,targetsCurrent:()=>boolean):Promise<ReturnType<typeof targetSurfacePointsExperimental>>{
+    this.ensureActive()
+    const before=this.snapshot,preparation=this.runtime.history.current?.preparation
+    if(before!==expected||!targetsCurrent())throw Error('Bozza o riferimenti dei punti superficie cambiati.')
+    if(!before.net||before.net!==before.committedNet||before.validNet!==before.net||before.calculating||before.previewStale||
+      !before.preview?.valid||!Number.isSafeInteger(before.preview.previewRevision)||this.exportRequests||
+      this.proposingPlaneTangency||this.proposingCurvedTangency||before.cylinderSession!==null||before.planeTangency||before.curvedTangency||
+      preparation?.adaptiveSelection||!preparation)
+      throw Error('Attendi una bozza CAD valida e una preparazione supportata per i punti simultanei.')
+    const input=structuredClone(points),settings=structuredClone(options)
+    if(input.length<2||input.length>8||input.some(p=>!p?.anchor||p.anchor.face!==preparation.face||
+      !Number.isSafeInteger(p.anchor.selectionRevision)||p.anchor.selectionRevision<0||!Number.isFinite(p.anchor.u)||!Number.isFinite(p.anchor.v)))
+      throw Error('Anchor dei punti simultanei non coerenti con la faccia.')
+    const locked=new Set([...before.locks,...before.trimLocks,...before.hiddenPoles])
+    const editablePoles=before.selected.filter(i=>!locked.has(i)&&(before.freeBoundary||!boundaryLocked(before.net!,i,before.continuity)))
+    if(!editablePoles.length)throw Error('Seleziona poli liberi che influenzino i punti superficie.')
+    let result:ReturnType<typeof targetSurfacePointsExperimental>
+    try{result=targetSurfacePointsExperimental(before.net,{...settings,editablePoles,
+      points:input.map(p=>({u:p.anchor.u,v:p.anchor.v,target:p.target}))})}
+    catch(error){throw new SurfacePointTargetsCandidateRefusal(error)}
+    this.checkEdit(result.net)
+    const current=()=>{
+      this.ensureActive()
+      if(!targetsCurrent()||this.snapshot!==before||this.exportRequests||this.proposingPlaneTangency||this.proposingCurvedTangency)
+        throw Error('Bozza o riferimenti cambiati durante la verifica dei punti simultanei.')
+    }
+    for(let i=0;i<input.length;i++){
+      const resolved=await this.runtime.worker.ask<{at:Point}>({action:'noteResolve',anchor:input[i].anchor,previewRevision:before.preview.previewRevision!})
+      current()
+      if(!resolved||!Array.isArray(resolved.at)||resolved.at.length!==3||!resolved.at.every(Number.isFinite)||
+        Math.hypot(...resolved.at.map((x,d)=>x-result.before[i][d]))>1e-7)
+        throw Error('Un punto CAD non coincide con il suo anchor superficie.')
+    }
+    current()
+    this.commit(result.net)
+    return result
   }
 
   /** Restore the source surface even when points have since been manually locked. */

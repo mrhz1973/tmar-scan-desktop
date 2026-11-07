@@ -1,0 +1,18 @@
+{
+  "scope": "Plugin-only multi-target collection/review/apply/cancel UI and controller checkpoint",
+  "flow": ["Select authorized poles", "Enable multi-point collection", "Choose scan or external CAD", "Click 2-8 CAD surface points", "Review coordinate pairs and reference labels, remove if needed", "Apply once or cancel/Escape"],
+  "geometryDuringCollection": "UNCHANGED",
+  "viewport": "Existing face picker and THREE reference resolver reused; CAD points blue, destinations orange",
+  "checks": {"collectionControllerAndLayer": 8, "renderedPanelAriaLive": 1, "nativeCollection": 1},
+  "nativeCollection": {
+    "sessionDispatcherOcct": "REAL", "referenceIntersections": "REAL THREE meshes, two synthetic patches", "transport": "IN_PROCESS SIMULATED", "referenceLifetime": "IMMUTABLE TEST REFERENCES",
+    "reviewedPairs": 2, "oneGeometryCommit": true,
+    "maxTargetSkinDistanceMm": 7.155253887515298e-8,
+    "valid": true, "faces": 6, "solids": 1,
+    "undoNetRestored": true, "sourceUnchanged": true,
+    "inputHash": "50891ab6eb0c188e0e416c35879ade74029372e041b2f2c853772855246fbc26"
+  },
+  "accessibility": {"announcer": "Dynamic count and Apply availability tested at 0, 1 and 2 points", "controls": "Native checkbox/buttons", "focus": "Removal focuses next/previous Remove or Cancel; exit restores start or collection toggle when panel/body had focus", "focusAndKeyboardBrowserTest": "NOT_RUN; existing panel harness is server-rendered markup"},
+  "limitations": ["No browser/physical pointer/project persistence or packaged release qualification", "Native integration uses synthetic references and controlled lifetime, not a live scan project", "UI click/reference resolver independently covered with simulated viewport lease and real THREE intersections", "Finite point constraints only; no global fitting/deviation claim", "Fixed 64-pass solver can conservatively refuse correlated constraints"],
+  "hostChanges": "NONE"
+}

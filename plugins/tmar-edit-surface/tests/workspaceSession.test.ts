@@ -8,6 +8,7 @@ import { SurfaceRuntime } from '../surfaceRuntime'
 import { SurfaceDraft } from '../surfaceDraft'
 import { createWorkspaceSurfaceSession, type WorkspaceSurfaceSession } from '../workspaceSession'
 import { replaySurfaceHistory } from '../historyReplay'
+import {targetSurfacePoint} from '../surfacePointTarget'
 
 type Msg = { id: number; action: string; exportStep?: boolean; net?: Net; edge?:number; delta?:number[]; path?:number[][]; previous?:Array<{edge:number;delta:number[];path:number[][]}> }
 class FakeWorker {
@@ -255,6 +256,124 @@ describe('whole natural boundary movement',()=>{
     expect(t.session.getSnapshot().validation.kind).toBe('invalid')
     expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)
     t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    await t.session.dispose('cancelled')
+  })
+})
+
+describe('experimental simultaneous surface-point controller',()=>{
+  const pins=()=>[[.3,.4],[.7,.6]].map(([u,v])=>({anchor:{face:0,selectionRevision:1,u,v},
+    at:targetSurfacePoint(plane(),{u,v,target:[0,0,0],editablePoles:Array.from({length:25},(_,i)=>i),maxPoleDisplacement:10,minInfluence:.01,residualTolerance:1e-9}).before,normal:[0,0,1]}))
+  it('collects and reviews real target pairs without geometry, removes a point and applies the remaining pairs atomically',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    const resolve=(at:Point)=>({point:[at[0],at[1],.02] as Point,kind:'scan' as const,label:'Scan QA',current:()=>true})
+    const collect=async(pin:typeof points[number])=>{
+      const pending=t.session.pickSurfaceTarget(pin.at,resolve)
+      expect(t.worker.sent.at(-1)?.action).toBe('notePick');t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    }
+    t.session.beginSurfaceTarget('scan',1,true)
+    await collect(points[0]);await collect(points[1])
+    expect(t.session.getPanelState().surfaceTargetBatch).toHaveLength(2)
+    expect(t.session.getPanelState().surfaceTargetBatch![0]).toEqual({at:points[0].at,target:[...points[0].at.slice(0,2),.02],label:'Scan QA'})
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getSnapshot().historyRevision).toBe(history)
+    t.session.removeSurfaceTarget(0);expect(t.session.getPanelState().surfaceTargetBatch).toHaveLength(1)
+    await collect(points[0])
+    const pending=t.session.applySurfaceTargets()
+    for(const pin of [points[1],points[0]]){expect(t.worker.sent.at(-1)?.action).toBe('noteResolve');t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()}
+    await pending
+    expect(t.session.getPanelState().surfaceTargetBatch).toBeNull();expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid');t.session.undo()
+    expect(t.session.getPanelState().net).toEqual(before);expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it('retains a current collection after a precommit budget refusal and permits review and cancellation without history',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    t.session.beginSurfaceTarget('scan',.001,true)
+    for(const pin of points){
+      const pending=t.session.pickSurfaceTarget(pin.at,at=>({point:[at[0],at[1],.02],kind:'scan',label:'Scan QA',current:()=>true}))
+      t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    }
+    const count=t.worker.sent.length,pairs=t.session.getPanelState().surfaceTargetBatch
+    await expect(t.session.applySurfaceTargets()).rejects.toThrow(/limite autorizzato/)
+    expect(t.worker.sent).toHaveLength(count) // no CAD resolve/evaluation/commit happened
+    expect(t.session.getPanelState().surfaceTargetBatch).toEqual(pairs)
+    expect(t.session.getPanelState().surfaceTarget).toBe('scan');expect(t.session.getPanelState().busy).toBe(false)
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getPanelState().canUndo).toBe(false)
+    t.session.removeSurfaceTarget(0);expect(t.session.getPanelState().surfaceTargetBatch).toHaveLength(1)
+    t.session.cancelSurfaceTarget();expect(t.session.getPanelState().surfaceTargetBatch).toBeNull()
+    expect(t.session.getPanelState().net).toBe(before);await t.session.dispose('cancelled')
+  })
+  it.each(['cancel','reference'] as const)('discards collected pairs on %s without changing geometry or Undo',async mode=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!
+    let current=true;t.session.beginSurfaceTarget('cad',1,true)
+    for(const pin of points){
+      const pending=t.session.pickSurfaceTarget(pin.at,at=>({point:[at[0],at[1],.02],kind:'cad',label:'CAD QA',current:()=>current}))
+      t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    }
+    if(mode==='cancel')t.session.cancelSurfaceTarget()
+    else{current=false;await expect(t.session.applySurfaceTargets()).rejects.toThrow(/riferimenti/)}
+    expect(t.session.getPanelState().surfaceTargetBatch).toBeNull();expect(t.session.getPanelState().net).toBe(before)
+    expect(t.session.getPanelState().canUndo).toBe(false);await t.session.dispose('cancelled')
+  })
+  it('does not restore a cancelled collection when its CAD pick returns late',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const before=t.session.getPanelState().net!,pin=pins()[0];t.session.beginSurfaceTarget('scan',1,true)
+    const pending=t.session.pickSurfaceTarget(pin.at,at=>({point:[at[0],at[1],.02],kind:'scan',label:'Scan QA',current:()=>true})).catch(e=>e as Error)
+    t.session.cancelSurfaceTarget();t.worker.reply(t.worker.sent.at(-1)!.id,pin)
+    expect(await pending).toBeInstanceOf(Error);expect(t.session.getPanelState().surfaceTargetBatch).toBeNull()
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it('announces collection counts and Apply availability in the rendered panel after additions and removal',async()=>{
+    const {createElement}=await import('react'),{renderToStaticMarkup}=await import('react-dom/server')
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false);t.session.beginSurfaceTarget('scan',1,true)
+    const render=()=>renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:t.session}))
+    expect(render()).toMatch(/aria-live="polite"[^>]*aria-atomic="true"/)
+    expect(render()).toContain('Punti raccolti: 0 di 8. Servono almeno due punti')
+    for(const pin of pins()){
+      const pending=t.session.pickSurfaceTarget(pin.at,at=>({point:[at[0],at[1],.02],kind:'scan',label:'Scan QA',current:()=>true}))
+      t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    }
+    const complete=render();expect(complete).toContain('Punti raccolti: 2 di 8. Puoi applicare')
+    expect(complete).toMatch(/data-test="surface-point-apply">/)
+    t.session.removeSurfaceTarget(1)
+    const removed=render();expect(removed).toContain('Punti raccolti: 1 di 8. Servono almeno due punti')
+    expect(removed).toMatch(/data-test="surface-point-apply" disabled/)
+    await t.session.dispose('cancelled')
+  })
+  it('uses CAD picks and current external references for one batch commit and one Undo',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    const resolve=vi.fn((at:Point)=>({point:[at[0],at[1],.02] as Point,kind:'scan' as const,label:'scan QA',current:()=>true}))
+    const pending=t.session.targetSurfacePointsExperimental('scan',1,points.map(p=>p.at),resolve)
+    for(const pin of points){expect(t.worker.sent.at(-1)?.action).toBe('notePick');t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()}
+    for(const pin of points){expect(t.worker.sent.at(-1)?.action).toBe('noteResolve');t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()}
+    await pending
+    expect(resolve).toHaveBeenCalledTimes(2);expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before);expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it.each(['reference','cancel','source'] as const)('refuses an obsolete batch after %s changes while CAD resolves anchors',async mode=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!
+    let current=true
+    const pending=t.session.targetSurfacePointsExperimental('cad',1,points.map(p=>p.at),at=>({point:[at[0],at[1],.02],kind:'cad',label:'external CAD',current:()=>current})).catch(e=>e as Error)
+    for(const pin of points){t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()}
+    t.worker.reply(t.worker.sent.at(-1)!.id,points[0]);await flush()
+    const last=t.worker.sent.at(-1)!
+    if(mode==='reference')current=false
+    if(mode==='cancel')t.session.cancelSurfaceTarget()
+    if(mode==='source')t.invalidate()
+    t.worker.reply(last.id,points[1]);expect(await pending).toBeInstanceOf(Error)
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getPanelState().canUndo).toBe(false)
     await t.session.dispose('cancelled')
   })
 })

@@ -488,6 +488,20 @@ it.each(['scan','cad'] as const)('resolves a surface target from external %s ref
   layer.dispose()
 })
 
+it('shows collected CAD/target pairs and clears them on reference invalidation and Escape',()=>{
+  const f=fixture({reference:'scan'});f.owner.cancelSurfaceTarget=vi.fn(()=>f.set({surfaceTarget:null}))
+  const layer=createWorkspaceLayer(f.view,f.owner),pair={at:[0,0,0] as Point,target:[0,0,.2] as Point,label:'scan QA'}
+  f.set({surfaceTarget:{kind:'scan',sourceBodyId:4,pairs:[pair]},snap:false})
+  const pins=f.group.getObjectByName('tmar-edit-surface-notes')!
+  expect(pins.children).toHaveLength(3)
+  expect((pins.children[0] as THREE.Mesh).position.toArray()).toEqual(pair.at)
+  expect((pins.children[1] as THREE.Mesh).position.toArray()).toEqual(pair.target)
+  f.notifyReferences();expect(f.owner.cancelSurfaceTarget).toHaveBeenCalledOnce();expect(pins.children).toHaveLength(0)
+  f.set({surfaceTarget:{kind:'cad',sourceBodyId:4,pairs:[pair]}})
+  expect(layer.cancelGesture()).toBe(true);expect(pins.children).toHaveLength(0)
+  expect(f.previewPoles).not.toHaveBeenCalled();expect(f.finishPoleGesture).not.toHaveBeenCalled();layer.dispose()
+})
+
 it('never uses the edited CAD body or neighbouring preview faces as an external point target',async()=>{
   const f=fixture({reference:'cad-face'})
   let found:unknown='not called'
