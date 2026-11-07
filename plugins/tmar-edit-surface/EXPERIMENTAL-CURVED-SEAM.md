@@ -169,6 +169,12 @@ rejects a sampled gap and a rank-deficient fit. Samples and holdouts do not
 prove continuous G1, regularity, correspondence on arbitrary trimmed faces,
 kernel validity, wall thickness or volume. This is not wired into the editor.
 
+A further synthetic test uses non-nested U bases and a target derivative not
+representable in the strip basis. Although the sampled error improves, it
+remains above the test budget on independent holdouts. Matching the fitted
+coefficients alone is therefore not evidence of matching the support; the
+support residual must be checked separately.
+
 An isolated follow-up searches seam phase, parameter direction and the local
 quadratic maps automatically for polynomial quadratic/quartic periodic curves
 with matching Bezier-span counts and knot-to-knot correspondence. It compares
