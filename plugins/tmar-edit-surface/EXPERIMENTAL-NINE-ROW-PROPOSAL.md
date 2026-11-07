@@ -144,6 +144,13 @@ training/fitted/stored holdout budgets. The legacy entry points keep their
 original solver and thresholds. The scaled path remains synthetic only and
 does not qualify an imported solid, trim or continuous joint quality.
 
+An independent experimental observation-Gram check can certify full rank and
+an inverse-norm bound for the binary64 evaluated free-column sample matrix.
+Synthetic data shows the equilibrated QR can conservatively refuse a
+subnormal fill-in even for a full-rank, exactly representable fit. The Gram
+certificate is not a solver, a bound for the exact spline evaluation, or a
+CAD acceptance check; no QR guard is relaxed.
+
 The experimental quintic-side diagnostic composes the fixed-first fit for one
 moving side with explicit gap, pivot, residual, displacement and seam checks.
 It measures the stored proposal on separate holdout samples, including both
