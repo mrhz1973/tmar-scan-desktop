@@ -2,9 +2,11 @@
 import { expect, it } from 'vitest'
 import type { Net, Point } from '../brep'
 import { mapPeriodicKnotsAffineRounded } from '../experimentalPeriodicAffineKnotMap'
-import { measureExperimentalPeriodicQuinticPairFullDomain, measureExperimentalPeriodicQuinticPairFullDomainScaled,
+import { measureExperimentalPeriodicQuinticPairFullDomain, measureExperimentalPeriodicQuinticPairFullDomainCertifiedFit,
+  measureExperimentalPeriodicQuinticPairFullDomainScaled,
   type ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest } from '../experimentalPeriodicQuinticPairFullDomainDiagnostic'
-import type { ExperimentalPeriodicQuinticScaledBudgets } from '../experimentalPeriodicQuinticSideDiagnostic'
+import type { ExperimentalPeriodicQuinticCertifiedFitBudgets,
+  ExperimentalPeriodicQuinticScaledBudgets } from '../experimentalPeriodicQuinticSideDiagnostic'
 
 function fixture(targetSlope = 8): ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest {
   const ring = [[0, 0], [1, 2 ** -35], [2, 2], [-2, 0]]
@@ -192,4 +194,65 @@ it('withholds both candidates on a scaled-fit stop at the second lateral or an i
     expect(result.receipts.joint.V0).not.toHaveProperty('candidate')
     expect(result.receipts.joint.V1).not.toHaveProperty('candidate')
   }
+})
+
+function certifiedFixture(slope?: number): ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<ExperimentalPeriodicQuinticCertifiedFitBudgets> {
+  const { central, atCentralV0, atCentralV1 } = fixture(slope)
+  const certified = (side: typeof atCentralV0) => {
+    const { minimumPivotRatio: _minimumPivotRatio, ...budgets } = side.budgets
+    return { ...side, budgets: { ...budgets, storedHoldoutDerivativeResidual: budgets.holdoutDerivativeResidual,
+      coefficientCertificate: { maxCoefficientError: [1e-10, 1e-10, 1e-10] as const, maxRows: 64, maxFreeColumns: 8,
+        maximumInverseGramInfinityNorm: 100 },
+    } }
+  }
+  return { central, atCentralV0: certified(atCentralV0), atCentralV1: certified(atCentralV1) }
+}
+
+it('certifies the unscaled fits before checking both stored joints and native domains', () => {
+  const request = certifiedFixture(), before = structuredClone(request)
+  const result = measureExperimentalPeriodicQuinticPairFullDomainCertifiedFit(request)
+  expect(result).toMatchObject({ status: 'diagnostic-only', receipts: {
+    normals: { V0: { status: 'certified-positive' }, V1: { status: 'certified-positive' } },
+  } })
+  if (result.status !== 'diagnostic-only') throw new Error(JSON.stringify(result))
+  for (const edge of ['V0', 'V1'] as const) {
+    const receipt = result.receipts.joint[edge]
+    if (receipt.status !== 'diagnostic-only') throw new Error(JSON.stringify(receipt))
+    const evidence = receipt.evidence
+    expect(evidence.fitCertificate?.status).toBe('certified')
+    expect(evidence.fit).toHaveProperty('pivotRatio')
+    expect(evidence.fit).not.toHaveProperty('scaledPivotRatio')
+    expect(evidence.maxTrainingResidual!.value).toBeLessThan(1e-10)
+    expect(evidence.maxStoredHoldoutResidual!.value).toBeLessThan(1e-10)
+    expect(evidence.candidateSeam?.status).toBe('within-tolerance')
+  }
+  expect(request).toEqual(before)
+})
+
+it('stops before the second proposal if its coefficient error cannot be certified per axis', () => {
+  const request = certifiedFixture()
+  request.atCentralV1.budgets.coefficientCertificate.maxCoefficientError = [1e-10, 1e-10, 0]
+  const result = measureExperimentalPeriodicQuinticPairFullDomainCertifiedFit(request)
+  expect(result).toMatchObject({ status: 'inconclusive', stop: {
+    stage: 'joint-diagnostic', phase: 'fit-certificate', side: 'V1', reasonCode: 'fit-coefficient-certificate-inconclusive',
+  }, receipts: {
+    joint: { V0: { status: 'diagnostic-only', evidence: { fitCertificate: { status: 'certified' } } },
+      V1: { status: 'inconclusive', evidence: { fitCertificate: { status: 'inconclusive', reason: 'coefficient-error-not-certified' } } } },
+    normals: { V0: { status: 'not-run' }, V1: { status: 'not-run' } },
+  } })
+  expect(result).not.toHaveProperty('candidates')
+  expect(result.receipts.joint.V0).not.toHaveProperty('candidate')
+  expect(result.receipts.joint.V1).not.toHaveProperty('evidence.proposal')
+})
+
+it('withholds both certified-fit proposals on an interior normal witness', () => {
+  const result = measureExperimentalPeriodicQuinticPairFullDomainCertifiedFit(certifiedFixture(45))
+  expect(result).toMatchObject({ status: 'nonpositive-witness', stop: {
+    stage: 'surface-normals', side: 'V1', reasonCode: 'nonpositive-normal-dot-witness',
+  }, receipts: {
+    joint: { V0: { evidence: { fitCertificate: { status: 'certified' } } }, V1: { evidence: { fitCertificate: { status: 'certified' } } } },
+    normals: { V0: { status: 'certified-positive' }, V1: { status: 'nonpositive-witness',
+      nativeParameter: { u: { enclosure: [43, 43] }, v: { enclosure: [1, 1] } } } },
+  } })
+  expect(result).not.toHaveProperty('candidates')
 })

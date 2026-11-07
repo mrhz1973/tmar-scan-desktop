@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Net } from './brep'
-import { measureExperimentalPeriodicQuinticSide, measureExperimentalPeriodicQuinticSideScaled,
+import { measureExperimentalPeriodicQuinticSide, measureExperimentalPeriodicQuinticSideCertifiedFit,
+  measureExperimentalPeriodicQuinticSideScaled, type ExperimentalPeriodicQuinticCertifiedFitBudgets,
   type ExperimentalPeriodicQuinticScaledBudgets, type ExperimentalPeriodicQuinticSideDiagnosticRequest,
   type ExperimentalPeriodicQuinticSideDiagnosticResult } from './experimentalPeriodicQuinticSideDiagnostic'
 
@@ -38,6 +39,12 @@ export function measureExperimentalPeriodicQuinticPairScaled(
   request: ExperimentalPeriodicQuinticPairDiagnosticRequest<ExperimentalPeriodicQuinticScaledBudgets>,
 ) {
   return measurePeriodicQuinticPair(request, measureExperimentalPeriodicQuinticSideScaled)
+}
+
+export function measureExperimentalPeriodicQuinticPairCertifiedFit(
+  request: ExperimentalPeriodicQuinticPairDiagnosticRequest<ExperimentalPeriodicQuinticCertifiedFitBudgets>,
+) {
+  return measurePeriodicQuinticPair(request, measureExperimentalPeriodicQuinticSideCertifiedFit)
 }
 
 export type ExperimentalPeriodicQuinticPairDiagnosticResult<FitEvidence> =

@@ -8,11 +8,13 @@ import { sampleExperimentalPeriodicTransverseDerivatives } from './experimentalP
 import { prepareExperimentalPeriodicUBasis } from './experimentalPeriodicUBasis'
 import { fitExperimentalPeriodicUVectorSamplesWithFixedFirst,
   fitExperimentalPeriodicUVectorSamplesWithScaledFreeColumns } from './experimentalPeriodicUVectorFit'
+import { certifyExperimentalPeriodicUFitCoefficients,
+  type ExperimentalPeriodicUFitCertificateRequest } from './experimentalPeriodicUFitCertificate'
 
 type Sampler = Parameters<typeof sampleExperimentalPeriodicTransverseDerivatives>[0]
 type Sample = ReturnType<typeof sampleExperimentalPeriodicTransverseDerivatives>['samples'][number]
 type Side = 'left' | 'right'
-type Phase = 'preflight' | 'source-seam' | 'support-seam' | 'sampling' | 'fit' | 'proposal' | 'candidate-seam' | 'holdout'
+type Phase = 'preflight' | 'source-seam' | 'support-seam' | 'sampling' | 'fit' | 'fit-certificate' | 'proposal' | 'candidate-seam' | 'holdout'
 type Location = { t: number; lateralU: number; supportU: number; seamSide?: Side }
 type Metric = { value: number; at: Location }
 const phaseFailures = {
@@ -21,6 +23,7 @@ const phaseFailures = {
   'support-seam': 'support-seam-refused',
   sampling: 'sampling-refused',
   fit: 'fit-refused',
+  'fit-certificate': 'fit-coefficient-certificate-inconclusive',
   proposal: 'proposal-refused',
   'candidate-seam': 'candidate-seam-refused',
   holdout: 'holdout-refused',
@@ -29,6 +32,7 @@ type ReasonCode = typeof phaseFailures[Phase] | 'seam-gap-exceeds-budget' | 'sea
   'training-gap-exceeds-budget' | 'holdout-gap-exceeds-budget' | 'training-holdout-overlap' |
   'mapped-training-holdout-alias' | 'free-rank-deficient' | 'pivot-ratio-below-budget' |
   'raw-column-rms-below-budget' | 'raw-column-norm-ratio-below-budget' | 'scaled-pivot-ratio-below-budget' |
+  'inverse-gram-norm-not-certified' |
   'training-residual-exceeds-budget' | 'fitted-holdout-residual-exceeds-budget' |
   'displacement-bound-exceeds-budget' | 'stored-holdout-residual-exceeds-budget' | 'joint-normals-refused'
 
@@ -54,6 +58,14 @@ export interface ExperimentalPeriodicQuinticScaledBudgets extends ExperimentalPe
   storedHoldoutDerivativeResidual: number
 }
 
+export interface ExperimentalPeriodicQuinticCertifiedFitBudgets extends ExperimentalPeriodicQuinticCommonBudgets {
+  coefficientCertificate: Pick<ExperimentalPeriodicUFitCertificateRequest, 'maxCoefficientError' | 'maxRows' | 'maxFreeColumns'> & {
+    maximumInverseGramInfinityNorm: number
+  }
+  // In this mode holdoutDerivativeResidual applies to the fitted field only.
+  storedHoldoutDerivativeResidual: number
+}
+
 export interface ExperimentalPeriodicQuinticSideDiagnosticRequest<Limits = Budgets> {
   lateral: Sampler['strip']
   support: Sampler['support']
@@ -72,10 +84,16 @@ const fail = (reason: string, reasonCode?: ReasonCode): never => { throw new Gat
 
 type FitInputs = Parameters<typeof fitExperimentalPeriodicUVectorSamplesWithFixedFirst>
 type FitResult = Pick<ReturnType<typeof fitExperimentalPeriodicUVectorSamplesWithFixedFirst>, 'coefficients' | 'residuals' | 'rank'>
+type FitCertificate = ReturnType<typeof certifyExperimentalPeriodicUFitCoefficients>
+type CertifiedFit = Extract<FitCertificate, { status: 'certified' }>
 type FitMode<Limits, FitEvidence> = {
   valid: (limits: Limits) => boolean
   solve: (inputs: FitInputs) => { fit: FitResult; evidence: FitEvidence }
-  check: (evidence: FitEvidence, limits: Limits) => void
+  check?: (evidence: FitEvidence, limits: Limits) => void
+  certificate?: {
+    evaluate: (inputs: FitInputs, fit: FitResult, limits: Limits) => FitCertificate
+    acceptsGram: (certificate: CertifiedFit, limits: Limits) => boolean
+  }
   storedHoldoutLimit: (limits: Limits) => number
 }
 
@@ -113,6 +131,28 @@ const scaledFit: FitMode<ExperimentalPeriodicQuinticScaledBudgets, ScaledFitEvid
       fail('rapporto delle norme delle colonne originali sotto budget', 'raw-column-norm-ratio-below-budget')
     if (!(scaledPivotRatio >= limits.minimumScaledPivotRatio))
       fail('rapporto dei pivot equilibrati sotto budget', 'scaled-pivot-ratio-below-budget')
+  },
+  storedHoldoutLimit: limits => limits.storedHoldoutDerivativeResidual,
+}
+
+const certifiedFit: FitMode<ExperimentalPeriodicQuinticCertifiedFitBudgets, UnscaledFitEvidence> = {
+  solve: unscaledFit.solve,
+  valid: limits => {
+    if (!Number.isFinite(limits.storedHoldoutDerivativeResidual) || limits.storedHoldoutDerivativeResidual < 0 ||
+        !limits.coefficientCertificate) return false
+    const { maxCoefficientError, maxRows, maxFreeColumns, maximumInverseGramInfinityNorm } = limits.coefficientCertificate
+    return Array.isArray(maxCoefficientError) && maxCoefficientError.length === 3 &&
+      Array.from(maxCoefficientError).every(value => Number.isFinite(value) && value >= 0) &&
+      Number.isInteger(maxRows) && maxRows >= 1 && maxRows <= 4096 &&
+      Number.isInteger(maxFreeColumns) && maxFreeColumns >= 1 && maxFreeColumns <= 256 &&
+      Number.isFinite(maximumInverseGramInfinityNorm) && maximumInverseGramInfinityNorm > 0
+  },
+  certificate: {
+    evaluate: ([degree, knots, multiplicities, samples, fixedFirst], fit, limits) => certifyExperimentalPeriodicUFitCoefficients({
+      ...limits.coefficientCertificate, degree, knots, multiplicities, samples, fixedFirst, coefficients: fit.coefficients,
+    }),
+    acceptsGram: (certificate, limits) =>
+      certificate.gram.inverseInfinityNormUpper <= limits.coefficientCertificate.maximumInverseGramInfinityNorm,
   },
   storedHoldoutLimit: limits => limits.storedHoldoutDerivativeResidual,
 }
@@ -171,6 +211,19 @@ export function measureExperimentalPeriodicQuinticSideScaled(
   return measurePeriodicQuinticSide(request, scaledFit)
 }
 
+/**
+ * Use the legacy unscaled solver and its numerical rank check. Its pivot
+ * ratio is diagnostic here. Admission requires explicit bounds on the
+ * inverse Gram norm and sampled coefficient error before making a proposal.
+ * The inverse norm concerns the supplied observations, including their
+ * number and locations. It does not measure a condition number.
+ */
+export function measureExperimentalPeriodicQuinticSideCertifiedFit(
+  request: ExperimentalPeriodicQuinticSideDiagnosticRequest<ExperimentalPeriodicQuinticCertifiedFitBudgets>,
+) {
+  return measurePeriodicQuinticSide(request, certifiedFit)
+}
+
 export type ExperimentalPeriodicQuinticSideDiagnosticResult<FitEvidence> =
   ReturnType<typeof measurePeriodicQuinticSide<ExperimentalPeriodicQuinticCommonBudgets, FitEvidence>>
 
@@ -184,6 +237,7 @@ function measurePeriodicQuinticSide<Limits extends ExperimentalPeriodicQuinticCo
     maxTrainingGap?: Metric; maxHoldoutGap?: Metric
     trainingCount?: number; holdoutInteriorCount?: number
     fit?: FitRankEvidence & FitEvidence
+    fitCertificate?: FitCertificate
     maxTrainingResidual?: Metric; maxFittedHoldoutResidual?: Metric; maxStoredHoldoutResidual?: Metric
     proposal?: { changedIndices: number[]; maxDerivativeResidualBound: number;
       maxSecondDerivativeChangeBound: number; maxPositionDisplacementBound: number }
@@ -255,10 +309,11 @@ function measurePeriodicQuinticSide<Limits extends ExperimentalPeriodicQuinticCo
     phase = 'fit'
     const fixedFirst = originalFirstDerivative(lateral)
     const { du, ku, mu, nu } = lateral.net
-    const { fit, evidence: fitEvidence } = fitMode.solve([du, ku, mu, trainSamples, fixedFirst])
+    const fitInputs: FitInputs = [du, ku, mu, trainSamples, fixedFirst]
+    const { fit, evidence: fitEvidence } = fitMode.solve(fitInputs)
     evidence.fit = { fixedFirst, freeRank: fit.rank, expectedFreeRank: nu - 1, ...fitEvidence }
     if (fit.rank !== nu - 1) fail('rango libero insufficiente', 'free-rank-deficient')
-    fitMode.check(fitEvidence, budgets)
+    fitMode.check?.(fitEvidence, budgets)
     for (const [i, value] of fit.residuals.entries())
       evidence.maxTrainingResidual = maximum(evidence.maxTrainingResidual, value, locationOf(trainSamples[i]))
     if (evidence.maxTrainingResidual!.value > budgets.trainingDerivativeResidual) {
@@ -280,8 +335,17 @@ function measurePeriodicQuinticSide<Limits extends ExperimentalPeriodicQuinticCo
       fail('residuo holdout del fit oltre budget', 'fitted-holdout-residual-exceeds-budget')
     }
 
-    phase = 'proposal'
     location = undefined
+    if (fitMode.certificate) {
+      phase = 'fit-certificate'
+      const certificate = fitMode.certificate.evaluate(fitInputs, fit, budgets)
+      evidence.fitCertificate = certificate
+      if (certificate.status !== 'certified') return stop('inconclusive', certificate.reason)
+      if (!fitMode.certificate.acceptsGram(certificate, budgets))
+        return stop('inconclusive', 'norma inversa del Gram non certificata entro budget', 'inverse-gram-norm-not-certified')
+    }
+
+    phase = 'proposal'
     const result = proposeExperimentalPeriodicAlmostC1QuinticSide({
       net: lateral.net, edge: lateral.edge, targetInward: fit.coefficients, lockIndices,
       derivativeTolerance: budgets.storageDerivativeResidual, secondDerivativeTolerance: budgets.secondDerivativeChange,

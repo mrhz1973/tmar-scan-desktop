@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { expect, it } from 'vitest'
 import type { Net, Point } from '../brep'
-import { measureExperimentalPeriodicQuinticSide, measureExperimentalPeriodicQuinticSideScaled,
+import { measureExperimentalPeriodicQuinticSide, measureExperimentalPeriodicQuinticSideCertifiedFit,
+  measureExperimentalPeriodicQuinticSideScaled, type ExperimentalPeriodicQuinticCertifiedFitBudgets,
   type ExperimentalPeriodicQuinticScaledBudgets,
   type ExperimentalPeriodicQuinticSideDiagnosticRequest } from '../experimentalPeriodicQuinticSideDiagnostic'
 
@@ -225,4 +226,75 @@ it('refuses missing or coercible fit thresholds while keeping the original thres
   const legacy = fixture()
   legacy.budgets.minimumPivotRatio = '0.1' as unknown as number
   expect(measureExperimentalPeriodicQuinticSide(legacy)).toMatchObject({ status: 'declined', phase: 'preflight', reasonCode: 'invalid-input' })
+})
+
+function certifiedFixture(): ExperimentalPeriodicQuinticSideDiagnosticRequest<ExperimentalPeriodicQuinticCertifiedFitBudgets> {
+  const request = fixture()
+  const { minimumPivotRatio: _minimumPivotRatio, ...budgets } = request.budgets
+  return { ...request, budgets: { ...budgets, storedHoldoutDerivativeResidual: budgets.holdoutDerivativeResidual,
+    coefficientCertificate: { maxCoefficientError: [1e-10, 1e-10, 1e-10], maxRows: 64, maxFreeColumns: 8,
+      maximumInverseGramInfinityNorm: 100 },
+  } }
+}
+
+it('uses a rigorous Gram admission gate in the distinct certified path and keeps the legacy pivot gate', () => {
+  const training = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 4]
+  const legacy = fixture()
+  legacy.training = training
+  legacy.budgets.minimumPivotRatio = 0.25
+  const refused = measureExperimentalPeriodicQuinticSide(legacy)
+  expect(refused).toMatchObject({ status: 'declined', phase: 'fit', reasonCode: 'pivot-ratio-below-budget' })
+  expect(refused.evidence).not.toHaveProperty('fitCertificate')
+
+  const request = certifiedFixture()
+  request.training = training
+  request.budgets.coefficientCertificate.maximumInverseGramInfinityNorm = 1000
+  const certified = measureExperimentalPeriodicQuinticSideCertifiedFit(request)
+  expect(certified).toMatchObject({ status: 'diagnostic-only', evidence: { fitCertificate: { status: 'certified' } } })
+  expect(certified.evidence.fit?.pivotRatio).toBe(refused.evidence.fit?.pivotRatio)
+})
+
+it('refuses a full-rank weak design even if its sampled coefficient error is certified', () => {
+  const request = certifiedFixture(), step = 2 ** -8
+  request.training = [0, 0.25, 0.5, 0.75, 1, 1 + step, 1 + 2 * step, 1 + 3 * step, 4]
+  request.budgets.holdoutDerivativeResidual = 1e-4
+  request.budgets.coefficientCertificate.maxCoefficientError = [1e-3, 1e-3, 1e-3]
+  const result = measureExperimentalPeriodicQuinticSideCertifiedFit(request)
+  expect(result).toMatchObject({ status: 'inconclusive', phase: 'fit-certificate', reasonCode: 'inverse-gram-norm-not-certified',
+    evidence: { fit: { freeRank: 3, expectedFreeRank: 3 }, fitCertificate: { status: 'certified' } },
+  })
+  const certificate = result.evidence.fitCertificate
+  if (certificate?.status !== 'certified') throw new Error(JSON.stringify(result))
+  expect(certificate.gram.inverseInfinityNormUpper).toBeGreaterThan(1e6)
+  expect(result.evidence).not.toHaveProperty('proposal')
+  expect(result).not.toHaveProperty('candidate')
+})
+
+it('still refuses a stored holdout mismatch after certifying the sampled fit', () => {
+  const request = certifiedFixture()
+  request.support.net.poles[6][2] -= 2 ** -8
+  request.budgets.seamDerivativeGap = 1 / 8
+  request.budgets.displacement = 12
+  request.budgets.trainingDerivativeResidual = 1
+  request.budgets.holdoutDerivativeResidual = 1
+  request.budgets.storedHoldoutDerivativeResidual = 1e-9
+  const result = measureExperimentalPeriodicQuinticSideCertifiedFit(request)
+  expect(result).toMatchObject({ status: 'declined', phase: 'holdout', reasonCode: 'stored-holdout-residual-exceeds-budget',
+    evidence: { fitCertificate: { status: 'certified' }, candidateSeam: { status: 'within-tolerance' } },
+  })
+  expect(result).not.toHaveProperty('candidate')
+})
+
+it('requires a finite Gram threshold and withholds proposals when the certificate work cap is insufficient', () => {
+  const request = certifiedFixture()
+  request.budgets.coefficientCertificate.maximumInverseGramInfinityNorm = Infinity
+  expect(measureExperimentalPeriodicQuinticSideCertifiedFit(request)).toMatchObject({ status: 'declined', phase: 'preflight' })
+  request.budgets.coefficientCertificate.maximumInverseGramInfinityNorm = 100
+  request.budgets.coefficientCertificate.maxRows = 1
+  const bounded = measureExperimentalPeriodicQuinticSideCertifiedFit(request)
+  expect(bounded).toMatchObject({ status: 'inconclusive', phase: 'fit-certificate',
+    evidence: { fitCertificate: { status: 'inconclusive', reason: 'work-budget' } },
+  })
+  expect(bounded.evidence).not.toHaveProperty('proposal')
+  expect(bounded).not.toHaveProperty('candidate')
 })

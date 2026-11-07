@@ -157,6 +157,14 @@ inverse bound. It bounds coefficient error relative to the least-squares
 solution for the evaluated binary64 sample matrix with fixed U0. It is not a
 continuous spline or CAD bound and is not connected to an operational solver.
 
+A separate experimental certified-fit diagnostic now combines the original
+QR's rank refusal with explicit verified Gram-inverse and coefficient-error
+limits before proposal, plus the existing sampled and full-domain checks.
+Its raw pivot remains an indicator; its Gram limit depends on the chosen
+sample grid and does not certify exact spline evaluation. Previous entry
+points retain their original pivot gates. This path is synthetic only and
+does not establish continuous joint quality or CAD validity.
+
 The experimental quintic-side diagnostic composes the fixed-first fit for one
 moving side with explicit gap, pivot, residual, displacement and seam checks.
 It measures the stored proposal on separate holdout samples, including both

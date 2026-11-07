@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { generateExperimentalPeriodicIndependentSamples,
   type ExperimentalPeriodicIndependentSamplesRequest } from './experimentalPeriodicIndependentSamples'
-import { measureExperimentalPeriodicQuinticPair, measureExperimentalPeriodicQuinticPairScaled,
+import { measureExperimentalPeriodicQuinticPair, measureExperimentalPeriodicQuinticPairCertifiedFit,
+  measureExperimentalPeriodicQuinticPairScaled,
   type ExperimentalPeriodicQuinticPairDiagnosticRequest,
   type ExperimentalPeriodicQuinticPairDiagnosticResult } from './experimentalPeriodicQuinticPairDiagnostic'
-import type { ExperimentalPeriodicQuinticScaledBudgets } from './experimentalPeriodicQuinticSideDiagnostic'
+import type { ExperimentalPeriodicQuinticCertifiedFitBudgets,
+  ExperimentalPeriodicQuinticScaledBudgets } from './experimentalPeriodicQuinticSideDiagnostic'
 import { boundExperimentalPeriodicQuinticSurfaceNormals } from './experimentalPeriodicQuinticSurfaceNormals'
 
 type DefaultBudgets = ExperimentalPeriodicQuinticPairDiagnosticRequest['atCentralV0']['budgets']
@@ -57,6 +59,17 @@ export function measureExperimentalPeriodicQuinticPairFullDomainScaled(
   request: ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<ExperimentalPeriodicQuinticScaledBudgets>,
 ) {
   return measurePeriodicQuinticPairFullDomain(request, measureExperimentalPeriodicQuinticPairScaled)
+}
+
+/**
+ * Require a sampled least-squares coefficient certificate for each unscaled
+ * fit before its proposal. The existing sampled joint and full-domain
+ * lateral normal comparisons remain separate checks.
+ */
+export function measureExperimentalPeriodicQuinticPairFullDomainCertifiedFit(
+  request: ExperimentalPeriodicQuinticPairFullDomainDiagnosticRequest<ExperimentalPeriodicQuinticCertifiedFitBudgets>,
+) {
+  return measurePeriodicQuinticPairFullDomain(request, measureExperimentalPeriodicQuinticPairCertifiedFit)
 }
 
 function measurePeriodicQuinticPairFullDomain<Limits, FitEvidence>(
