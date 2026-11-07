@@ -440,6 +440,36 @@ it.each(['dragMode','axis','strength','canStart'] as const)('cancels a pending b
   layer.dispose()
 })
 
+it('cancels a pending whole-boundary CAD query when a section is activated',async()=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  let resolve!:(value:readonly VerifiedBoundaryPick[])=>void
+  f.owner.prepareWholeBoundaryPicks=vi.fn(()=>new Promise<readonly VerifiedBoundaryPick[]>(r=>{resolve=r}))
+  const layer=createWorkspaceLayer(f.view,f.owner);f.set({wholeBoundaryDrag:{side:'U0',canStart:true}})
+  expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(true)
+  f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,0,1),1)],false)
+  expect(f.owner.cancelPreparedWholeBoundaryPicks).toHaveBeenCalledOnce()
+  expect(f.counts().captured).toBeNull()
+  resolve([{side:'U0',point:[-1,0,0]}]);await flushBoundaryPick()
+  expect(f.owner.beginVerifiedWholeBoundaryGesture).not.toHaveBeenCalled()
+  expect(f.finishPoleGesture).not.toHaveBeenCalled()
+  expect(f.previewPoles).not.toHaveBeenCalled()
+  layer.dispose()
+})
+
+it('restores a promoted whole-boundary draft when a section is activated',async()=>{
+  const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
+  const layer=createWorkspaceLayer(f.view,f.owner);f.set({wholeBoundaryDrag:{side:'U0',canStart:true},snap:false})
+  expect(f.getLayer().pointerDown?.(f.event(1,[-1,0,0]))).toBe(true)
+  await flushBoundaryPick()
+  f.getHandlers().move(f.event(1,[-.5,0,0]))
+  expect(f.previewPoles).toHaveBeenCalledOnce()
+  f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,0,1),1)],false)
+  expect(f.finishPoleGesture).toHaveBeenLastCalledWith(null)
+  expect(f.counts().captured).toBeNull()
+  expect(f.claimEditDrag).toHaveBeenLastCalledWith(false)
+  layer.dispose()
+})
+
 it.each(['dragMode','axis','strength'] as const)('rejects a late boundary reply if %s changed without a sync notification',async change=>{
   const f=fixture();f.owner.beginWholeBoundaryGesture=vi.fn(()=>true)
   let resolve!:(value:readonly VerifiedBoundaryPick[])=>void

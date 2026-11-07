@@ -49,6 +49,7 @@ type Capture = {
   offsetY?: number
   deferredPole?: boolean
   wholeFaceLocal?: boolean
+  wholeBoundary?: boolean
   verifiedStrip?: boolean
   directFence?: { clipping:SheetEdgeClippingProof | undefined; references:FaceOccluder[] }
 }
@@ -1148,7 +1149,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
           // changed while the query was pending, and Up cannot revive it.
           if(!owner.beginVerifiedWholeBoundaryGesture!(pick)){cancelPendingPick();return}
           pickPending=null
-          capture={kind:'pole',pointerId:pending.pointerId,gesture,camera,projection:pending.projection,cameraWorld:pending.cameraWorld,partWorld:matrix,rect:pending.rect}
+          capture={kind:'pole',pointerId:pending.pointerId,gesture,camera,projection:pending.projection,cameraWorld:pending.cameraWorld,partWorld:matrix,rect:pending.rect,wholeBoundary:true}
           promotedCapture=capture
           if(pending.last){const result=gesture.move(pending.last);if(result.kind==='preview')owner.previewPoles(result.poles)}
         }).catch(error=>{if(pickPending===pending){cancelPendingPick();if(!disposed&&!layerDisposed)report(errorText(error))}else if(promotedCapture&&capture===promotedCapture)cancelGesture()})
@@ -1435,7 +1436,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       clipping = { planes, intersection: false }
       clippingRevision++
       hideFeedback()
-      if (planes?.length && (pickPending?.kind === 'face' || capture?.wholeFaceLocal)) cancelGesture()
+      if (planes?.length && (pickPending?.kind === 'face' || pickPending?.kind === 'boundary' || capture?.wholeFaceLocal || capture?.wholeBoundary)) cancelGesture()
       if (directPress || capture?.verifiedStrip) cancelGesture()
       directChoiceSerial++
       if (directSelection?.proof) clearDirect()
