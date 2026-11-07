@@ -84,6 +84,18 @@ export function queryBoundaryVisibilityCad(k:OcctKernel,source:ShapeHandle,side:
     if(location!=='in'&&location!=='on')throw Error('Bordo fuori dalla faccia CAD.')
     const edgeDistance=k.distanceBetween(own(k.makeVertex(...point)),matches[0])
     if(!Number.isFinite(edgeDistance)||edgeDistance>tolerance)throw Error('Isocurva non corrispondente al bordo topologico.')
+    return { ...proveBoundaryPointVisibility(k,face,point,tuple(k.surfaceNormal(face,u,v)),cameraOrigin,parallelDirection),
+      projectionDistanceMm:distance(point,seed),pickerSegment:segment }
+  }finally{owned.reverse().forEach(h=>k.release(h))}
+}
+
+
+/** Native visibility of an already certified boundary point, against the complete owning shape. */
+export function proveBoundaryPointVisibility(k:OcctKernel,shape:ShapeHandle,point:Point,normal:Point,
+  cameraOrigin:Point,parallelDirection?:Point):Omit<BoundaryVisibilityCadResult,'projectionDistanceMm'|'pickerSegment'> {
+  const owned:ShapeHandle[]=[],own=(h:ShapeHandle)=>{owned.push(h);return h}
+  const children=(h:ShapeHandle,type:'edge'|'vertex')=>{const a=k.getSubShapes(h,type);owned.push(...a);return a}
+  try {
     let origin=cameraOrigin
     if(parallelDirection){
       const length=Math.hypot(...parallelDirection)
@@ -94,10 +106,10 @@ export function queryBoundaryVisibilityCad(k:OcctKernel,source:ShapeHandle,side:
     }
     const depth=distance(point,origin)
     if(!Number.isFinite(depth)||depth<endpointMargin*10||depth>1e6)throw Error('Segmento di vista CAD non qualificabile.')
-    const direction=point.map((x,d)=>(x-origin[d])/depth) as Point,normal=tuple(k.surfaceNormal(face,u,v))
+    const direction=point.map((x,d)=>(x-origin[d])/depth) as Point
     if(!normal.every(Number.isFinite)||Math.abs(dot(normal,direction))<.1)throw Error('Vista tangente o normale CAD ambigua.')
     const viewSegment=own(k.makeLineEdge(vec(origin),vec(point.map((x,d)=>x+direction[d]*endpointMargin) as Point)))
-    const section=own(k.section(face,viewSegment)),sectionEdges=children(section,'edge'),vertices=children(section,'vertex')
+    const section=own(k.section(shape,viewSegment)),sectionEdges=children(section,'edge'),vertices=children(section,'vertex')
     if(sectionEdges.length||!vertices.length||vertices.length>128)throw Error('Intersezione CAD assente o non puntuale.')
     const hits=vertices.map(vertex=>{
       const p=tuple(k.vertexPosition(vertex)),offset=p.map((x,d)=>x-origin[d]) as Point,along=dot(offset,direction)
@@ -105,13 +117,12 @@ export function queryBoundaryVisibilityCad(k:OcctKernel,source:ShapeHandle,side:
       if(!p.every(Number.isFinite)||along<0||along>depth+endpointMargin+tolerance||distance(onRay,p)>tolerance)throw Error('Intersezione CAD incoerente.')
       return {point:p,depth:along}
     }).sort((a,z)=>a.depth-z.depth)
-    const base={point,firstDepthMm:hits[0].depth,anchorDepthMm:depth,intersectionCount:hits.length,frontDistanceMm:null,
-      projectionDistanceMm:distance(point,seed),pickerSegment:segment}
+    const base={point,firstDepthMm:hits[0].depth,anchorDepthMm:depth,intersectionCount:hits.length,frontDistanceMm:null}
     if(hits[0].depth<depth-tolerance)return {...base,visible:false,reason:'occluded'}
     if(hits.length!==1||distance(hits[0].point,point)>tolerance)return {...base,visible:false,reason:'ambiguous-intersection'}
     const front=own(k.makeLineEdge(vec(origin),vec(point.map((x,d)=>x-direction[d]*endpointMargin) as Point)))
-    const frontDistance=k.distanceBetween(front,face)
+    const frontDistance=k.distanceBetween(front,shape)
     if(!Number.isFinite(frontDistance)||frontDistance<=tolerance)return {...base,frontDistanceMm:frontDistance,visible:false,reason:'front-segment-not-clear'}
     return {...base,frontDistanceMm:frontDistance,visible:true,reason:'native-section-and-clear-front'}
-  }finally{owned.reverse().forEach(h=>k.release(h))}
+  } finally { owned.reverse().forEach(h=>k.release(h)) }
 }
