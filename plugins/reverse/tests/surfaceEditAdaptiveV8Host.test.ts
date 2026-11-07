@@ -125,9 +125,10 @@ it.skipIf(!enabled)('host opt-in v8 refuses invalid notes safely and saves/reope
     const prior=useReverse.getState(),priorHistory=useHistory.getState().past.length
     // The thin-face sampling guard is now adaptive. Keep a deterministic negative
     // regression by forging an inverted note normal; never publish partial state.
-    const invalidNormalPlan=await validateAnnotatedCopy({...payload,notes:payload.notes.map(note=>({
-      ...note,target:{...note.target,orientedNormal:[-n[0],-n[1],-n[2]] as [number,number,number]},
-    }))},ticket)
+    const invalidNormalPlan=await validateAnnotatedCopy({...payload,notes:[{
+      ...payload.notes[0],target:{...payload.notes[0].target,
+        orientedNormal:[-n[0],-n[1],-n[2]] as [number,number,number]},
+    }]},ticket)
     await expect(withFrozenHistoryTransaction({
       freezeHistory:()=>({isCurrent:()=>true,release:()=>{}}),
     },prepared,async gate=>{
