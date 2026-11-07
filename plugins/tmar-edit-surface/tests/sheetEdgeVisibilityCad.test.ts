@@ -1,15 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { OcctKernel, type ShapeHandle } from 'occt-wasm'
+import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { OrthographicCamera } from 'three'
 import { expect, it, vi } from 'vitest'
 import type { Net, Point } from '../brep'
+import { replaceSurface, surfaceTable } from '../brep'
+import { rebuildFreeBoundary } from '../freeBoundary'
+import { wholeBoundaryIndices } from '../wholeBoundary'
 import type { FaceInfo, Preview } from '../editorKernel'
 import type { Request } from '../editor.worker'
 import { pickSheetEdge } from '../sheetDrag'
-import { sheetEdgePaths } from '../sheetExtension'
+import { sheetEdgePaths, withBoundary } from '../sheetExtension'
 import { queryVisibleSheetEdge } from '../sheetEdgeVisibilityCad'
 
 const frontZ = .02
+function curvedCandidate(paths:Point[][], matches:(point:Point)=>boolean, fraction:number) {
+  const edges=paths.flatMap((path,edge)=>path.length===49 && path.every(matches)?[edge]:[])
+  expect(edges).toHaveLength(1)
+  const edge=edges[0], path=paths[edge], along=fraction*(path.length-1)
+  const segment=Math.floor(along), offset=along-segment
+  const seed=path[segment].map((value,i)=>value+offset*(path[segment+1][i]-value)) as Point
+  return {edge,path,seed,segment}
+}
 function foldedFaces(k:OcctKernel,own:(shape:ShapeHandle)=>ShapeHandle) {
   const vertex = ([x,y,z]:Point) => ({x,y,z})
   const planar = (corners:Point[]) => {
@@ -66,6 +79,77 @@ it('certifies the front free edge of a folded shell independent of candidate ord
     owned.reverse().forEach(shape=>k.release(shape))
     k[Symbol.dispose]()
   }
+},30000)
+
+it('certifies the curved free edge from the actual D polyline on the qualified STEP',async()=>{
+  const k=await OcctKernel.init(), owned:ShapeHandle[]=[]
+  try {
+    const input=readFileSync(new URL('../evidence/free-boundary/compiled-20261103/moved.step',import.meta.url))
+    expect(createHash('sha256').update(input).digest('hex')).toBe('61e1e624a432089e613cc9b744a7c883ccee3cd79ba459f0ef1c5c159419741f')
+    const source=k.importStep(input.toString('utf8'))
+    owned.push(source)
+    const before=k.toBREP(source), paths=sheetEdgePaths(k,source)
+    const side=(point:Point)=>Math.abs(point[0]-20)<1e-8
+    const path=paths.find(candidate=>candidate.length===49 && candidate.every(side))!
+    expect(path).toBeDefined()
+    const fraction=path[0][1]<path.at(-1)![1] ? .37 : .63
+    const candidate=curvedCandidate(paths,side,fraction)
+    const result=queryVisibleSheetEdge(k,source,[candidate],[40,-25,45])
+    expect(result?.edge).toBe(candidate.edge)
+    const expected=withBoundary(k,source,edges=>{
+      const edge=edges[candidate.edge], {first,last}=k.curveParameters(edge)
+      return k.curvePointAtParam(edge,first+(last-first)*fraction)
+    })
+    expect(result?.point).toEqual([expect.closeTo(expected.x,10),expect.closeTo(expected.y,10),expect.closeTo(expected.z,10)])
+    const gap=Math.hypot(...result!.point.map((x,i)=>x-candidate.seed[i]))
+    expect(gap).toBeGreaterThan(1e-6)
+    expect(queryVisibleSheetEdge(k,source,[{...candidate,segment:candidate.segment+3}],[40,-25,45])).toBeNull()
+    expect(queryVisibleSheetEdge(k,source,[{...candidate,segment:undefined}],[40,-25,45])).toBeNull()
+    expect(k.toBREP(source)).toBe(before)
+    console.info('Curved D STEP native point', {gap,point:result!.point,segment:candidate.segment})
+
+    const keep=(shape:ShapeHandle)=>{owned.push(shape);return shape}
+    const faces=k.getSubShapes(source,'face');owned.push(...faces)
+    const net=surfaceTable(k.toBREP(faces[0])).find(record=>record.net)!.net!
+    const edges=(['U0','V1','U1','V0'] as const).map(side=>{
+      const ids=wholeBoundaryIndices(net,side), varyV=side==='U0'||side==='U1'
+      const knots=varyV?net.kv:net.ku
+      return keep(k.makeBSplineEdge(ids.flatMap(i=>net.poles[i]),ids.map(i=>net.weights[i]),
+        side==='U1'?knots.map(value=>100+2*value):knots,varyV?net.mv:net.mu,varyV?net.dv:net.du))
+    })
+    const shifted=keep(k.fixShape(keep(k.makeFaceOnSurface(faces[0],keep(k.makeWire(edges))))))
+    expect(k.isValid(shifted)).toBe(true)
+    const reparameterized=curvedCandidate(sheetEdgePaths(k,shifted),side,fraction)
+    expect(withBoundary(k,shifted,edges=>k.curveParameters(edges[reparameterized.edge]))).toEqual({first:100,last:160})
+    const checked=queryVisibleSheetEdge(k,shifted,[reparameterized],[40,-25,45])
+    expect(checked?.point).toEqual([expect.closeTo(expected.x,10),expect.closeTo(expected.y,10),expect.closeTo(expected.z,10)])
+  } finally { owned.reverse().forEach(shape=>k.release(shape));k[Symbol.dispose]() }
+},30000)
+
+it('distinguishes curved free rims separated by 0.02 mm on a folded CAD face',async()=>{
+  const k=await OcctKernel.init(), owned:ShapeHandle[]=[]
+  const own=(shape:ShapeHandle)=>{owned.push(shape);return shape}
+  try {
+    const box=own(k.makeBox(20,30,10)), faces=k.getSubShapes(box,'face')
+    owned.push(...faces)
+    const top=faces.find(face=>{const b=k.uvBounds(face);return Math.abs(k.pointOnSurface(face,(b.uMin+b.uMax)/2,(b.vMin+b.vMax)/2).z-10)<1e-8})!
+    const b=k.uvBounds(top), text=k.toBREP(top), record=surfaceTable(text).find(record=>record.kind===1)!
+    const net:Net={nu:3,nv:3,du:2,dv:2,ku:[b.uMin,b.uMax],kv:[b.vMin,b.vMax],mu:[3,3],mv:[3,3],rational:[0,0],
+      poles:[[-1,-1,0],[-.7,0,0],[-1,1,0],[1,-1,.01],[1.3,0,.01],[1,1,.01],
+        [-1,-1,.02],[-.7,0,.02],[-1,1,.02]],weights:Array(9).fill(1)}
+    const support=own(k.fromBREP(replaceSurface(text,record,net))), source=own(rebuildFreeBoundary(k,support,net))
+    expect(k.isValid(source)).toBe(true)
+    const before=k.toBREP(source), paths=sheetEdgePaths(k,source)
+    const rim=(z:number)=>curvedCandidate(paths,point=>Math.abs(point[2]-z)<1e-8,.37)
+    const front=rim(.02), rear=rim(0)
+    for (const candidates of [[rear,front],[front,rear]]) {
+      const result=queryVisibleSheetEdge(k,source,candidates,[0,0,1],[0,0,-1])
+      expect(result?.edge).toBe(front.edge)
+      expect(result?.point[2]).toBeCloseTo(.02,10)
+    }
+    expect(queryVisibleSheetEdge(k,source,[rear],[0,0,1],[0,0,-1])).toBeNull()
+    expect(k.toBREP(source)).toBe(before)
+  } finally { owned.reverse().forEach(shape=>k.release(shape));k[Symbol.dispose]() }
 },30000)
 
 type WithoutId<T> = T extends { id:number } ? Omit<T,'id'> : never

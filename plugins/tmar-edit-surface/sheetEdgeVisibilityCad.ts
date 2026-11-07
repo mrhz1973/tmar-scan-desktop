@@ -16,9 +16,50 @@ export interface SheetEdgeVisibilityCandidate {
   edge:number
   path:readonly Point[]
   seed:Point
+  /** Required for a sampled curved edge. Straight paths have only segment 0. */
+  segment?:number
 }
 
-/** A read-only proof for overlapping straight free edges of one open CAD shell.
+function candidatePoint(k:OcctKernel,edge:ShapeHandle,path:Point[],candidate:SheetEdgeVisibilityCandidate):Point|null {
+  const {first,last}=k.curveParameters(edge)
+  if (!Number.isFinite(first) || !Number.isFinite(last) || last<=first) return null
+  const kind=k.curveType(edge)
+  let t:number, point:Point
+  if (kind==='line' && path.length===2 && (candidate.segment===undefined || candidate.segment===0)) {
+    const projected=k.projectPointOnEdge(edge,vec(candidate.seed))
+    t=projected.parameter
+    point=tuple(projected.point)
+    if (distance(point,candidate.seed)>tolerance) return null
+  } else {
+    const segment=candidate.segment
+    if (kind!=='bspline' || path.length!==49 || segment===undefined || !Number.isInteger(segment) ||
+        segment<0 || segment>=path.length-1 || k.curveIsClosed(edge) || k.curveIsPeriodic(edge)) return null
+    const start=path[segment], end=path[segment+1]
+    const chord=end.map((value,i)=>value-start[i])
+    const squared=chord.reduce((sum,value)=>sum+value*value,0)
+    if (!Number.isFinite(squared) || squared<=1e-18) return null
+    const fraction=chord.reduce((sum,value,i)=>sum+value*(candidate.seed[i]-start[i]),0)/squared
+    const along=Math.max(0,Math.min(1,fraction))
+    const onChord=start.map((value,i)=>value+along*chord[i]) as Point
+    if (!finite(onChord) || distance(onChord,candidate.seed)>1e-7) return null
+    const step=(last-first)/(path.length-1), lo=first+segment*step, hi=first+(segment+1)*step
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi<=lo) return null
+    const nativeStart=tuple(k.curvePointAtParam(edge,lo)), nativeEnd=tuple(k.curvePointAtParam(edge,hi))
+    if (!finite(nativeStart) || !finite(nativeEnd) ||
+        distance(nativeStart,start)>tolerance || distance(nativeEnd,end)>tolerance) return null
+    // The picker chord is parameterized by samples of this very edge. Map
+    // its fraction to that interval, without a global nearest-point search.
+    t=lo+along*(hi-lo)
+    if (!(t>=lo && t<=hi)) return null
+    point=tuple(k.curvePointAtParam(edge,t))
+    const tangent=tuple(k.curveTangent(edge,t))
+    if (!finite(tangent) || Math.hypot(...tangent)<=1e-12) return null
+  }
+  return Number.isFinite(t) && t>first && t<last && finite(point) &&
+    [path[0],path[path.length-1]].every(end=>distance(end,point)>=endpointMargin) ? point : null
+}
+
+/** A read-only proof for straight or open, nonperiodic B-spline free edges of one CAD shell.
  * The caller supplies the screen-equivalent candidates and still owns the
  * preview/camera fence and reprojection of the returned point.
  */
@@ -27,7 +68,7 @@ export function queryVisibleSheetEdge(k:OcctKernel,source:ShapeHandle,candidates
   if (!candidates.length || candidates.length > 8 || !finite(cameraOrigin) ||
       (parallelDirection && !finite(parallelDirection)) ||
       candidates.some(candidate => !Number.isSafeInteger(candidate.edge) || candidate.edge < 0 ||
-        candidate.path.length !== 2 || !candidate.path.every(finite) || !finite(candidate.seed)) ||
+        ![2,49].includes(candidate.path.length) || !candidate.path.every(finite) || !finite(candidate.seed)) ||
       new Set(candidates.map(candidate => candidate.edge)).size !== candidates.length) return null
   const kind = k.getShapeType(source)
   if (kind !== 'shell' && kind !== 'face') return null
@@ -48,17 +89,14 @@ export function queryVisibleSheetEdge(k:OcctKernel,source:ShapeHandle,candidates
       let winner:{edge:number;point:Point}|null = null
       for (const candidate of candidates) {
         const edge = edges[candidate.edge], path = paths[candidate.edge]
-        if (!edge || !path || path.length !== 2 || k.curveType(edge) !== 'line' ||
+        if (!edge || !path || path.length!==candidate.path.length ||
             !path.every((point,i) => distance(point,candidate.path[i]) <= tolerance)) return null
-        const matches = paths.filter(other => other.length === 2 &&
+        const matches = paths.filter(other => other.length===path.length &&
           (other.every((point,i) => distance(point,path[i]) <= tolerance) ||
-           other.every((point,i) => distance(point,path[1-i]) <= tolerance)))
+           other.every((point,i) => distance(point,path[path.length-1-i]) <= tolerance)))
         if (matches.length !== 1) return null
-        const {first,last} = k.curveParameters(edge)
-        const projected = k.projectPointOnEdge(edge,vec(candidate.seed)), point = tuple(projected.point)
-        if (!Number.isFinite(first) || !Number.isFinite(last) || !Number.isFinite(projected.parameter) ||
-            projected.parameter <= first || projected.parameter >= last || !finite(point) ||
-            distance(point,candidate.seed) > tolerance || path.some(end => distance(end,point) < endpointMargin)) return null
+        const point=candidatePoint(k,edge,path,candidate)
+        if (!point) return null
         const incident = faces.filter(face => {
           const rims = k.getSubShapes(face,'edge')
           try { return rims.some(rim => k.isSame(rim,edge)) } finally { rims.forEach(rim => k.release(rim)) }
