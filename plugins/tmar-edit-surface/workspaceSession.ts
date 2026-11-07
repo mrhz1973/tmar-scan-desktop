@@ -823,7 +823,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
   }
 
   async prepareDirectStripPick(revision:number,candidates:SheetEdgeVisibilityCandidate[],
-    origin:Point,parallelDirection?:Point):Promise<VerifiedDirectStripPick|null> {
+    origin:Point,parallelDirection?:Point,clipping?:import('./sheetEdgeVisibilityCad').SheetEdgeClippingProof):Promise<VerifiedDirectStripPick|null> {
     this.assertMutable()
     const cache=this.directCache, serial=++this.directPickSerial, draftEpoch=this.draftEpoch
     if (!cache || !this.matchesDirect(cache,this.directIdentity()) || cache.revision!==revision ||
@@ -835,6 +835,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       action:'verifySheetEdgeVisibility',previewRevision:revision,selection:{face:cache.face,refinements},
       candidates:requested,origin:pointCopy(origin),
       ...(parallelDirection?{parallelDirection:pointCopy(parallelDirection)}:{}),
+      ...(clipping?{clipping:structuredClone(clipping)}:{}),
     },this.context.signal)
     this.assertMutable()
     if (serial!==this.directPickSerial || draftEpoch!==this.draftEpoch || cache!==this.directCache ||

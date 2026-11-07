@@ -1363,9 +1363,9 @@ export class SurfaceEditorKernel {
     try {return read(sheet)} finally {this.kernel.release(sheet)}
   }
   sheetEdges(revision:number) { return this.withSheet(revision,s=>sheetEdgePaths(this.kernel,s)) }
-  verifySheetEdgeVisibility(revision:number, candidates:readonly SheetEdgeVisibilityCandidate[], origin:Point, parallelDirection?:Point) {
+  verifySheetEdgeVisibility(revision:number, candidates:readonly SheetEdgeVisibilityCandidate[], origin:Point, parallelDirection?:Point, clipping?:import('./sheetEdgeVisibilityCad').SheetEdgeClippingProof) {
     if (this.adaptiveSelection) throw new Error('Preparazione non qualificata per la verifica del bordo libero.')
-    const pick = this.withSheet(revision, sheet => queryVisibleSheetEdge(this.kernel,sheet,candidates,origin,parallelDirection))
+    const pick = this.withSheet(revision, sheet => queryVisibleSheetEdge(this.kernel,sheet,candidates,origin,parallelDirection,clipping))
     return { face:this.chosen, previewRevision:revision, pick }
   }
   duplicateSheetEdge(revision:number,edge:number,delta:Point,previous:StripMove[]=[],expectedPath?:Point[]) {

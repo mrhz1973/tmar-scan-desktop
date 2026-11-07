@@ -207,6 +207,11 @@ it('queries the exact worker-owned STEP shell and rejects a stale revision or se
     const witness = await ask({action:'finalFaceWitness',previewRevision})
     const expected = {face:selection.face,previewRevision,pick:{edge:candidates[1].edge,
       point:[expect.closeTo(-2,10),expect.closeTo(0,10),expect.closeTo(frontZ,10)]}}
+    const clipping={partToWorld:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+      planes:[{normal:[0,0,-1] as Point,constant:.01}],margins:{planeClearanceMm:.001,startGuardMm:.001,
+        endpointExtensionMm:.0001,minimumVisibleLengthMm:.003,minimumCrossingCosine:.01}}
+    expect(await ask({...request,clipping})).toEqual({face:selection.face,previewRevision,pick:{edge:candidates[0].edge,
+      point:[expect.closeTo(-2,10),expect.closeTo(0,10),expect.closeTo(0,10)]}})
     expect(await ask(request)).toEqual(expected)
     expect(await ask({...request,candidates:[...candidates].reverse()})).toEqual(expected)
     expect(await ask({action:'finalFaceWitness',previewRevision})).toEqual(witness)

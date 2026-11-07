@@ -1380,8 +1380,10 @@ it.each([false, true])('rejects an axis aligned or almost aligned to the view (%
   layer.dispose()
 })
 
-function overlappingDirectEdges(backFirst:boolean) {
-  const f=fixture(), layer=createWorkspaceLayer(f.view,f.owner)
+function overlappingDirectEdges(backFirst:boolean, withReference=false) {
+  const f=fixture(withReference ? {reference:'scan'} : {})
+  if (withReference) f.reference.partFromGeometry=new THREE.Matrix4().makeTranslation(0,0,-2).toArray()
+  const layer=createWorkspaceLayer(f.view,f.owner)
   const front:Point[]=[[-1,-1,.02],[1,-1,.02]], back:Point[]=[[-1,-1,0],[1,-1,0]]
   const paths=backFirst?[back,front]:[front,back], edge=backFirst?1:0
   const winner={edge,point:[0,-1,.02] as Point}
@@ -1447,11 +1449,101 @@ it.each(['release','camera','viewport','part transform','section','selection','r
     layer.dispose()
   })
 
-it('does not offer an ambiguous D selection with an active clipping plane',()=>{
+it('certifies D with world clipping planes and repeats the proof on pointerdown',async()=>{
+  const {f,layer,winner,prepare,begin,handle,press}=overlappingDirectEdges(true)
+  const plane=new THREE.Plane(new THREE.Vector3(0,0,1),1)
+  f.getLayer().clippingChanged?.([plane],false)
+  expect(f.getLayer().pointerDown?.(f.event(1,[0,-1,0]))).toBe(true)
+  await flushBoundaryPick()
+  expect(prepare.mock.calls[0][4]).toEqual({partToWorld:f.group.matrixWorld.toArray(),
+    planes:[{normal:[0,0,1],constant:1}],margins:{planeClearanceMm:.001,startGuardMm:.001,
+      endpointExtensionMm:.0001,minimumVisibleLengthMm:.003,minimumCrossingCosine:.01}})
+  expect(handle.style.display).toBe('block')
+  prepare.mockResolvedValueOnce(winner)
+  const down=press();handle.dispatch('pointerdown',down)
+  await flushBoundaryPick()
+  expect(prepare.mock.calls[1][4]).toEqual(prepare.mock.calls[0][4])
+  expect(begin).toHaveBeenCalledWith(winner)
+  f.getHandlers().up(down);layer.dispose()
+})
+
+it.each(['section event','plane mutation','preview','camera','references'] as const)(
+  'rejects a pending clipped D proof after %s',async reason=>{
+    const {f,layer,winner,prepare,handle}=overlappingDirectEdges(true)
+    const plane=new THREE.Plane(new THREE.Vector3(0,0,1),1)
+    f.getLayer().clippingChanged?.([plane],false)
+    let complete!:(pick:typeof winner)=>void
+    prepare.mockReset().mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve}))
+    f.getLayer().pointerDown?.(f.event(1,[0,-1,0]))
+    await flushBoundaryPick()
+    if(reason==='section event') f.getLayer().clippingChanged?.(null,false)
+    if(reason==='plane mutation') plane.constant=2
+    if(reason==='preview') f.set({preview:null})
+    if(reason==='camera') { f.view.camera().position.z+=1;f.frame() }
+    if(reason==='references') f.notifyReferences()
+    complete(winner);await flushBoundaryPick()
+    expect(handle.style.display).toBe('none')
+    expect(f.counts().captured).toBeNull()
+    layer.dispose()
+  })
+
+it('refuses a recertification if a clipping plane mutates in place',async()=>{
+  const {f,layer,winner,prepare,begin,handle,press}=overlappingDirectEdges(true)
+  const plane=new THREE.Plane(new THREE.Vector3(0,0,1),1)
+  f.getLayer().clippingChanged?.([plane],false)
+  f.getLayer().pointerDown?.(f.event(1,[0,-1,0]));await flushBoundaryPick()
+  let complete!:(pick:typeof winner)=>void
+  prepare.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve}))
+  handle.dispatch('pointerdown',press())
+  plane.constant=2
+  complete(winner);await flushBoundaryPick()
+  expect(begin).not.toHaveBeenCalled()
+  expect(f.counts().captured).toBeNull()
+  layer.dispose()
+})
+
+it.each(['frame','tick','move','up'] as const)(
+  'cancels a verified drag on in-place plane mutation before %s',async trigger=>{
+    const {f,layer,winner,prepare,begin,handle,press}=overlappingDirectEdges(true)
+    const plane=new THREE.Plane(new THREE.Vector3(0,0,1),1)
+    f.getLayer().clippingChanged?.([plane],false)
+    f.getLayer().pointerDown?.(f.event(1,[0,-1,0]));await flushBoundaryPick()
+    prepare.mockResolvedValueOnce(winner)
+    const down=press();handle.dispatch('pointerdown',down);await flushBoundaryPick()
+    expect(begin).toHaveBeenCalledOnce()
+    const moved={...down,clientX:down.clientX+30}
+    f.getHandlers().move(moved)
+    plane.constant=2
+    if (trigger==='frame') f.frame()
+    if (trigger==='tick') f.getLayer().tick?.(600,600)
+    if (trigger==='move') f.getHandlers().move(moved)
+    if (trigger==='up') f.getHandlers().up(moved)
+    expect(f.finishStripGesture).toHaveBeenCalledWith(null)
+    expect(f.counts().captured).toBeNull()
+    layer.dispose()
+  })
+
+it('cancels a verified drag when a reference changes without a notification',async()=>{
+  const {f,layer,winner,prepare,begin,handle,press}=overlappingDirectEdges(true,true)
+  f.getLayer().pointerDown?.(f.event(1,[0,-1,0]));await flushBoundaryPick()
+  prepare.mockResolvedValueOnce(winner)
+  const down=press();handle.dispatch('pointerdown',down);await flushBoundaryPick()
+  expect(begin).toHaveBeenCalledOnce()
+  const moved={...down,clientX:down.clientX+30}
+  f.getHandlers().move(moved)
+  f.reference.partFromGeometry[12]+=1
+  f.getHandlers().up(moved)
+  expect(f.finishStripGesture).toHaveBeenCalledWith(null)
+  expect(f.counts().captured).toBeNull()
+  layer.dispose()
+})
+
+it('rejects a native result whose point is clipped',async()=>{
   const {f,layer,prepare,handle}=overlappingDirectEdges(true)
-  f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,0,1),1)],false)
-  expect(f.getLayer().pointerDown?.(f.event(1,[0,-1,0]))).toBe(false)
-  expect(prepare).not.toHaveBeenCalled()
+  f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,0,1),-.01)],false)
+  prepare.mockReset().mockResolvedValue({edge:0,point:[0,-1,0]})
+  f.getLayer().pointerDown?.(f.event(1,[0,-1,.02]));await flushBoundaryPick()
+  expect(prepare).toHaveBeenCalledOnce()
   expect(handle.style.display).toBe('none')
   layer.dispose()
 })
@@ -1544,7 +1636,8 @@ it.each(['visible','refused','outside click','recertified outside click','releas
   if (scenario==='section') {
     f.getLayer().clippingChanged?.([new THREE.Plane(new THREE.Vector3(0,0,1),1)],false)
     f.getLayer().pointerDown?.(f.event(1,click))
-    expect(prepare).not.toHaveBeenCalled()
+    await flushBoundaryPick()
+    expect(prepare).toHaveBeenCalledOnce()
     expect(handle.style.display).toBe('block')
     layer.dispose()
     return

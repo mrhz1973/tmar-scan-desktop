@@ -133,7 +133,7 @@ export interface WorkspaceSurfaceLayerOwner {
   /** Promote the matching cached boundary and begin its gesture synchronously. */
   beginDirectStripGesture?(edge: number, revision: number): boolean
   prepareDirectStripPick?(revision:number, candidates:import('./sheetEdgeVisibilityCad').SheetEdgeVisibilityCandidate[],
-    origin:Point, parallelDirection?:Point):Promise<VerifiedDirectStripPick|null>
+    origin:Point, parallelDirection?:Point, clipping?:import('./sheetEdgeVisibilityCad').SheetEdgeClippingProof):Promise<VerifiedDirectStripPick|null>
   beginVerifiedDirectStripGesture?(pick:VerifiedDirectStripPick):boolean
   cancelPreparedDirectStripPick?():void
   previewStripDelta?(delta: Point): void

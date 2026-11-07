@@ -41,7 +41,7 @@ export type Request = { id: number } & (
   | ({ action: 'publishG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedValidationRequest)
   | ({ action: 'evaluateG1CurvedTangency'; selection: {face:number;refinements:KnotInsertion[]} } & G1CurvedEvaluationRequest)
   | { action: 'sheetEdges'; previewRevision: number }
-  | { action: 'verifySheetEdgeVisibility'; previewRevision:number; selection:{face:number;refinements:KnotInsertion[]}; candidates:SheetEdgeVisibilityCandidate[]; origin:Point; parallelDirection?:Point }
+  | { action: 'verifySheetEdgeVisibility'; previewRevision:number; selection:{face:number;refinements:KnotInsertion[]}; candidates:SheetEdgeVisibilityCandidate[]; origin:Point; parallelDirection?:Point; clipping?:import('./sheetEdgeVisibilityCad').SheetEdgeClippingProof }
   | { action: 'duplicateSheetEdge'; previewRevision: number; edge: number; delta: Point; previous?: StripMove[]; path?: Point[] }
   | { action: 'finalFaceWitness'; previewRevision: number }
   | { action: 'duplicateCadFace'; previewRevision: number; selection: {face:number;refinements:KnotInsertion[]} }
@@ -207,7 +207,7 @@ self.onmessage = (event: MessageEvent<Request>) => {
           if (cylinder || adaptiveSelectionKey !== null || !req.selection || selectionKey === null ||
               selectionKey !== JSON.stringify(req.selection))
             throw new Error('Selezione del bordo libero scaduta o non supportata.')
-          result = editor.verifySheetEdgeVisibility(req.previewRevision,req.candidates,req.origin,req.parallelDirection)
+          result = editor.verifySheetEdgeVisibility(req.previewRevision,req.candidates,req.origin,req.parallelDirection,req.clipping)
           break
         case 'duplicateSheetEdge': result = editor.duplicateSheetEdge(req.previewRevision,req.edge,req.delta,req.previous,req.path); break
         case 'finalFaceWitness': result = editor.finalFaceWitness(req.previewRevision); break

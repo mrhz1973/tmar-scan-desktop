@@ -19,7 +19,7 @@ import { snapAlong, type SnapHit } from './snap'
 import { wholeBoundaryPath,wholeBoundaryIndices } from './wholeBoundary'
 import { WorkspacePreview, type WorkspacePreviewClipping } from './workspacePreview'
 import type { VerifiedDirectStripPick, WorkspaceReticleFrame, WorkspaceSurfaceLayer, WorkspaceSurfaceLayerOwner, WorkspaceSurfaceView, WorkspaceSurfaceViewState } from './workspaceBridge'
-import type { SheetEdgeVisibilityCandidate } from './sheetEdgeVisibilityCad'
+import type { SheetEdgeClippingProof, SheetEdgeVisibilityCandidate } from './sheetEdgeVisibilityCad'
 
 type ZebraOptions = NonNullable<WorkspaceSurfaceViewState['stripes']> & { target: 'visible'; selectedIds: number[] }
 interface Zebra { setOptions(options: ZebraOptions): void; tick(): void; dispose(): void }
@@ -50,12 +50,13 @@ type Capture = {
   deferredPole?: boolean
   wholeFaceLocal?: boolean
   verifiedStrip?: boolean
+  directFence?: { clipping:SheetEdgeClippingProof | undefined; references:FaceOccluder[] }
 }
 type DirectFrame = Pick<Capture,'camera'|'projection'|'cameraWorld'|'partWorld'|'rect'>
 type DirectBasis = Pick<WorkspaceSurfaceViewState,'net'|'preview'|'selected'|'face'>
 type DirectProof = {
   frame:DirectFrame; basis:DirectBasis; candidates:SheetEdgeVisibilityCandidate[]; anchor:Point;
-  references:FaceOccluder[]; click:{x:number;y:number}
+  references:FaceOccluder[]; click:{x:number;y:number}; clipping:SheetEdgeClippingProof | undefined
 }
 type DirectSelection = { paths: readonly (readonly Point[])[]; revision: number; edge: number; proof?:DirectProof }
 type DirectPress = { event:PointerEvent; last:PointerEvent|null; selection:DirectSelection }
@@ -127,6 +128,7 @@ function disposeTargets(targets: Target[]): void {
 export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: WorkspaceSurfaceLayerOwner): WorkspaceSurfaceLayer {
   let disposed = false
   let clipping: WorkspacePreviewClipping = { planes: null, intersection: false }
+  let clippingRevision = 0
   let capture: Capture | null = null
   let pickPending:CadPickPending|null=null
   let displayed: WorkspaceSurfaceViewState['preview'] | NonNullable<WorkspaceSurfaceViewState['provisionalPreview']> = null
@@ -215,6 +217,18 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     const partFromWorld = partWorld.clone().invert()
     return clipping.planes.map(plane => plane.clone().applyMatrix4(partFromWorld))
   }
+  const directClipping = (partWorld:THREE.Matrix4):SheetEdgeClippingProof | undefined => clipping.planes?.length ? {
+    partToWorld: [...partWorld.elements],
+    planes: clipping.planes.map(plane => ({normal: point(plane.normal), constant: plane.constant})),
+    margins: {planeClearanceMm:.001, startGuardMm:.001, endpointExtensionMm:.0001,
+      minimumVisibleLengthMm:.003, minimumCrossingCosine:.01},
+  } : undefined
+  const sameDirectClipping = (snapshot:SheetEdgeClippingProof | undefined, partWorld:THREE.Matrix4):boolean => {
+    const now=directClipping(partWorld)
+    return !snapshot ? !now : !!now && snapshot.planes.length===now.planes.length &&
+      snapshot.planes.every((plane,i)=>plane.constant===now.planes[i].constant &&
+        plane.normal.every((value,j)=>value===now.planes[i].normal[j]))
+  }
   const mousePoint = (event: PointerEvent, offsetX = 0, offsetY = 0): SurfacePointer => {
     const state = owner.getViewState()
     return { pointerId: event.pointerId, clientX: event.clientX - offsetX, clientY: event.clientY - offsetY, altKey: event.altKey,
@@ -247,7 +261,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       if (!anchor || state.placingNote || state.surfaceTarget || state.wholeBoundaryDrag || state.wholeFaceDrag || state.navigationOnly) { stripHandle.style.display = 'none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return }
       const direct = !state.strip && state.directStrip && directSelection &&
         state.directStrip.paths === directSelection.paths && state.directStrip.revision === directSelection.revision ? directSelection : null
-      if (direct?.proof && (clipping.planes?.length || !frameUnchanged(direct.proof.frame) || !directBasisCurrent(direct.proof.basis))) {
+      if (direct?.proof && (!sameDirectClipping(direct.proof.clipping,direct.proof.frame.partWorld) || !frameUnchanged(direct.proof.frame) || !directBasisCurrent(direct.proof.basis))) {
         stripHandle.style.display='none'; delete stripHandle.dataset.edge; delete stripHandle.dataset.revision; return
       }
       stripHandle.dataset.edge = String(state.strip ? state.strip.selectedEdge : direct?.edge ?? -1)
@@ -795,6 +809,13 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       return camera.matrixWorld.equals(active.cameraWorld) && camera.projectionMatrix.equals(active.projection) && view.group.matrixWorld.equals(active.partWorld)
     } catch { return false } // A revoked source cancels rather than trapping the pointer.
   }
+  const captureCurrent = (active:Capture):boolean => {
+    try {
+      return frameUnchanged(active) && (!active.directFence ||
+        (sameDirectClipping(active.directFence.clipping,active.partWorld) &&
+          sameFaceOccluders(active.directFence.references,wholeFaceOccluders())))
+    } catch { return false }
+  }
   const directAvailable = (selection:Pick<DirectSelection,'paths'|'revision'>):boolean => {
     const state=owner.getViewState()
     return !disposed && !layerDisposed && !state.busy && !state.strip && !state.placingNote && !state.surfaceTarget &&
@@ -808,8 +829,8 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
   const directPressCurrent = (press:DirectPress):boolean => {
     try {
       return directPress===press && directSelection===press.selection && directAvailable(press.selection) &&
-        !clipping.planes?.length && frameUnchanged(press.selection.proof!.frame) &&
-        directBasisCurrent(press.selection.proof!.basis) && view.hasPointerCapture(press.event.pointerId)
+        sameDirectClipping(press.selection.proof!.clipping,press.selection.proof!.frame.partWorld) && frameUnchanged(press.selection.proof!.frame) &&
+        sameFaceOccluders(press.selection.proof!.references,wholeFaceOccluders()) && directBasisCurrent(press.selection.proof!.basis) && view.hasPointerCapture(press.event.pointerId)
     } catch { return false }
   }
   const cancelDirectPress = ():boolean => {
@@ -820,14 +841,15 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     release(pointerId);positionStripHandle()
     return true
   }
-  const verifyDirect = (revision:number,candidates:SheetEdgeVisibilityCandidate[],anchor:Point) => {
+  const verifyDirect = (revision:number,candidates:SheetEdgeVisibilityCandidate[],anchor:Point, section?:SheetEdgeClippingProof) => {
     const camera=cameraInPart(anchor), origin=point(new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld))
     return owner.prepareDirectStripPick!(revision,candidates,origin,
-      (camera as THREE.OrthographicCamera).isOrthographicCamera ? point(camera.getWorldDirection(new THREE.Vector3())) : undefined)
+      (camera as THREE.OrthographicCamera).isOrthographicCamera ? point(camera.getWorldDirection(new THREE.Vector3())) : undefined, section)
   }
   const checkDirectReferenceDepth = (anchor:Point,frame:DirectFrame,references:FaceOccluder[]) => {
     const screen=view.projectPartPoint(anchor), rect=frame.rect, camera=cameraInPart(anchor)
-    if (!screen.visible) throw new Error('Il bordo CAD è fuori dalla vista.')
+    if (!screen.visible || clipping.planes?.some(plane => plane.distanceToPoint(new THREE.Vector3(...anchor).applyMatrix4(frame.partWorld)) < 0))
+      throw new Error('Il bordo CAD è fuori dalla vista.')
     const caster=new THREE.Raycaster()
     const ndc=new THREE.Vector2((screen.clientX-rect.left)*2/rect.width-1,1-(screen.clientY-rect.top)*2/rect.height)
     caster.setFromCamera(ndc,camera)
@@ -840,7 +862,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (!start || !finitePoint(start)) { clearDirect();return false }
     const partWorld=partMatrix(start)
     const candidates=direct.paths.flatMap((path,edge)=>{
-      const picked=pickPaths([path],0,x,y,false,partWorld)
+      const picked=pickPaths([path],0,x,y,true,partWorld)
       return picked ? [{edge,path,seed:picked.anchor,segment:picked.segment,distance:picked.distance}] : []
     }).sort((a,b)=>a.distance-b.distance)
     const first=candidates[0]
@@ -849,7 +871,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     const shortlisted=candidates.filter(candidate=>candidate.distance-first.distance<=1)
       .map(({edge,path,seed,segment})=>({edge,path,seed,segment}))
     const canVerify=!!owner.prepareDirectStripPick && !!owner.beginVerifiedDirectStripGesture &&
-      !clipping.planes?.length && shortlisted.length<=8 &&
+      shortlisted.length<=8 &&
       shortlisted.every(candidate=>candidate.path.length===2 || candidate.path.length===49)
     if (!canVerify) {
       if (shortlisted.length!==1) return false
@@ -862,19 +884,22 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     const {left,top,width,height}=view.bounds()
     const frame={camera,partWorld,projection:camera.projectionMatrix.clone(),cameraWorld:camera.matrixWorld.clone(),
       rect:{left,top,width,height}}
-    const references=wholeFaceOccluders()
+    const references=wholeFaceOccluders(), section=directClipping(partWorld), sectionRevision=clippingRevision
     let basis:DirectBasis|undefined
-    const current=()=>serial===directChoiceSerial && !clipping.planes?.length && directAvailable(direct) &&
-      frameUnchanged(frame) && (!basis || directBasisCurrent(basis))
+    const current=()=>{
+      try { return serial===directChoiceSerial && sectionRevision===clippingRevision && sameDirectClipping(section,partWorld) && directAvailable(direct) &&
+        sameFaceOccluders(references,wholeFaceOccluders()) && frameUnchanged(frame) && (!basis || directBasisCurrent(basis)) }
+      catch { return false }
+    }
     void Promise.resolve().then(async()=>{
       if (!current()) return
       basis=owner.getViewState()
-      const pick=await verifyDirect(direct.revision,shortlisted,first.seed)
+      const pick=await verifyDirect(direct.revision,shortlisted,first.seed,section)
       if (!pick || !current()) return
       const anchor=[...pick.point] as Point, screen=checkDirectReferenceDepth(anchor,frame,references)
       if (Math.hypot(screen.clientX-x,screen.clientY-y)>directClickTolerance) return
       directSelection={paths:direct.paths,revision:direct.revision,edge:pick.edge,
-        proof:{anchor,frame,basis,candidates:shortlisted,references,click:{x,y}}}
+        proof:{anchor,frame,basis,candidates:shortlisted,references,click:{x,y},clipping:section}}
       syncStrip(owner.getViewState());positionStripHandle();view.invalidate()
     }).catch(error=>{ if (current()) report(errorText(error)) })
     return true
@@ -926,6 +951,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       if (!verified) view.claimEditDrag(true)
       capture = { kind: 'strip', pointerId: event.pointerId, gesture, camera, projection: camera.projectionMatrix.clone(),
         cameraWorld: camera.matrixWorld.clone(), partWorld: matrix, offsetX, offsetY, verifiedStrip:!!verified,
+        directFence: verified && direct?.proof ? {clipping:direct.proof.clipping,references:direct.proof.references} : undefined,
         rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } }
       return true
     } catch (error) {
@@ -948,7 +974,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       const edge = strip ? strip.selectedEdge : direct!.edge, axis = strip ? strip.axis : state.directStrip!.axis
       if (direct?.proof) {
         if (capture || pickPending || directPress || event.button!==0 || event.shiftKey || event.ctrlKey || event.metaKey ||
-            !directAvailable(direct) || clipping.planes?.length || !frameUnchanged(direct.proof.frame) || !directBasisCurrent(direct.proof.basis) ||
+            !directAvailable(direct) || !sameDirectClipping(direct.proof.clipping,direct.proof.frame.partWorld) || !frameUnchanged(direct.proof.frame) || !directBasisCurrent(direct.proof.basis) ||
             !owner.prepareDirectStripPick || !owner.beginVerifiedDirectStripGesture) return
         if (!view.capturePointer(event.pointerId)) { view.releasePointer(event.pointerId);return }
         const press:DirectPress={event,last:null,selection:direct}
@@ -956,7 +982,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         view.claimEditDrag(true)
         positionStripHandle()
         const proof=direct.proof
-        void verifyDirect(direct.revision,proof.candidates,proof.anchor).then(pick=>{
+        void verifyDirect(direct.revision,proof.candidates,proof.anchor,proof.clipping).then(pick=>{
           if (!directPressCurrent(press) || !pick || pick.edge!==direct.edge ||
               owner.getViewState().directStrip?.axis!==axis) {
             if (directPress===press) { cancelDirectPress();clearDirect() }
@@ -1255,7 +1281,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     }
     if(pickPending?.pointerId===event.pointerId){if(!frameUnchanged(pickPending))cancelPendingPick();else pickPending.last=mousePoint(event);return}
     if (!capture || capture.pointerId !== event.pointerId) return
-    if (!frameUnchanged(capture)) { cancelGesture(); return }
+    if (!captureCurrent(capture)) { cancelGesture(); return }
     const sample = mousePoint(event, capture.offsetX, capture.offsetY)
     if (sample.altKey || !sample.snapEnabled) hideFeedback()
     const result = capture.gesture.move(sample)
@@ -1276,7 +1302,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     if (directPress?.event.pointerId===event.pointerId) { cancelDirectPress();return }
     if(pickPending?.pointerId===event.pointerId){cancelPendingPick();return}
     if (!capture || capture.pointerId !== event.pointerId) return
-    if (!frameUnchanged(capture)) { cancelGesture(); return }
+    if (!captureCurrent(capture)) { cancelGesture(); return }
     const active = capture; capture = null
     try {
       const result = active.gesture.up(mousePoint(event, active.offsetX, active.offsetY))
@@ -1317,16 +1343,15 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     },
     clippingChanged: planes => {
       clipping = { planes, intersection: false }
+      clippingRevision++
       hideFeedback()
       if (planes?.length && (pickPending?.kind === 'face' || capture?.wholeFaceLocal)) cancelGesture()
-      if (planes?.length && (directPress || capture?.verifiedStrip)) cancelGesture()
-      if (planes?.length) {
-        directChoiceSerial++
-        if (directSelection?.proof) clearDirect()
-      }
+      if (directPress || capture?.verifiedStrip) cancelGesture()
+      directChoiceSerial++
+      if (directSelection?.proof) clearDirect()
       preview.refreshClipping(); syncOverlayClipping(stripGroup); syncOverlayClipping(g1Group); positionStripHandle()
     },
-    tick: () => { zebra?.tick(); if (capture && !frameUnchanged(capture)) cancelGesture() },
+    tick: () => { zebra?.tick(); if (capture && !captureCurrent(capture)) cancelGesture() },
     dispose: () => {
       if (layerDisposed) return
       layerDisposed = true
@@ -1350,6 +1375,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     cleanups.push(view.onFrame(() => {
       if (pickPending?.kind === 'face' && !frameUnchanged(pickPending)) cancelPendingPick()
       if (directPress && !directPressCurrent(directPress)) cancelDirectPress()
+      if (capture && !captureCurrent(capture)) cancelGesture()
       positionStripHandle()
     }))
     cleanups.push(view.subscribeReferences(() => {
