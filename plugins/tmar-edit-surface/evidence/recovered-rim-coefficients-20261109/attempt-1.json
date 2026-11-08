@@ -1,0 +1,109 @@
+{
+  "schema": "TMAR_RECOVERED_RIM_COEFFICIENT_CHECK_V1",
+  "status": "coefficient-only-pass",
+  "adapterQualification": "WAIT_REAL_DETACHED_BREP",
+  "startedAtUtc": "2026-11-08T23:12:55.129Z",
+  "durationMs": 7.614400000000046,
+  "commit": "57bffc7e1662757e6aa90612679927ce776eaa3f",
+  "archiveSha256": "4ee5216ef839d236688c04823df17c46e60a09396f917ebf698de7e988a26476",
+  "dataSha256": "8d60108498ab64b76d296ae6062b45443b87dee776189031bf4e48e9f08908f5",
+  "requestPayloadSha256": "cb9988441981177c45742305e25280dbd11dc36148e8f06a8ed2cae1d1c57194",
+  "sourceStepSha256Declared": "6b711960fcded7972ded41ed1ceaa2f09e2dd8332fc7ee980b76d2514c94e8ae",
+  "sourceEdge": 207767,
+  "sourceCurve": 207771,
+  "sourceMapping": "STEP binary64 coefficients and reported range; implicit unit weights; periodic=false supported by knot/pole cardinality and historical report",
+  "sourceMatchesRaw323V0": true,
+  "helperSha256": "e0634f01cb427d0f9fcfdc8bc39e64253e6248ebdbe80787c459ca1a2d17d31a",
+  "adapterSha256": "38de2090a1c92c711183e8631993f3f2675d673c0bcfeb242967ed76bc85578d",
+  "bundledInputs": [
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicCurveWitness.ts",
+      "sha256": "1bf66dfd5fe408ac586878b88914032164d9f8329792764bfc82d3e1ffc2a784"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicSurfaceRefinement.ts",
+      "sha256": "30c620732b207f497e76e9519e9356dce2beff3e5f758b12e51aff1fbaa28cde"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicSeamDerivativeGap.ts",
+      "sha256": "ae7fcabe39f28be6241b66bd798e9a8dfa9ff04f3115448439882b0251d9b26b"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalClampedBSplineTrim.ts",
+      "sha256": "e0634f01cb427d0f9fcfdc8bc39e64253e6248ebdbe80787c459ca1a2d17d31a"
+    }
+  ],
+  "runtime": {
+    "node": "v26.8.1",
+    "esbuild": "0.25.12",
+    "kernelLoaded": false
+  },
+  "metrics": {
+    "status": "converted",
+    "sourceDegree": 3,
+    "sourcePoles": 239,
+    "sourceDistinctKnots": 239,
+    "sourceSimpleInteriorKnots": 235,
+    "activeRange": [
+      0,
+      252.00932454753
+    ],
+    "clampedPoles": 239,
+    "clampedDistinctKnots": 237,
+    "clampedEndpointMultiplicities": [
+      4,
+      4
+    ],
+    "clampedSimpleInteriorKnots": 235,
+    "polesUnchanged": true,
+    "interiorKnotsUnchanged": true,
+    "interiorMultiplicitiesUnchanged": true,
+    "maximumCurveErrorUpper": 0,
+    "exactInBinary64": true,
+    "inputUnchanged": true
+  },
+  "actions": {
+    "helperInvocations": 1,
+    "clampAdapterInvocations": 0,
+    "cadImports": 0,
+    "cadKernelInvocations": 0,
+    "cadCandidates": 0,
+    "geometryEvaluations": 0,
+    "consumedTestsReplayed": 0,
+    "markerWrites": 0,
+    "dependencyChanges": 0,
+    "liveCadActions": 0
+  },
+  "execution": {
+    "exitCode": 0,
+    "processCompleted": true,
+    "runner": "One in-memory Node invocation; existing TypeScript helper bundled with installed esbuild, then evaluated in an I/O-free vm context. No new test file, kernel or CAD model was loaded."
+  },
+  "archiveIntegrity": {
+    "listedMembers": 12,
+    "verifiedSizes": 12,
+    "verifiedSha256": 12,
+    "memberSetExact": true,
+    "checksumManifest": "SHA256SUMS.csv",
+    "sourceFile": "dati_recuperati.json",
+    "sourceKey": "edges[\"207767\"].curve_3d"
+  },
+  "sourceEvidenceLimits": {
+    "frozenStepHash": "declared by the attached provenance; original frozen CAD not opened or rehashed in this check",
+    "range": "same as coefficient-derived active domain; actual B-Rep trim only historically reported",
+    "edgeTolerance": "1e-7 mm reported historically, not remeasured",
+    "vertexTolerance": "missing",
+    "vertexRepresentations": "not included",
+    "detachedBrep": "not included",
+    "sourceCoefficients": "parsed as binary64; zero bound concerns that input model"
+  },
+  "reconciliation": {
+    "branch": "codex/edit-surface-tubo-periodic",
+    "headBefore": "57bffc7e1662757e6aa90612679927ce776eaa3f",
+    "protectedWipFiles": 43,
+    "stagedBefore": 0,
+    "checkoutHostVersion": "0.9.4",
+    "checkoutKernelVersion": "5.7.1",
+    "kernelInvoked": false
+  }
+}
