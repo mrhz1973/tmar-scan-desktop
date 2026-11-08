@@ -1,0 +1,43 @@
+{
+  "schema": "experimental-detached-rim-clamp-239-synthetic-v1",
+  "startedAt": "2026-11-08T21:11:05.700525+00:00",
+  "durationSeconds": 2.0160000000032596,
+  "baseCommit": "e20e4b2c2db77417900ec62cd189df1716f2a06c",
+  "kernelPackage": "occt-wasm@5.7.1",
+  "scope": "synthetic-only: 239 poles, 235 simple interior knots, no Tube data or qualification; no live CAD or host",
+  "predeclaredFixture": {
+    "degree": 3,
+    "sourcePoles": 239,
+    "simpleInteriorKnots": 235,
+    "activeRange": [
+      -2,
+      234
+    ],
+    "paddingKnots": [
+      -3,
+      235
+    ],
+    "activeSpans": 236,
+    "sampledParameters": 945,
+    "sampledGapLimitMm": 1e-07,
+    "edgeToleranceLimitMm": 1e-06
+  },
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp239.test.ts",
+    "--maxWorkers=1",
+    "--no-file-parallelism",
+    "--reporter=verbose"
+  ],
+  "sourceSha256": {
+    "plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp239.test.ts": "00f767c3e8aed15727231482ace6e0ed2a996aca610c24454eb521eab6015e16",
+    "plugins/tmar-edit-surface/experimentalDetachedBrepRimClamp.ts": "38de2090a1c92c711183e8631993f3f2675d673c0bcfeb242967ed76bc85578d",
+    "plugins/tmar-edit-surface/experimentalClampedBSplineTrim.ts": "e0634f01cb427d0f9fcfdc8bc39e64253e6248ebdbe80787c459ca1a2d17d31a",
+    "plugins/tmar-edit-surface/tests/experimentalPeriodicClosedSolid.fixture.ts": "17cdca72d2248533c388a84f7505ad266ed850f40cc7834cf6f3d4bbd3d08b32"
+  },
+  "exitCode": 0,
+  "stdout": "\n RUN  v3.2.7 <worktree>\n\nstdout | plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp239.test.ts > preserves a synthetic cubic 239-pole rim with 235 simple interior knots through detached clamping and STEP\n\n*******************************************************************\n******        Statistics on Transfer (Write)                 ******\n\n*******************************************************************\n******        Transfer Mode = 0  I.E.  As Is       ******\n\n******        Transferring Shape, ShapeType = 3                      ******\n\n{\n  scope: 'synthetic-only; no Tube data or qualification',\n  degree: 3,\n  sourcePoles: 239,\n  clampedPoles: 239,\n  simpleInteriorKnots: 235,\n  activeSpans: 236,\n  sampledParameters: 945,\n  exactClampingBound: 0,\n  sewnSupportGap: 3.580361673049448e-15,\n  sewnSourceGap: 0,\n  sewnTolerance: 1e-7,\n  reopenedSupportGap: 3.580361673049448e-15,\n  reopenedSourceGap: 0,\n  reopenedTolerance: 1e-7,\n  reopenedPeriodic: true,\n  reopenedPoles: 238\n}\n\n ✓ plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp239.test.ts > preserves a synthetic cubic 239-pole rim with 235 simple interior knots through detached clamping and STEP 557ms\n\n Test Files  1 passed (1)\n      Tests  1 passed (1)\n   Start at  22:11:06\n   Duration  1.12s (transform 121ms, setup 0ms, collect 159ms, tests 558ms, environment 0ms, prepare 145ms)\n\n",
+  "stderr": ""
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "experimental-detached-rim-clamp-239-typecheck-v1",
+  "startedAt": "2026-11-08T21:12:09.925246+00:00",
+  "durationSeconds": 1.5939999999827705,
+  "baseCommit": "e20e4b2c2db77417900ec62cd189df1716f2a06c",
+  "scope": "only the new synthetic 239-pole test import graph; not whole host",
+  "command": [
+    "node",
+    "node_modules/typescript/bin/tsc",
+    "--noEmit",
+    "--target",
+    "ES2022",
+    "--lib",
+    "ES2022,DOM,DOM.Iterable",
+    "--module",
+    "ESNext",
+    "--moduleResolution",
+    "bundler",
+    "--strict",
+    "--noUnusedLocals",
+    "--noUnusedParameters",
+    "--skipLibCheck",
+    "plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp239.test.ts"
+  ],
+  "testSha256": "00f767c3e8aed15727231482ace6e0ed2a996aca610c24454eb521eab6015e16",
+  "exitCode": 0,
+  "stdout": "",
+  "stderr": ""
+}
