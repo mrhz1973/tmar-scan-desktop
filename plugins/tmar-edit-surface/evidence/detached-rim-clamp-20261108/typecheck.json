@@ -1,0 +1,29 @@
+{
+  "schema": "experimental-detached-rim-clamp-typecheck-v1",
+  "startedAt": "2026-11-08T18:09:03.559363+00:00",
+  "durationSeconds": 4.577999999979511,
+  "baseCommit": "82942bf36c33ec20ed3793bb42b0f72ab3cec6d5",
+  "scope": "only adapter and its synthetic test import graph; not whole host",
+  "command": [
+    "node",
+    "node_modules/typescript/bin/tsc",
+    "--noEmit",
+    "--target",
+    "ES2022",
+    "--lib",
+    "ES2022,DOM,DOM.Iterable",
+    "--module",
+    "ESNext",
+    "--moduleResolution",
+    "bundler",
+    "--strict",
+    "--noUnusedLocals",
+    "--noUnusedParameters",
+    "--skipLibCheck",
+    "plugins/tmar-edit-surface/experimentalDetachedBrepRimClamp.ts",
+    "plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp.test.ts"
+  ],
+  "exitCode": 0,
+  "stdout": "",
+  "stderr": ""
+}

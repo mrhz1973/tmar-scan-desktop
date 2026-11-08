@@ -1,0 +1,24 @@
+{
+  "schema": "experimental-detached-rim-clamp-synthetic-v1",
+  "startedAt": "2026-11-08T18:07:50.322581+00:00",
+  "durationSeconds": 2.0,
+  "baseCommit": "82942bf36c33ec20ed3793bb42b0f72ab3cec6d5",
+  "kernelPackage": "occt-wasm@5.7.1",
+  "scope": "synthetic detached-face adapter only; no owner STEP, no live CAD, no host",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp.test.ts",
+    "--maxWorkers=1",
+    "--no-file-parallelism",
+    "--reporter=verbose"
+  ],
+  "sourceSha256": {
+    "plugins/tmar-edit-surface/experimentalDetachedBrepRimClamp.ts": "38de2090a1c92c711183e8631993f3f2675d673c0bcfeb242967ed76bc85578d",
+    "plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp.test.ts": "1a60847f61271a0da77a56e3382a2954170876ec98e38f8850897846d082d3b4"
+  },
+  "exitCode": 0,
+  "stdout": "\n\u001b[1m\u001b[46m RUN \u001b[49m\u001b[22m \u001b[36mv3.2.7 \u001b[39m\u001b[90m<worktree>\u001b[39m\n\n\u001b[90mstdout\u001b[2m | plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp.test.ts\u001b[2m > \u001b[22m\u001b[2mclamps a detached protected rim and preserves both native pcurves through sewing and STEP readback\n\u001b[22m\u001b[39m\n*******************************************************************\n******        Statistics on Transfer (Write)                 ******\n\n*******************************************************************\n******        Transfer Mode = 0  I.E.  As Is       ******\n\n******        Transferring Shape, ShapeType = 3                      ******\n\n{\n  sewnGap: \u001b[33m2.808666774861361e-15\u001b[39m,\n  sewnTolerance: \u001b[33m1e-7\u001b[39m,\n  reopenedGap: \u001b[33m2.808666774861361e-15\u001b[39m,\n  reopenedTolerance: \u001b[33m1e-7\u001b[39m,\n  reopenedPeriodic: \u001b[33mtrue\u001b[39m\n}\n\n \u001b[32m✓\u001b[39m plugins/tmar-edit-surface/tests/experimentalDetachedBrepRimClamp.test.ts\u001b[2m > \u001b[22mclamps a detached protected rim and preserves both native pcurves through sewing and STEP readback\u001b[33m 341\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m   Start at \u001b[22m 19:07:51\n\u001b[2m   Duration \u001b[22m 950ms\u001b[2m (transform 133ms, setup 0ms, collect 181ms, tests 342ms, environment 0ms, prepare 173ms)\u001b[22m\n\n",
+  "stderr": ""
+}
