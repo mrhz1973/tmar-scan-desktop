@@ -46,7 +46,7 @@ export function makeExperimentalNaturalPeriodicFixtureSide(k: OcctKernel, n: Net
   const saturated = n.mu[0] === n.du && n.mu.at(-1) === n.du
   const uniformQuadraticCut = n.du === 2 && n.ku[1] - u0 === u1 - n.ku.at(-2)! &&
     [n.mu[0], n.mu[1], n.mu.at(-2), n.mu.at(-1)].every(m => m === 1)
-  if (n.periodic[0] !== 1 || n.periodic[1] !== 0 || n.weights.some(w => w !== 1) ||
+  if (n.periodic?.[0] !== 1 || n.periodic[1] !== 0 || n.weights.some(w => w !== 1) ||
       n.rational.some(Boolean) || n.mv[0] !== n.dv + 1 || n.mv.at(-1) !== n.dv + 1 ||
       (!saturated && !uniformQuadraticCut)) throw new Error('Unsupported natural periodic fixture basis')
   // Saturated cut uses U0. The other fixture uses a uniform quadratic
