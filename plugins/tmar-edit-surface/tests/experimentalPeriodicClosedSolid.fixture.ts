@@ -41,11 +41,18 @@ function insertFixtureKnot(k: OcctKernel, net: Net, knot: number, own: Own): Net
   return { ...net, nu, ku, mu, poles, weights: poles.map(() => 1) }
 }
 
-function naturalSide(k: OcctKernel, n: Net) {
-  const [v0, v1] = n.kv, u0 = n.ku[0], u1 = n.ku.at(-1)!
-  // The fixture uses an unweighted quadratic basis with simple uniform
-  // knots around the cut. Its cut curve uses the average of two U poles.
-  const seam = n.poles.slice(0, n.nv).map((a, v) => a.map((x, d) => (x + n.poles[n.nv + v][d]) / 2))
+export function makeExperimentalNaturalPeriodicFixtureSide(k: OcctKernel, n: Net) {
+  const v0 = n.kv[0], v1 = n.kv.at(-1)!, u0 = n.ku[0], u1 = n.ku.at(-1)!
+  const saturated = n.mu[0] === n.du && n.mu.at(-1) === n.du
+  const uniformQuadraticCut = n.du === 2 && n.ku[1] - u0 === u1 - n.ku.at(-2)! &&
+    [n.mu[0], n.mu[1], n.mu.at(-2), n.mu.at(-1)].every(m => m === 1)
+  if (n.periodic[0] !== 1 || n.periodic[1] !== 0 || n.weights.some(w => w !== 1) ||
+      n.rational.some(Boolean) || n.mv[0] !== n.dv + 1 || n.mv.at(-1) !== n.dv + 1 ||
+      (!saturated && !uniformQuadraticCut)) throw new Error('Unsupported natural periodic fixture basis')
+  // Saturated cut uses U0. The other fixture uses a uniform quadratic
+  // basis near the cut, where the cut is the average of the first two U poles.
+  const seam = saturated ? n.poles.slice(0, n.nv) :
+    n.poles.slice(0, n.nv).map((a, v) => a.map((x, d) => (x + n.poles[n.nv + v][d]) / 2))
   const curve = (poles: number[][], knots: number[], mult: number[], degree: number, periodic: number) =>
     [`7 0 ${periodic} ${degree} ${poles.length} ${knots.length}`,
       ...poles.map(p => p.join(' ')), ...knots.map((knot, i) => `${knot} ${mult[i]}`)].join('\n')
@@ -82,7 +89,7 @@ ${vertex(seam[0])}
 Ed
  ${tolerance} 1 1 0
 1 2 0 ${v0} ${v1}
-3 2 3CN 1 0 ${v0} ${v1}
+3 2 3${saturated ? 'C0' : 'CN'} 1 0 ${v0} ${v1}
 0
 
 0101000
@@ -116,7 +123,7 @@ export function makeExperimentalPeriodicClosedSolid(k: OcctKernel, own: Own) {
     const edge = own(k.makeBSplineEdge(rim(net, row).flat(), [], net.ku, net.mu, net.du, true))
     return own(k.makeFace(own(k.makeWire([edge]))))
   }
-  const faces = [own(naturalSide(k, lower)), own(naturalSide(k, upper)), cap(lower, 0), cap(upper, upper.nv - 1)]
+  const faces = [own(makeExperimentalNaturalPeriodicFixtureSide(k, lower)), own(makeExperimentalNaturalPeriodicFixtureSide(k, upper)), cap(lower, 0), cap(upper, upper.nv - 1)]
   if (faces.some(face => !k.isValid(face))) throw new Error('Invalid fixture face')
   return own(k.sewAndSolidify(faces, tolerance))
 }
