@@ -44,10 +44,12 @@ function insertFixtureKnot(k: OcctKernel, net: Net, knot: number, own: Own): Net
 export interface ExperimentalPreservedFixtureRim {
   curve: NurbsCurveData
   range: readonly [number, number]
-  pcurve: { range: readonly [number, number]; start: readonly [number, number]; end: readonly [number, number] }
+  pcurve: { kind?: 'identity-line'; range: readonly [number, number]; start: readonly [number, number]; end: readonly [number, number] }
 }
 
-export function makeExperimentalNaturalPeriodicFixtureSide(k: OcctKernel, n: Net, lowerRim?: ExperimentalPreservedFixtureRim) {
+export function makeExperimentalNaturalPeriodicFixtureSide(k: OcctKernel, n: Net,
+  lowerRim?: ExperimentalPreservedFixtureRim, upperRim?: ExperimentalPreservedFixtureRim,
+) {
   const v0 = n.kv[0], v1 = n.kv.at(-1)!, u0 = n.ku[0], u1 = n.ku.at(-1)!
   const saturated = n.mu[0] === n.du && n.mu.at(-1) === n.du
   const uniformQuadraticCut = n.du === 2 && n.ku[1] - u0 === u1 - n.ku.at(-2)! &&
@@ -62,34 +64,35 @@ export function makeExperimentalNaturalPeriodicFixtureSide(k: OcctKernel, n: Net
   const curve = (poles: number[][], knots: number[], mult: number[], degree: number, periodic: number) =>
     [`7 0 ${periodic} ${degree} ${poles.length} ${knots.length}`,
       ...poles.map(p => p.join(' ')), ...knots.map((knot, i) => `${knot} ${mult[i]}`)].join('\n')
-  let lowerCurve = curve(rim(n, 0), n.ku, n.mu, n.du, 1)
-  let lowerPcurve = `1 0 ${v0} 1 0`, lowerRange: readonly [number, number] = [u0, u1]
-  if (lowerRim) {
-    const { curve: data, range, pcurve } = lowerRim, [first, last] = range
+  function encodeRim(v: number, row: number, preserved?: ExperimentalPreservedFixtureRim) {
+    const identity = `1 0 ${v} 1 0`
+    if (!preserved) return { curve: curve(rim(n, row), n.ku, n.mu, n.du, 1), pcurve: identity, range: [u0, u1] as const }
+    const { curve: data, range, pcurve } = preserved, [first, last] = range
     if (!saturated || data.periodic || data.rational || data.weights.some(w => w !== 1) ||
         ![...data.poles, ...data.knots, first, last].every(Number.isFinite) || !(last > first) ||
         !(first >= data.knots[0] && last <= data.knots.at(-1)!) ||
         pcurve.range[0] !== first || pcurve.range[1] !== last ||
-        pcurve.start[0] !== u0 || pcurve.end[0] !== u1 || pcurve.start[1] !== v0 || pcurve.end[1] !== v0)
+        pcurve.start[0] !== u0 || pcurve.end[0] !== u1 || pcurve.start[1] !== v || pcurve.end[1] !== v ||
+        (pcurve.kind === 'identity-line' && (first !== u0 || last !== u1)))
       throw new Error('Unsupported preserved rim range or pcurve')
     const poles = Array.from({ length: data.poles.length / 3 }, (_, i) => data.poles.slice(3 * i, 3 * i + 3))
-    lowerCurve = curve(poles, data.knots, data.multiplicities, data.degree, 0)
-    lowerRange = range
-    lowerPcurve = `7 0 0 1 2 2 ${pcurve.start.join(' ')} ${pcurve.end.join(' ')} ${first} 2 ${last} 2`
+    return { curve: curve(poles, data.knots, data.multiplicities, data.degree, 0), range,
+      pcurve: pcurve.kind === 'identity-line' ? identity : `7 0 0 1 2 2 ${pcurve.start.join(' ')} ${pcurve.end.join(' ')} ${first} 2 ${last} 2` }
   }
+  const lower = encodeRim(v0, 0, lowerRim), upper = encodeRim(v1, n.nv - 1, upperRim)
   const vertex = (point: number[]) => `Ve\n${tolerance}\n${point.join(' ')}\n0 0\n\n0101101\n*`
   // The four uses are upper rim, cut, lower rim, and the reverse cut.
   const result = k.fromBREP(`CASCADE Topology V3, (c) Open Cascade
 Locations 0
 Curve2ds 4
-1 0 ${v1} 1 0
+${upper.pcurve}
 1 ${u1} 0 0 1
 1 ${u0} 0 0 1
-${lowerPcurve}
+${lower.pcurve}
 Curves 3
-${curve(rim(n, n.nv - 1), n.ku, n.mu, n.du, 1)}
+${upper.curve}
 ${curve(seam, n.kv, n.mv, n.dv, 0)}
-${lowerCurve}
+${lower.curve}
 Polygon3D 0
 PolygonOnTriangulations 0
 Surfaces 1
@@ -100,8 +103,8 @@ TShapes 7
 ${vertex(seam.at(-1)!)}
 Ed
  ${tolerance} 1 1 0
-1 1 0 ${u0} ${u1}
-2 1 1 0 ${u0} ${u1}
+1 1 0 ${upper.range.join(' ')}
+2 1 1 0 ${upper.range.join(' ')}
 0
 
 0101000
@@ -117,8 +120,8 @@ Ed
 -7 0 +5 0 *
 Ed
  ${tolerance} 1 1 0
-1 3 0 ${lowerRange.join(' ')}
-2 4 1 0 ${lowerRange.join(' ')}
+1 3 0 ${lower.range.join(' ')}
+2 4 1 0 ${lower.range.join(' ')}
 0
 
 0101000
@@ -135,21 +138,25 @@ Fa
 
 +1 0
 `)
-  if (lowerRim) {
+  if (lowerRim || upperRim) {
     let edges: ShapeHandle[] = []
     try {
       edges = k.getSubShapes(result, 'edge')
-      const candidates = edges.filter(edge => {
-        const { first, last } = k.curveParameters(edge)
-        return k.curveIsClosed(edge) && !k.curveIsPeriodic(edge) && first === lowerRange[0] && last === lowerRange[1]
-      })
-      if (candidates.length !== 1 || !k.isValid(result)) throw new Error('Preserved rim invalid after reconstruction')
-      const edge = candidates[0]
-      for (let j = 0; j <= 32; j++) {
-        const f = j / 32
-        const p = k.curvePointAtParam(edge, lowerRange[0] + f * (lowerRange[1] - lowerRange[0]))
-        const q = k.pointOnSurface(result, u0 + f * (u1 - u0), v0)
-        if (!(Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) <= tolerance)) throw new Error('Preserved rim geometry mismatch')
+      if (!k.isValid(result)) throw new Error('Preserved rim invalid after reconstruction')
+      for (const [preserved, v] of [[lowerRim, v0], [upperRim, v1]] as const) {
+        if (!preserved) continue
+        const [first, last] = preserved.range
+        const candidates = edges.filter(edge => {
+          const range = k.curveParameters(edge)
+          return k.curveIsClosed(edge) && !k.curveIsPeriodic(edge) && range.first === first && range.last === last
+        })
+        if (candidates.length !== 1) throw new Error('Preserved rim invalid after reconstruction')
+        for (let j = 0; j <= 32; j++) {
+          const f = j / 32
+          const p = k.curvePointAtParam(candidates[0], first + f * (last - first))
+          const q = k.pointOnSurface(result, u0 + f * (u1 - u0), v)
+          if (!(Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) <= tolerance)) throw new Error('Preserved rim geometry mismatch')
+        }
       }
     } catch (error) { k.release(result); throw error }
     finally { edges.forEach(edge => k.release(edge)) }
