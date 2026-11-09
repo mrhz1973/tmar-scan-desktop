@@ -1,4 +1,4 @@
-# Edit Surface — completed saved-pair checkpoint
+# Edit Surface — saved candidate continuous qualification STOP
 
 Updated **2026-11-09**. This chat executes `plugins/tmar-edit-surface/**`. Coordination and host/kernel/MCP changes remain with the coordinator; live Tube CAD/candidate work remains with Tube. No merge or live-session change is authorized by this checkpoint.
 
@@ -6,9 +6,15 @@ Updated **2026-11-09**. This chat executes `plugins/tmar-edit-surface/**`. Coord
 
 Assigned worktree: `C:\Users\mrhz\.codex\worktrees\edit-surface-tubo-periodic\tmar-scan-desktop-zebra`.
 Branch: `codex/edit-surface-tubo-periodic`.
-Parent acquired by the coordinator for this increment: `1887859163f8fd260189e5cbd218acdd007a9c91`. The saved-pair contracts below were completed in that checkpoint; the distinct candidate preparation follows it. Obtain the exact new HEAD and remote ref from Git before continuing. The other `codex/edit-surface` worktree is outside scope.
+Parent acquired by the coordinator for this increment: **`2849cc01855fef259553bf603eecf243554ec2e2`**. That checkpoint prepared the saved modified candidate. The saved-pair contracts at `1887859` and the preparation at `2849cc0` remain acquired and were not replayed. Obtain the exact new HEAD and remote ref from Git before continuing. The other `codex/edit-surface` worktree is outside scope.
 
-The original `EditSurface.tsx` WIP and all **130 inherited protected files** remain unchanged. The new preservation manifest contains **146 files**:
+The original `EditSurface.tsx` WIP and all **149 files inherited by this increment** remain unchanged. The current final preservation manifest protects **173 files**, including the new private preflights, driver, builds, logs, consumed marker and negative receipt:
+
+`evidence/candidate-qualification-2849cc0.local/preservation-final.local.json`
+
+SHA-256: **`7952cee9ffba4d1d4fdb61f118ea3d9b8f6085ac5d5e4abbb7cf7897057b56a7`**. Include this manifest and the subsequent commit/push receipts in the next baseline. No consumed marker may be reset.
+
+The previous 146-file manifest remains preserved:
 
 `evidence/modified-candidate-1887859.local/preservation-final.local.json`
 
@@ -94,12 +100,59 @@ The next requested candidate is now concrete: **`tubo-6b-derivative-storage-cand
 
 Status is **`prepared-unqualified-coefficient-candidate`**. Preparation criteria are satisfied; continuousG1/nativeCAD/Tube acceptance remain false.
 
+## DONE — continuous qualification of candidate 1 after 2849cc0
+
+**Status: `candidate-qualification-stop`; native gate false.** The immutable candidate is `tubo-6b-derivative-storage-candidate-1`, SHA-256 `4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a`.
+
+One new coefficient-only execution completed every independent scope at **2026-11-09T22:16:40Z–22:17:23Z**. See [EXPERIMENTAL-CANDIDATE-QUALIFICATION.md](EXPERIMENTAL-CANDIDATE-QUALIFICATION.md) and [the criterion-linked public evidence](evidence/candidate-qualification-20261109/README.md).
+
+### Proven criterion violations
+
+- **Stored derivative-change coefficient cap, face 323/V1:** 237/238 coefficients within 5 mm/native-V; only zero-based U=205 exceeds it. Its exact norm lies in `[5.000000000000056, 5.000000000000057]`. Exact squared margin `25−||DeltaD||² = −1145015349844183/2028240960365170645274427025 <0`. This is a coefficient criterion failure, not proof of a surface displacement excess. The acquired small D1 residual does not relax the cap.
+- **Oriented normal chord on joint 74:** a regular, positive-dot point witness has strictly negative chord-inequality margin under the `1e-4` criterion.
+- **Oriented normal chord on joint 75:** a separate point witness likewise violates `1e-4`. Duplicate endpoint records at the same subcell boundary represent one point, not independent witnesses.
+
+### Independently satisfied criteria
+
+- Bundle target changes: 238/238 coefficients within 5 mm/V on both sides. Stored derivative-change coefficients on 321: 238/238 within the cap. D1/D2 evidence is reused from the preparation receipt of the identical artifact.
+- Continuous joint position gaps: upper `2.0467183503569696e-11 mm` on 74 and `2.7300828264742466e-11 mm` on 75, under `1e-6`.
+- Both joints have positive tangent/normal orientation, native tangent/transverse norm floors and lambda >=0.0625. Joint 75 tangent chord is within `1e-10`.
+- Full-support regularity and relative orientation: **708/708 cells of 321, 95/95 of fixed 322, 708/708 of 323**. All three periodic U seams meet their jump and normal-chord criteria.
+- Surface correspondence displacement upper: **323 `0.04977416992187588 mm` ; 321 `0.049214389679658105 mm`**, both <=0.05. Seam displacement upper: **`0.009089103447495039` / `0.006818452451454857 mm`**, both <=0.05. Pole movement is recorded separately, with upper `0.10000000000000124` / `0.06492088175293245 mm`.
+
+### Inconclusive criteria, not failures
+
+- Joint 74 tangent chord: 329 certified and **8192 unresolved leaves**, with no violating witness.
+- Historical sampled normal-residual criterion on both joints: new continuous uppers `0.026316328297860254` / `0.0018516255628473661 mm/V` do not establish <=1e-3 for all points. Larger conservative uppers do not prove a sampled violation. No old sampled PASS was promoted to the new continuous scope.
+
+The matrix has **54 entries: 44 within, 3 proven outside, 3 inconclusive, 4 informational**. An exit code 0 means analysis and receipt writing completed, not candidate PASS.
+
+### New implementation and evidence
+
+Three new reusable helpers implement exact derivative coefficient caps, mixed linear/quintic continuous joint criteria and full-support regularity/relative orientation. A separate V-linear extractor was added without changing the existing quintic exports. **21 unique new pure tests passed**, with final targeted TypeScript checks successful. The additional signed-lambda reporting test initially exposed a Windows source synchronization gap; only that new test was rerun after synchronization, and the failed log remains preserved.
+
+Final preflight revision 2 SHA-256: **`7b0fde5ae637ea8f78b2550fba737a52d530b6da8e54ef9bc42ee53a1ef4d6bc`**. The unexecuted first draft/build is preserved.
+
+New consumed marker:
+
+`evidence/candidate-qualification-2849cc0.local/continuous-qualification-1.local.run-once`
+
+New receipt:
+
+`evidence/candidate-qualification-2849cc0.local/continuous-qualification-1.local.receipt.json`
+
+SHA-256: **`4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d`**, 126,563 bytes. The marker must not be replayed or reset. The saved candidate and all earlier markers/STOPs remain unchanged. Zero preparation, solve, fit, kernel initialization, native construction, STEP import/export, live CAD operation, host/kernel/MCP update or merge occurred.
+
 ## NEXT
 
-Continue from this artifact and its exact hash. Implement the distinct continuous qualification for the modified candidate's two bundle joins, regularity/orientation and declared movement criteria, then a separately declared isolated native construction/readback of coherent supports, both U seam curves and both pcurves per seam. Reuse acquired saved-pair evidence within its own scope. Do not rerun the saved pair or consumed storage/fitting wrapper. A future native runner needs its own preflight/marker/receipt and must preserve the earlier STOP.
+Use these evidence files directly. An eventual successor candidate needs a distinct correction contract addressing **both** the stored 5 mm/V coefficient cap and the continuous normal-chord violations on joints 74/75. The unresolved joint 74 tangent-chord and historical sampled-residual questions require their own targeted evidence; do not rerun the complete consumed qualification to recover them.
 
-The candidate contract fixes parameter maps, inward/normal signs, dimensional and angular diagnostic criteria, and the original source/frame. The prospective native consistency budgets are 1e-7 mm position and 1e-8 unit-direction chord; bundle normal chord remains 1e-4. Those are distinct from the qualified rim contract and from whole-Tube physical acceptance.
+Do not silently adjust candidate 1, loosen any criterion or repeat preparation/solve. The accepted scope here was qualification of the saved candidate. A new candidate must be identified with its own inputs, coefficient changes, hashes and evidence before a native gate can be reconsidered.
+
+The prospective native contract remains distinct: coherent modified supports, both U-seam 3D curves and their two pcurves, topology/provenance, parameters, orientations and consistency budgets 1e-7 mm / 1e-8 direction chord. **No native runner was consumed in this increment.** The old `reopened-own-support-mismatch` STOP remains a separate historical result.
 
 ## WAIT / scope limits
 
-No technical blocker remains for the saved pair or for preparation of this derivative-driven candidate. No requested geometric datum had to be invented. Whole-Tube acceptance still lacks explicit tolerance bands for the nominal 2 mm wall, 4.75 mm hole and 17.09 mm block dimensions, and any required global angular specification. Those gaps do not block the isolated candidate qualification work. Native raw surfaceD1 verification would require a separately supplied/exposed capability; updates remain the coordinator's responsibility. AIRBOX stays paused. Original handoff/archive provenance remains in earlier reports; no full transcript access or direct cross-chat delivery is inferred.
+The native step is blocked by the three demonstrated local criterion violations on candidate 1, independently of the three inconclusive entries. No missing whole-Tube dimensional band caused this stop. The user explicitly allowed these isolated checks to proceed without those bands, and all requested independent analysis scopes were executed.
+
+Whole-Tube physical acceptance remains outside this local result. The qualified rim 323/V0–324/V1, edge #207767, is distinct from the two bundle joints and was not retested. No local PASS or STOP is automatically transferred to the complete Tube. AIRBOX stays paused; ownership of host/kernel/MCP and coordination remains with the coordinator. Original handoff/archive provenance remains in earlier reports; no full transcript access or direct cross-chat delivery is inferred.

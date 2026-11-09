@@ -1,0 +1,564 @@
+{
+  "schema": "TMAR_CANDIDATE_QUALIFICATION_PUBLIC_MATRIX_V1",
+  "candidateSha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+  "receiptSha256": "4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d",
+  "criteria": [
+    {
+      "id": "derivative-cap-323-targetChange",
+      "scope": "face-323",
+      "requirement": "Euclidean supplied target minus original bundle base, each U coefficient <=5",
+      "units": "mm/native-V",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/derivative-cap-323/targetChange",
+      "value": {
+        "uIndex": 206,
+        "exactSquaredNorm": {
+          "numerator": "2028240960365158469964440064156849",
+          "denominator": "81129638414606681695789005144064"
+        },
+        "squaredNormInterval": {
+          "lower": 24.999999999999893,
+          "upper": 24.999999999999897
+        },
+        "normInterval": {
+          "lower": 4.999999999999989,
+          "upper": 4.99999999999999
+        },
+        "exactSquaredMarginToCap": {
+          "numerator": "8572430285064444751",
+          "denominator": "81129638414606681695789005144064"
+        },
+        "squaredMarginSign": "positive"
+      }
+    },
+    {
+      "id": "derivative-cap-323-storedChange",
+      "scope": "face-323",
+      "requirement": "Euclidean exact stored inward D1(candidate) minus D1(source), each U coefficient <=5",
+      "units": "mm/native-V",
+      "status": "outside-declared-criterion",
+      "evidence": "#/scopes/derivative-cap-323/storedChange",
+      "value": {
+        "uIndex": 205,
+        "exactSquaredNorm": {
+          "numerator": "50706024009130411147210519808",
+          "denominator": "2028240960365170645274427025"
+        },
+        "squaredNormInterval": {
+          "lower": 25.00000000000056,
+          "upper": 25.000000000000565
+        },
+        "normInterval": {
+          "lower": 5.000000000000056,
+          "upper": 5.000000000000057
+        },
+        "exactSquaredMarginToCap": {
+          "numerator": "-1145015349844183",
+          "denominator": "2028240960365170645274427025"
+        },
+        "squaredMarginSign": "negative"
+      }
+    },
+    {
+      "id": "stored-D1-residual-323",
+      "scope": "face-323",
+      "requirement": "D1 stored-versus-target residual <=1e-9",
+      "units": "mm/native-V",
+      "status": "within-declared-criterion",
+      "value": 1.6539825065109432e-12,
+      "evidence": "sha256:9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777#/sides/V0/derivativeResidualUpperMmPerV",
+      "acquired": true
+    },
+    {
+      "id": "stored-D2-change-323",
+      "scope": "face-323",
+      "requirement": "Stored D2 change <=1e-9",
+      "units": "mm/native-V^2",
+      "status": "within-declared-criterion",
+      "value": 1.394440118929197e-12,
+      "evidence": "sha256:9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777#/sides/V0/secondDerivativeChangeUpperMmPerV2",
+      "acquired": true
+    },
+    {
+      "id": "derivative-cap-321-targetChange",
+      "scope": "face-321",
+      "requirement": "Euclidean supplied target minus original bundle base, each U coefficient <=5",
+      "units": "mm/native-V",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/derivative-cap-321/targetChange",
+      "value": {
+        "uIndex": 122,
+        "exactSquaredNorm": {
+          "numerator": "53427934629348369620954813369241",
+          "denominator": "5070602400912917605986812821504"
+        },
+        "squaredNormInterval": {
+          "lower": 10.536802218949198,
+          "upper": 10.5368022189492
+        },
+        "normInterval": {
+          "lower": 3.246044087647178,
+          "upper": 3.2460440876471783
+        },
+        "exactSquaredMarginToCap": {
+          "numerator": "73337125393474570528715507168359",
+          "denominator": "5070602400912917605986812821504"
+        },
+        "squaredMarginSign": "positive"
+      }
+    },
+    {
+      "id": "derivative-cap-321-storedChange",
+      "scope": "face-321",
+      "requirement": "Euclidean exact stored inward D1(candidate) minus D1(source), each U coefficient <=5",
+      "units": "mm/native-V",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/derivative-cap-321/storedChange",
+      "value": {
+        "uIndex": 122,
+        "exactSquaredNorm": {
+          "numerator": "136775512651084943513975515136000",
+          "denominator": "12980742146337070512478121581609"
+        },
+        "squaredNormInterval": {
+          "lower": 10.536802218945587,
+          "upper": 10.536802218945589
+        },
+        "normInterval": {
+          "lower": 3.246044087646621,
+          "upper": 3.2460440876466214
+        },
+        "exactSquaredMarginToCap": {
+          "numerator": "187743041007341819297977524404225",
+          "denominator": "12980742146337070512478121581609"
+        },
+        "squaredMarginSign": "positive"
+      }
+    },
+    {
+      "id": "stored-D1-residual-321",
+      "scope": "face-321",
+      "requirement": "D1 stored-versus-target residual <=1e-9",
+      "units": "mm/native-V",
+      "status": "within-declared-criterion",
+      "value": 1.701416785238053e-12,
+      "evidence": "sha256:9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777#/sides/V1/derivativeResidualUpperMmPerV",
+      "acquired": true
+    },
+    {
+      "id": "stored-D2-change-321",
+      "scope": "face-321",
+      "requirement": "Stored D2 change <=1e-9",
+      "units": "mm/native-V^2",
+      "status": "within-declared-criterion",
+      "value": 6.217248937900883e-13,
+      "evidence": "sha256:9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777#/sides/V1/secondDerivativeChangeUpperMmPerV2",
+      "acquired": true
+    },
+    {
+      "id": "joint-74-position",
+      "scope": "joint-74",
+      "requirement": "Continuous position gap <=1e-6",
+      "units": "mm",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-74/criterionResults/position"
+    },
+    {
+      "id": "joint-74-nativeTangentNorm",
+      "scope": "joint-74",
+      "requirement": "Both native ||Su|| >=1e-8",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-74/criterionResults/nativeTangentNorm"
+    },
+    {
+      "id": "joint-74-transverseNorm",
+      "scope": "joint-74",
+      "requirement": "Lateral/support transverse speeds and support projected against lateral tangent >=1e-8",
+      "units": "mm/native-V",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-74/criterionResults/transverseNorm"
+    },
+    {
+      "id": "joint-74-tangentOrientation",
+      "scope": "joint-74",
+      "requirement": "Positive common-parameter tangent dot",
+      "units": "oriented sign",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-74/criterionResults/tangentOrientation"
+    },
+    {
+      "id": "joint-74-tangentChord",
+      "scope": "joint-74",
+      "requirement": "Unit tangent chord <=1e-10",
+      "units": "dimensionless",
+      "status": "inconclusive",
+      "evidence": "#/scopes/joint-74/criterionResults/tangentChord"
+    },
+    {
+      "id": "joint-74-normalOrientation",
+      "scope": "joint-74",
+      "requirement": "Positive oriented normal dot",
+      "units": "oriented sign",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-74/criterionResults/normalOrientation"
+    },
+    {
+      "id": "joint-74-normalChord",
+      "scope": "joint-74",
+      "requirement": "Unit oriented normal chord <=1e-4",
+      "units": "dimensionless",
+      "status": "outside-declared-criterion",
+      "evidence": "#/scopes/joint-74/criterionResults/normalChord"
+    },
+    {
+      "id": "joint-74-positiveScale",
+      "scope": "joint-74",
+      "requirement": "lambda=(Tl x M).(Tl x R)/||Tl x R||^2 >=0.0625",
+      "units": "dimensionless",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-74/criterionResults/positiveScale"
+    },
+    {
+      "id": "joint-74-normal-residual",
+      "scope": "joint-74",
+      "requirement": "Additional continuous residual bound; historical 1e-3 sampled criterion is not promoted to a continuous gate",
+      "units": "mm/native-V",
+      "status": "informational",
+      "value": 0.026316328297860254,
+      "evidence": "#/scopes/joint-74/maximumContinuousNormalResidualUpperMmPerV"
+    },
+    {
+      "id": "joint-74-historical-sampled-normal-residual",
+      "scope": "joint-74",
+      "requirement": "Historical sampled normal residual <=1e-3; a continuous upper <=1e-3 is sufficient, a larger upper is inconclusive for this sampled criterion",
+      "units": "mm/native-V",
+      "status": "inconclusive",
+      "value": 0.026316328297860254,
+      "evidence": "#/scopes/joint-74/maximumContinuousNormalResidualUpperMmPerV"
+    },
+    {
+      "id": "joint-75-position",
+      "scope": "joint-75",
+      "requirement": "Continuous position gap <=1e-6",
+      "units": "mm",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-75/criterionResults/position"
+    },
+    {
+      "id": "joint-75-nativeTangentNorm",
+      "scope": "joint-75",
+      "requirement": "Both native ||Su|| >=1e-8",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-75/criterionResults/nativeTangentNorm"
+    },
+    {
+      "id": "joint-75-transverseNorm",
+      "scope": "joint-75",
+      "requirement": "Lateral/support transverse speeds and support projected against lateral tangent >=1e-8",
+      "units": "mm/native-V",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-75/criterionResults/transverseNorm"
+    },
+    {
+      "id": "joint-75-tangentOrientation",
+      "scope": "joint-75",
+      "requirement": "Positive common-parameter tangent dot",
+      "units": "oriented sign",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-75/criterionResults/tangentOrientation"
+    },
+    {
+      "id": "joint-75-tangentChord",
+      "scope": "joint-75",
+      "requirement": "Unit tangent chord <=1e-10",
+      "units": "dimensionless",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-75/criterionResults/tangentChord"
+    },
+    {
+      "id": "joint-75-normalOrientation",
+      "scope": "joint-75",
+      "requirement": "Positive oriented normal dot",
+      "units": "oriented sign",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-75/criterionResults/normalOrientation"
+    },
+    {
+      "id": "joint-75-normalChord",
+      "scope": "joint-75",
+      "requirement": "Unit oriented normal chord <=1e-4",
+      "units": "dimensionless",
+      "status": "outside-declared-criterion",
+      "evidence": "#/scopes/joint-75/criterionResults/normalChord"
+    },
+    {
+      "id": "joint-75-positiveScale",
+      "scope": "joint-75",
+      "requirement": "lambda=(Tl x M).(Tl x R)/||Tl x R||^2 >=0.0625",
+      "units": "dimensionless",
+      "status": "within-declared-criterion",
+      "evidence": "#/scopes/joint-75/criterionResults/positiveScale"
+    },
+    {
+      "id": "joint-75-normal-residual",
+      "scope": "joint-75",
+      "requirement": "Additional continuous residual bound; historical 1e-3 sampled criterion is not promoted to a continuous gate",
+      "units": "mm/native-V",
+      "status": "informational",
+      "value": 0.0018516255628473661,
+      "evidence": "#/scopes/joint-75/maximumContinuousNormalResidualUpperMmPerV"
+    },
+    {
+      "id": "joint-75-historical-sampled-normal-residual",
+      "scope": "joint-75",
+      "requirement": "Historical sampled normal residual <=1e-3; a continuous upper <=1e-3 is sufficient, a larger upper is inconclusive for this sampled criterion",
+      "units": "mm/native-V",
+      "status": "inconclusive",
+      "value": 0.0018516255628473661,
+      "evidence": "#/scopes/joint-75/maximumContinuousNormalResidualUpperMmPerV"
+    },
+    {
+      "id": "support-321-regularity",
+      "scope": "support-321",
+      "requirement": "Strictly positive ||Su x Sv|| on every closed native cell",
+      "units": "mm^2/(native-U native-V)",
+      "status": "within-declared-criterion",
+      "value": 1.6472252124461777,
+      "evidence": "#/scopes/support-321"
+    },
+    {
+      "id": "support-321-relative-orientation",
+      "scope": "support-321",
+      "requirement": "Strictly positive source/candidate native normal dot on every closed native cell",
+      "units": "oriented sign",
+      "status": "within-declared-criterion",
+      "value": 7.877471558824155e-07,
+      "evidence": "#/scopes/support-321"
+    },
+    {
+      "id": "support-322-regularity",
+      "scope": "support-322",
+      "requirement": "Strictly positive ||Su x Sv|| on every closed native cell",
+      "units": "mm^2/(native-U native-V)",
+      "status": "within-declared-criterion",
+      "value": 0.09768515949807488,
+      "evidence": "#/scopes/support-322"
+    },
+    {
+      "id": "support-322-relative-orientation",
+      "scope": "support-322",
+      "requirement": "Strictly positive source/candidate native normal dot on every closed native cell",
+      "units": "oriented sign",
+      "status": "within-declared-criterion",
+      "value": 0.009106879329749339,
+      "evidence": "#/scopes/support-322"
+    },
+    {
+      "id": "seam-322-sourceJumpUpperMmPerU",
+      "scope": "support-322",
+      "requirement": "sourceJumpUpperMmPerU <=1e-9",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "value": 5.536395620538581e-12,
+      "evidence": "#/scopes/support-322/linearVSeam/evidence/sourceJumpUpperMmPerU"
+    },
+    {
+      "id": "seam-322-candidateJumpUpperMmPerU",
+      "scope": "support-322",
+      "requirement": "candidateJumpUpperMmPerU <=1e-9",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "value": 5.536395620538581e-12,
+      "evidence": "#/scopes/support-322/linearVSeam/evidence/candidateJumpUpperMmPerU"
+    },
+    {
+      "id": "seam-322-jumpChangeUpperMmPerU",
+      "scope": "support-322",
+      "requirement": "jumpChangeUpperMmPerU <=1e-9",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "value": 0,
+      "evidence": "#/scopes/support-322/linearVSeam/evidence/jumpChangeUpperMmPerU"
+    },
+    {
+      "id": "seam-322-normalChordUpper",
+      "scope": "support-322",
+      "requirement": "normalChordUpper <=0.0001",
+      "units": "dimensionless",
+      "status": "within-declared-criterion",
+      "value": 1.7339382009241636e-10,
+      "evidence": "#/scopes/support-322/linearVSeam/evidence/normalChordUpper"
+    },
+    {
+      "id": "support-323-regularity",
+      "scope": "support-323",
+      "requirement": "Strictly positive ||Su x Sv|| on every closed native cell",
+      "units": "mm^2/(native-U native-V)",
+      "status": "within-declared-criterion",
+      "value": 4.718672646190998,
+      "evidence": "#/scopes/support-323"
+    },
+    {
+      "id": "support-323-relative-orientation",
+      "scope": "support-323",
+      "requirement": "Strictly positive source/candidate native normal dot on every closed native cell",
+      "units": "oriented sign",
+      "status": "within-declared-criterion",
+      "value": 7.426226976991535e-10,
+      "evidence": "#/scopes/support-323"
+    },
+    {
+      "id": "seam-323-position",
+      "scope": "seam-323",
+      "requirement": "Saved seam curve is exactly the shared saturated U0/Uend column, with fixed endpoints",
+      "units": "coefficient identity",
+      "status": "within-declared-criterion",
+      "evidence": "sha256:9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777#/seams/323",
+      "acquired": true
+    },
+    {
+      "id": "seam-323-sourceJumpUpper",
+      "scope": "seam-323",
+      "requirement": "sourceJumpUpper <=1e-9",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "value": 9.525735628065995e-12,
+      "evidence": "#/scopes/seam-323/evidence/sourceJumpUpper"
+    },
+    {
+      "id": "seam-323-candidateJumpUpper",
+      "scope": "seam-323",
+      "requirement": "candidateJumpUpper <=1e-9",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "value": 9.525735628065995e-12,
+      "evidence": "#/scopes/seam-323/evidence/candidateJumpUpper"
+    },
+    {
+      "id": "seam-323-jumpChangeUpper",
+      "scope": "seam-323",
+      "requirement": "jumpChangeUpper <=1e-9",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "value": 1.349418891910224e-14,
+      "evidence": "#/scopes/seam-323/evidence/jumpChangeUpper"
+    },
+    {
+      "id": "seam-323-maximumNormalChordUpper",
+      "scope": "seam-323",
+      "requirement": "maximumNormalChordUpper <=0.0001",
+      "units": "dimensionless",
+      "status": "within-declared-criterion",
+      "value": 1.1784739882345132e-11,
+      "evidence": "#/scopes/seam-323/maximumNormalChordUpper"
+    },
+    {
+      "id": "movement-323-maximumSurfaceDisplacementUpper",
+      "scope": "movement-323",
+      "requirement": "maximumSurfaceDisplacementUpper <=0.05 at identical native (U,V)",
+      "units": "mm",
+      "status": "within-declared-criterion",
+      "value": 0.04977416992187588,
+      "evidence": "#/scopes/movement-323/maximumSurfaceDisplacementUpper"
+    },
+    {
+      "id": "movement-323-maximumSeamDisplacementUpper",
+      "scope": "movement-323",
+      "requirement": "maximumSeamDisplacementUpper <=0.05 at identical native (U,V)",
+      "units": "mm",
+      "status": "within-declared-criterion",
+      "value": 0.009089103447495039,
+      "evidence": "#/scopes/movement-323/maximumSeamDisplacementUpper"
+    },
+    {
+      "id": "movement-323-poles",
+      "scope": "movement-323",
+      "requirement": "Pole movement is recorded separately and is not the surface displacement criterion",
+      "units": "mm",
+      "status": "informational",
+      "value": 0.10000000000000124,
+      "evidence": "#/scopes/movement-323/maximumPoleDisplacementUpper"
+    },
+    {
+      "id": "seam-321-position",
+      "scope": "seam-321",
+      "requirement": "Saved seam curve is exactly the shared saturated U0/Uend column, with fixed endpoints",
+      "units": "coefficient identity",
+      "status": "within-declared-criterion",
+      "evidence": "sha256:9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777#/seams/321",
+      "acquired": true
+    },
+    {
+      "id": "seam-321-sourceJumpUpper",
+      "scope": "seam-321",
+      "requirement": "sourceJumpUpper <=1e-9",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "value": 2.092262530913747e-11,
+      "evidence": "#/scopes/seam-321/evidence/sourceJumpUpper"
+    },
+    {
+      "id": "seam-321-candidateJumpUpper",
+      "scope": "seam-321",
+      "requirement": "candidateJumpUpper <=1e-9",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "value": 2.092262530913747e-11,
+      "evidence": "#/scopes/seam-321/evidence/candidateJumpUpper"
+    },
+    {
+      "id": "seam-321-jumpChangeUpper",
+      "scope": "seam-321",
+      "requirement": "jumpChangeUpper <=1e-9",
+      "units": "mm/native-U",
+      "status": "within-declared-criterion",
+      "value": 1.2320972542878063e-14,
+      "evidence": "#/scopes/seam-321/evidence/jumpChangeUpper"
+    },
+    {
+      "id": "seam-321-maximumNormalChordUpper",
+      "scope": "seam-321",
+      "requirement": "maximumNormalChordUpper <=0.0001",
+      "units": "dimensionless",
+      "status": "within-declared-criterion",
+      "value": 4.350967784373393e-11,
+      "evidence": "#/scopes/seam-321/maximumNormalChordUpper"
+    },
+    {
+      "id": "movement-321-maximumSurfaceDisplacementUpper",
+      "scope": "movement-321",
+      "requirement": "maximumSurfaceDisplacementUpper <=0.05 at identical native (U,V)",
+      "units": "mm",
+      "status": "within-declared-criterion",
+      "value": 0.049214389679658105,
+      "evidence": "#/scopes/movement-321/maximumSurfaceDisplacementUpper"
+    },
+    {
+      "id": "movement-321-maximumSeamDisplacementUpper",
+      "scope": "movement-321",
+      "requirement": "maximumSeamDisplacementUpper <=0.05 at identical native (U,V)",
+      "units": "mm",
+      "status": "within-declared-criterion",
+      "value": 0.006818452451454857,
+      "evidence": "#/scopes/movement-321/maximumSeamDisplacementUpper"
+    },
+    {
+      "id": "movement-321-poles",
+      "scope": "movement-321",
+      "requirement": "Pole movement is recorded separately and is not the surface displacement criterion",
+      "units": "mm",
+      "status": "informational",
+      "value": 0.06492088175293245,
+      "evidence": "#/scopes/movement-321/maximumPoleDisplacementUpper"
+    }
+  ],
+  "counts": {
+    "within-declared-criterion": 44,
+    "outside-declared-criterion": 3,
+    "inconclusive": 3,
+    "informational": 4
+  },
+  "evidencePointersRelativeTo": "private receipt except sha256-prefixed references to acquired preparation"
+}

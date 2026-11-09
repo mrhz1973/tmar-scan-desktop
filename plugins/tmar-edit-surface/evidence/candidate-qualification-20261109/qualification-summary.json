@@ -1,0 +1,796 @@
+{
+  "schema": "TMAR_CANDIDATE_CONTINUOUS_RECEIPT_V1",
+  "candidateId": "tubo-6b-derivative-storage-candidate-1",
+  "candidateSha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+  "baseCommit": "2849cc01855fef259553bf603eecf243554ec2e2",
+  "startedAtUtc": "2026-11-09T22:16:40.392Z",
+  "finishedAtUtc": "2026-11-09T22:17:23.672Z",
+  "status": "candidate-qualification-stop",
+  "scope": "saved-candidate-continuous-coefficient-qualification-only",
+  "preflightSha256": "7b0fde5ae637ea8f78b2550fba737a52d530b6da8e54ef9bc42ee53a1ef4d6bc",
+  "preparationReceiptSha256": "9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777",
+  "baselineSha256": "014645f54ca8acfbe3f17b0b768e5529021b1987e71befe0b5a00b5585ef6be4",
+  "continuousCriteriaSatisfied": false,
+  "nativeGateSatisfied": false,
+  "outsideCriteria": [
+    "derivative-cap-323-storedChange",
+    "joint-74-normalChord",
+    "joint-75-normalChord"
+  ],
+  "inconclusiveCriteria": [
+    "joint-74-tangentChord",
+    "joint-74-historical-sampled-normal-residual",
+    "joint-75-historical-sampled-normal-residual"
+  ],
+  "oldExperimentsReplayed": 0,
+  "preparations": 0,
+  "fittingRuns": 0,
+  "solves": 0,
+  "kernelInitializations": 0,
+  "nativeConstructionRuns": 0,
+  "stepImports": 0,
+  "stepExports": 0,
+  "exactG1Certified": false,
+  "nativeCadCertified": false,
+  "tubeAccepted": false,
+  "maps": [
+    {
+      "label": "V0",
+      "face": "323",
+      "joint": "74",
+      "lateralEdge": "V1",
+      "supportEdge": "V0",
+      "stepEdge": 207475,
+      "nativeNormalFactor": -1,
+      "lateral": "(U,V)=(252.00932454753*s,1)",
+      "support": "(U,V)=(242.48253589446*s,0)",
+      "commonParameter": "s in [0,1], increasing affine maps; separate U=0+ and U=L- limits",
+      "tangent": "T=L*Su; native tangent norm threshold applies to Su",
+      "lateralTransverse": "M=-Sv",
+      "supportReference": "R=-Sv",
+      "nativeNormalFactorConditionalOnForwardFace": true
+    },
+    {
+      "label": "V1",
+      "face": "321",
+      "joint": "75",
+      "lateralEdge": "V0",
+      "supportEdge": "V1",
+      "stepEdge": 207173,
+      "nativeNormalFactor": 1,
+      "lateral": "(U,V)=(237.3422596445*s,0)",
+      "support": "(U,V)=(242.48253589446*s,1)",
+      "commonParameter": "s in [0,1], increasing affine maps; separate U=0+ and U=L- limits",
+      "tangent": "T=L*Su; native tangent norm threshold applies to Su",
+      "lateralTransverse": "M=+Sv",
+      "supportReference": "R=+Sv",
+      "nativeNormalFactorConditionalOnForwardFace": true
+    }
+  ],
+  "qualifiedRim": {
+    "edgeStepId": 207767,
+    "maps": [
+      "323:(252.00932454753*s,0)",
+      "324:(261.52535017517*s,1)"
+    ],
+    "acquiredEvidenceReused": true,
+    "testsReplayed": 0,
+    "distinctFromBundleJoins": true
+  },
+  "preservationVerified": true,
+  "inheritedFilesUnchangedBefore": 149,
+  "inheritedFilesUnchangedAfter": 149,
+  "privateReceipt": {
+    "path": "evidence/candidate-qualification-2849cc0.local/continuous-qualification-1.local.receipt.json",
+    "sha256": "4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d",
+    "bytes": 126563
+  },
+  "scopeResults": {
+    "derivative-cap-323": {
+      "status": "coefficient-cap-exceeded",
+      "evidenceScope": "exact-binary64-input-polynomial-inward-derivative-coefficient-change",
+      "parameterUnits": "coordinate-units-per-native-V-unit",
+      "maximumChange": 5,
+      "edge": "V1",
+      "degreeV": 5,
+      "nativeFirstSpanWidthExact": {
+        "numerator": "225179981368525",
+        "denominator": "4503599627370496"
+      },
+      "targetChange": {
+        "status": "within-coefficient-cap",
+        "checkedUCoefficients": 238,
+        "withinCapCount": 238,
+        "exceedingCapCount": 0,
+        "violatingUIndices": [],
+        "maximum": {
+          "uIndex": 206,
+          "exactSquaredNorm": {
+            "numerator": "2028240960365158469964440064156849",
+            "denominator": "81129638414606681695789005144064"
+          },
+          "squaredNormInterval": {
+            "lower": 24.999999999999893,
+            "upper": 24.999999999999897
+          },
+          "normInterval": {
+            "lower": 4.999999999999989,
+            "upper": 4.99999999999999
+          },
+          "exactSquaredMarginToCap": {
+            "numerator": "8572430285064444751",
+            "denominator": "81129638414606681695789005144064"
+          },
+          "squaredMarginSign": "positive"
+        }
+      },
+      "storedChange": {
+        "status": "coefficient-cap-exceeded",
+        "checkedUCoefficients": 238,
+        "withinCapCount": 237,
+        "exceedingCapCount": 1,
+        "violatingUIndices": [
+          205
+        ],
+        "maximum": {
+          "uIndex": 205,
+          "exactSquaredNorm": {
+            "numerator": "50706024009130411147210519808",
+            "denominator": "2028240960365170645274427025"
+          },
+          "squaredNormInterval": {
+            "lower": 25.00000000000056,
+            "upper": 25.000000000000565
+          },
+          "normInterval": {
+            "lower": 5.000000000000056,
+            "upper": 5.000000000000057
+          },
+          "exactSquaredMarginToCap": {
+            "numerator": "-1145015349844183",
+            "denominator": "2028240960365170645274427025"
+          },
+          "squaredMarginSign": "negative"
+        }
+      },
+      "targetFromExactSourceChange": {
+        "status": "within-coefficient-cap",
+        "checkedUCoefficients": 238,
+        "withinCapCount": 238,
+        "exceedingCapCount": 0,
+        "violatingUIndices": [],
+        "maximum": {
+          "uIndex": 206,
+          "exactSquaredNorm": {
+            "numerator": "257110087081437806018958995792741165317492281696730765313169",
+            "denominator": "10284403483257556032239024027278031166043968781917198745600"
+          },
+          "squaredNormInterval": {
+            "lower": 24.999999999999893,
+            "upper": 24.999999999999897
+          },
+          "normInterval": {
+            "lower": 4.999999999999989,
+            "upper": 4.99999999999999
+          },
+          "exactSquaredMarginToCap": {
+            "numerator": "1094787016604889209613833606937851199203326831",
+            "denominator": "10284403483257556032239024027278031166043968781917198745600"
+          },
+          "squaredMarginSign": "positive"
+        }
+      },
+      "targetFromExactSourceIsAdditionalDiagnostic": true,
+      "nativeCadCertified": false,
+      "tubeAccepted": false
+    },
+    "derivative-cap-321": {
+      "status": "within-coefficient-cap",
+      "evidenceScope": "exact-binary64-input-polynomial-inward-derivative-coefficient-change",
+      "parameterUnits": "coordinate-units-per-native-V-unit",
+      "maximumChange": 5,
+      "edge": "V0",
+      "degreeV": 5,
+      "nativeFirstSpanWidthExact": {
+        "numerator": "3602879701896397",
+        "denominator": "72057594037927936"
+      },
+      "targetChange": {
+        "status": "within-coefficient-cap",
+        "checkedUCoefficients": 238,
+        "withinCapCount": 238,
+        "exceedingCapCount": 0,
+        "violatingUIndices": [],
+        "maximum": {
+          "uIndex": 122,
+          "exactSquaredNorm": {
+            "numerator": "53427934629348369620954813369241",
+            "denominator": "5070602400912917605986812821504"
+          },
+          "squaredNormInterval": {
+            "lower": 10.536802218949198,
+            "upper": 10.5368022189492
+          },
+          "normInterval": {
+            "lower": 3.246044087647178,
+            "upper": 3.2460440876471783
+          },
+          "exactSquaredMarginToCap": {
+            "numerator": "73337125393474570528715507168359",
+            "denominator": "5070602400912917605986812821504"
+          },
+          "squaredMarginSign": "positive"
+        }
+      },
+      "storedChange": {
+        "status": "within-coefficient-cap",
+        "checkedUCoefficients": 238,
+        "withinCapCount": 238,
+        "exceedingCapCount": 0,
+        "violatingUIndices": [],
+        "maximum": {
+          "uIndex": 122,
+          "exactSquaredNorm": {
+            "numerator": "136775512651084943513975515136000",
+            "denominator": "12980742146337070512478121581609"
+          },
+          "squaredNormInterval": {
+            "lower": 10.536802218945587,
+            "upper": 10.536802218945589
+          },
+          "normInterval": {
+            "lower": 3.246044087646621,
+            "upper": 3.2460440876466214
+          },
+          "exactSquaredMarginToCap": {
+            "numerator": "187743041007341819297977524404225",
+            "denominator": "12980742146337070512478121581609"
+          },
+          "squaredMarginSign": "positive"
+        }
+      },
+      "targetFromExactSourceChange": {
+        "status": "within-coefficient-cap",
+        "checkedUCoefficients": 238,
+        "withinCapCount": 238,
+        "exceedingCapCount": 0,
+        "violatingUIndices": [],
+        "maximum": {
+          "uIndex": 122,
+          "exactSquaredNorm": {
+            "numerator": "693534242834924174461430655298278077722180925427550788360023809",
+            "denominator": "65820182292848248993706953956808814041829634723462532286119936"
+          },
+          "squaredNormInterval": {
+            "lower": 10.536802218949198,
+            "upper": 10.5368022189492
+          },
+          "normInterval": {
+            "lower": 3.2460440876471774,
+            "upper": 3.246044087647178
+          },
+          "exactSquaredMarginToCap": {
+            "numerator": "951970314486282050381243193621942273323559942659012518792974591",
+            "denominator": "65820182292848248993706953956808814041829634723462532286119936"
+          },
+          "squaredMarginSign": "positive"
+        }
+      },
+      "targetFromExactSourceIsAdditionalDiagnostic": true,
+      "nativeCadCertified": false,
+      "tubeAccepted": false
+    },
+    "joint-74": {
+      "status": "candidate-joint-continuous-coefficient-analysis",
+      "classification": "outside-declared-joint-criteria",
+      "criterionResults": {
+        "position": {
+          "certifiedLeaves": 8521,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "nativeTangentNorm": {
+          "certifiedLeaves": 8521,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "transverseNorm": {
+          "certifiedLeaves": 8521,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "tangentOrientation": {
+          "certifiedLeaves": 8521,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "tangentChord": {
+          "certifiedLeaves": 329,
+          "unresolvedLeaves": 8192,
+          "witnesses": [],
+          "classification": "inconclusive"
+        },
+        "normalOrientation": {
+          "certifiedLeaves": 8521,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "normalChord": {
+          "certifiedLeaves": 8512,
+          "unresolvedLeaves": 9,
+          "witnesses": [
+            {
+              "metric": "normalChord",
+              "endpoint": 1,
+              "reason": "unit-normal-chord-exceeds-budget",
+              "enclosure": [
+                -147665.81409427823,
+                -147665.8134908928
+              ],
+              "cell": 49,
+              "localDomain": [
+                0,
+                0.5
+              ]
+            },
+            {
+              "metric": "normalChord",
+              "endpoint": 0,
+              "reason": "unit-normal-chord-exceeds-budget",
+              "enclosure": [
+                -147665.81409427823,
+                -147665.8134908928
+              ],
+              "cell": 49,
+              "localDomain": [
+                0.5,
+                1
+              ]
+            }
+          ],
+          "classification": "outside-declared-criterion"
+        },
+        "positiveScale": {
+          "certifiedLeaves": 8521,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        }
+      },
+      "criteria": {
+        "maximumPositionGapMm": 1e-06,
+        "maximumTangentChord": 1e-10,
+        "maximumNormalChord": 0.0001,
+        "minimumNativeTangentNorm": 1e-08,
+        "minimumTransverseNorm": 1e-08,
+        "minimumPositiveScale": 0.0625,
+        "maxCells": 4096,
+        "maxDepth": 12,
+        "maxLeaves": 65536
+      },
+      "checkedCells": 330,
+      "checkedLeaves": 8521,
+      "subdivisions": 8191,
+      "problemCells": [
+        {
+          "cell": 190,
+          "localDomain": [
+            0,
+            0.000244140625
+          ],
+          "unresolved": [
+            "tangentChord"
+          ]
+        },
+        {
+          "cell": 190,
+          "localDomain": [
+            0.000244140625,
+            0.00048828125
+          ],
+          "unresolved": [
+            "tangentChord"
+          ]
+        },
+        {
+          "cell": 190,
+          "localDomain": [
+            0.00048828125,
+            0.000732421875
+          ],
+          "unresolved": [
+            "tangentChord"
+          ]
+        },
+        {
+          "cell": 190,
+          "localDomain": [
+            0.000732421875,
+            0.0009765625
+          ],
+          "unresolved": [
+            "tangentChord"
+          ]
+        },
+        {
+          "cell": 190,
+          "localDomain": [
+            0.0009765625,
+            0.001220703125
+          ],
+          "unresolved": [
+            "tangentChord"
+          ]
+        },
+        {
+          "cell": 190,
+          "localDomain": [
+            0.001220703125,
+            0.00146484375
+          ],
+          "unresolved": [
+            "tangentChord"
+          ]
+        },
+        {
+          "cell": 190,
+          "localDomain": [
+            0.00146484375,
+            0.001708984375
+          ],
+          "unresolved": [
+            "tangentChord"
+          ]
+        },
+        {
+          "cell": 190,
+          "localDomain": [
+            0.001708984375,
+            0.001953125
+          ],
+          "unresolved": [
+            "tangentChord"
+          ]
+        }
+      ],
+      "maximumPositionGapUpper": 2.0467183503569696e-11,
+      "maximumContinuousNormalResidualUpperMmPerV": 0.026316328297860254,
+      "normalResidualIsAcceptanceGate": false,
+      "minimumNativeTangentNormLower": 0.6310228237266524,
+      "minimumTransverseNormLower": 0.12915420912589098,
+      "minimumNormalNormLower": 45.41448051060349,
+      "minimumTangentDotLower": 58618.29533368244,
+      "minimumNormalDotLower": 126605.87462196333,
+      "minimumLambdaLower": 0.803348280121197,
+      "lateral": {
+        "edge": "V1",
+        "uDomain": [
+          0,
+          252.00932454753
+        ],
+        "inwardSign": -1
+      },
+      "support": {
+        "edge": "V0",
+        "uDomain": [
+          0,
+          242.48253589446
+        ],
+        "referenceSign": -1
+      },
+      "correspondence": "positive-affine-original-U-to-common-normalized-s",
+      "seamEndpointContract": "separate-one-sided-0-plus-and-1-minus",
+      "scope": "continuous-natural-boundary-differential-coefficient-model",
+      "positionWithinDeclaredBudget": true,
+      "exactG1Certified": false,
+      "globalSupportRegularityCertified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "normalizedPartitionSha256": "5d1abbc415955b600106addfa73435f61835027f6172595570dbbd4f80d1b6f3"
+    },
+    "joint-75": {
+      "status": "candidate-joint-continuous-coefficient-analysis",
+      "classification": "outside-declared-joint-criteria",
+      "criterionResults": {
+        "position": {
+          "certifiedLeaves": 331,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "nativeTangentNorm": {
+          "certifiedLeaves": 331,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "transverseNorm": {
+          "certifiedLeaves": 331,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "tangentOrientation": {
+          "certifiedLeaves": 331,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "tangentChord": {
+          "certifiedLeaves": 331,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "normalOrientation": {
+          "certifiedLeaves": 331,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        },
+        "normalChord": {
+          "certifiedLeaves": 329,
+          "unresolvedLeaves": 2,
+          "witnesses": [
+            {
+              "metric": "normalChord",
+              "endpoint": 1,
+              "reason": "unit-normal-chord-exceeds-budget",
+              "enclosure": [
+                -388810.28266873973,
+                -388810.28228773305
+              ],
+              "cell": 105,
+              "localDomain": [
+                0,
+                0.5
+              ]
+            },
+            {
+              "metric": "normalChord",
+              "endpoint": 0,
+              "reason": "unit-normal-chord-exceeds-budget",
+              "enclosure": [
+                -388810.28266873973,
+                -388810.28228773305
+              ],
+              "cell": 105,
+              "localDomain": [
+                0.5,
+                1
+              ]
+            }
+          ],
+          "classification": "outside-declared-criterion"
+        },
+        "positiveScale": {
+          "certifiedLeaves": 331,
+          "unresolvedLeaves": 0,
+          "witnesses": [],
+          "classification": "within-declared-criterion"
+        }
+      },
+      "criteria": {
+        "maximumPositionGapMm": 1e-06,
+        "maximumTangentChord": 1e-10,
+        "maximumNormalChord": 0.0001,
+        "minimumNativeTangentNorm": 1e-08,
+        "minimumTransverseNorm": 1e-08,
+        "minimumPositiveScale": 0.0625,
+        "maxCells": 4096,
+        "maxDepth": 12,
+        "maxLeaves": 65536
+      },
+      "checkedCells": 330,
+      "checkedLeaves": 331,
+      "subdivisions": 1,
+      "problemCells": [],
+      "maximumPositionGapUpper": 2.7300828264742466e-11,
+      "maximumContinuousNormalResidualUpperMmPerV": 0.0018516255628473661,
+      "normalResidualIsAcceptanceGate": false,
+      "minimumNativeTangentNormLower": 0.661180822437321,
+      "minimumTransverseNormLower": 0.12611686562555466,
+      "minimumNormalNormLower": 42.943710619142756,
+      "minimumTangentDotLower": 56175.74983319372,
+      "minimumNormalDotLower": 63210.769147006766,
+      "minimumLambdaLower": 1.2419629880210443,
+      "lateral": {
+        "edge": "V0",
+        "uDomain": [
+          0,
+          237.3422596445
+        ],
+        "inwardSign": 1
+      },
+      "support": {
+        "edge": "V1",
+        "uDomain": [
+          0,
+          242.48253589446
+        ],
+        "referenceSign": 1
+      },
+      "correspondence": "positive-affine-original-U-to-common-normalized-s",
+      "seamEndpointContract": "separate-one-sided-0-plus-and-1-minus",
+      "scope": "continuous-natural-boundary-differential-coefficient-model",
+      "positionWithinDeclaredBudget": true,
+      "exactG1Certified": false,
+      "globalSupportRegularityCertified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "normalizedPartitionSha256": "517590caf1c5cb5cb07cec0fd7fe8d419b8dbc3c560560b18acf88606c553744"
+    },
+    "support-321": {
+      "status": "certified-relative-orientation-and-regularity",
+      "expectedNativeCells": 708,
+      "checkedNativeCells": 708,
+      "certifiedNativeCells": 708,
+      "inconclusiveNativeCells": 0,
+      "nonpositiveNativeCells": 0,
+      "coverageComplete": true,
+      "unvisitedNativeCells": 0,
+      "patchChecks": 708,
+      "maxNativeCells": 1024,
+      "maxDepth": 8,
+      "maxPatchChecks": 1048576,
+      "patchBudgetExhausted": false,
+      "minLocalNormalDotLower": 7.877471558824155e-07,
+      "minLocalCandidateNormalNormLower": 0.0005545926240718622,
+      "minLocalSourceNormalNormLower": 0.0005545926240718622,
+      "minNativeCandidateNormalNormLower": 1.6472252124461777,
+      "minNativeSourceNormalNormLower": 1.6472252124461777,
+      "problems": [],
+      "omittedProblemCount": 0,
+      "nativeNormalUnits": "length^2 per native-U per native-V",
+      "localNormalUnits": "length^2 per normalized-cell-U per normalized-cell-V",
+      "normalConvention": "increasing-native-Su-cross-Sv-source-and-candidate",
+      "seamTreatment": "separate-one-sided-closures-of-each-native-polynomial-cell",
+      "crossCellG1Certified": false,
+      "nativeFaceSenseCertified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "evidenceScope": "full-support-relative-orientation-and-regularity-coefficient-model"
+    },
+    "support-322": {
+      "status": "certified-relative-orientation-and-regularity",
+      "expectedNativeCells": 95,
+      "checkedNativeCells": 95,
+      "certifiedNativeCells": 95,
+      "inconclusiveNativeCells": 0,
+      "nonpositiveNativeCells": 0,
+      "coverageComplete": true,
+      "unvisitedNativeCells": 0,
+      "patchChecks": 95,
+      "maxNativeCells": 1024,
+      "maxDepth": 8,
+      "maxPatchChecks": 1048576,
+      "patchBudgetExhausted": false,
+      "minLocalNormalDotLower": 0.009106879329749339,
+      "minLocalCandidateNormalNormLower": 0.05865258664415243,
+      "minLocalSourceNormalNormLower": 0.05865258664415243,
+      "minNativeCandidateNormalNormLower": 0.09768515949807488,
+      "minNativeSourceNormalNormLower": 0.09768515949807488,
+      "problems": [],
+      "omittedProblemCount": 0,
+      "linearVSeam": {
+        "status": "certified",
+        "evidence": {
+          "sourceJumpUpperMmPerU": 5.536395620538581e-12,
+          "candidateJumpUpperMmPerU": 5.536395620538581e-12,
+          "jumpChangeUpperMmPerU": 0,
+          "sharedNativeSvNormUpper": 3.0593917293180093,
+          "normalChordUpper": 1.7339382009241636e-10
+        },
+        "nativeNormalNormLower": 0.09768515949807488,
+        "normalConvention": "increasing-native-Su-cross-Sv-on-both-one-sided-U-limits",
+        "positionIdentity": "shared-saturated-periodic-column-zero",
+        "orientedNormalDotPositive": true,
+        "nativeCadCertified": false,
+        "evidenceScope": "linear-v-periodic-seam-native-derivative-and-normal-coefficients"
+      },
+      "nativeNormalUnits": "length^2 per native-U per native-V",
+      "localNormalUnits": "length^2 per normalized-cell-U per normalized-cell-V",
+      "normalConvention": "increasing-native-Su-cross-Sv-source-and-candidate",
+      "seamTreatment": "separate-one-sided-closures-of-each-native-polynomial-cell",
+      "crossCellG1Certified": false,
+      "nativeFaceSenseCertified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "evidenceScope": "full-support-relative-orientation-and-regularity-coefficient-model"
+    },
+    "support-323": {
+      "status": "certified-relative-orientation-and-regularity",
+      "expectedNativeCells": 708,
+      "checkedNativeCells": 708,
+      "certifiedNativeCells": 708,
+      "inconclusiveNativeCells": 0,
+      "nonpositiveNativeCells": 0,
+      "coverageComplete": true,
+      "unvisitedNativeCells": 0,
+      "patchChecks": 708,
+      "maxNativeCells": 1024,
+      "maxDepth": 8,
+      "maxPatchChecks": 1048576,
+      "patchBudgetExhausted": false,
+      "minLocalNormalDotLower": 7.426226976991535e-10,
+      "minLocalCandidateNormalNormLower": 1.7450490324294683e-05,
+      "minLocalSourceNormalNormLower": 1.726679613202899e-05,
+      "minNativeCandidateNormalNormLower": 4.718672646190998,
+      "minNativeSourceNormalNormLower": 3.791985437999023,
+      "problems": [],
+      "omittedProblemCount": 0,
+      "nativeNormalUnits": "length^2 per native-U per native-V",
+      "localNormalUnits": "length^2 per normalized-cell-U per normalized-cell-V",
+      "normalConvention": "increasing-native-Su-cross-Sv-source-and-candidate",
+      "seamTreatment": "separate-one-sided-closures-of-each-native-polynomial-cell",
+      "crossCellG1Certified": false,
+      "nativeFaceSenseCertified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "evidenceScope": "full-support-relative-orientation-and-regularity-coefficient-model"
+    },
+    "seam-323": {
+      "status": "certified",
+      "maximumNormalChordUpper": 1.1784739882345132e-11,
+      "work": {
+        "checkedPieces": 3,
+        "acceptedPieces": 3
+      },
+      "evidence": {
+        "sourceJumpUpper": 9.525735628065995e-12,
+        "jumpChangeUpper": 1.349418891910224e-14,
+        "candidateJumpUpper": 9.525735628065995e-12
+      }
+    },
+    "movement-323": {
+      "status": "within-surface-budget",
+      "maximumSurfaceDisplacementUpper": 0.04977416992187588,
+      "maximumSeamDisplacementUpper": 0.009089103447495039,
+      "maximumPoleDisplacementUpper": 0.10000000000000124,
+      "work": {
+        "checkedPieces": 736,
+        "terminalPieces": 725,
+        "maximumDepthUsed": 3
+      },
+      "evidenceScope": "stored-periodic-quintic-correspondence-displacement"
+    },
+    "seam-321": {
+      "status": "certified",
+      "maximumNormalChordUpper": 4.350967784373393e-11,
+      "work": {
+        "checkedPieces": 3,
+        "acceptedPieces": 3
+      },
+      "evidence": {
+        "sourceJumpUpper": 2.092262530913747e-11,
+        "jumpChangeUpper": 1.2320972542878063e-14,
+        "candidateJumpUpper": 2.092262530913747e-11
+      }
+    },
+    "movement-321": {
+      "status": "within-surface-budget",
+      "maximumSurfaceDisplacementUpper": 0.049214389679658105,
+      "maximumSeamDisplacementUpper": 0.006818452451454857,
+      "maximumPoleDisplacementUpper": 0.06492088175293245,
+      "work": {
+        "checkedPieces": 756,
+        "terminalPieces": 735,
+        "maximumDepthUsed": 1
+      },
+      "evidenceScope": "stored-periodic-quintic-correspondence-displacement"
+    }
+  },
+  "criterionCounts": {
+    "within-declared-criterion": 44,
+    "outside-declared-criterion": 3,
+    "inconclusive": 3,
+    "informational": 4
+  },
+  "matrixFile": "criterion-matrix.json",
+  "partitionDisclosure": "Exact normalized partitions remain in the private receipt; their SHA-256 digests are included here."
+}

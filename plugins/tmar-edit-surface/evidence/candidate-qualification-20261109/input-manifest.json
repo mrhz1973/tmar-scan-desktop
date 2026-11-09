@@ -1,0 +1,224 @@
+{
+  "schema": "TMAR_CANDIDATE_QUALIFICATION_PUBLIC_INPUTS_V1",
+  "baseCommit": "2849cc01855fef259553bf603eecf243554ec2e2",
+  "candidateId": "tubo-6b-derivative-storage-candidate-1",
+  "candidateSha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+  "preflightSha256": "7b0fde5ae637ea8f78b2550fba737a52d530b6da8e54ef9bc42ee53a1ef4d6bc",
+  "inputs": [
+    {
+      "path": "Tubo_BASE_COPIA.step",
+      "bytes": 27555617,
+      "sha256": "6b711960fcded7972ded41ed1ceaa2f09e2dd8332fc7ee980b76d2514c94e8ae",
+      "location": "frozen-source"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/modified-candidate-1887859.local/candidate-1.coefficients.local.json",
+      "bytes": 1112885,
+      "sha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "bundle_storage_6b.json",
+      "bytes": 61764,
+      "sha256": "4e6bcf262c2897d45e1689ab0e72c19fd0f2aeb67ec76dcd2aa5a53a1cc75b37",
+      "location": "frozen-source"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/modified-candidate-1887859.local/candidate-preparation-1.local.receipt.json",
+      "bytes": 11842,
+      "sha256": "9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/baseline.local.json",
+      "bytes": 34480,
+      "sha256": "014645f54ca8acfbe3f17b0b768e5529021b1987e71befe0b5a00b5585ef6be4",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/typecheck-2.local.json",
+      "bytes": 515,
+      "sha256": "7e43ef9fb5b2abbc104567d96a56b62f8e22084e4a2fb42dfbb2c3705d9f1d09",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/new-unit-tests-1.local.json",
+      "bytes": 1732,
+      "sha256": "07ac21d043efe134ce7c9aa4991426f995b365194413a9c4451ea3b68f6c32ff",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/negative-lambda-reporting-test-1.local.json",
+      "bytes": 4092,
+      "sha256": "0d9a7e41adb82aa2601d5fc07821371374791cdfff8eac3009dcbb4cd14db10c",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/negative-lambda-reporting-test-2.local.json",
+      "bytes": 1546,
+      "sha256": "86ebd70fc156741d219a48ec728e28d0336752fb573353f76de7ece358263f77",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/build-1.local.json",
+      "bytes": 1279,
+      "sha256": "403974a9279ce5ca468e01429ae7eeee95ab4bb5d784258cd8c92648e8420813",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/typecheck-4.local.json",
+      "bytes": 515,
+      "sha256": "144dfef11a32cf123b7d32198f3c38d149dce73cf97db7aff57db3c4d6c622d8",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/build-2.local.json",
+      "bytes": 1279,
+      "sha256": "a4070e9b3376f6d5c4053208a7bda5a36155251c45b86667a9130b33ac462db6",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/continuous-qualification-1.local.preflight.json",
+      "bytes": 10931,
+      "sha256": "26530b0a32c0bfcc62f688b8380c6e4d7f0ad666e79f1d445d493d70da121c48",
+      "location": "assigned-worktree"
+    }
+  ],
+  "codeFiles": [
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicCurveWitness.ts",
+      "bytes": 5632,
+      "sha256": "1bf66dfd5fe408ac586878b88914032164d9f8329792764bfc82d3e1ffc2a784",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicSurfaceRefinement.ts",
+      "bytes": 6427,
+      "sha256": "30c620732b207f497e76e9519e9356dce2beff3e5f758b12e51aff1fbaa28cde",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicSeamDerivativeGap.ts",
+      "bytes": 4927,
+      "sha256": "ae7fcabe39f28be6241b66bd798e9a8dfa9ff04f3115448439882b0251d9b26b",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalDerivativeCoefficientCap.ts",
+      "bytes": 9701,
+      "sha256": "d500068c554919b30ae5d3cb1abdbb3356e31722e5a7c412da37eb971d2bdc71",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tangencyCoefficientIntervals.ts",
+      "bytes": 2144,
+      "sha256": "8e503dbebc0252a0047608314e986d3fafaacef4bfbe7d98b1fafb8f17661be5",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicQuinticBernsteinCells.ts",
+      "bytes": 12697,
+      "sha256": "453f7aef7b548ab184df12fca95a7ad2185a0682d30d0c1a34ff008bb145910b",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalCandidateJointDifferential.ts",
+      "bytes": 22054,
+      "sha256": "cf408d028601b55404234d1aa18643ab5873c225549d30b85b3215f44cad6a27",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalBernsteinPatchNormalBound.ts",
+      "bytes": 8912,
+      "sha256": "384ef0f3a9222c25e86dd204c15a626ce17342ed5a9dd784dafc00e4072d9a35",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicSupportOrientation.ts",
+      "bytes": 11262,
+      "sha256": "33238be57a997da6e6697cc2cdb97be9f82284d357d50366f4367008f72875ff",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicQuinticSeamChange.ts",
+      "bytes": 7236,
+      "sha256": "a74ca9ad71848f36108d65329f945648769c4a2a0ffef00c536b7475ef19cd68",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicQuinticStoredDisplacement.ts",
+      "bytes": 6235,
+      "sha256": "9edbb6368e5f77d3cef304f4d7214455628aec2a595d7f1c6cfc83538732e0e6",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tests/experimentalCandidateQualificationOnce.local.ts",
+      "bytes": 20685,
+      "sha256": "42da8bbd3a3fe0f048a9d6828e4fb89eb65e466da990b9c2ddfe9349a970eb7f",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/continuous-qualification-1.runner-2.local.cjs",
+      "bytes": 87094,
+      "sha256": "ce9117e03b7314615d85f880af99118cef5f2f811196f1819a7f95ad04a05f56",
+      "location": "assigned-worktree"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/continuous-qualification-1.runner-2.local.metafile.json",
+      "bytes": 10157,
+      "sha256": "ca502569b70e78dddf73d64a152c688271544a7f9f3ba7fa791f0bbded3ce104",
+      "location": "assigned-worktree"
+    }
+  ],
+  "criteria": {
+    "derivativeCoefficientCap": {
+      "targetChangeMaximum": 5,
+      "storedExactChangeMaximum": 5,
+      "units": "mm/native-V",
+      "roundingSlack": 0,
+      "targetFromExactSourceAdditionalDiagnosticOnly": true
+    },
+    "acquiredD1ResidualMaximum": 1e-09,
+    "acquiredD2ChangeMaximum": 1e-09,
+    "joint": {
+      "maximumPositionGapMm": 1e-06,
+      "maximumTangentChord": 1e-10,
+      "maximumNormalChord": 0.0001,
+      "minimumNativeTangentNorm": 1e-08,
+      "minimumTransverseNorm": 1e-08,
+      "minimumPositiveScale": 0.0625,
+      "maxCells": 4096,
+      "maxDepth": 12,
+      "maxLeaves": 65536
+    },
+    "support": {
+      "maxNativeCells": 1024,
+      "maxDepth": 8,
+      "maxPatchChecks": 1048576
+    },
+    "linearVSeam": {
+      "maximumAbsoluteJump": 1e-09,
+      "maximumJumpChange": 1e-09,
+      "maximumNormalChord": 0.0001
+    },
+    "seam": {
+      "maximumAbsoluteJump": 1e-09,
+      "maximumJumpChange": 1e-09,
+      "maximumCandidateNormalChord": 0.0001,
+      "maxPieces": 100000,
+      "maxDepth": 8
+    },
+    "movement": {
+      "maximumSurfaceDisplacement": 0.05,
+      "maxPieces": 100000,
+      "maxDepth": 8
+    },
+    "maximumSeamDisplacement": 0.05,
+    "historicalSampledNormalResidualMaximum": 0.001
+  },
+  "receiptSha256": "4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d",
+  "historicalStop": {
+    "reason": "reopened-own-support-mismatch",
+    "receiptSha256": "32f2b99c16c5f4ddf4177c5b8ec2431ebd9cc7c417dcf502595ed779b87fcc92"
+  }
+}

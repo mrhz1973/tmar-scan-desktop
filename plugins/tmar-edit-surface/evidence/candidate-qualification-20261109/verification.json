@@ -1,0 +1,44 @@
+{
+  "schema": "TMAR_CANDIDATE_QUALIFICATION_VERIFICATION_V1",
+  "baseCommit": "2849cc01855fef259553bf603eecf243554ec2e2",
+  "newUniquePureTests": 21,
+  "newUniquePureTestsPassed": 21,
+  "testGroups": {
+    "derivativeCoefficientCap": 7,
+    "supportOrientation": 6,
+    "candidateJointDifferential": 8
+  },
+  "firstNewSuite": {
+    "testsPassed": 20,
+    "path": "evidence/candidate-qualification-2849cc0.local/new-unit-tests-1.local.json"
+  },
+  "additionalReportingTest": {
+    "title": "reports no signed lambda lower bound from a negative numerator hull",
+    "initialExitCode": 1,
+    "finalExitCode": 0,
+    "explanation": "The focused test exposed that the reviewed signed-lambda reporting fix had not reached the Windows source. The helper was synchronized, then only this additional test was rerun. The first 20 tests were not replayed. Both logs are retained."
+  },
+  "finalTargetedTypeScript": {
+    "exitCode": 0,
+    "path": "evidence/candidate-qualification-2849cc0.local/typecheck-4.local.json"
+  },
+  "driverReview": "Separates a negative relative-orientation witness from an unproved regularity failure; asserts exact declared numerical budgets; links historical sampled normal-residual criterion to sufficient continuous evidence or leaves it inconclusive. Unexecuted draft1 remains preserved.",
+  "preflightRevision": 2,
+  "oneShotCandidateAnalyses": 1,
+  "candidateAnalysisProcessExitCode": 0,
+  "candidateCriteriaSatisfied": false,
+  "nativeGateSatisfied": false,
+  "processExitCodeMeaning": "0 means completed and receipt saved; it does not mean candidate PASS",
+  "newConsumedMarker": "evidence/candidate-qualification-2849cc0.local/continuous-qualification-1.local.run-once",
+  "privateReceiptSha256": "4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d",
+  "inheritedFilesPreserved": 149,
+  "oldExperimentsReplayed": 0,
+  "preparations": 0,
+  "solves": 0,
+  "kernelInitializations": 0,
+  "nativeConstructions": 0,
+  "liveCadActions": 0,
+  "hostKernelMcpUpdates": 0,
+  "merges": 0,
+  "wholeTubeAccepted": false
+}

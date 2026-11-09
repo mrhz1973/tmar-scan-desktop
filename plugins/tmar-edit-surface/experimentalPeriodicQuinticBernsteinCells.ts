@@ -150,6 +150,38 @@ export function extractExperimentalPeriodicQuinticBernsteinCell(
 }
 
 /**
+ * Separate cell extraction for a unit-weight U-periodic/V-linear support.
+ * Reuses the native-knot restriction arithmetic; it does not elevate V,
+ * manufacture a quintic net or change the existing quintic contract.
+ * Both patches use increasing normalized cell coordinates and retain each
+ * native polynomial piece's one-sided endpoint derivatives.
+ */
+export function extractExperimentalPeriodicLinearVBernsteinCell(
+  original: Net, candidate: Net, uSpan: number, vSpan: number,
+) {
+  validateExperimentalPeriodicSurfaceU(original)
+  validateExperimentalPeriodicSurfaceU(candidate)
+  for (const net of [original, candidate]) {
+    if (net.du > 3 || net.dv !== 1 || net.mu[0] !== net.du || net.rational.some(Boolean) ||
+        net.weights.some(weight => weight !== 1))
+      fail('richiesti supporti polinomiali, V lineare e cucitura U satura con grado fino a tre')
+  }
+  const { du, dv, nu, nv, ku, kv, mu, mv } = original
+  if (du !== candidate.du || dv !== candidate.dv || nu !== candidate.nu || nv !== candidate.nv ||
+      !equal(ku, candidate.ku) || !equal(kv, candidate.kv) || !equal(mu, candidate.mu) || !equal(mv, candidate.mv))
+    fail('basi U/V sorgente e candidato diverse')
+  if (!Number.isInteger(uSpan) || uSpan < 0 || uSpan >= ku.length - 1 ||
+      !Number.isInteger(vSpan) || vSpan < 0 || vSpan >= kv.length - 1)
+    fail('indice della cella fuori dal dominio')
+  const u = localAxis(du, ku, mu, uSpan, true), v = localAxis(dv, kv, mv, vSpan, false)
+  const origin: Point = [...original.poles[u.indices[0] * nv + v.indices[0]]]
+  return { uSpan, vSpan, uDomain: [ku[uSpan], ku[uSpan + 1]] as const,
+    vDomain: [kv[vSpan], kv[vSpan + 1]] as const, origin,
+    original: extractPatch(original, u, v, origin), candidate: extractPatch(candidate, u, v, origin),
+    evidenceScope: 'periodic-linear-v-bernstein-cell-coefficient-model' as const }
+}
+
+/**
  * Extract two polynomial supports on exactly the same real UV rectangle,
  * using each support's own U knot vector. The supplied U subcell must lie
  * inside one native span of each support. V uses the common native basis.
