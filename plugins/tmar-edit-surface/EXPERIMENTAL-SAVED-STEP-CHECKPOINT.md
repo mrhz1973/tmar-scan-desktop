@@ -6,15 +6,15 @@ Updated **2026-11-09**. This chat executes `plugins/tmar-edit-surface/**`. Coord
 
 Assigned worktree: `C:\Users\mrhz\.codex\worktrees\edit-surface-tubo-periodic\tmar-scan-desktop-zebra`.
 Branch: `codex/edit-surface-tubo-periodic`.
-Parent acquired by the coordinator: `360d460fe260e6763cdff9cd18a87e1a35d19d29`. This completion is committed with the present checkpoint; obtain its exact HEAD and remote ref from Git before continuing. The other `codex/edit-surface` worktree is outside scope.
+Parent acquired by the coordinator for this increment: `1887859163f8fd260189e5cbd218acdd007a9c91`. The saved-pair contracts below were completed in that checkpoint; the distinct candidate preparation follows it. Obtain the exact new HEAD and remote ref from Git before continuing. The other `codex/edit-surface` worktree is outside scope.
 
-The original `EditSurface.tsx` WIP remains unchanged. The original 43 protected WIP files and all 100 inherited protected files are unchanged. The new preservation manifest contains **127 files**:
+The original `EditSurface.tsx` WIP and all **130 inherited protected files** remain unchanged. The new preservation manifest contains **146 files**:
 
-`evidence/recovered-pair-completion-360d460.local/preservation-final.local.json`
+`evidence/modified-candidate-1887859.local/preservation-final.local.json`
 
-SHA-256: `de9c4680960bb05a072317e733745cffd6ed387d599f7d9cf815a86f6a0020d6`.
+SHA-256: `35168a99af24d3876f38d268a07d1f56f598ae563974b50a9dec519e3581aa44`.
 
-The manifest itself and later commit/push receipts must also enter a new preservation baseline before another increment. Never overwrite an existing manifest or consumed marker.
+The manifest itself and later commit/push receipts must enter the next baseline. The earlier 127-file manifest (SHA-256 `de9c4680960bb05a072317e733745cffd6ed387d599f7d9cf815a86f6a0020d6`) remains preserved. Never overwrite a manifest or consumed marker.
 
 Checkout / installed kernel remain `0.9.4 / occt-wasm 5.7.1`. The earlier read-only API comparison with `0.9.10 / 5.15.0` remains acquired in `evidence/recovered-rim-adapter-20261109/API-COMPARISON.md`. Do not repeat it or install/update anything to reproduce this checkpoint.
 
@@ -22,7 +22,7 @@ Checkout / installed kernel remain `0.9.4 / occt-wasm 5.7.1`. The earlier read-o
 
 ### Acquired position proofs, not replayed
 
-- Full-support coefficient position bounds for323/324 remain those committed at `b699c6eb08a73621774adab2f00c821297ef4173`.
+- Full-support coefficient position bounds for 323/324 remain those committed at `b699c6eb08a73621774adab2f00c821297ef4173`.
 - Shared-rim coefficient correspondence and the two explicit support-boundary maps remain those committed at `360d460`.
 - The indexed/oriented graph and exact serialized identity of edge9 remain acquired from the saved topology receipt. No second old topology experiment was run.
 
@@ -79,10 +79,27 @@ New consumed markers in `evidence/recovered-pair-completion-360d460.local/`:
 
 Preserve all source hashes, preflight drafts/finals, failed initial typecheck, successful logs, native readback, receipts and runners. A new question requires a new declared contract and new evidence; do not clear a marker or weaken a guard to manufacture a PASS.
 
+## DONE — modified candidate prepared after 1887859
+
+The next requested candidate is now concrete: **`tubo-6b-derivative-storage-candidate-1`**, prepared at 2026-11-09T18:52:05Z with a distinct one-shot coefficient contract. See [EXPERIMENTAL-MODIFIED-CANDIDATE.md](EXPERIMENTAL-MODIFIED-CANDIDATE.md) and [the public evidence](evidence/modified-candidate-20261109/README.md).
+
+- The real frozen bundle supplies inward-derivative targets for 323/V1–322/V0 and321/V0–322/V1. No translation or new fitting was invented. The packet labels 5 mm an estimate; the derivative-change cap is 5 mm/native-V.
+- Both target and source inward-derivative arrays match the original bundle hashes exactly. New raw/periodic applicability for 321/322 has 14 exact zero-error clamps; 323 reuses its original saved BREP with exact raw coefficient identity.
+- The candidate modifies 476 poles per lateral: 323 rows 9/10 in V[.95,1], 321 rows 1/2 in V[0,.05]. All other rows and basis data are identical. 322 and 324 remain unchanged. The qualified rim 323/V0–324/V1 remains a different relation from the bundle joins.
+- Complete source/candidate nets, targets, all XYZ deltas and both replacement U seam curves are saved in `evidence/modified-candidate-1887859.local/candidate-1.coefficients.local.json` (1,112,885 bytes), SHA-256 `4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a`.
+- New receipt: `candidate-preparation-1.local.receipt.json`, SHA-256 `9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777`. Preflight hash `1876d5e8ad5f1d76cdc2d606e02067d870cc73d5261297c57dcddcd7e86d4132`. Marker `candidate-preparation-1.local.run-once` is consumed; do not replay preparation to reproduce the artifact.
+- Stored D1/D2 residuals are below 1.8e-12 in their declared native units. The maximum observed pole movements are 0.10000000000000121mm and 0.06492088175293244mm; these are not continuous surface-displacement bounds.
+- Read-only STEP text recovery supplies the 321 U seam/far-boundary chain and all selected pcurve maps. No kernel/STEP import or old topology test was invoked.
+- Nine new pure tests and final targeted TypeScript checks passed. The initial narrowing typecheck failure is retained. No old test, solve, kernel initialization, live CAD change, host/kernel/MCP update or merge occurred.
+
+Status is **`prepared-unqualified-coefficient-candidate`**. Preparation criteria are satisfied; continuousG1/nativeCAD/Tube acceptance remain false.
+
 ## NEXT
 
-The three requested contracts for the saved undeformed pair are complete. Reuse these helpers and this evidence when specifying the next **distinct edited candidate**. That candidate needs explicit changed coefficients/geometry, target displacement and dimensional/angular acceptance criteria before any new one-shot qualification. Do not rerun this pair to establish the same claims again.
+Continue from this artifact and its exact hash. Implement the distinct continuous qualification for the modified candidate's two bundle joins, regularity/orientation and declared movement criteria, then a separately declared isolated native construction/readback of coherent supports, both U seam curves and both pcurves per seam. Reuse acquired saved-pair evidence within its own scope. Do not rerun the saved pair or consumed storage/fitting wrapper. A future native runner needs its own preflight/marker/receipt and must preserve the earlier STOP.
+
+The candidate contract fixes parameter maps, inward/normal signs, dimensional and angular diagnostic criteria, and the original source/frame. The prospective native consistency budgets are 1e-7 mm position and 1e-8 unit-direction chord; bundle normal chord remains 1e-4. Those are distinct from the qualified rim contract and from whole-Tube physical acceptance.
 
 ## WAIT / scope limits
 
-No technical blocker remains for this saved-pair checkpoint. Acceptance of an edited candidate or the full Tube remains a different task and is not supplied by these local results. Native raw surfaceD1 verification would require a separately supplied/exposed capability; updates remain the coordinator's responsibility. AIRBOX stays paused. Original handoff/archive provenance remains in earlier reports; no full transcript access or direct cross-chat delivery is inferred.
+No technical blocker remains for the saved pair or for preparation of this derivative-driven candidate. No requested geometric datum had to be invented. Whole-Tube acceptance still lacks explicit tolerance bands for the nominal 2 mm wall, 4.75 mm hole and 17.09 mm block dimensions, and any required global angular specification. Those gaps do not block the isolated candidate qualification work. Native raw surfaceD1 verification would require a separately supplied/exposed capability; updates remain the coordinator's responsibility. AIRBOX stays paused. Original handoff/archive provenance remains in earlier reports; no full transcript access or direct cross-chat delivery is inferred.

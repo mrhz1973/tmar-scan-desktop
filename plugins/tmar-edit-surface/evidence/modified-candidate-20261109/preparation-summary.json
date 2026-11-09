@@ -1,0 +1,197 @@
+{
+  "schema": "TMAR_MODIFIED_CANDIDATE_RECEIPT_V1",
+  "candidateId": "tubo-6b-derivative-storage-candidate-1",
+  "startedAtUtc": "2026-11-09T18:52:05.119Z",
+  "baseCommit": "1887859163f8fd260189e5cbd218acdd007a9c91",
+  "preflightSha256": "1876d5e8ad5f1d76cdc2d606e02067d870cc73d5261297c57dcddcd7e86d4132",
+  "status": "prepared-unqualified-coefficient-candidate",
+  "scope": "new-explicit-coefficient-artifact-no-native-qualification",
+  "oldExperimentsReplayed": 0,
+  "kernelInitializations": 0,
+  "stepImports": 0,
+  "stepExports": 0,
+  "fittingRuns": 0,
+  "continuousG1Certified": false,
+  "nativeCadCertified": false,
+  "tubeAccepted": false,
+  "representation": {
+    "321": {
+      "status": "prepared-coefficient-representation",
+      "correspondence": "identity-u-v-on-original-closed-active-domain",
+      "originalActiveU": [
+        0,
+        237.3422596445
+      ],
+      "scope": "polynomial-tensor-product-coefficient-representation-only",
+      "nativeCadCertified": false,
+      "differentialContinuityCertified": false,
+      "tubeAccepted": false,
+      "sourceRawPolesFloat64LE": "ae7880d06c657455bfe6b9fca2cfdafd8d62d67930486486851ce2b91f1a4c16",
+      "netSha256": "81cac3e5cf4202577714aeb1e31f3cbaa1af77fb0c4665c837f9ef0563289f0d",
+      "grid": [
+        238,
+        12
+      ],
+      "perVClampsSummary": {
+        "count": 12,
+        "allZeroError": true
+      }
+    },
+    "322": {
+      "status": "prepared-coefficient-representation",
+      "correspondence": "identity-u-v-on-original-closed-active-domain",
+      "originalActiveU": [
+        0,
+        242.48253589446
+      ],
+      "scope": "polynomial-tensor-product-coefficient-representation-only",
+      "nativeCadCertified": false,
+      "differentialContinuityCertified": false,
+      "tubeAccepted": false,
+      "sourceRawPolesFloat64LE": "2c205ff4fa94a1e6b98a228fd0bb2940c8ae3f464c23c4e22d3bafe3bd92ca69",
+      "netSha256": "b60b126dac307bb90c96c8bd4e2618250bdb2e7bb6cc4441179f55f8079af054",
+      "grid": [
+        97,
+        2
+      ],
+      "perVClampsSummary": {
+        "count": 2,
+        "allZeroError": true
+      }
+    },
+    "323": {
+      "originalBrepReused": true,
+      "rawCoefficientIdentity": true,
+      "netSha256": "211a503609569b6a4186a584815c68e5155652018c51a6d9c269d6d0418f451b",
+      "noOldProofReplayed": true
+    }
+  },
+  "sides": {
+    "V0": {
+      "face": 323,
+      "edge": "V1",
+      "sourceNetSha256": "211a503609569b6a4186a584815c68e5155652018c51a6d9c269d6d0418f451b",
+      "candidateNetSha256": "5dcb77de0ca0436cefd8939f2543715ab97a48b1fa2e0a53086e82a0acb9ff30",
+      "sourcePolesFloat64LE": "80a8e7bdfe23ed96a4d96c4d1be91e432d04c2cb79ff8c61e53ae3c32e7b78ad",
+      "candidatePolesFloat64LE": "082d402fa482d1fe1b508746b36002369a0734583f9990b4886b1a56c3ce04a6",
+      "targetFloat64LE": "c78521dd5ac876bab43ea589003d488d552c8de0aafbc351da150d874921cce7",
+      "targetArrayMatchesOriginalBundle": true,
+      "baseArrayMatchesOriginalBundleExactly": true,
+      "changedPoleCount": 476,
+      "changedVRows": [
+        9,
+        10
+      ],
+      "fixedRowsBitwise": true,
+      "unchangedBasis": true,
+      "sourceObjectUnchanged": true,
+      "nativeVBand": [
+        0.95,
+        1
+      ],
+      "step": 0.010000000000000009,
+      "spread": 2,
+      "observedStoredPoleEuclideanMaximumMm": 0.10000000000000121,
+      "conservativePoleL1UpperMm": 0.15486418971886284,
+      "derivativeResidualUpperMmPerV": 1.6539825065109432e-12,
+      "secondDerivativeChangeUpperMmPerV2": 1.394440118929197e-12,
+      "pendingQualification": [
+        "source-and-candidate-seam-bounds",
+        "surface-and-seam-displacement",
+        "surface-regularity-and-orientation",
+        "joint-continuity",
+        "native-topology-and-pcurves",
+        "tube-physical-requirements"
+      ]
+    },
+    "V1": {
+      "face": 321,
+      "edge": "V0",
+      "sourceNetSha256": "81cac3e5cf4202577714aeb1e31f3cbaa1af77fb0c4665c837f9ef0563289f0d",
+      "candidateNetSha256": "55192829323aa1052e76780e2b8eb8b193d9e9a4412a9ffe414bf5382e10c19a",
+      "sourcePolesFloat64LE": "6aa27e63b920121f2c32e631135a960d9a972559a2eae35c7929fc3c689322b7",
+      "candidatePolesFloat64LE": "468d3e9fd9ba403d40ba26ad8a2959ffad496512ea0f6aba82cb9497da7beff9",
+      "targetFloat64LE": "522b667ae6cbe5bed96c16c3bff0d15ed8016fe8ddd125db6fa2aae068eb0730",
+      "targetArrayMatchesOriginalBundle": true,
+      "baseArrayMatchesOriginalBundleExactly": true,
+      "changedPoleCount": 476,
+      "changedVRows": [
+        1,
+        2
+      ],
+      "fixedRowsBitwise": true,
+      "unchangedBasis": true,
+      "sourceObjectUnchanged": true,
+      "nativeVBand": [
+        0,
+        0.05
+      ],
+      "step": 0.01,
+      "spread": 2,
+      "observedStoredPoleEuclideanMaximumMm": 0.06492088175293244,
+      "conservativePoleL1UpperMm": 0.07458976953957834,
+      "derivativeResidualUpperMmPerV": 1.701416785238053e-12,
+      "secondDerivativeChangeUpperMmPerV2": 6.217248937900883e-13,
+      "pendingQualification": [
+        "source-and-candidate-seam-bounds",
+        "surface-and-seam-displacement",
+        "surface-regularity-and-orientation",
+        "joint-continuity",
+        "native-topology-and-pcurves",
+        "tube-physical-requirements"
+      ]
+    }
+  },
+  "seams": {
+    "321": {
+      "edgeStepId": 207440,
+      "originalCurveStepId": 207442,
+      "originalCurveRecordSha256": "8059611d29f4ddca7dcae6878971e5d95f43809415c64efc89e793d8bb8a3cda",
+      "candidateCurveSha256": "ec2a64b3d7a24d8d1b18f5cf2bca35fd31280cbf682958466defcaa8715a8f98",
+      "candidatePolesFloat64LE": "7f4c5b2b6c9e6c5801bf4b37024ff3b968ed3dbdfcdad5087831b98784c44567",
+      "sourceCoefficientGapObservedMm": 0,
+      "candidateCurveIsStoredColumnZero": true,
+      "endpointCoefficientsBitwiseFixed": true,
+      "pcurveIds": [
+        207455,
+        207462
+      ],
+      "pcurveMapVerifiedAsData": true,
+      "nativeBindingPending": true
+    },
+    "323": {
+      "edgeStepId": 208034,
+      "originalCurveStepId": 208036,
+      "originalCurveRecordSha256": "b5cb8d11ffc17d2dfc39ac39e087afbde499e616379e329e1746a400053e8e02",
+      "candidateCurveSha256": "ffdd04576cd54c58c2142403dcaed470c34cdbe1da1fe1ac81ef3595b0f028f7",
+      "candidatePolesFloat64LE": "65c5b6e87cbbd01342ebd6b6fbaf9231361f7890994e0bd24773736dbf31ec1b",
+      "sourceCoefficientGapObservedMm": 0,
+      "candidateCurveIsStoredColumnZero": true,
+      "endpointCoefficientsBitwiseFixed": true,
+      "pcurveIds": [
+        208039,
+        208046
+      ],
+      "pcurveMapVerifiedAsData": true,
+      "nativeBindingPending": true
+    }
+  },
+  "preservation": {
+    "central322NetSha256": "b60b126dac307bb90c96c8bd4e2618250bdb2e7bb6cc4441179f55f8079af054",
+    "protected324NetSha256": "bd07285b2c59bdd70d94ad98be1d38356baa41fe1eabe79c5ae5e291835bf9d3",
+    "central322Unchanged": true,
+    "protected324Unchanged": true,
+    "qualifiedRim323V0Rows012BitwiseFixed": true,
+    "bundleBoundaryPositionsBitwiseFixed": true,
+    "far321V1Rows11910BitwiseFixed": true,
+    "inheritedFilesUnchanged": 130
+  },
+  "artifact": {
+    "path": "evidence/modified-candidate-1887859.local/candidate-1.coefficients.local.json",
+    "bytes": 1112885,
+    "sha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a"
+  },
+  "preparationCriteriaSatisfied": true,
+  "finishedAtUtc": "2026-11-09T18:52:05.280Z",
+  "receiptSha256": "9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777"
+}

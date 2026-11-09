@@ -1,0 +1,146 @@
+{
+  "schema": "TMAR_MODIFIED_CANDIDATE_INPUT_MANIFEST_V1",
+  "preflightSha256": "1876d5e8ad5f1d76cdc2d606e02067d870cc73d5261297c57dcddcd7e86d4132",
+  "sourceFrame": "frozen STEP coordinates in mm; no transform",
+  "inputs": [
+    {
+      "name": "Tubo_BASE_COPIA.step",
+      "bytes": 27555617,
+      "sha256": "6b711960fcded7972ded41ed1ceaa2f09e2dd8332fc7ee980b76d2514c94e8ae"
+    },
+    {
+      "name": "bundle_storage_6b.json",
+      "bytes": 61764,
+      "sha256": "4e6bcf262c2897d45e1689ab0e72c19fd0f2aeb67ec76dcd2aa5a53a1cc75b37"
+    },
+    {
+      "name": "source-capture.local.json",
+      "bytes": 663837,
+      "sha256": "02a34618425c96fe82e7355a9b31467a09399849b7cb3339d6b1fda89e7d1539"
+    },
+    {
+      "name": "baseline.local.json",
+      "bytes": 29775,
+      "sha256": "6511f817a744291bfc93d4e82034e5c212b9c90602520468c120f74cb2a862cd"
+    },
+    {
+      "name": "face-323.original.brep",
+      "bytes": 387591,
+      "sha256": "be5d618395055efb262e53c200e435754a5675b870a9d19e8d422f2156ef2148"
+    },
+    {
+      "name": "face-324.original.brep",
+      "bytes": 530129,
+      "sha256": "d9dcfeda56d7c76d50ebb24c1a841bdb41ab83d94a8b70bd14d67d3c12059e64"
+    },
+    {
+      "name": "pair-roundtrip-1.local.receipt.json",
+      "bytes": 5505,
+      "sha256": "32f2b99c16c5f4ddf4177c5b8ec2431ebd9cc7c417dcf502595ed779b87fcc92"
+    },
+    {
+      "name": "tube-storage-oracle-6b-exact-chord-private.local.receipt.json",
+      "bytes": 6714,
+      "sha256": "55b97acc4c4f5d2c09c477c8b49c8526352d3c3daf1aba27ff7ce9575682076a"
+    }
+  ],
+  "code": [
+    {
+      "path": "plugins/tmar-edit-surface/brep.ts",
+      "bytes": 9975,
+      "sha256": "c71d266391f12ac1b8b5d02d3a104584a8f0bb5d03bf45a7848bd90bdcbf8cdc"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicCurveWitness.ts",
+      "bytes": 5632,
+      "sha256": "1bf66dfd5fe408ac586878b88914032164d9f8329792764bfc82d3e1ffc2a784"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicSurfaceRefinement.ts",
+      "bytes": 6427,
+      "sha256": "30c620732b207f497e76e9519e9356dce2beff3e5f758b12e51aff1fbaa28cde"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicSeamDerivativeGap.ts",
+      "bytes": 4927,
+      "sha256": "ae7fcabe39f28be6241b66bd798e9a8dfa9ff04f3115448439882b0251d9b26b"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalClampedBSplineTrim.ts",
+      "bytes": 7673,
+      "sha256": "e0634f01cb427d0f9fcfdc8bc39e64253e6248ebdbe80787c459ca1a2d17d31a"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tangencyCoefficientIntervals.ts",
+      "bytes": 2144,
+      "sha256": "8e503dbebc0252a0047608314e986d3fafaacef4bfbe7d98b1fafb8f17661be5"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicCurveAffineDifference.ts",
+      "bytes": 12882,
+      "sha256": "f79958ba1119f4dbf81e755251f20147a91959c17ec31280e96a5d94b75b5df6"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalRawPeriodicSupport.ts",
+      "bytes": 7236,
+      "sha256": "e59c838fca4e686173f7e78e53e9d115482f2778e03686d14e39dca647a1ddcc"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicQuinticBernsteinCells.ts",
+      "bytes": 10822,
+      "sha256": "e1c9c3b4890b3b72519b5e54eedb3c105c15d67cdc637afd6f8cc4f7ac3f619a"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicQuinticSeamChange.ts",
+      "bytes": 7236,
+      "sha256": "a74ca9ad71848f36108d65329f945648769c4a2a0ffef00c536b7475ef19cd68"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalBernsteinPatchNormalBound.ts",
+      "bytes": 8912,
+      "sha256": "384ef0f3a9222c25e86dd204c15a626ce17342ed5a9dd784dafc00e4072d9a35"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicQuinticSurfaceNormals.ts",
+      "bytes": 5182,
+      "sha256": "689c5d6aceeec0325182e897448a6e1c5c1162f289bfc82dc086727077a3a9f1"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicQuinticStoredDisplacement.ts",
+      "bytes": 6235,
+      "sha256": "9edbb6368e5f77d3cef304f4d7214455628aec2a595d7f1c6cfc83538732e0e6"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicQuinticSide.ts",
+      "bytes": 20945,
+      "sha256": "3b6cfa2d63ee2296c0c0e7901e53196e5730b1539bedb6faa06fa2d50e991fd4"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tests/experimentalModifiedTubeCandidateOnce.local.ts",
+      "bytes": 15438,
+      "sha256": "77f894fdc23be6e046b91cb07e9aae89e0855643393760505588c9ff3f41102d"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/modified-candidate-1887859.local/candidate-preparation-1.local.cjs",
+      "bytes": 44749,
+      "sha256": "44d546f394e2f1cdebaee2da7fb08e34f8a206e06894d9bf9d7d6ec9023f6776"
+    }
+  ],
+  "noKernelOrSolverDependencies": true,
+  "preparationCriteria": {
+    "derivativeResidualMmPerV": 1e-9,
+    "secondDerivativeChangeMmPerV2": 1e-9,
+    "sourceSeamCoefficientGapMm": 1e-9,
+    "fixedRows": "binary64-Object.is",
+    "targetHashes": "original-bundle-float64-little-endian",
+    "rawMapping": "exact-zero-clamp-error-and-closed-canonical-identity"
+  },
+  "remainingQualificationCriteria": {
+    "surfaceDisplacementMm": 0.05,
+    "seamDisplacementMm": 0.05,
+    "bundleNormalChord": 0.0001,
+    "bundlePositionMm": 0.000001,
+    "seamNativeDerivativeJumpMmPerU": 1e-9,
+    "scope": "declared-future-diagnostic-only-not-tested-by-preparation"
+  }
+}

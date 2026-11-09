@@ -70,6 +70,42 @@ export function proposeExperimentalPeriodicQuinticSide(request: QuinticSideReque
 }
 
 /**
+ * Materialize supplied derivative targets as a separate, unqualified
+ * coefficient artifact using the same two-row storage arithmetic.
+ * Applicability is limited to the saturated U seam and internally C1 U
+ * basis of the mobile-seam experiment. Only the coefficient representation,
+ * requested D1/D2 residual bounds and caller locks are checked here.
+ *
+ * This entry point does not run the consumed full storage diagnostic. Its
+ * result has no guarded proposal status and must not enable a CAD edit or
+ * substitute for the existing seam, displacement, normal or joint guards.
+ * Native seam curves/pcurves and physical acceptance remain separate.
+ */
+export function materializeExperimentalPeriodicQuinticCandidateCoefficients(request: QuinticSideRequest) {
+  validateQuinticSide(request)
+  const { net } = request
+  if (net.du > 3 || net.nu < 3 || net.mu[0] !== net.du || net.mu.slice(1, -1).some(m => m >= net.du))
+    fail('materializzazione limitata a cucitura U satura di grado fino a tre e nodi interni C1')
+  const proposal = proposeQuinticRows(request)
+  return {
+    status: 'prepared-unqualified-coefficient-candidate' as const,
+    proposal,
+    evidenceScope: 'supplied-target-periodic-quintic-coefficient-artifact' as const,
+    pendingQualification: [
+      'source-and-candidate-seam-bounds',
+      'surface-and-seam-displacement',
+      'surface-regularity-and-orientation',
+      'joint-continuity',
+      'native-topology-and-pcurves',
+      'tube-physical-requirements',
+    ] as const,
+    continuousG1Certified: false as const,
+    nativeCadCertified: false as const,
+    tubeAccepted: false as const,
+  }
+}
+
+/**
  * Separate coefficient experiment for a structurally C0 U seam. A bound
  * on the absolute derivative gap is required for the source and for the
  * stored proposal. The full U0 column stays fixed, preserving the seam

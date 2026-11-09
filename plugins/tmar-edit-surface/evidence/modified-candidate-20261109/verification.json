@@ -1,0 +1,29 @@
+{
+  "schema": "TMAR_MODIFIED_CANDIDATE_VERIFICATION_V1",
+  "dateUtc": "2026-11-09T18:53:48.001031+00:00",
+  "baseCommit": "1887859163f8fd260189e5cbd218acdd007a9c91",
+  "newUnitTestFiles": [
+    "tests/experimentalRawPeriodicSupport.test.ts",
+    "tests/experimentalPeriodicCandidatePreparation.test.ts"
+  ],
+  "uniqueNewTestsPassed": 9,
+  "unitExitCode": 0,
+  "unitLogSha256": "392ee8e45ecfbf89bbb3dd9b60108ce1719c6b9a8b35799fb0ed1c8c3e0e043f",
+  "typecheckInitialExitCode": 2,
+  "typecheckInitialLogSha256": "cceb5af8bbfa472d47b4cf677ab507de6c18d753b836a0f5ed78a2be2e139e2a",
+  "typecheckCorrection": "explicit never return for discriminated-union narrowing; no runtime criterion change",
+  "typecheckFinalExitCode": 0,
+  "typecheckFinalLogSha256": "06522e278871e090f0d2501f53b02f497ceee90d4dc1885cf5a399f3af5e6f29",
+  "driverTypecheckExitCode": 0,
+  "driverTypecheckLogSha256": "e768b11363a0494da5869e1ac9941e40a8c091f9a274a97209b02be4cf375880",
+  "candidateExecutionExitCode": 0,
+  "candidateExecutionLogSha256": "49213b86aedc4d51e2c4cfa8a0865d4eb06b1a5984748f3cfd5ad2fde3124343",
+  "candidateReceiptSha256": "9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777",
+  "candidateArtifactSha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+  "oldTestsReplayed": 0,
+  "nativeCalls": 0,
+  "stepImportsExports": 0,
+  "solverRuns": 0,
+  "inputHashesAfterVerified": true,
+  "inheritedProtectedFilesUnchanged": 130
+}

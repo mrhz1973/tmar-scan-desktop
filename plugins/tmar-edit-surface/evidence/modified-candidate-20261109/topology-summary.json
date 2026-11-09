@@ -1,0 +1,311 @@
+{
+  "path": "evidence/modified-candidate-1887859.local/source-capture.local.json",
+  "sha256": "02a34618425c96fe82e7355a9b31467a09399849b7cb3339d6b1fda89e7d1539",
+  "bytes": 663837,
+  "faces": {
+    "321": {
+      "faceStepId": 207169,
+      "surfaceStepId": 204263,
+      "sameSense": true,
+      "uses": [
+        {
+          "faceStepId": 207169,
+          "surfaceStepId": 204263,
+          "boundStepId": 207170,
+          "boundOrientation": true,
+          "loopStepId": 207171,
+          "orientedEdgeStepId": 207172,
+          "edgeStepId": 207173,
+          "edgeUseOrientation": true
+        },
+        {
+          "faceStepId": 207169,
+          "surfaceStepId": 204263,
+          "boundStepId": 207170,
+          "boundOrientation": true,
+          "loopStepId": 207171,
+          "orientedEdgeStepId": 207439,
+          "edgeStepId": 207440,
+          "edgeUseOrientation": true
+        },
+        {
+          "faceStepId": 207169,
+          "surfaceStepId": 204263,
+          "boundStepId": 207170,
+          "boundOrientation": true,
+          "loopStepId": 207171,
+          "orientedEdgeStepId": 207469,
+          "edgeStepId": 204199,
+          "edgeUseOrientation": false
+        },
+        {
+          "faceStepId": 207169,
+          "surfaceStepId": 204263,
+          "boundStepId": 207170,
+          "boundOrientation": true,
+          "loopStepId": 207171,
+          "orientedEdgeStepId": 207470,
+          "edgeStepId": 207440,
+          "edgeUseOrientation": false
+        }
+      ]
+    },
+    "322": {
+      "faceStepId": 207471,
+      "surfaceStepId": 207237,
+      "sameSense": true,
+      "uses": [
+        {
+          "faceStepId": 207471,
+          "surfaceStepId": 207237,
+          "boundStepId": 207472,
+          "boundOrientation": true,
+          "loopStepId": 207473,
+          "orientedEdgeStepId": 207474,
+          "edgeStepId": 207475,
+          "edgeUseOrientation": true
+        },
+        {
+          "faceStepId": 207471,
+          "surfaceStepId": 207237,
+          "boundStepId": 207472,
+          "boundOrientation": true,
+          "loopStepId": 207473,
+          "orientedEdgeStepId": 207741,
+          "edgeStepId": 207742,
+          "edgeUseOrientation": true
+        },
+        {
+          "faceStepId": 207471,
+          "surfaceStepId": 207237,
+          "boundStepId": 207472,
+          "boundOrientation": true,
+          "loopStepId": 207473,
+          "orientedEdgeStepId": 207761,
+          "edgeStepId": 207173,
+          "edgeUseOrientation": false
+        },
+        {
+          "faceStepId": 207471,
+          "surfaceStepId": 207237,
+          "boundStepId": 207472,
+          "boundOrientation": true,
+          "loopStepId": 207473,
+          "orientedEdgeStepId": 207762,
+          "edgeStepId": 207742,
+          "edgeUseOrientation": false
+        }
+      ]
+    },
+    "323": {
+      "faceStepId": 207763,
+      "surfaceStepId": 207539,
+      "sameSense": true,
+      "uses": [
+        {
+          "faceStepId": 207763,
+          "surfaceStepId": 207539,
+          "boundStepId": 207764,
+          "boundOrientation": true,
+          "loopStepId": 207765,
+          "orientedEdgeStepId": 207766,
+          "edgeStepId": 207767,
+          "edgeUseOrientation": true
+        },
+        {
+          "faceStepId": 207763,
+          "surfaceStepId": 207539,
+          "boundStepId": 207764,
+          "boundOrientation": true,
+          "loopStepId": 207765,
+          "orientedEdgeStepId": 208033,
+          "edgeStepId": 208034,
+          "edgeUseOrientation": true
+        },
+        {
+          "faceStepId": 207763,
+          "surfaceStepId": 207539,
+          "boundStepId": 207764,
+          "boundOrientation": true,
+          "loopStepId": 207765,
+          "orientedEdgeStepId": 208053,
+          "edgeStepId": 207475,
+          "edgeUseOrientation": false
+        },
+        {
+          "faceStepId": 207763,
+          "surfaceStepId": 207539,
+          "boundStepId": 207764,
+          "boundOrientation": true,
+          "loopStepId": 207765,
+          "orientedEdgeStepId": 208054,
+          "edgeStepId": 208034,
+          "edgeUseOrientation": false
+        }
+      ]
+    },
+    "324": {
+      "faceStepId": 208055,
+      "surfaceStepId": 207831,
+      "sameSense": true,
+      "uses": [
+        {
+          "faceStepId": 208055,
+          "surfaceStepId": 207831,
+          "boundStepId": 208056,
+          "boundOrientation": true,
+          "loopStepId": 208057,
+          "orientedEdgeStepId": 208058,
+          "edgeStepId": 208059,
+          "edgeUseOrientation": true
+        },
+        {
+          "faceStepId": 208055,
+          "surfaceStepId": 207831,
+          "boundStepId": 208056,
+          "boundOrientation": true,
+          "loopStepId": 208057,
+          "orientedEdgeStepId": 208325,
+          "edgeStepId": 208326,
+          "edgeUseOrientation": true
+        },
+        {
+          "faceStepId": 208055,
+          "surfaceStepId": 207831,
+          "boundStepId": 208056,
+          "boundOrientation": true,
+          "loopStepId": 208057,
+          "orientedEdgeStepId": 208345,
+          "edgeStepId": 207767,
+          "edgeUseOrientation": false
+        },
+        {
+          "faceStepId": 208055,
+          "surfaceStepId": 207831,
+          "boundStepId": 208056,
+          "boundOrientation": true,
+          "loopStepId": 208057,
+          "orientedEdgeStepId": 208346,
+          "edgeStepId": 208326,
+          "edgeUseOrientation": false
+        }
+      ]
+    }
+  },
+  "rawHashes": {
+    "321": "ae7880d06c657455bfe6b9fca2cfdafd8d62d67930486486851ce2b91f1a4c16",
+    "322": "2c205ff4fa94a1e6b98a228fd0bb2940c8ae3f464c23c4e22d3bafe3bd92ca69",
+    "323": "004a558065df19aac6e7ba63f5729c1cb79625744c5b718dd4340b3d274a9bea"
+  },
+  "graphEntities": 861,
+  "edgeAdjacency": {
+    "204199": [
+      {
+        "faceStepId": 204195,
+        "surfaceStepId": 201289,
+        "orientation": true
+      },
+      {
+        "faceStepId": 207169,
+        "surfaceStepId": 204263,
+        "orientation": false
+      }
+    ],
+    "207173": [
+      {
+        "faceStepId": 207169,
+        "surfaceStepId": 204263,
+        "orientation": true
+      },
+      {
+        "faceStepId": 207471,
+        "surfaceStepId": 207237,
+        "orientation": false
+      }
+    ],
+    "207440": [
+      {
+        "faceStepId": 207169,
+        "surfaceStepId": 204263,
+        "orientation": true
+      },
+      {
+        "faceStepId": 207169,
+        "surfaceStepId": 204263,
+        "orientation": false
+      }
+    ],
+    "207475": [
+      {
+        "faceStepId": 207471,
+        "surfaceStepId": 207237,
+        "orientation": true
+      },
+      {
+        "faceStepId": 207763,
+        "surfaceStepId": 207539,
+        "orientation": false
+      }
+    ],
+    "207742": [
+      {
+        "faceStepId": 207471,
+        "surfaceStepId": 207237,
+        "orientation": true
+      },
+      {
+        "faceStepId": 207471,
+        "surfaceStepId": 207237,
+        "orientation": false
+      }
+    ],
+    "207767": [
+      {
+        "faceStepId": 207763,
+        "surfaceStepId": 207539,
+        "orientation": true
+      },
+      {
+        "faceStepId": 208055,
+        "surfaceStepId": 207831,
+        "orientation": false
+      }
+    ],
+    "208034": [
+      {
+        "faceStepId": 207763,
+        "surfaceStepId": 207539,
+        "orientation": true
+      },
+      {
+        "faceStepId": 207763,
+        "surfaceStepId": 207539,
+        "orientation": false
+      }
+    ],
+    "208059": [
+      {
+        "faceStepId": 208055,
+        "surfaceStepId": 207831,
+        "orientation": true
+      },
+      {
+        "faceStepId": 208347,
+        "surfaceStepId": 208123,
+        "orientation": false
+      }
+    ],
+    "208326": [
+      {
+        "faceStepId": 208055,
+        "surfaceStepId": 207831,
+        "orientation": true
+      },
+      {
+        "faceStepId": 208055,
+        "surfaceStepId": 207831,
+        "orientation": false
+      }
+    ]
+  }
+}
