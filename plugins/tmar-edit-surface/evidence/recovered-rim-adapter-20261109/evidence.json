@@ -1,0 +1,1047 @@
+{
+  "schema": "TMAR_RECOVERED_RIM_PUBLIC_EVIDENCE_V1",
+  "recordedAtUtcDate": "2026-11-09",
+  "baseCommit": "8540f37238399abcc7192f4baaa33e2b48fe665b",
+  "branch": "codex/edit-surface-tubo-periodic",
+  "environment": {
+    "checkoutVersion": "0.9.4",
+    "installedOcctWasm": "5.7.1",
+    "vitest": "3.2.7",
+    "hostKernelMcpUpdates": 0
+  },
+  "scope": "Real frozen-source adapter applicability, detached-face readback, and one undeformed-pair sew/raw-STEP attempt; the latter stopped at exact support identity after STEP. No deformation or full Tube qualification.",
+  "source": {
+    "frozenStepSha256": "6b711960fcded7972ded41ed1ceaa2f09e2dd8332fc7ee980b76d2514c94e8ae",
+    "attachmentSha256": "4ee5216ef839d236688c04823df17c46e60a09396f917ebf698de7e988a26476",
+    "frozenNativeSha256": "cc64b9284f11f92093563325fe407a046a8d54dbb26c1cac3344d7047e491263",
+    "frozenNativeSavedAppVersion": "0.9.5",
+    "nativeProjectMembers": 6,
+    "nativeContainsPrimaryBrep": false,
+    "fullPriorConversationRead": false,
+    "embeddedImportFeature309StepIdenticalToFrozen6b": true
+  },
+  "structural": {
+    "planSha256": "c301ed8acbdd0fa64b51e9457cfd2ba885efd344e3e718b50cfd73ab822f2edb",
+    "primaryReceiptSha256": "ca86479242ee96252777527d12ea6d8949432bdda3b611ac0c6000cf2fa1cba7",
+    "typecheck": {
+      "exitCode": 0,
+      "receiptSha256": "dc0ef034c3059183fa22ee28bbc126e0d0a39d8ec736428e042f3781dab972b2"
+    },
+    "execution": {
+      "vitestExitCode": 0,
+      "testsPassed": 1,
+      "receiptSha256": "5f4ea9aada52c8cec70671a0bfd8fb2e9835647b61e20d5da6b1b32431db6346",
+      "launcherConsoleNote": "The launcher's final console print failed under Windows CP1252 after writing the successful child execution receipt; stored files were read back, and the test was not rerun."
+    },
+    "result": {
+      "schema": "TMAR_REAL_RIM_ADAPTER_CONTRACT_ONCE_V1",
+      "status": "structural-contract-satisfied",
+      "startedAtUtc": "2026-11-09T00:50:17.939Z",
+      "baseCommit": "8540f37238399abcc7192f4baaa33e2b48fe665b",
+      "kernelVersion": "5.7.1",
+      "sourceStepSha256": "6b711960fcded7972ded41ed1ceaa2f09e2dd8332fc7ee980b76d2514c94e8ae",
+      "inputSha256": "fa68fa7608e34e81884a08823672470ac27fe0fb722750d2d0a0d3fb476f4382",
+      "runnerSha256": "27ec373977e2f252307c66dce2638c003a6d8da0c348a131e5dca5be3e8ba213",
+      "adapterSha256": "38de2090a1c92c711183e8631993f3f2675d673c0bcfeb242967ed76bc85578d",
+      "scope": "new isolated frozen-STEP read and string-only adapter contract; no candidate CAD",
+      "sourceArchiveSha256": "4ee5216ef839d236688c04823df17c46e60a09396f917ebf698de7e988a26476",
+      "targetFaceIndex": 324,
+      "stage": "complete-without-cad-materialization",
+      "files": [
+        {
+          "name": "face-323.original.brep",
+          "bytes": 387591,
+          "sha256": "be5d618395055efb262e53c200e435754a5675b870a9d19e8d422f2156ef2148"
+        },
+        {
+          "name": "face-324.original.brep",
+          "bytes": 530129,
+          "sha256": "d9dcfeda56d7c76d50ebb24c1a841bdb41ab83d94a8b70bd14d67d3c12059e64"
+        },
+        {
+          "name": "rim.original.brep",
+          "bytes": 369450,
+          "sha256": "6a203323a4894e03530397535417d3fa923332ce1453f9848fbbd9602cf36182"
+        },
+        {
+          "name": "face-324.rewritten-unmaterialized.brep",
+          "bytes": 529179,
+          "sha256": "c3bb88719cec31fe8dd6f65ccad849d2ac36a102880f5a34f94a574b781fc565"
+        }
+      ],
+      "actions": {
+        "imports": 1,
+        "adapterCalls": 1,
+        "fromBrep": 0,
+        "sew": 0,
+        "export": 0,
+        "fitting": 0,
+        "surfaceEvaluations": 0,
+        "volumeMeasurements": 0,
+        "consumedTestReplays": 0,
+        "liveCadActions": 0
+      },
+      "sourceBrepSha256Before": "4b4244d35a9bf0a7684ae28199585cd9d0203ef6d2cc0d7c85029e895dbe8ac5",
+      "faceCount": 624,
+      "vertexTables": [
+        {
+          "faceIndex": 323,
+          "vertices": [
+            {
+              "tolerance": 1e-7,
+              "representationListTerminatorFound": true,
+              "representationRows": []
+            },
+            {
+              "tolerance": 1e-7,
+              "representationListTerminatorFound": true,
+              "representationRows": []
+            }
+          ]
+        },
+        {
+          "faceIndex": 324,
+          "vertices": [
+            {
+              "tolerance": 1e-7,
+              "representationListTerminatorFound": true,
+              "representationRows": []
+            },
+            {
+              "tolerance": 1e-7,
+              "representationListTerminatorFound": true,
+              "representationRows": []
+            }
+          ]
+        }
+      ],
+      "faceSupports": [
+        {
+          "faceIndex": 323,
+          "tolerance": 1e-7,
+          "signatureSha256": "0ce8d6319f8bfe7c54907af736981ca8fd0d2a04138e529e2e0d94556dada128",
+          "kind": 9,
+          "periodic": [
+            1,
+            0
+          ],
+          "poleGrid": [
+            238,
+            12
+          ]
+        },
+        {
+          "faceIndex": 324,
+          "tolerance": 1e-7,
+          "signatureSha256": "8254ce13c552bf1cc8088dca4097f073369c1cada2897d789e46aa587ce00fe0",
+          "kind": 9,
+          "periodic": [
+            1,
+            0
+          ],
+          "poleGrid": [
+            238,
+            12
+          ]
+        }
+      ],
+      "nativeCurve": {
+        "matchesInputExactly": true,
+        "degree": 3,
+        "poles": 239,
+        "periodic": false,
+        "rational": false,
+        "knots": 239
+      },
+      "nativeRange": [
+        0,
+        252.00932454753
+      ],
+      "orientedUses": [
+        "forward",
+        "reversed"
+      ],
+      "associations": [
+        {
+          "faceIndex": 323,
+          "pcurveIndex": 1,
+          "supportIndex": 1,
+          "range": [
+            0,
+            252.00932454753
+          ]
+        },
+        {
+          "faceIndex": 324,
+          "pcurveIndex": 2,
+          "supportIndex": 2,
+          "range": [
+            0,
+            252.00932454753
+          ]
+        }
+      ],
+      "adapter": {
+        "status": "rewritten",
+        "curveIndex": 3
+      },
+      "sourceFileUnchanged": true,
+      "protectedWipUnchanged": true,
+      "sourceBrepSha256After": "4b4244d35a9bf0a7684ae28199585cd9d0203ef6d2cc0d7c85029e895dbe8ac5",
+      "sourceBrepUnchanged": true,
+      "completedAtUtc": "2026-11-09T00:50:21.689Z"
+    }
+  },
+  "materialization": {
+    "planSha256": "0c69a46fdda61a5d90cfec48ee70064e0bcf301c12f4a03ca93d4cde4d53219c",
+    "primaryReceiptSha256": "25a52c306da6676132043695b411d2b716faa8d633a752f34cf040b4910773fb",
+    "typecheck": {
+      "exitCode": 0,
+      "receiptSha256": "603f135e3f6e00cd953509f6f81be60c5cace64187a1d4897de8b13c5dc15854"
+    },
+    "execution": {
+      "vitestExitCode": 0,
+      "testsPassed": 1,
+      "receiptSha256": "725eccecefc1332c6c37f5e1106c10721f8d8ee0d21b761d5f0fade82c92deb2"
+    },
+    "result": {
+      "schema": "TMAR_REAL_RIM_MATERIALIZATION_ONCE_V1",
+      "status": "detached-face-readback-satisfied",
+      "startedAtUtc": "2026-11-09T00:58:04.893Z",
+      "baseCommit": "8540f37238399abcc7192f4baaa33e2b48fe665b",
+      "kernelVersion": "5.7.1",
+      "runnerSha256": "b4324086317e7240966ed7a3f661935ee7558bd820caed02b39b67fa977bd232",
+      "priorReceiptSha256": "ca86479242ee96252777527d12ea6d8949432bdda3b611ac0c6000cf2fa1cba7",
+      "inputs": [
+        {
+          "name": "input.local.json",
+          "sha256": "fa68fa7608e34e81884a08823672470ac27fe0fb722750d2d0a0d3fb476f4382"
+        },
+        {
+          "name": "attempt-1.local.receipt.json",
+          "sha256": "ca86479242ee96252777527d12ea6d8949432bdda3b611ac0c6000cf2fa1cba7"
+        },
+        {
+          "name": "face-323.original.brep",
+          "sha256": "be5d618395055efb262e53c200e435754a5675b870a9d19e8d422f2156ef2148"
+        },
+        {
+          "name": "face-324.original.brep",
+          "sha256": "d9dcfeda56d7c76d50ebb24c1a841bdb41ab83d94a8b70bd14d67d3c12059e64"
+        },
+        {
+          "name": "rim.original.brep",
+          "sha256": "6a203323a4894e03530397535417d3fa923332ce1453f9848fbbd9602cf36182"
+        },
+        {
+          "name": "face-324.rewritten-unmaterialized.brep",
+          "sha256": "c3bb88719cec31fe8dd6f65ccad849d2ac36a102880f5a34f94a574b781fc565"
+        }
+      ],
+      "scope": "native materialization/readback of saved detached face 324; sampled rim consistency only; no Tube candidate",
+      "targetFaceIndex": 324,
+      "stage": "complete-without-sewing-or-step",
+      "files": [
+        {
+          "name": "face-324.materialized-readback.brep",
+          "bytes": 530086,
+          "sha256": "60774a823a35a32b0d91cd9affc561a15af607b0329497b18e12152a2049dacc"
+        }
+      ],
+      "actions": {
+        "stepImports": 0,
+        "adapterCalls": 0,
+        "fromBrep": 3,
+        "sew": 0,
+        "stepExports": 0,
+        "fitting": 0,
+        "sampledParameters": 945,
+        "volumeMeasurements": 0,
+        "consumedTestReplays": 0,
+        "liveCadActions": 0
+      },
+      "nativeValidity": {
+        "original323": true,
+        "original324": true,
+        "rewritten324": true
+      },
+      "topologyCounts": [
+        {
+          "face": 1,
+          "wire": 1,
+          "edge": 3,
+          "vertex": 2,
+          "shell": 0,
+          "solid": 0
+        },
+        {
+          "face": 1,
+          "wire": 1,
+          "edge": 3,
+          "vertex": 2,
+          "shell": 0,
+          "solid": 0
+        },
+        {
+          "face": 1,
+          "wire": 1,
+          "edge": 3,
+          "vertex": 2,
+          "shell": 0,
+          "solid": 0
+        }
+      ],
+      "pcurvesSupportsVerticesTopologyBytewisePreserved": true,
+      "nativeCurve": {
+        "degree": 3,
+        "poles": 239,
+        "knots": 237,
+        "simpleInteriorKnots": 235,
+        "endpointMultiplicities": [
+          4,
+          4
+        ],
+        "exactExpectedCoefficientMatch": true,
+        "otherCurvesUnchanged": true,
+        "periodic": false,
+        "rational": false,
+        "range": [
+          0,
+          252.00932454753
+        ],
+        "tolerance": 1e-7,
+        "useOrientation": "reversed"
+      },
+      "sampledConsistency": {
+        "parameters": 945,
+        "activeSpans": 236,
+        "maximumSourceGap": 0,
+        "maximumNeighborGap": 8.533911106286719e-14,
+        "maximumProtectedGap": 8.664469239778968e-12,
+        "limit": 1e-7,
+        "limitSource": "unchanged native edge tolerance; not a Tube dimensional requirement",
+        "continuousCertificate": false
+      },
+      "primaryInputsUnchanged": true,
+      "protectedWipUnchanged": true,
+      "sourceFileUnchanged": true,
+      "originalHandlesChecked": 2,
+      "originalHandlesUnchanged": true,
+      "completedAtUtc": "2026-11-09T00:58:05.185Z"
+    }
+  },
+  "historicalInputRecovery": {
+    "status": "M08 identities recovered; no numerical solver replay",
+    "relativeDirectory": "QA_GUARDIE/ORACOLO_SVD",
+    "manifest": {
+      "file": "SHA256_ORACOLO.txt",
+      "bytes": 927,
+      "sha256": "cf54dd5a9a4b3b642f9249da1b6f0d69d0ce72f747344bfb0e2b3c266d936d98",
+      "modifiedAtUtc": "2026-11-07T22:47:06.940890+00:00"
+    },
+    "inputs": [
+      {
+        "role": "snapshot",
+        "file": "snapshot_sistemi_sparsi.json",
+        "bytes": 4157782,
+        "sha256": "b1833ae29625324c7db9d2a419937135f6944c09a1525a7f0ab3f3e243dce54c",
+        "modifiedAtUtc": "2026-11-07T22:39:23.871713+00:00",
+        "readScope": "JSON identity, provenance and schema"
+      },
+      {
+        "role": "systems",
+        "file": "sistemi_svd.npz",
+        "bytes": 409038,
+        "sha256": "093ee8ce1d883d779696e3aaca29ed43042f8056d985fe7d091dd3e7e42f5e55",
+        "modifiedAtUtc": "2026-11-07T22:41:21.269143+00:00",
+        "readScope": "bytewise hash only; no deserialization"
+      },
+      {
+        "role": "constrained",
+        "file": "risultato_vincolo_esatto_5mmV.npz",
+        "bytes": 5694,
+        "sha256": "28adcdc63627090ae28afe7a78525034adfa3bd6f59bdf7f16257cf75d1bfc83",
+        "modifiedAtUtc": "2026-11-07T22:44:53.082253+00:00",
+        "readScope": "bytewise hash only; no deserialization"
+      }
+    ],
+    "historicalChoice": "V0 exact constrained solution; V1 unconstrained SVD. The older approximate-cap risultato_con_vincolo_5mmV is explicitly discarded by the saved README.",
+    "snapshotHoldout": {
+      "V0": {
+        "parameterEntries": 713,
+        "rows": 711
+      },
+      "V1": {
+        "parameterEntries": 710,
+        "rows": 708
+      }
+    }
+  },
+  "qualification": {
+    "syntheticPassTransferred": false,
+    "realDetachedFaceReadback": true,
+    "sampledParameters": 945,
+    "continuousCertificate": false,
+    "fullTubeCandidate": false,
+    "stepRoundtrip": false,
+    "volume": false,
+    "wallThickness": false,
+    "globalG1": false,
+    "liveCad": false,
+    "merge": false,
+    "undeformedPairBeforeStep": true,
+    "stepRoundtripAttempted": true,
+    "stepStop": "reopened-own-support-mismatch",
+    "postStepRimAndPcurveChecksReached": false
+  },
+  "pairRoundtrip": {
+    "planSha256": "84b8797c1ef6778ea355f4b2cf8cb4afd87afded2e0e66f0914834febdb7c80e",
+    "primaryReceiptSha256": "32f2b99c16c5f4ddf4177c5b8ec2431ebd9cc7c417dcf502595ed779b87fcc92",
+    "typecheck": {
+      "exitCode": 0,
+      "receiptSha256": "9bf05d7c776ed6ab81be6f9cf298045c660e49c7cf74562fa56b26ae0c5d6998"
+    },
+    "execution": {
+      "vitestExitCode": 1,
+      "testsFailed": 1,
+      "receiptSha256": "968132e1ae59775d0435f3139b872e26b4fd816f677d7f8dad340599dd0e0f80"
+    },
+    "result": {
+      "schema": "TMAR_REAL_RIM_PAIR_ROUNDTRIP_ONCE_V1",
+      "status": "stopped",
+      "startedAtUtc": "2026-11-09T01:12:19.882Z",
+      "baseCommit": "8540f37238399abcc7192f4baaa33e2b48fe665b",
+      "kernelVersion": "5.7.1",
+      "runnerSha256": "1b3ab09e752077a130112ffc6c058cd4b66b2eaa080b774b0cc6aeafda9db6c6",
+      "adapterSha256": "38de2090a1c92c711183e8631993f3f2675d673c0bcfeb242967ed76bc85578d",
+      "inputs": [
+        {
+          "name": "input.local.json",
+          "sha256": "fa68fa7608e34e81884a08823672470ac27fe0fb722750d2d0a0d3fb476f4382"
+        },
+        {
+          "name": "attempt-1.local.receipt.json",
+          "sha256": "ca86479242ee96252777527d12ea6d8949432bdda3b611ac0c6000cf2fa1cba7"
+        },
+        {
+          "name": "materialization-1.local.receipt.json",
+          "sha256": "25a52c306da6676132043695b411d2b716faa8d633a752f34cf040b4910773fb"
+        },
+        {
+          "name": "face-323.original.brep",
+          "sha256": "be5d618395055efb262e53c200e435754a5675b870a9d19e8d422f2156ef2148"
+        },
+        {
+          "name": "face-324.original.brep",
+          "sha256": "d9dcfeda56d7c76d50ebb24c1a841bdb41ab83d94a8b70bd14d67d3c12059e64"
+        },
+        {
+          "name": "rim.original.brep",
+          "sha256": "6a203323a4894e03530397535417d3fa923332ce1453f9848fbbd9602cf36182"
+        },
+        {
+          "name": "face-324.rewritten-unmaterialized.brep",
+          "sha256": "c3bb88719cec31fe8dd6f65ccad849d2ac36a102880f5a34f94a574b781fc565"
+        },
+        {
+          "name": "face-324.materialized-readback.brep",
+          "sha256": "60774a823a35a32b0d91cd9affc561a15af607b0329497b18e12152a2049dacc"
+        },
+        {
+          "name": "attempt-1.local.run-once",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "materialization-1.local.run-once",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "scope": "undeformed source pair only; raw sewing and STEP; sampled consistency; no full Tube candidate",
+      "allowedRimRepresentations": {
+        "sewn": [
+          "clamped239"
+        ],
+        "reopened": [
+          "clamped239",
+          "periodic238-final-duplicate-removed"
+        ]
+      },
+      "expectedSupportSha256": [
+        "0ce8d6319f8bfe7c54907af736981ca8fd0d2a04138e529e2e0d94556dada128",
+        "8254ce13c552bf1cc8088dca4097f073369c1cada2897d789e46aa587ce00fe0"
+      ],
+      "stage": "reopened-topology",
+      "files": [
+        {
+          "name": "pair-sewn-before-step.brep",
+          "bytes": 548265,
+          "sha256": "a03b57c7b416952efe642094a818c249b2f996a952f25f1ce4408275be79567b"
+        },
+        {
+          "name": "pair-raw.step",
+          "bytes": 592864,
+          "sha256": "c17fe7d3b43e395f28c9cdbadaa8c3ba0fe6fa781f81d668d5df6229cfe63dc6"
+        },
+        {
+          "name": "pair-reopened.brep",
+          "bytes": 381142,
+          "sha256": "29623dd22e2442777a9abdba1610b981e4c718d19b186beb1cbdd59932499b89"
+        }
+      ],
+      "actions": {
+        "adapterCalls": 1,
+        "fromBrep": 3,
+        "sew": 1,
+        "stepExports": 1,
+        "stepImports": 1,
+        "frozenStepImports": 0,
+        "sampledParameters": 945,
+        "healing": 0,
+        "fitting": 0,
+        "deformation": 0,
+        "volumeMeasurements": 0,
+        "mesh": 0,
+        "consumedTestReplays": 0,
+        "liveCadActions": 0
+      },
+      "adapter323": {
+        "status": "rewritten",
+        "curveIndex": 1,
+        "sha256": "c0c0166e538878d9861f639ba082cb30c4ebca0052183f9218212fbd35d1a4c3"
+      },
+      "otherCurveBaselineSha256": [
+        "9856d43513554dd59bc48a84957103f3edaa44b9ea283cbea8894379ac2fc6c5",
+        "7cb6f76c50ded0a66a13b7ab2511527640b0225eb1515070c0d7543595177f7c"
+      ],
+      "sewn": {
+        "valid": true,
+        "faces": 2,
+        "shells": 1,
+        "solids": 0,
+        "supportSha256": [
+          "0ce8d6319f8bfe7c54907af736981ca8fd0d2a04138e529e2e0d94556dada128",
+          "8254ce13c552bf1cc8088dca4097f073369c1cada2897d789e46aa587ce00fe0"
+        ],
+        "rim": {
+          "representation": "clamped239",
+          "degree": 3,
+          "poles": 239,
+          "knots": 237,
+          "periodic": false,
+          "rational": false
+        },
+        "orientedUses": [
+          "forward",
+          "reversed"
+        ],
+        "otherCurveSha256": [
+          "9856d43513554dd59bc48a84957103f3edaa44b9ea283cbea8894379ac2fc6c5",
+          "7cb6f76c50ded0a66a13b7ab2511527640b0225eb1515070c0d7543595177f7c"
+        ],
+        "edgeHeader": [
+          1e-7,
+          1,
+          1,
+          0
+        ],
+        "pcurves": [
+          [
+            1,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            7,
+            0,
+            0,
+            1,
+            2,
+            2,
+            0,
+            1,
+            261.52535017517,
+            1,
+            0,
+            2,
+            252.00932454753,
+            2
+          ]
+        ],
+        "associations": [
+          {
+            "faceIndex": 323,
+            "pcurveIndex": 1,
+            "supportIndex": 1
+          },
+          {
+            "faceIndex": 324,
+            "pcurveIndex": 2,
+            "supportIndex": 2
+          }
+        ],
+        "sampledConsistency": {
+          "parameters": 945,
+          "activeSpans": 236,
+          "maximumSourceGap": 0,
+          "maximum323Gap": 8.533911106286719e-14,
+          "maximum324Gap": 8.664469239778968e-12,
+          "limit": 1e-7,
+          "limitSource": "unchanged native rim tolerance; not a Tube dimensional requirement",
+          "continuousCertificate": false
+        }
+      },
+      "reopened": {
+        "valid": true,
+        "faces": 2,
+        "shells": 1,
+        "solids": 0,
+        "supportSha256": [
+          "6df4ae4f04f95f81c1d8b5928e372d010ca267e39988ba2f5a3def8b41eebd98",
+          "9ce4bfda24460740a10e5973b3d9594cec23fb1ef9b98bde24841b5abd1eb298"
+        ]
+      },
+      "error": "reopened-own-support-mismatch",
+      "primaryInputsUnchanged": true,
+      "protectedWipUnchanged": true,
+      "sourceFileUnchanged": true,
+      "completedAtUtc": "2026-11-09T01:12:20.779Z"
+    },
+    "staticSupportDifference": {
+      "schema": "TMAR_STOP_STATIC_SUPPORT_DIFF_V2",
+      "recordedAtUtc": "2026-11-09T01:16:30.725Z",
+      "scope": "text parsing and coefficient comparison only; no OCCT instance, new sampling, guard change or rerun",
+      "primaryReceiptSha256": "32f2b99c16c5f4ddf4177c5b8ec2431ebd9cc7c417dcf502595ed779b87fcc92",
+      "parserSha256": "c71d266391f12ac1b8b5d02d3a104584a8f0bb5d03bf45a7848bd90bdcbf8cdc",
+      "inputs": [
+        {
+          "name": "pair-sewn-before-step.brep",
+          "bytes": 548265,
+          "sha256": "a03b57c7b416952efe642094a818c249b2f996a952f25f1ce4408275be79567b"
+        },
+        {
+          "name": "pair-reopened.brep",
+          "bytes": 381142,
+          "sha256": "29623dd22e2442777a9abdba1610b981e4c718d19b186beb1cbdd59932499b89"
+        }
+      ],
+      "before": [
+        {
+          "faceRecord": 0,
+          "surfaceIndex": 1,
+          "faceTolerance": 1e-7,
+          "signatureSha256": "0ce8d6319f8bfe7c54907af736981ca8fd0d2a04138e529e2e0d94556dada128",
+          "kind": 9,
+          "degree": [
+            3,
+            5
+          ],
+          "poleGrid": [
+            238,
+            12
+          ],
+          "periodic": [
+            1,
+            0
+          ],
+          "rational": [
+            0,
+            0
+          ],
+          "knotCounts": [
+            237,
+            4
+          ],
+          "knotExtents": [
+            [
+              0,
+              252.00932454753
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "endpointMultiplicities": [
+            [
+              3,
+              3
+            ],
+            [
+              6,
+              6
+            ]
+          ]
+        },
+        {
+          "faceRecord": 1,
+          "surfaceIndex": 2,
+          "faceTolerance": 1e-7,
+          "signatureSha256": "8254ce13c552bf1cc8088dca4097f073369c1cada2897d789e46aa587ce00fe0",
+          "kind": 9,
+          "degree": [
+            3,
+            5
+          ],
+          "poleGrid": [
+            238,
+            12
+          ],
+          "periodic": [
+            1,
+            0
+          ],
+          "rational": [
+            0,
+            0
+          ],
+          "knotCounts": [
+            237,
+            4
+          ],
+          "knotExtents": [
+            [
+              0,
+              261.52535017517
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "endpointMultiplicities": [
+            [
+              3,
+              3
+            ],
+            [
+              6,
+              6
+            ]
+          ]
+        }
+      ],
+      "after": [
+        {
+          "faceRecord": 0,
+          "surfaceIndex": 1,
+          "faceTolerance": 1e-7,
+          "signatureSha256": "6df4ae4f04f95f81c1d8b5928e372d010ca267e39988ba2f5a3def8b41eebd98",
+          "kind": 9,
+          "degree": [
+            3,
+            5
+          ],
+          "poleGrid": [
+            238,
+            12
+          ],
+          "periodic": [
+            1,
+            0
+          ],
+          "rational": [
+            0,
+            0
+          ],
+          "knotCounts": [
+            237,
+            4
+          ],
+          "knotExtents": [
+            [
+              0,
+              252.00932454753
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "endpointMultiplicities": [
+            [
+              3,
+              3
+            ],
+            [
+              6,
+              6
+            ]
+          ]
+        },
+        {
+          "faceRecord": 1,
+          "surfaceIndex": 2,
+          "faceTolerance": 1e-7,
+          "signatureSha256": "9ce4bfda24460740a10e5973b3d9594cec23fb1ef9b98bde24841b5abd1eb298",
+          "kind": 9,
+          "degree": [
+            3,
+            5
+          ],
+          "poleGrid": [
+            238,
+            12
+          ],
+          "periodic": [
+            1,
+            0
+          ],
+          "rational": [
+            0,
+            0
+          ],
+          "knotCounts": [
+            237,
+            4
+          ],
+          "knotExtents": [
+            [
+              0,
+              261.52535017517
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "endpointMultiplicities": [
+            [
+              3,
+              3
+            ],
+            [
+              6,
+              6
+            ]
+          ]
+        }
+      ],
+      "comparisons": [
+        [
+          {
+            "beforeFaceRecord": 0,
+            "afterFaceRecord": 0,
+            "exactSignature": false,
+            "metadataEqual": {
+              "du": true,
+              "dv": true,
+              "nu": true,
+              "nv": true,
+              "rational": true,
+              "periodic": true,
+              "ku": false,
+              "mu": true,
+              "kv": true,
+              "mv": true,
+              "weights": true
+            },
+            "comparedPoles": 2856,
+            "poleCountEqual": true,
+            "differentPoleComponents": 8530,
+            "maxAbsPoleComponentDifference": 9.49995637711254e-12,
+            "maxPoleDistance": 1.535018717853387e-11,
+            "duplicateFinalURowOnly": false
+          },
+          {
+            "beforeFaceRecord": 0,
+            "afterFaceRecord": 1,
+            "exactSignature": false,
+            "metadataEqual": {
+              "du": true,
+              "dv": true,
+              "nu": true,
+              "nv": true,
+              "rational": true,
+              "periodic": true,
+              "ku": false,
+              "mu": true,
+              "kv": true,
+              "mv": true,
+              "weights": true
+            },
+            "comparedPoles": 2856,
+            "poleCountEqual": true,
+            "differentPoleComponents": 8568,
+            "maxAbsPoleComponentDifference": 10.074491310076453,
+            "maxPoleDistance": 10.365858997533433,
+            "duplicateFinalURowOnly": false
+          }
+        ],
+        [
+          {
+            "beforeFaceRecord": 1,
+            "afterFaceRecord": 0,
+            "exactSignature": false,
+            "metadataEqual": {
+              "du": true,
+              "dv": true,
+              "nu": true,
+              "nv": true,
+              "rational": true,
+              "periodic": true,
+              "ku": false,
+              "mu": true,
+              "kv": true,
+              "mv": true,
+              "weights": true
+            },
+            "comparedPoles": 2856,
+            "poleCountEqual": true,
+            "differentPoleComponents": 8568,
+            "maxAbsPoleComponentDifference": 10.074491310083836,
+            "maxPoleDistance": 10.365858997538478,
+            "duplicateFinalURowOnly": false
+          },
+          {
+            "beforeFaceRecord": 1,
+            "afterFaceRecord": 1,
+            "exactSignature": false,
+            "metadataEqual": {
+              "du": true,
+              "dv": true,
+              "nu": true,
+              "nv": true,
+              "rational": true,
+              "periodic": true,
+              "ku": false,
+              "mu": true,
+              "kv": true,
+              "mv": true,
+              "weights": true
+            },
+            "comparedPoles": 2856,
+            "poleCountEqual": true,
+            "differentPoleComponents": 8540,
+            "maxAbsPoleComponentDifference": 9.49995637711254e-12,
+            "maxPoleDistance": 1.613393366576604e-11,
+            "duplicateFinalURowOnly": false
+          }
+        ]
+      ],
+      "knotComparisons": [
+        [
+          {
+            "beforeFaceRecord": 0,
+            "afterFaceRecord": 0,
+            "sameNativeUExtent": true,
+            "changedUKnots": 142,
+            "maximumAbsoluteUKnotDifference": 9.421796676178928e-12,
+            "examples": [
+              {
+                "index": 1,
+                "before": 5.0135119188523705,
+                "after": 5.013511918852,
+                "absoluteDifference": 3.703704010149522e-13
+              },
+              {
+                "index": 2,
+                "before": 5.017938754478206,
+                "after": 5.017938754478,
+                "absoluteDifference": 2.0605739337042905e-13
+              },
+              {
+                "index": 3,
+                "before": 5.0667277912365325,
+                "after": 5.066727791237,
+                "absoluteDifference": 4.671818487622659e-13
+              }
+            ],
+            "units": "native U parameter; not millimetres"
+          },
+          {
+            "beforeFaceRecord": 0,
+            "afterFaceRecord": 1,
+            "sameNativeUExtent": false,
+            "changedUKnots": 236,
+            "maximumAbsoluteUKnotDifference": 9.516025627639976,
+            "examples": [
+              {
+                "index": 1,
+                "before": 5.0135119188523705,
+                "after": 5.202825183312,
+                "absoluteDifference": 0.1893132644596296
+              },
+              {
+                "index": 2,
+                "before": 5.017938754478206,
+                "after": 5.207419178948,
+                "absoluteDifference": 0.18948042446979407
+              },
+              {
+                "index": 3,
+                "before": 5.0667277912365325,
+                "after": 5.258050519458,
+                "absoluteDifference": 0.19132272822146756
+              }
+            ],
+            "units": "native U parameter; not millimetres"
+          }
+        ],
+        [
+          {
+            "beforeFaceRecord": 1,
+            "afterFaceRecord": 0,
+            "sameNativeUExtent": false,
+            "changedUKnots": 236,
+            "maximumAbsoluteUKnotDifference": 9.516025627639976,
+            "examples": [
+              {
+                "index": 1,
+                "before": 5.202825183311677,
+                "after": 5.013511918852,
+                "absoluteDifference": 0.18931326445967667
+              },
+              {
+                "index": 2,
+                "before": 5.207419178947724,
+                "after": 5.017938754478,
+                "absoluteDifference": 0.1894804244697239
+              },
+              {
+                "index": 3,
+                "before": 5.258050519458,
+                "after": 5.066727791237,
+                "absoluteDifference": 0.19132272822100038
+              }
+            ],
+            "units": "native U parameter; not millimetres"
+          },
+          {
+            "beforeFaceRecord": 1,
+            "afterFaceRecord": 1,
+            "sameNativeUExtent": true,
+            "changedUKnots": 142,
+            "maximumAbsoluteUKnotDifference": 9.478640095039736e-12,
+            "examples": [
+              {
+                "index": 1,
+                "before": 5.202825183311677,
+                "after": 5.202825183312,
+                "absoluteDifference": 3.232969447708456e-13
+              },
+              {
+                "index": 2,
+                "before": 5.207419178947724,
+                "after": 5.207419178948,
+                "absoluteDifference": 2.7622348852673895e-13
+              },
+              {
+                "index": 5,
+                "before": 5.583534249166231,
+                "after": 5.583534249166,
+                "absoluteDifference": 2.3092638912203256e-13
+              }
+            ],
+            "units": "native U parameter; not millimetres"
+          }
+        ]
+      ],
+      "kernelInvocations": 0,
+      "geometryEvaluations": 0,
+      "qualificationChanged": false
+    },
+    "remainingBlock": "Exact support identity does not survive this raw STEP roundtrip. Both poles and native U knots differ; a maximum pole change alone is not a certified surface or pcurve error bound. Post-STEP rim/pcurve/other-curve/sample gates were not reached. The attempt remains stopped and consumed."
+  }
+}
