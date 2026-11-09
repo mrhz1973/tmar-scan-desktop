@@ -1,0 +1,513 @@
+{
+  "schema": "TMAR_SAVED_PAIR_REMAINING_COEFFICIENT_V1",
+  "status": "saved-pair-remaining-coefficient-analysis-computed",
+  "baseCommit": "360d460fe260e6763cdff9cd18a87e1a35d19d29",
+  "startedAtUtc": "2026-11-09T18:00:28.590Z",
+  "inputs": [
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-6b-8540f37.local/pair-sewn-before-step.brep",
+      "sha256": "a03b57c7b416952efe642094a818c249b2f996a952f25f1ce4408275be79567b"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-6b-8540f37.local/pair-reopened.brep",
+      "sha256": "29623dd22e2442777a9abdba1610b981e4c718d19b186beb1cbdd59932499b89"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-support-1abf89d.local/coefficient-analysis-1.local.receipt.json",
+      "sha256": "6fd01a409c2721fb6f18abc8086578dc37e0a20a027f7ccccdf2563a6d170d12"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-6b-8540f37.local/pair-roundtrip-1.local.receipt.json",
+      "sha256": "32f2b99c16c5f4ddf4177c5b8ec2431ebd9cc7c417dcf502595ed779b87fcc92"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-affine-b699c6e.local/rim-affine-1.local.receipt.json",
+      "sha256": "2127916903deb8cd368e7792ffa655600784fcc92fa4c3cff8ccdc1b94457aed"
+    }
+  ],
+  "preflightSha256": "122fd75dfe4acb48421046bbb6c02fdeeb2c9714e6e2504ddfb022a594df8a3d",
+  "contract": {
+    "name": "remaining-curves-boundary-jets-and-cell-regularity-v1",
+    "positionContextMm": 1e-7,
+    "positionCriterionSource": "unchanged local native edge tolerance; no full Tube acceptance",
+    "normalizedBoundaryTangentDriftBudget": 0.000001,
+    "increasingVBoundaryDerivativeDriftBudget": 0.000001,
+    "derivativeBudgetSource": "new isolated comparison criterion fixed before execution; mm per stated parameter unit",
+    "maximumNormalSine": 0.000001,
+    "maximumPeriodicSeamNormalChord": 0.000001,
+    "angularCriterionSource": "new dimensionless experimental criterion; not supplied as a Tube requirement",
+    "jointParameters": [
+      "S323(252.00932454753*s,0)",
+      "S324(261.52535017517*s,1)"
+    ],
+    "tangent": "T_i = period_i * Su_i, s increasing from 0 to 1",
+    "transverse": "Sv_i in increasing native V",
+    "inwardTransverseSigns": [
+      1,
+      -1
+    ],
+    "parametricNormalSigns": [
+      1,
+      1
+    ],
+    "edgeUseOrientations": [
+      "forward",
+      "reversed"
+    ],
+    "periodicSeam": "one-sided 0+ and 1- kept separate; independent normal-chord estimate over all V",
+    "regularity": "every closed native polynomial cell; no injectivity or solid claim",
+    "budgets": {
+      "curveCells": 1024,
+      "differentialCells": 1024,
+      "differentialDepth": 8,
+      "differentialLeaves": 8192,
+      "regularityCellsPerFace": 1024,
+      "regularityDepth": 12
+    },
+    "acquiredPositionProofsReusedByReceiptOnly": true,
+    "nativeCadCertified": false,
+    "exactG1Certified": false,
+    "tubeAccepted": false
+  },
+  "stage": "complete-with-separate-local-criteria",
+  "actions": {
+    "supportPositionProofReplays": 0,
+    "sharedRimPositionProofReplays": 0,
+    "oldNativeAttemptReplays": 0,
+    "kernelInitializations": 0,
+    "fromBrep": 0,
+    "stepImports": 0,
+    "stepExports": 0,
+    "sewing": 0,
+    "fitting": 0,
+    "deformation": 0,
+    "healing": 0,
+    "liveCadActions": 0,
+    "volumeMeasurements": 0,
+    "mesh": 0,
+    "paddedClamps": 1,
+    "quinticCurveComparisons": 2,
+    "boundaryDifferentialComparisons": 3,
+    "regularityNativeCells": 1416,
+    "periodicSeamGapBounds": 2
+  },
+  "otherCurves": [
+    {
+      "edgeId": 5,
+      "status": "bounded",
+      "maximumCurveDifferenceUpper": 2.4797369019280437e-11,
+      "clampErrorUpper": 0,
+      "clampExactInBinary64": true,
+      "periodicComparisonUpper": 2.4797369019280437e-11,
+      "canonicalizationExactRepresentationIdentity": true,
+      "originalActiveDomain": [
+        0,
+        261.52535017517
+      ],
+      "candidateDomain": [
+        0,
+        261.52535017517
+      ],
+      "clampedPoleCount": 239,
+      "canonicalPoleCount": 238,
+      "checkedCells": 378,
+      "checkedControlPairs": 1512,
+      "worstCell": {
+        "cell": 126,
+        "originalSpan": 79,
+        "candidateSpan": 79,
+        "upperBound": 2.4797369019280437e-11
+      },
+      "correspondence": "identity-original-active-parameter",
+      "boundMethod": "own-clamp-error-plus-periodic-bernstein-difference",
+      "evidenceScope": "padded-polynomial-curve-coefficient-model",
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "normalizedPartitionCount": 379,
+      "normalizedPartitionSha256": "937be6f6d7bfa7c87ad354cbaf441ae5157906cff1df1e5d3cb079df1e3a6a38",
+      "belowDeclaredPositionContext": true
+    },
+    {
+      "edgeId": 10,
+      "status": "bounded",
+      "maximumCurveDifferenceUpper": 1.5036860645523127e-11,
+      "checkedControlPairs": 12,
+      "changedComponents": 33,
+      "worstPoleIndex": 9,
+      "degree": 5,
+      "domain": [
+        0,
+        1
+      ],
+      "correspondence": "identity-original-parameter-unchanged-quintic-basis",
+      "boundMethod": "nonnegative-bspline-basis-outward-coefficient-l1-hull",
+      "evidenceScope": "nonperiodic-quintic-curve-coefficient-model",
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "belowDeclaredPositionContext": true
+    },
+    {
+      "edgeId": 4,
+      "status": "bounded",
+      "maximumCurveDifferenceUpper": 1.7640999772083897e-11,
+      "checkedControlPairs": 12,
+      "changedComponents": 36,
+      "worstPoleIndex": 2,
+      "degree": 5,
+      "domain": [
+        0,
+        1
+      ],
+      "correspondence": "identity-original-parameter-unchanged-quintic-basis",
+      "boundMethod": "nonnegative-bspline-basis-outward-coefficient-l1-hull",
+      "evidenceScope": "nonperiodic-quintic-curve-coefficient-model",
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "belowDeclaredPositionContext": true
+    }
+  ],
+  "acquiredOtherCurve": {
+    "edgeId": 9,
+    "exactSerializedCoefficients": true,
+    "reusedReceiptSha256": "6fd01a409c2721fb6f18abc8086578dc37e0a20a027f7ccccdf2563a6d170d12",
+    "recomputed": false
+  },
+  "boundaryDifferentials": [
+    {
+      "name": "pre-post-face-323-joint-boundary",
+      "status": "differential-coefficient-bound",
+      "classification": "within-declared-normal-budget",
+      "normalizedTangentDifferenceUpper": 5.71732657661528e-7,
+      "increasingVDerivativeDifferenceUpper": 1.9962989872279747e-9,
+      "normalSineUpper": 2.907465909345293e-9,
+      "minimumTangentNormLower": 156.68919073924582,
+      "minimumNormalNormLower": 1583.4574282438098,
+      "minimumNormalDotLower": 6331944.020076736,
+      "checkedCells": 378,
+      "checkedLeaves": 378,
+      "subdivisions": 0,
+      "unresolvedLeaves": 0,
+      "regularityUnresolvedLeaves": 0,
+      "unresolvedLeavesScope": "normal-budget-without-definite-violation",
+      "boundaryRegularityCertified": true,
+      "criteria": {
+        "maximumNormalSine": 0.000001,
+        "strictlyPositiveTangentAndNormal": true,
+        "strictlyPositiveOrientedNormalDot": true
+      },
+      "budget": {
+        "maxCells": 1024,
+        "maxDepth": 8,
+        "maxLeaves": 8192,
+        "maxExactBits": 8192
+      },
+      "first": {
+        "side": "V-min",
+        "normalSign": 1,
+        "uDomain": [
+          0,
+          252.00932454753
+        ],
+        "vDomain": [
+          0,
+          1
+        ],
+        "inwardTransverseSign": 1,
+        "internalUCreaseKnots": []
+      },
+      "second": {
+        "side": "V-min",
+        "normalSign": 1,
+        "uDomain": [
+          0,
+          252.00932454753
+        ],
+        "vDomain": [
+          0,
+          1
+        ],
+        "inwardTransverseSign": 1,
+        "internalUCreaseKnots": []
+      },
+      "correspondence": "exact-positive-affine-normalized-U",
+      "seamEndpointContract": "separate-one-sided-0-plus-and-1-minus",
+      "evidenceScope": "saved-boundary-differential-coefficient-model",
+      "exactG1Certified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "normalizedPartitionCount": 379,
+      "normalizedPartitionSha256": "1f46460549a4ae4b4952c832ec67b2312bd7661038da3cddd0b4551c2f600872",
+      "derivativeDriftWithinDeclaredBudget": true
+    },
+    {
+      "name": "pre-post-face-324-joint-boundary",
+      "status": "differential-coefficient-bound",
+      "classification": "within-declared-normal-budget",
+      "normalizedTangentDifferenceUpper": 0.0000011979254543881274,
+      "increasingVDerivativeDifferenceUpper": 1.957534606633616e-9,
+      "normalSineUpper": 3.892927296448085e-9,
+      "minimumTangentNormLower": 156.68919073928222,
+      "minimumNormalNormLower": 1583.4574281261384,
+      "minimumNormalDotLower": 6331944.020069045,
+      "checkedCells": 378,
+      "checkedLeaves": 378,
+      "subdivisions": 0,
+      "unresolvedLeaves": 0,
+      "regularityUnresolvedLeaves": 0,
+      "unresolvedLeavesScope": "normal-budget-without-definite-violation",
+      "boundaryRegularityCertified": true,
+      "criteria": {
+        "maximumNormalSine": 0.000001,
+        "strictlyPositiveTangentAndNormal": true,
+        "strictlyPositiveOrientedNormalDot": true
+      },
+      "budget": {
+        "maxCells": 1024,
+        "maxDepth": 8,
+        "maxLeaves": 8192,
+        "maxExactBits": 8192
+      },
+      "first": {
+        "side": "V-max",
+        "normalSign": 1,
+        "uDomain": [
+          0,
+          261.52535017517
+        ],
+        "vDomain": [
+          0,
+          1
+        ],
+        "inwardTransverseSign": -1,
+        "internalUCreaseKnots": []
+      },
+      "second": {
+        "side": "V-max",
+        "normalSign": 1,
+        "uDomain": [
+          0,
+          261.52535017517
+        ],
+        "vDomain": [
+          0,
+          1
+        ],
+        "inwardTransverseSign": -1,
+        "internalUCreaseKnots": []
+      },
+      "correspondence": "exact-positive-affine-normalized-U",
+      "seamEndpointContract": "separate-one-sided-0-plus-and-1-minus",
+      "evidenceScope": "saved-boundary-differential-coefficient-model",
+      "exactG1Certified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "normalizedPartitionCount": 379,
+      "normalizedPartitionSha256": "937be6f6d7bfa7c87ad354cbaf441ae5157906cff1df1e5d3cb079df1e3a6a38",
+      "derivativeDriftWithinDeclaredBudget": false
+    }
+  ],
+  "joint": {
+    "status": "differential-coefficient-bound",
+    "classification": "within-declared-normal-budget",
+    "normalizedTangentDifferenceUpper": 8.812470451147195e-7,
+    "increasingVDerivativeDifferenceUpper": 2.9414131130778308e-9,
+    "normalSineUpper": 3.4722390945302286e-9,
+    "minimumTangentNormLower": 156.6891907392067,
+    "minimumNormalNormLower": 1583.4574281255657,
+    "minimumNormalDotLower": 6331944.019920631,
+    "checkedCells": 471,
+    "checkedLeaves": 471,
+    "subdivisions": 0,
+    "unresolvedLeaves": 0,
+    "regularityUnresolvedLeaves": 0,
+    "unresolvedLeavesScope": "normal-budget-without-definite-violation",
+    "boundaryRegularityCertified": true,
+    "criteria": {
+      "maximumNormalSine": 0.000001,
+      "strictlyPositiveTangentAndNormal": true,
+      "strictlyPositiveOrientedNormalDot": true
+    },
+    "budget": {
+      "maxCells": 1024,
+      "maxDepth": 8,
+      "maxLeaves": 8192,
+      "maxExactBits": 8192
+    },
+    "first": {
+      "side": "V-min",
+      "normalSign": 1,
+      "uDomain": [
+        0,
+        252.00932454753
+      ],
+      "vDomain": [
+        0,
+        1
+      ],
+      "inwardTransverseSign": 1,
+      "internalUCreaseKnots": []
+    },
+    "second": {
+      "side": "V-max",
+      "normalSign": 1,
+      "uDomain": [
+        0,
+        261.52535017517
+      ],
+      "vDomain": [
+        0,
+        1
+      ],
+      "inwardTransverseSign": -1,
+      "internalUCreaseKnots": []
+    },
+    "correspondence": "exact-positive-affine-normalized-U",
+    "seamEndpointContract": "separate-one-sided-0-plus-and-1-minus",
+    "evidenceScope": "saved-boundary-differential-coefficient-model",
+    "exactG1Certified": false,
+    "nativeCadCertified": false,
+    "tubeAccepted": false,
+    "normalizedPartitionCount": 472,
+    "normalizedPartitionSha256": "6354d59823361a24b14f50045d34e3323aa9f0cbcff9a6b42cbb7c98c3fc4b81"
+  },
+  "regularity": [
+    {
+      "faceIndex": 323,
+      "status": "regular-on-each-closed-native-cell",
+      "coverageComplete": true,
+      "expectedNativeCells": 708,
+      "checkedNativeCells": 708,
+      "certifiedNativeCells": 708,
+      "inconclusiveNativeCells": 0,
+      "nonpositiveNativeCells": 0,
+      "unvisitedNativeCells": 0,
+      "checkedBernsteinCells": 708,
+      "maxNativeCells": 1024,
+      "maxDepth": 12,
+      "minLocalNormalNormLower": 0.00001750953376271401,
+      "minNativeNormalNormLower": 5.7563073973595795,
+      "certifiedCellsMinLocalNormalNormLower": 0.00001750953376271401,
+      "certifiedCellsMinNativeNormalNormLower": 5.7563073973595795,
+      "worstLocalCell": {
+        "uSpan": 136,
+        "vSpan": 2,
+        "lowerBound": 0.00001750953376271401
+      },
+      "worstNativeCell": {
+        "uSpan": 210,
+        "vSpan": 1,
+        "lowerBound": 5.7563073973595795,
+        "areaScaleUpper": 5.236789257819
+      },
+      "problemCells": [],
+      "omittedProblemCellCount": 0,
+      "budgetExhausted": false,
+      "localNormalUnits": "length^2 per normalized-cell-U per normalized-cell-V",
+      "nativeNormalUnits": "length^2 per native-U per native-V",
+      "seamTreatment": "separate-one-sided-closures-of-native-polynomial-cells",
+      "crossCellG1Certified": false,
+      "seamG1Certified": false,
+      "faceOrientationCertified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "evidenceScope": "full-support-piecewise-polynomial-regularity-coefficient-model"
+    },
+    {
+      "faceIndex": 324,
+      "status": "regular-on-each-closed-native-cell",
+      "coverageComplete": true,
+      "expectedNativeCells": 708,
+      "checkedNativeCells": 708,
+      "certifiedNativeCells": 708,
+      "inconclusiveNativeCells": 0,
+      "nonpositiveNativeCells": 0,
+      "unvisitedNativeCells": 0,
+      "checkedBernsteinCells": 708,
+      "maxNativeCells": 1024,
+      "maxDepth": 12,
+      "minLocalNormalNormLower": 0.00001816233546021652,
+      "minNativeNormalNormLower": 5.434544778129242,
+      "certifiedCellsMinLocalNormalNormLower": 0.00001816233546021652,
+      "certifiedCellsMinNativeNormalNormLower": 5.434544778129242,
+      "worstLocalCell": {
+        "uSpan": 136,
+        "vSpan": 0,
+        "lowerBound": 0.00001816233546021652
+      },
+      "worstNativeCell": {
+        "uSpan": 215,
+        "vSpan": 0,
+        "lowerBound": 5.434544778129242,
+        "areaScaleUpper": 0.29088217278700074
+      },
+      "problemCells": [],
+      "omittedProblemCellCount": 0,
+      "budgetExhausted": false,
+      "localNormalUnits": "length^2 per normalized-cell-U per normalized-cell-V",
+      "nativeNormalUnits": "length^2 per native-U per native-V",
+      "seamTreatment": "separate-one-sided-closures-of-native-polynomial-cells",
+      "crossCellG1Certified": false,
+      "seamG1Certified": false,
+      "faceOrientationCertified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "evidenceScope": "full-support-piecewise-polynomial-regularity-coefficient-model"
+    }
+  ],
+  "periodicSeams": [
+    {
+      "faceIndex": 323,
+      "evidenceScope": "periodic-seam-one-sided-coefficient-model-all-V",
+      "gap": {
+        "status": "within-tolerance",
+        "maxDerivativeDifferenceBound": 1.5176983787983567e-11,
+        "checkedVCoefficients": 12,
+        "evidenceScope": "absolute-periodic-seam-derivative-coefficient-bound"
+      },
+      "sameIncreasingVFieldAtBothSeamSides": true,
+      "equalityBasis": "saturated periodic boundary row is exactly the same stored pole column and V basis",
+      "checkedVDerivativeCoefficients": 11,
+      "increasingVDerivativeNormUpper": 10.954813845298627,
+      "minNativeNormalNormLower": 5.7563073973595795,
+      "nativeNormalDifferenceUpper": 1.662610321304752e-10,
+      "normalizedNormalChordUpper": 5.776655784808827e-11,
+      "formula": "||N+ - N-|| <= ||Su+ - Su-|| * ||Sv||; unit-normal chord <= 2*normalDifference/minNativeNormal",
+      "classification": "within-declared-seam-normal-chord-budget",
+      "exactG1Certified": false,
+      "nativeCadCertified": false
+    },
+    {
+      "faceIndex": 324,
+      "evidenceScope": "periodic-seam-one-sided-coefficient-model-all-V",
+      "gap": {
+        "status": "within-tolerance",
+        "maxDerivativeDifferenceBound": 1.65896042292518e-11,
+        "checkedVCoefficients": 12,
+        "evidenceScope": "absolute-periodic-seam-derivative-coefficient-bound"
+      },
+      "sameIncreasingVFieldAtBothSeamSides": true,
+      "equalityBasis": "saturated periodic boundary row is exactly the same stored pole column and V basis",
+      "checkedVDerivativeCoefficients": 11,
+      "increasingVDerivativeNormUpper": 12.307039278600497,
+      "minNativeNormalNormLower": 5.434544778129242,
+      "nativeNormalDifferenceUpper": 2.0416891086583886e-10,
+      "normalizedNormalChordUpper": 7.513744727525126e-11,
+      "formula": "||N+ - N-|| <= ||Su+ - Su-|| * ||Sv||; unit-normal chord <= 2*normalDifference/minNativeNormal",
+      "classification": "within-declared-seam-normal-chord-budget",
+      "exactG1Certified": false,
+      "nativeCadCertified": false
+    }
+  ],
+  "localCriteriaSatisfied": false,
+  "nativeCadCertified": false,
+  "protected100Unchanged": true,
+  "sourceStepUnchanged": true,
+  "allSavedInputsUnchanged": true,
+  "analyzerSourcesUnchanged": true,
+  "oldCadStopPreserved": true,
+  "tubeAccepted": false,
+  "exactG1Certified": false,
+  "completedAtUtc": "2026-11-09T18:00:33.706Z",
+  "privateReceiptRetained": true,
+  "originalPrivateReceiptSha256": "e569858adc9d89d8afe80a86cbbb64f4b7526da85dd6de91104ae0fb544a9413"
+}

@@ -1,0 +1,77 @@
+{
+  "schema": "TMAR_SAVED_PAIR_VERIFICATION_SUMMARY_V1",
+  "baseCommit": "360d460fe260e6763cdff9cd18a87e1a35d19d29",
+  "verifiedAtUtc": "2026-11-09T18:08:38.748275+00:00",
+  "uniqueNewPureTests": 25,
+  "nativeReadbackExperiments": 1,
+  "testRuns": {
+    "initialNewPureTests": 20,
+    "curveTestsRerunAfterTypeNarrowingFix": 8,
+    "additionalTargetedTangentTests": 5,
+    "priorCheckpointTestsRerun": 0
+  },
+  "typechecks": "all three targeted final checks passed; initial narrowing-only TypeScript failure retained privately",
+  "protectedOriginalWipFiles": 43,
+  "inheritedProtectedFiles": 100,
+  "finalPreservedFiles": 127,
+  "preservationManifest": {
+    "path": "plugins/tmar-edit-surface/evidence/recovered-pair-completion-360d460.local/preservation-final.local.json",
+    "sha256": "de9c4680960bb05a072317e733745cffd6ed387d599f7d9cf815a86f6a0020d6"
+  },
+  "tests": [
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-pair-completion-360d460.local/new-unit-tests.local.json",
+      "sha256": "9096405257af2b9ebeedea16235456e4d054783d22aff6b9bf2b23911d4e2ce2",
+      "exitCode": 0
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-pair-completion-360d460.local/curve-unit-tests-final.local.json",
+      "sha256": "fd4adf4100664ddcdd2aef86c462213504e856d212c44aadf79bc76c88a23878",
+      "exitCode": 0
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-pair-completion-360d460.local/tangent-unit-tests.local.json",
+      "sha256": "6e19e2bf135ab6570cd8ded22379178492190b85cba4aaf5bf41e9c481d08fca",
+      "exitCode": 0
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-pair-completion-360d460.local/coefficient-typecheck-final.local.json",
+      "sha256": "4357f952fd54708e292d1713bc48e246444d8d375be709c432e6f4f3c3f69c23",
+      "exitCode": 0
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-pair-completion-360d460.local/native-typecheck.local.json",
+      "sha256": "9fd1a0cc4bf5c6c0cd7acd73a7aa330aa0f8ba8787a45873a27ceb2a0445858d",
+      "exitCode": 0
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-pair-completion-360d460.local/tangent-typecheck.local.json",
+      "sha256": "d8c203897ff7e633d68352843a30cbe67185814fb4ed2359ea4035e0ac04fb1b",
+      "exitCode": 0
+    }
+  ],
+  "sources": [
+    {
+      "path": "plugins/tmar-edit-surface/experimentalSavedPairCurveCorrespondence.ts",
+      "sha256": "73ebbfb2ff873ebf19b3ca3e29d6c5ed1c3f7b58dab1827735b35c1bf907e0b5"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalSavedPairDifferential.ts",
+      "sha256": "e391d85c5c3c04c3f0096c798bf053e0b7119671b872aa955e4e7ee87da5d292"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalSavedSupportRegularity.ts",
+      "sha256": "d7fbbd38d8a361174e3b26df39897b0c255055c6f3a8844f096e204270654225"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalSavedBoundaryTangentBudget.ts",
+      "sha256": "54a07669f298ab4508cccac43cdc275d09b8e41a59b7af47d14440e357c5b89b"
+    }
+  ],
+  "oldStop": "reopened-own-support-mismatch",
+  "oldStopReclassified": false,
+  "hostKernelMcpUpdated": false,
+  "liveCadModified": false,
+  "mergePerformed": false,
+  "tubeAccepted": false
+}

@@ -1,0 +1,244 @@
+{
+  "schema": "TMAR_SAVED_PAIR_NATIVE_READBACK_V1",
+  "status": "saved-pair-native-readback-criteria-satisfied",
+  "baseCommit": "360d460fe260e6763cdff9cd18a87e1a35d19d29",
+  "startedAtUtc": "2026-11-09T18:03:39.921Z",
+  "inputs": [
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-6b-8540f37.local/pair-sewn-before-step.brep",
+      "sha256": "a03b57c7b416952efe642094a818c249b2f996a952f25f1ce4408275be79567b"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-6b-8540f37.local/pair-reopened.brep",
+      "sha256": "29623dd22e2442777a9abdba1610b981e4c718d19b186beb1cbdd59932499b89"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-support-1abf89d.local/coefficient-analysis-1.local.receipt.json",
+      "sha256": "6fd01a409c2721fb6f18abc8086578dc37e0a20a027f7ccccdf2563a6d170d12"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-6b-8540f37.local/pair-roundtrip-1.local.receipt.json",
+      "sha256": "32f2b99c16c5f4ddf4177c5b8ec2431ebd9cc7c417dcf502595ed779b87fcc92"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/recovered-rim-affine-b699c6e.local/rim-affine-1.local.receipt.json",
+      "sha256": "2127916903deb8cd368e7792ffa655600784fcc92fa4c3cff8ccdc1b94457aed"
+    }
+  ],
+  "preflightSha256": "b4e31c4df95d2f0629b81bf71425815a78b40367d22051e856acb554425aedeb",
+  "contract": {
+    "name": "saved-post-step-brep-native-readback-v1",
+    "source": "existing pair-reopened.brep; one new detached fromBREP materialization",
+    "maximumCurveSurfaceGapMm": 1e-7,
+    "maximumModelDirectionChord": 1e-8,
+    "maximumNativeNormalSine": 0.000001,
+    "criteriaSource": "new isolated experiment, declared before execution; not a full Tube requirement",
+    "topology": "valid shell, two own faces, five edges, three vertices, one shared rim, four oriented wire uses per face",
+    "associations": "exact post-STEP own-support signatures and exact native curve coefficients, backed by saved indexed graph",
+    "pcurves": "own-face maps/ranges from saved snapshot; compare with new native serialization; use explicit chain rule",
+    "positionGrid": "each active 3D-curve knot plus thirds of every span",
+    "directionGrid": "thirds strictly inside relevant native knot spans; no endpoint derivative convention assumed",
+    "supportNormalGrid": "one interior midpoint of every own native UV cell",
+    "nativeSurfaceD1MagnitudesAvailable": false,
+    "nativeDirectionalOutputs": [
+      "curveTangent",
+      "surfaceNormal"
+    ],
+    "normalConvention": "native surfaceNormal includes face orientation; curveTangent follows increasing native parameter",
+    "sourceFacade": {
+      "commit": "9892357968bc6ef0b52b98d20620a3f9c2385bc9",
+      "path": "facade/generated/kernel.cpp",
+      "sha256": "0e4e9ee8d0640dff55cd991c125495dfa9eb6b43c78176095fe4f9761b38abec",
+      "inspectedAtDate": "2026-11-09"
+    },
+    "continuousNativeCertificate": false,
+    "oldRoundtripReclassified": false,
+    "tubeAccepted": false
+  },
+  "stage": "new-native-observations-complete",
+  "actions": {
+    "supportPositionProofReplays": 0,
+    "sharedRimPositionProofReplays": 0,
+    "oldNativeAttemptReplays": 0,
+    "kernelInitializations": 1,
+    "fromBrep": 1,
+    "stepImports": 0,
+    "stepExports": 0,
+    "sewing": 0,
+    "fitting": 0,
+    "deformation": 0,
+    "healing": 0,
+    "liveCadActions": 0,
+    "volumeMeasurements": 0,
+    "mesh": 0,
+    "curveParametersSampled": 1583,
+    "curveSurfaceAssociationsSampled": 2312,
+    "curveDirectionComparisons": 1536,
+    "surfaceInteriorNormalsSampled": 1416,
+    "jointNormalPairsSampled": 472
+  },
+  "coefficientReceiptSha256": "e569858adc9d89d8afe80a86cbbb64f4b7526da85dd6de91104ae0fb544a9413",
+  "priorCoefficientCriteriaSatisfied": false,
+  "nativeTopology": {
+    "valid": true,
+    "faces": 2,
+    "edges": 5,
+    "vertices": 3,
+    "shells": 1,
+    "solids": 0
+  },
+  "faceOrientations": [
+    "forward",
+    "forward"
+  ],
+  "nativeSupportSha256": [
+    "6df4ae4f04f95f81c1d8b5928e372d010ca267e39988ba2f5a3def8b41eebd98",
+    "9ce4bfda24460740a10e5973b3d9594cec23fb1ef9b98bde24841b5abd1eb298"
+  ],
+  "orientedUses": [
+    {
+      "faceIndex": 323,
+      "uses": [
+        {
+          "id": 12,
+          "orientation": "forward"
+        },
+        {
+          "id": 10,
+          "orientation": "forward"
+        },
+        {
+          "id": 9,
+          "orientation": "reversed"
+        },
+        {
+          "id": 10,
+          "orientation": "reversed"
+        }
+      ]
+    },
+    {
+      "faceIndex": 324,
+      "uses": [
+        {
+          "id": 5,
+          "orientation": "forward"
+        },
+        {
+          "id": 4,
+          "orientation": "forward"
+        },
+        {
+          "id": 12,
+          "orientation": "reversed"
+        },
+        {
+          "id": 4,
+          "orientation": "reversed"
+        }
+      ]
+    }
+  ],
+  "readback": {
+    "path": "native-readback-1.brep",
+    "bytes": 381142,
+    "sha256": "29623dd22e2442777a9abdba1610b981e4c718d19b186beb1cbdd59932499b89",
+    "exactOwnPcurveMapsRangesAndGraph": true,
+    "continuityLabel": "C1",
+    "flagsObserved": [
+      {
+        "id": 12,
+        "flags": "0101100"
+      },
+      {
+        "id": 10,
+        "flags": "0101000"
+      },
+      {
+        "id": 9,
+        "flags": "0101100"
+      },
+      {
+        "id": 5,
+        "flags": "0101100"
+      },
+      {
+        "id": 4,
+        "flags": "0101000"
+      }
+    ],
+    "flagsAreNotGeometricCriteria": true
+  },
+  "curveOnSurface": [
+    {
+      "edgeId": 12,
+      "parameterCount": 709,
+      "directionCount": 944,
+      "maximumGapMm": 1.4144264730304644e-11,
+      "maximumTangentChord": 1.6150483312315e-10,
+      "positionWithinBudget": true,
+      "directionWithinBudget": true
+    },
+    {
+      "edgeId": 10,
+      "parameterCount": 10,
+      "directionCount": 12,
+      "maximumGapMm": 1.5987211554602254e-14,
+      "maximumTangentChord": 1.134355298878496e-16,
+      "positionWithinBudget": true,
+      "directionWithinBudget": true
+    },
+    {
+      "edgeId": 9,
+      "parameterCount": 145,
+      "directionCount": 96,
+      "maximumGapMm": 2.3162552761135214e-11,
+      "maximumTangentChord": 8.074621008428463e-12,
+      "positionWithinBudget": true,
+      "directionWithinBudget": true
+    },
+    {
+      "edgeId": 5,
+      "parameterCount": 709,
+      "directionCount": 472,
+      "maximumGapMm": 8.644125458514251e-14,
+      "maximumTangentChord": 3.513575236638911e-16,
+      "positionWithinBudget": true,
+      "directionWithinBudget": true
+    },
+    {
+      "edgeId": 4,
+      "parameterCount": 10,
+      "directionCount": 12,
+      "maximumGapMm": 2.0097183471152322e-14,
+      "maximumTangentChord": 1.1857187100668868e-16,
+      "positionWithinBudget": true,
+      "directionWithinBudget": true
+    }
+  ],
+  "normals": {
+    "maxModelNormalChord": 5.990528825160287e-13,
+    "maxJointNormalSine": 1.3507876727045193e-10,
+    "minJointNormalDot": 0.9999999999999997,
+    "jointNormalSamples": 472,
+    "cellNormalSamples": 1416,
+    "directionModelAgreement": true,
+    "jointWithinDeclaredBudget": true,
+    "continuousNativeCertificate": false
+  },
+  "nativeReadbackCriteriaSatisfied": true,
+  "nativeCadCertified": false,
+  "nativeSurfaceD1MagnitudesVerified": false,
+  "nativeContinuousG1Certified": false,
+  "nativeContinuousRegularityCertified": false,
+  "protected100Unchanged": true,
+  "sourceStepUnchanged": true,
+  "allSavedInputsUnchanged": true,
+  "analyzerSourcesUnchanged": true,
+  "oldCadStopPreserved": true,
+  "tubeAccepted": false,
+  "exactG1Certified": false,
+  "completedAtUtc": "2026-11-09T18:03:40.304Z",
+  "privateReceiptRetained": true,
+  "originalPrivateReceiptSha256": "05fd21686e2798dfca6c600a2f8becfd87b716f1cc373c5e504cb70084f25e3d"
+}
