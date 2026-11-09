@@ -1,0 +1,1865 @@
+{
+  "schema": "TMAR_SAVED_SUPPORT_PUBLIC_EVIDENCE_V1",
+  "baseCommit": "1abf89d214ed5898e362a714a5bbb64d5ad15196",
+  "collectedAtUtc": "2026-11-09T12:24:23.435Z",
+  "privateReceipt": {
+    "name": "coefficient-analysis-1.local.receipt.json",
+    "sha256": "6fd01a409c2721fb6f18abc8086578dc37e0a20a027f7ccccdf2563a6d170d12",
+    "bytes": 80229
+  },
+  "redaction": "No source XYZ, CAD files or personal filesystem paths. Repeated multiplicity arrays are summarized; original private receipt is hash-pinned.",
+  "unitTests": {
+    "exitCode": 0,
+    "passed": 13,
+    "suites": [
+      {
+        "path": "tests/experimentalPeriodicSupportDifference.test.ts",
+        "passed": 8
+      },
+      {
+        "path": "tests/experimentalPeriodicQuinticBernsteinCells.test.ts",
+        "passed": 5
+      }
+    ],
+    "receiptSha256": "ff860c357c5eb40a845771412c81e96cd3978e8961898280d0de7a6bf8365276"
+  },
+  "typecheck": {
+    "exitCode": 0,
+    "receiptSha256": "a168200478d2336fd538da9c056c64a5e1f5a40ade8c3530ffdc0cac54229c31"
+  },
+  "execution": {
+    "exitCode": 0,
+    "receiptSha256": "bc25276cac48f0017a356d32291cfe527b4b84714f09fc35de343d2b19e1a0a3"
+  },
+  "analysis": {
+    "schema": "TMAR_SAVED_SUPPORT_COEFFICIENT_ANALYSIS_V1",
+    "status": "saved-support-position-bounds-computed",
+    "startedAtUtc": "2026-11-09T12:24:21.346Z",
+    "baseCommit": "1abf89d214ed5898e362a714a5bbb64d5ad15196",
+    "scope": "saved binary64 coefficient models only, identity UV; no new CAD execution",
+    "runnerSha256": "04d0bfbc4c17dc69d678377ef731567e2e5ed7b362a869c1385402c836416a7a",
+    "preflightSha256": "d72fc8b7cc68160df7b2b351a8cd0e0bf8f66eb40de37f50ca1f393033c52886",
+    "inputs": [
+      {
+        "name": "pair-sewn-before-step.brep",
+        "sha256": "a03b57c7b416952efe642094a818c249b2f996a952f25f1ce4408275be79567b"
+      },
+      {
+        "name": "pair-reopened.brep",
+        "sha256": "29623dd22e2442777a9abdba1610b981e4c718d19b186beb1cbdd59932499b89"
+      },
+      {
+        "name": "pair-roundtrip-1.local.receipt.json",
+        "sha256": "32f2b99c16c5f4ddf4177c5b8ec2431ebd9cc7c417dcf502595ed779b87fcc92"
+      }
+    ],
+    "sourceFiles": [
+      {
+        "path": "plugins/tmar-edit-surface/brep.ts",
+        "sha256": "c71d266391f12ac1b8b5d02d3a104584a8f0bb5d03bf45a7848bd90bdcbf8cdc"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/experimentalPeriodicCurveWitness.ts",
+        "sha256": "1bf66dfd5fe408ac586878b88914032164d9f8329792764bfc82d3e1ffc2a784"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/experimentalPeriodicSurfaceRefinement.ts",
+        "sha256": "30c620732b207f497e76e9519e9356dce2beff3e5f758b12e51aff1fbaa28cde"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/tangencyCoefficientIntervals.ts",
+        "sha256": "8e503dbebc0252a0047608314e986d3fafaacef4bfbe7d98b1fafb8f17661be5"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/experimentalPeriodicQuinticBernsteinCells.ts",
+        "sha256": "e1c9c3b4890b3b72519b5e54eedb3c105c15d67cdc637afd6f8cc4f7ac3f619a"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/experimentalPeriodicSupportDifference.ts",
+        "sha256": "5c264f8d436cb3c248b252c353ca82b4692015732bab2abd177080e9c325e2ec"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/tests/savedPairTopologyAudit.local.ts",
+        "sha256": "10838c71560730c1e5c5acf70be90798f498464af266b80d33868363141845c5"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/tests/experimentalRecoveredSupportDifferenceOnce.local.ts",
+        "sha256": "04d0bfbc4c17dc69d678377ef731567e2e5ed7b362a869c1385402c836416a7a"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/evidence/recovered-support-correspondence-20261109/PLAN.md",
+        "sha256": "1598481ba5c4f6c9d41d89d70bb6726cfe0a38cbdc03d5e26e0abe2df5146a10"
+      }
+    ],
+    "previousCadStopPreserved": true,
+    "previousCadStop": "reopened-own-support-mismatch",
+    "actions": {
+      "supportPairsBounded": 2,
+      "coefficientCells": 2268,
+      "savedTextAnalyses": 1,
+      "kernelInitializations": 0,
+      "fromBrep": 0,
+      "stepImports": 0,
+      "stepExports": 0,
+      "sewing": 0,
+      "cadSamples": 0,
+      "healing": 0,
+      "deformation": 0,
+      "fitting": 0,
+      "volumeMeasurements": 0,
+      "liveCadActions": 0,
+      "consumedTestReplays": 0
+    },
+    "stage": "complete-without-cad-or-tube-qualification",
+    "supportResults": [
+      {
+        "faceIndex": 323,
+        "beforeSurfaceIndex": 1,
+        "afterSurfaceIndex": 1,
+        "beforeSha256": "0ce8d6319f8bfe7c54907af736981ca8fd0d2a04138e529e2e0d94556dada128",
+        "afterSha256": "6df4ae4f04f95f81c1d8b5928e372d010ca267e39988ba2f5a3def8b41eebd98",
+        "status": "bounded",
+        "positionDifferenceUpperBound": 2.891975547925087e-11,
+        "checkedCells": 1134,
+        "checkedControlPairs": 27216,
+        "uCells": 378,
+        "vCells": 3,
+        "maxCells": 4096,
+        "worstCell": {
+          "uDomain": [
+            126.17390934446001,
+            130.19063850555
+          ],
+          "vDomain": [
+            0.95,
+            1
+          ],
+          "originalUSpan": 120,
+          "candidateUSpan": 120,
+          "vSpan": 2,
+          "upperBound": 2.891975547925087e-11
+        },
+        "uDomain": [
+          0,
+          252.00932454753
+        ],
+        "vDomain": [
+          0,
+          1
+        ],
+        "correspondence": "identity-uv",
+        "boundMethod": "common-partition-bernstein-interval-l1-hull",
+        "evidenceScope": "periodic-polynomial-support-coefficient-model",
+        "nativeCadCertified": false,
+        "uPartitionCount": 379,
+        "uPartitionSha256": "3402154312a61912ad7c8ce69bae0f6d0a3878f83fb8d6c852491af5a15eb6b6",
+        "comparisonWithPriorNativeRimTolerance": {
+          "toleranceMm": 1e-7,
+          "below": true,
+          "acceptanceGate": false,
+          "source": "unchanged pre-existing rim tolerance; not a Tube dimensional requirement"
+        }
+      },
+      {
+        "faceIndex": 324,
+        "beforeSurfaceIndex": 2,
+        "afterSurfaceIndex": 2,
+        "beforeSha256": "8254ce13c552bf1cc8088dca4097f073369c1cada2897d789e46aa587ce00fe0",
+        "afterSha256": "9ce4bfda24460740a10e5973b3d9594cec23fb1ef9b98bde24841b5abd1eb298",
+        "status": "bounded",
+        "positionDifferenceUpperBound": 2.930494735764457e-11,
+        "checkedCells": 1134,
+        "checkedControlPairs": 27216,
+        "uCells": 378,
+        "vCells": 3,
+        "maxCells": 4096,
+        "worstCell": {
+          "uDomain": [
+            119.43012679048209,
+            119.45714745196
+          ],
+          "vDomain": [
+            0.95,
+            1
+          ],
+          "originalUSpan": 108,
+          "candidateUSpan": 108,
+          "vSpan": 2,
+          "upperBound": 2.930494735764457e-11
+        },
+        "uDomain": [
+          0,
+          261.52535017517
+        ],
+        "vDomain": [
+          0,
+          1
+        ],
+        "correspondence": "identity-uv",
+        "boundMethod": "common-partition-bernstein-interval-l1-hull",
+        "evidenceScope": "periodic-polynomial-support-coefficient-model",
+        "nativeCadCertified": false,
+        "uPartitionCount": 379,
+        "uPartitionSha256": "ffbc5441e8e1adbcbb801e7919ecadec9e753e44668e97a700e78ed1a8df2c00",
+        "comparisonWithPriorNativeRimTolerance": {
+          "toleranceMm": 1e-7,
+          "below": true,
+          "acceptanceGate": false,
+          "source": "unchanged pre-existing rim tolerance; not a Tube dimensional requirement"
+        }
+      }
+    ],
+    "savedTopology": {
+      "evidenceScope": "saved-brep-v3-serialized-pair-comparison-only",
+      "before": {
+        "evidenceScope": "saved-brep-v3-serialized-pair-only",
+        "counts": {
+          "Ve": 3,
+          "Ed": 5,
+          "Wi": 2,
+          "Fa": 2,
+          "Sh": 1
+        },
+        "root": {
+          "orientation": "+",
+          "id": 1
+        },
+        "graph": [
+          {
+            "id": 13,
+            "kind": "Ve",
+            "children": []
+          },
+          {
+            "id": 12,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 13
+              },
+              {
+                "orientation": "-",
+                "id": 13
+              }
+            ]
+          },
+          {
+            "id": 11,
+            "kind": "Ve",
+            "children": []
+          },
+          {
+            "id": 10,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 13
+              },
+              {
+                "orientation": "-",
+                "id": 11
+              }
+            ]
+          },
+          {
+            "id": 9,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 11
+              },
+              {
+                "orientation": "-",
+                "id": 11
+              }
+            ]
+          },
+          {
+            "id": 8,
+            "kind": "Wi",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 12
+              },
+              {
+                "orientation": "+",
+                "id": 10
+              },
+              {
+                "orientation": "-",
+                "id": 9
+              },
+              {
+                "orientation": "-",
+                "id": 10
+              }
+            ]
+          },
+          {
+            "id": 7,
+            "kind": "Fa",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 8
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "kind": "Ve",
+            "children": []
+          },
+          {
+            "id": 5,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 6
+              },
+              {
+                "orientation": "-",
+                "id": 6
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 6
+              },
+              {
+                "orientation": "-",
+                "id": 13
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "kind": "Wi",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 5
+              },
+              {
+                "orientation": "+",
+                "id": 4
+              },
+              {
+                "orientation": "-",
+                "id": 12
+              },
+              {
+                "orientation": "-",
+                "id": 4
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "kind": "Fa",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 3
+              }
+            ]
+          },
+          {
+            "id": 1,
+            "kind": "Sh",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 7
+              },
+              {
+                "orientation": "+",
+                "id": 2
+              }
+            ]
+          }
+        ],
+        "tableCounts": {
+          "supports": 4,
+          "pcurves": 10,
+          "curves": 5
+        },
+        "faces": [
+          {
+            "id": 7,
+            "supportIndex": 1,
+            "domain": [
+              0,
+              252.00932454753,
+              0,
+              1
+            ],
+            "degree": [
+              3,
+              5
+            ],
+            "grid": [
+              238,
+              12
+            ],
+            "periodic": [
+              1,
+              0
+            ],
+            "tolerance": 1e-7,
+            "naturalRestriction": 0,
+            "uses": [
+              {
+                "id": 12,
+                "orientation": "forward"
+              },
+              {
+                "id": 10,
+                "orientation": "forward"
+              },
+              {
+                "id": 9,
+                "orientation": "reversed"
+              },
+              {
+                "id": 10,
+                "orientation": "reversed"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "supportIndex": 2,
+            "domain": [
+              0,
+              261.52535017517,
+              0,
+              1
+            ],
+            "degree": [
+              3,
+              5
+            ],
+            "grid": [
+              238,
+              12
+            ],
+            "periodic": [
+              1,
+              0
+            ],
+            "tolerance": 1e-7,
+            "naturalRestriction": 0,
+            "uses": [
+              {
+                "id": 5,
+                "orientation": "forward"
+              },
+              {
+                "id": 4,
+                "orientation": "forward"
+              },
+              {
+                "id": 12,
+                "orientation": "reversed"
+              },
+              {
+                "id": 4,
+                "orientation": "reversed"
+              }
+            ]
+          }
+        ],
+        "rim": {
+          "edgeId": 12,
+          "header": [
+            1e-7,
+            1,
+            1,
+            0
+          ],
+          "flags": "0101000",
+          "range": [
+            0,
+            252.00932454753
+          ],
+          "curve": {
+            "kind": 7,
+            "rational": false,
+            "periodic": false,
+            "degree": 3,
+            "poleCount": 239,
+            "knotCount": 237,
+            "multiplicitiesSummary": {
+              "count": 237,
+              "first": 4,
+              "last": 4,
+              "interiorHistogram": {
+                "1": 235
+              }
+            },
+            "activeDomain": [
+              0,
+              252.00932454753
+            ]
+          },
+          "pcurveMaps": [
+            {
+              "faceId": 7,
+              "supportIndex": 1,
+              "domain": [
+                0,
+                252.00932454753,
+                0,
+                1
+              ],
+              "edgeUse": "forward",
+              "pcurveIndex": 1,
+              "range": [
+                0,
+                252.00932454753
+              ],
+              "tokens": [
+                1,
+                0,
+                0,
+                1,
+                0
+              ]
+            },
+            {
+              "faceId": 2,
+              "supportIndex": 2,
+              "domain": [
+                0,
+                261.52535017517,
+                0,
+                1
+              ],
+              "edgeUse": "reversed",
+              "pcurveIndex": 2,
+              "range": [
+                0,
+                252.00932454753
+              ],
+              "tokens": [
+                7,
+                0,
+                0,
+                1,
+                2,
+                2,
+                0,
+                1,
+                261.52535017517,
+                1,
+                0,
+                2,
+                252.00932454753,
+                2
+              ]
+            }
+          ],
+          "continuityMetadata": "C2"
+        },
+        "edges": [
+          {
+            "id": 12,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101000",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 3,
+              "poleCount": 239,
+              "knotCount": 237,
+              "multiplicitiesSummary": {
+                "count": 237,
+                "first": 4,
+                "last": 4,
+                "interiorHistogram": {
+                  "1": 235
+                }
+              },
+              "activeDomain": [
+                0,
+                252.00932454753
+              ]
+            }
+          },
+          {
+            "id": 10,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101000",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 5,
+              "poleCount": 12,
+              "knotCount": 4,
+              "multiplicitiesSummary": {
+                "count": 4,
+                "first": 6,
+                "last": 6,
+                "interiorHistogram": {
+                  "3": 2
+                }
+              },
+              "activeDomain": [
+                0,
+                1
+              ]
+            }
+          },
+          {
+            "id": 9,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101100",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": true,
+              "degree": 3,
+              "poleCount": 50,
+              "knotCount": 49,
+              "multiplicitiesSummary": {
+                "count": 49,
+                "first": 3,
+                "last": 3,
+                "interiorHistogram": {
+                  "1": 47
+                }
+              },
+              "activeDomain": [
+                0,
+                242.48253589446
+              ]
+            }
+          },
+          {
+            "id": 5,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101100",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 3,
+              "poleCount": 239,
+              "knotCount": 239,
+              "multiplicitiesSummary": {
+                "count": 239,
+                "first": 1,
+                "last": 1,
+                "interiorHistogram": {
+                  "1": 235,
+                  "3": 2
+                }
+              },
+              "activeDomain": [
+                0,
+                261.52535017517
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101000",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 5,
+              "poleCount": 12,
+              "knotCount": 4,
+              "multiplicitiesSummary": {
+                "count": 4,
+                "first": 6,
+                "last": 6,
+                "interiorHistogram": {
+                  "3": 2
+                }
+              },
+              "activeDomain": [
+                0,
+                1
+              ]
+            }
+          }
+        ],
+        "vertexTolerances": [
+          {
+            "id": 13,
+            "tolerance": 1e-7,
+            "emptyParameterRepresentations": true
+          },
+          {
+            "id": 11,
+            "tolerance": 1e-7,
+            "emptyParameterRepresentations": true
+          },
+          {
+            "id": 6,
+            "tolerance": 1e-7,
+            "emptyParameterRepresentations": true
+          }
+        ],
+        "ownFaceMaps": [
+          {
+            "faceId": 7,
+            "edgeId": 12,
+            "kind": 2,
+            "range": [
+              0,
+              252.00932454753
+            ],
+            "maps": [
+              [
+                1,
+                0,
+                0,
+                1,
+                0
+              ]
+            ]
+          },
+          {
+            "faceId": 7,
+            "edgeId": 10,
+            "kind": 3,
+            "range": [
+              0,
+              1
+            ],
+            "maps": [
+              [
+                1,
+                252.00932454753,
+                0,
+                0,
+                1
+              ],
+              [
+                1,
+                0,
+                0,
+                0,
+                1
+              ]
+            ]
+          },
+          {
+            "faceId": 7,
+            "edgeId": 9,
+            "kind": 2,
+            "range": [
+              0,
+              242.48253589446
+            ],
+            "maps": [
+              [
+                7,
+                0,
+                0,
+                1,
+                2,
+                2,
+                0,
+                1,
+                252.00932454753,
+                1,
+                0,
+                2,
+                242.48253589446,
+                2
+              ]
+            ]
+          },
+          {
+            "faceId": 2,
+            "edgeId": 5,
+            "kind": 2,
+            "range": [
+              0,
+              261.52535017517
+            ],
+            "maps": [
+              [
+                1,
+                0,
+                0,
+                1,
+                0
+              ]
+            ]
+          },
+          {
+            "faceId": 2,
+            "edgeId": 4,
+            "kind": 3,
+            "range": [
+              0,
+              1
+            ],
+            "maps": [
+              [
+                1,
+                261.52535017517,
+                0,
+                0,
+                1
+              ],
+              [
+                1,
+                0,
+                0,
+                0,
+                1
+              ]
+            ]
+          },
+          {
+            "faceId": 2,
+            "edgeId": 12,
+            "kind": 2,
+            "range": [
+              0,
+              252.00932454753
+            ],
+            "maps": [
+              [
+                7,
+                0,
+                0,
+                1,
+                2,
+                2,
+                0,
+                1,
+                261.52535017517,
+                1,
+                0,
+                2,
+                252.00932454753,
+                2
+              ]
+            ]
+          }
+        ],
+        "nativeValidityChecked": false,
+        "continuousRimConsistencyCertified": false,
+        "continuityCertified": false
+      },
+      "after": {
+        "evidenceScope": "saved-brep-v3-serialized-pair-only",
+        "counts": {
+          "Ve": 3,
+          "Ed": 5,
+          "Wi": 2,
+          "Fa": 2,
+          "Sh": 1
+        },
+        "root": {
+          "orientation": "+",
+          "id": 1
+        },
+        "graph": [
+          {
+            "id": 13,
+            "kind": "Ve",
+            "children": []
+          },
+          {
+            "id": 12,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 13
+              },
+              {
+                "orientation": "-",
+                "id": 13
+              }
+            ]
+          },
+          {
+            "id": 11,
+            "kind": "Ve",
+            "children": []
+          },
+          {
+            "id": 10,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 13
+              },
+              {
+                "orientation": "-",
+                "id": 11
+              }
+            ]
+          },
+          {
+            "id": 9,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 11
+              },
+              {
+                "orientation": "-",
+                "id": 11
+              }
+            ]
+          },
+          {
+            "id": 8,
+            "kind": "Wi",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 12
+              },
+              {
+                "orientation": "+",
+                "id": 10
+              },
+              {
+                "orientation": "-",
+                "id": 9
+              },
+              {
+                "orientation": "-",
+                "id": 10
+              }
+            ]
+          },
+          {
+            "id": 7,
+            "kind": "Fa",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 8
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "kind": "Ve",
+            "children": []
+          },
+          {
+            "id": 5,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 6
+              },
+              {
+                "orientation": "-",
+                "id": 6
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "kind": "Ed",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 6
+              },
+              {
+                "orientation": "-",
+                "id": 13
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "kind": "Wi",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 5
+              },
+              {
+                "orientation": "+",
+                "id": 4
+              },
+              {
+                "orientation": "-",
+                "id": 12
+              },
+              {
+                "orientation": "-",
+                "id": 4
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "kind": "Fa",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 3
+              }
+            ]
+          },
+          {
+            "id": 1,
+            "kind": "Sh",
+            "children": [
+              {
+                "orientation": "+",
+                "id": 7
+              },
+              {
+                "orientation": "+",
+                "id": 2
+              }
+            ]
+          }
+        ],
+        "tableCounts": {
+          "supports": 2,
+          "pcurves": 8,
+          "curves": 5
+        },
+        "faces": [
+          {
+            "id": 7,
+            "supportIndex": 1,
+            "domain": [
+              0,
+              252.00932454753,
+              0,
+              1
+            ],
+            "degree": [
+              3,
+              5
+            ],
+            "grid": [
+              238,
+              12
+            ],
+            "periodic": [
+              1,
+              0
+            ],
+            "tolerance": 1e-7,
+            "naturalRestriction": 0,
+            "uses": [
+              {
+                "id": 12,
+                "orientation": "forward"
+              },
+              {
+                "id": 10,
+                "orientation": "forward"
+              },
+              {
+                "id": 9,
+                "orientation": "reversed"
+              },
+              {
+                "id": 10,
+                "orientation": "reversed"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "supportIndex": 2,
+            "domain": [
+              0,
+              261.52535017517,
+              0,
+              1
+            ],
+            "degree": [
+              3,
+              5
+            ],
+            "grid": [
+              238,
+              12
+            ],
+            "periodic": [
+              1,
+              0
+            ],
+            "tolerance": 1e-7,
+            "naturalRestriction": 0,
+            "uses": [
+              {
+                "id": 5,
+                "orientation": "forward"
+              },
+              {
+                "id": 4,
+                "orientation": "forward"
+              },
+              {
+                "id": 12,
+                "orientation": "reversed"
+              },
+              {
+                "id": 4,
+                "orientation": "reversed"
+              }
+            ]
+          }
+        ],
+        "rim": {
+          "edgeId": 12,
+          "header": [
+            1e-7,
+            1,
+            1,
+            0
+          ],
+          "flags": "0101100",
+          "range": [
+            0,
+            252.00932454753
+          ],
+          "curve": {
+            "kind": 7,
+            "rational": false,
+            "periodic": true,
+            "degree": 3,
+            "poleCount": 238,
+            "knotCount": 237,
+            "multiplicitiesSummary": {
+              "count": 237,
+              "first": 3,
+              "last": 3,
+              "interiorHistogram": {
+                "1": 235
+              }
+            },
+            "activeDomain": [
+              0,
+              252.00932454753
+            ]
+          },
+          "pcurveMaps": [
+            {
+              "faceId": 7,
+              "supportIndex": 1,
+              "domain": [
+                0,
+                252.00932454753,
+                0,
+                1
+              ],
+              "edgeUse": "forward",
+              "pcurveIndex": 1,
+              "range": [
+                0,
+                252.00932454753
+              ],
+              "tokens": [
+                1,
+                0,
+                0,
+                1,
+                0
+              ]
+            },
+            {
+              "faceId": 2,
+              "supportIndex": 2,
+              "domain": [
+                0,
+                261.52535017517,
+                0,
+                1
+              ],
+              "edgeUse": "reversed",
+              "pcurveIndex": 2,
+              "range": [
+                0,
+                252.00932454753
+              ],
+              "tokens": [
+                7,
+                0,
+                0,
+                1,
+                2,
+                2,
+                0,
+                1,
+                261.52535017517,
+                1,
+                0,
+                2,
+                252.00932454753,
+                2
+              ]
+            }
+          ],
+          "continuityMetadata": "C1"
+        },
+        "edges": [
+          {
+            "id": 12,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101100",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": true,
+              "degree": 3,
+              "poleCount": 238,
+              "knotCount": 237,
+              "multiplicitiesSummary": {
+                "count": 237,
+                "first": 3,
+                "last": 3,
+                "interiorHistogram": {
+                  "1": 235
+                }
+              },
+              "activeDomain": [
+                0,
+                252.00932454753
+              ]
+            }
+          },
+          {
+            "id": 10,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101000",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 5,
+              "poleCount": 12,
+              "knotCount": 4,
+              "multiplicitiesSummary": {
+                "count": 4,
+                "first": 6,
+                "last": 6,
+                "interiorHistogram": {
+                  "3": 2
+                }
+              },
+              "activeDomain": [
+                0,
+                1
+              ]
+            }
+          },
+          {
+            "id": 9,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101100",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": true,
+              "degree": 3,
+              "poleCount": 50,
+              "knotCount": 49,
+              "multiplicitiesSummary": {
+                "count": 49,
+                "first": 3,
+                "last": 3,
+                "interiorHistogram": {
+                  "1": 47
+                }
+              },
+              "activeDomain": [
+                0,
+                242.48253589446
+              ]
+            }
+          },
+          {
+            "id": 5,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101100",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": true,
+              "degree": 3,
+              "poleCount": 238,
+              "knotCount": 237,
+              "multiplicitiesSummary": {
+                "count": 237,
+                "first": 3,
+                "last": 3,
+                "interiorHistogram": {
+                  "1": 235
+                }
+              },
+              "activeDomain": [
+                0,
+                261.52535017517
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "header": [
+              1e-7,
+              1,
+              1,
+              0
+            ],
+            "flags": "0101000",
+            "curve": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 5,
+              "poleCount": 12,
+              "knotCount": 4,
+              "multiplicitiesSummary": {
+                "count": 4,
+                "first": 6,
+                "last": 6,
+                "interiorHistogram": {
+                  "3": 2
+                }
+              },
+              "activeDomain": [
+                0,
+                1
+              ]
+            }
+          }
+        ],
+        "vertexTolerances": [
+          {
+            "id": 13,
+            "tolerance": 1e-7,
+            "emptyParameterRepresentations": true
+          },
+          {
+            "id": 11,
+            "tolerance": 1e-7,
+            "emptyParameterRepresentations": true
+          },
+          {
+            "id": 6,
+            "tolerance": 1e-7,
+            "emptyParameterRepresentations": true
+          }
+        ],
+        "ownFaceMaps": [
+          {
+            "faceId": 7,
+            "edgeId": 12,
+            "kind": 2,
+            "range": [
+              0,
+              252.00932454753
+            ],
+            "maps": [
+              [
+                1,
+                0,
+                0,
+                1,
+                0
+              ]
+            ]
+          },
+          {
+            "faceId": 7,
+            "edgeId": 10,
+            "kind": 3,
+            "range": [
+              0,
+              1
+            ],
+            "maps": [
+              [
+                1,
+                252.00932454753,
+                0,
+                0,
+                1
+              ],
+              [
+                1,
+                0,
+                0,
+                0,
+                1
+              ]
+            ]
+          },
+          {
+            "faceId": 7,
+            "edgeId": 9,
+            "kind": 2,
+            "range": [
+              0,
+              242.48253589446
+            ],
+            "maps": [
+              [
+                7,
+                0,
+                0,
+                1,
+                2,
+                2,
+                0,
+                1,
+                252.00932454753,
+                1,
+                0,
+                2,
+                242.48253589446,
+                2
+              ]
+            ]
+          },
+          {
+            "faceId": 2,
+            "edgeId": 5,
+            "kind": 2,
+            "range": [
+              0,
+              261.52535017517
+            ],
+            "maps": [
+              [
+                1,
+                0,
+                0,
+                1,
+                0
+              ]
+            ]
+          },
+          {
+            "faceId": 2,
+            "edgeId": 4,
+            "kind": 3,
+            "range": [
+              0,
+              1
+            ],
+            "maps": [
+              [
+                1,
+                261.52535017517,
+                0,
+                0,
+                1
+              ],
+              [
+                1,
+                0,
+                0,
+                0,
+                1
+              ]
+            ]
+          },
+          {
+            "faceId": 2,
+            "edgeId": 12,
+            "kind": 2,
+            "range": [
+              0,
+              252.00932454753
+            ],
+            "maps": [
+              [
+                7,
+                0,
+                0,
+                1,
+                2,
+                2,
+                0,
+                1,
+                261.52535017517,
+                1,
+                0,
+                2,
+                252.00932454753,
+                2
+              ]
+            ]
+          }
+        ],
+        "nativeValidityChecked": false,
+        "continuousRimConsistencyCertified": false,
+        "continuityCertified": false
+      },
+      "exactIndexedOrientedGraph": true,
+      "mappingBasis": "same indexed/oriented graph anchored by distinct own-support domains; no nearest-point matching",
+      "rimPcurveMapsRangesAndUsesUnchanged": true,
+      "ownFacePcurveMapsAndRangesUnchanged": true,
+      "continuityMetadata": {
+        "before": "C2",
+        "after": "C1",
+        "unchanged": false,
+        "geometryDerivativeClaim": false
+      },
+      "changedFlags": [
+        {
+          "id": 12,
+          "kind": "Ed",
+          "before": "0101000",
+          "after": "0101100"
+        },
+        {
+          "id": 7,
+          "kind": "Fa",
+          "before": "0101000",
+          "after": "0111000"
+        },
+        {
+          "id": 2,
+          "kind": "Fa",
+          "before": "0101000",
+          "after": "0111000"
+        }
+      ],
+      "vertices": [
+        {
+          "id": 13,
+          "sameTolerance": true,
+          "sameCoordinates": false,
+          "changedComponents": 3,
+          "coordinateL1DifferenceUpper": 9.062972594620083e-12
+        },
+        {
+          "id": 11,
+          "sameTolerance": true,
+          "sameCoordinates": true,
+          "changedComponents": 0,
+          "coordinateL1DifferenceUpper": 0
+        },
+        {
+          "id": 6,
+          "sameTolerance": true,
+          "sameCoordinates": false,
+          "changedComponents": 3,
+          "coordinateL1DifferenceUpper": 7.741363106106295e-12
+        }
+      ],
+      "maxVertexCoordinateL1DifferenceUpper": 9.062972594620083e-12,
+      "edgeCurves": [
+        {
+          "edgeId": 12,
+          "sharedRim": true,
+          "sameHeader": true,
+          "sameRange": true,
+          "beforeCurveIndex": 1,
+          "afterCurveIndex": 1,
+          "coefficients": {
+            "comparableCoefficients": false,
+            "exactSerializedCoefficients": false,
+            "before": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 3,
+              "poleCount": 239,
+              "knotCount": 237,
+              "multiplicitiesSummary": {
+                "count": 237,
+                "first": 4,
+                "last": 4,
+                "interiorHistogram": {
+                  "1": 235
+                }
+              },
+              "activeDomain": [
+                0,
+                252.00932454753
+              ]
+            },
+            "after": {
+              "kind": 7,
+              "rational": false,
+              "periodic": true,
+              "degree": 3,
+              "poleCount": 238,
+              "knotCount": 237,
+              "multiplicitiesSummary": {
+                "count": 237,
+                "first": 3,
+                "last": 3,
+                "interiorHistogram": {
+                  "1": 235
+                }
+              },
+              "activeDomain": [
+                0,
+                252.00932454753
+              ]
+            },
+            "geometricErrorBound": null
+          }
+        },
+        {
+          "edgeId": 10,
+          "sharedRim": false,
+          "sameHeader": true,
+          "sameRange": true,
+          "beforeCurveIndex": 2,
+          "afterCurveIndex": 2,
+          "coefficients": {
+            "comparableCoefficients": true,
+            "exactSerializedCoefficients": false,
+            "sameWeights": true,
+            "sameKnots": true,
+            "sameMultiplicity": true,
+            "changedPoleComponents": 33,
+            "maxPoleL1DifferenceUpper": 1.5036860645523127e-11,
+            "changedKnots": 0,
+            "maxKnotDifferenceUpper": 0,
+            "geometricErrorBound": null,
+            "metadata": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 5,
+              "poleCount": 12,
+              "knotCount": 4,
+              "multiplicitiesSummary": {
+                "count": 4,
+                "first": 6,
+                "last": 6,
+                "interiorHistogram": {
+                  "3": 2
+                }
+              },
+              "activeDomain": [
+                0,
+                1
+              ]
+            }
+          }
+        },
+        {
+          "edgeId": 9,
+          "sharedRim": false,
+          "sameHeader": true,
+          "sameRange": true,
+          "beforeCurveIndex": 3,
+          "afterCurveIndex": 3,
+          "coefficients": {
+            "comparableCoefficients": true,
+            "exactSerializedCoefficients": true,
+            "sameWeights": true,
+            "sameKnots": true,
+            "sameMultiplicity": true,
+            "changedPoleComponents": 0,
+            "maxPoleL1DifferenceUpper": 0,
+            "changedKnots": 0,
+            "maxKnotDifferenceUpper": 0,
+            "geometricErrorBound": null,
+            "metadata": {
+              "kind": 7,
+              "rational": false,
+              "periodic": true,
+              "degree": 3,
+              "poleCount": 50,
+              "knotCount": 49,
+              "multiplicitiesSummary": {
+                "count": 49,
+                "first": 3,
+                "last": 3,
+                "interiorHistogram": {
+                  "1": 47
+                }
+              },
+              "activeDomain": [
+                0,
+                242.48253589446
+              ]
+            }
+          }
+        },
+        {
+          "edgeId": 5,
+          "sharedRim": false,
+          "sameHeader": true,
+          "sameRange": true,
+          "beforeCurveIndex": 4,
+          "afterCurveIndex": 4,
+          "coefficients": {
+            "comparableCoefficients": false,
+            "exactSerializedCoefficients": false,
+            "before": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 3,
+              "poleCount": 239,
+              "knotCount": 239,
+              "multiplicitiesSummary": {
+                "count": 239,
+                "first": 1,
+                "last": 1,
+                "interiorHistogram": {
+                  "1": 235,
+                  "3": 2
+                }
+              },
+              "activeDomain": [
+                0,
+                261.52535017517
+              ]
+            },
+            "after": {
+              "kind": 7,
+              "rational": false,
+              "periodic": true,
+              "degree": 3,
+              "poleCount": 238,
+              "knotCount": 237,
+              "multiplicitiesSummary": {
+                "count": 237,
+                "first": 3,
+                "last": 3,
+                "interiorHistogram": {
+                  "1": 235
+                }
+              },
+              "activeDomain": [
+                0,
+                261.52535017517
+              ]
+            },
+            "geometricErrorBound": null
+          }
+        },
+        {
+          "edgeId": 4,
+          "sharedRim": false,
+          "sameHeader": true,
+          "sameRange": true,
+          "beforeCurveIndex": 5,
+          "afterCurveIndex": 5,
+          "coefficients": {
+            "comparableCoefficients": true,
+            "exactSerializedCoefficients": false,
+            "sameWeights": true,
+            "sameKnots": true,
+            "sameMultiplicity": true,
+            "changedPoleComponents": 36,
+            "maxPoleL1DifferenceUpper": 1.7640999772083897e-11,
+            "changedKnots": 0,
+            "maxKnotDifferenceUpper": 0,
+            "geometricErrorBound": null,
+            "metadata": {
+              "kind": 7,
+              "rational": false,
+              "periodic": false,
+              "degree": 5,
+              "poleCount": 12,
+              "knotCount": 4,
+              "multiplicitiesSummary": {
+                "count": 4,
+                "first": 6,
+                "last": 6,
+                "interiorHistogram": {
+                  "3": 2
+                }
+              },
+              "activeDomain": [
+                0,
+                1
+              ]
+            }
+          }
+        }
+      ],
+      "allEdgeHeadersUnchanged": true,
+      "allEdgeRangesUnchanged": true,
+      "faceTolerancesUnchanged": true,
+      "vertexTolerancesUnchanged": true,
+      "nativeValidityChecked": false,
+      "continuousRimConsistencyCertified": false,
+      "continuityCertified": false,
+      "oldRoundtripStatusReclassified": false
+    },
+    "protectedFilesUnchanged": true,
+    "frozenSourceStepUnchanged": true,
+    "analyzerSourcesUnchanged": true,
+    "oldCadReceiptUnchanged": true,
+    "completedAtUtc": "2026-11-09T12:24:23.435Z"
+  }
+}

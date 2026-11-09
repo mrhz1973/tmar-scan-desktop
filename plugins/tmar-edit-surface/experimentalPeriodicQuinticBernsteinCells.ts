@@ -14,7 +14,8 @@ interface Blend {
   beta: I
 }
 
-function localAxis(degree: number, knots: number[], multiplicities: number[], span: number, periodic: boolean) {
+function localAxis(degree: number, knots: number[], multiplicities: number[], span: number, periodic: boolean,
+  domain?: readonly [number, number]) {
   const flat = knots.flatMap((knot, i) =>
     periodic && i === knots.length - 1 ? [] : Array<number>(multiplicities[i]).fill(knot))
   const end = multiplicities.slice(0, span + 1).reduce((sum, m) => sum + m, 0) - 1
@@ -42,7 +43,18 @@ function localAxis(degree: number, knots: number[], multiplicities: number[], sp
         if (right[1] === 0) return { alpha: scalar(1), beta: scalar(0) }
         return { alpha: divide(left, width), beta: divide(right, width) }
       }
-      return { j, left: blendAt(end), right: blendAt(end + 1) }
+      const blendAtParameter = (parameter: number): Blend => {
+        if (parameter === knots[span]) return blendAt(end)
+        if (parameter === knots[span + 1]) return blendAt(end + 1)
+        // The subcell endpoints lie in the native span. Form positive
+        // differences through its endpoints, including at the periodic
+        // seam, without translating knots or dividing by the subcell width.
+        const left = add(gap(lo, end), delta(parameter, knots[span]))
+        const right = add(delta(knots[span + 1], parameter), gap(end + 1, hi))
+        return { alpha: divide(left, width), beta: divide(right, width) }
+      }
+      return { j, left: domain ? blendAtParameter(domain[0]) : blendAt(end),
+        right: domain ? blendAtParameter(domain[1]) : blendAt(end + 1) }
     })
   })
   const start = end - (periodic ? multiplicities[0] - 1 : degree)
@@ -84,6 +96,15 @@ function validateCommonBasis(original: Net, candidate: Net) {
     fail('basi U/V sorgente e candidato diverse')
 }
 
+function extractPatch(net: Net, u: ReturnType<typeof localAxis>, v: ReturnType<typeof localAxis>, origin: Point) {
+  const columns = v.indices.map(j => restrictAxis(u.indices.map(i => {
+    const pole = net.poles[i * net.nv + j]
+    return pole.map((value, axis) => delta(value, origin[axis])) as V
+  }), u))
+  const controls = Array.from({ length: net.du + 1 }, (_, i) => restrictAxis(columns.map(column => column[i]), v)).flat()
+  return { degreeU: net.du, degreeV: net.dv, controls }
+}
+
 /** Restrict the stored pole differences directly, without subtracting two restricted position fields. */
 export function extractExperimentalPeriodicQuinticVDifferenceColumns(original: Net, candidate: Net, vSpan: number) {
   validateCommonBasis(original, candidate)
@@ -123,15 +144,53 @@ export function extractExperimentalPeriodicQuinticBernsteinCell(
 
   const u = localAxis(du, ku, mu, uSpan, true), v = localAxis(dv, kv, mv, vSpan, false)
   const origin: Point = [...original.poles[u.indices[0] * nv + v.indices[0]]]
-  const extract = (net: Net) => {
-    const columns = v.indices.map(j => restrictAxis(u.indices.map(i => {
-      const pole = net.poles[i * nv + j]
-      return pole.map((value, axis) => delta(value, origin[axis])) as V
-    }), u))
-    const controls = Array.from({ length: du + 1 }, (_, i) => restrictAxis(columns.map(column => column[i]), v)).flat()
-    return { degreeU: du, degreeV: dv, controls }
-  }
   return { uSpan, vSpan, uDomain: [ku[uSpan], ku[uSpan + 1]] as const, vDomain: [kv[vSpan], kv[vSpan + 1]] as const,
-    origin, original: extract(original), candidate: extract(candidate),
+    origin, original: extractPatch(original, u, v, origin), candidate: extractPatch(candidate, u, v, origin),
     evidenceScope: 'periodic-quintic-bernstein-cell-coefficient-model' as const }
+}
+
+/**
+ * Extract two polynomial supports on exactly the same real UV rectangle,
+ * using each support's own U knot vector. The supplied U subcell must lie
+ * inside one native span of each support. V uses the common native basis.
+ * The caller establishes the intended identity-UV correspondence; this
+ * routine neither discovers phase/orientation nor accepts a CAD topology.
+ *
+ * All arithmetic encloses the mathematical model of the input binary64
+ * coefficients. Native de Boor denominators are retained even when a
+ * subcell is only one ULP wide. No common-knot Net or kernel object is made.
+ */
+export function extractExperimentalPeriodicQuinticCommonCell(
+  original: Net, candidate: Net, originalUSpan: number, candidateUSpan: number,
+  vSpan: number, uDomain: readonly [number, number],
+) {
+  validateExperimentalPeriodicSurfaceU(original)
+  validateExperimentalPeriodicSurfaceU(candidate)
+  for (const net of [original, candidate]) {
+    if (net.du > 3 || net.dv !== 5 || net.mu[0] !== net.du || net.rational.some(Boolean) ||
+        net.weights.some(weight => weight !== 1))
+      fail('richiesti supporti polinomiali, V quintica e cucitura U satura con grado fino a tre')
+  }
+  if (original.du !== candidate.du || original.nu !== candidate.nu || original.nv !== candidate.nv ||
+      !equal(original.mu, candidate.mu) ||
+      original.ku[0] !== candidate.ku[0] || original.ku.at(-1) !== candidate.ku.at(-1) ||
+      !equal(original.kv, candidate.kv) || !equal(original.mv, candidate.mv))
+    fail('dominio U, molteplicità U o base V sorgente e candidato diversi')
+  if (!Array.isArray(uDomain) || uDomain.length !== 2 || !Number.isFinite(uDomain[0]) ||
+      !Number.isFinite(uDomain[1]) || !(uDomain[0] < uDomain[1]) ||
+      !Number.isInteger(vSpan) || vSpan < 0 || vSpan >= original.kv.length - 1)
+    fail('dominio della cella comune non valido')
+  const axes = [original, candidate].map((net, i) => {
+    const span = i === 0 ? originalUSpan : candidateUSpan
+    if (!Number.isInteger(span) || span < 0 || span >= net.ku.length - 1 ||
+        uDomain[0] < net.ku[span] || uDomain[1] > net.ku[span + 1])
+      fail('cella comune fuori dalla campata U nativa')
+    return localAxis(net.du, net.ku, net.mu, span, true, uDomain)
+  })
+  const v = localAxis(original.dv, original.kv, original.mv, vSpan, false)
+  const origin: Point = [...original.poles[axes[0].indices[0] * original.nv + v.indices[0]]]
+  return { originalUSpan, candidateUSpan, vSpan, uDomain: [...uDomain] as [number, number],
+    vDomain: [original.kv[vSpan], original.kv[vSpan + 1]] as const, origin,
+    original: extractPatch(original, axes[0], v, origin), candidate: extractPatch(candidate, axes[1], v, origin),
+    evidenceScope: 'periodic-quintic-common-cell-coefficient-model' as const }
 }
