@@ -1,28 +1,73 @@
-# Edit Surface — saved candidate continuous qualification STOP
+# Edit Surface — targeted diagnosis and corrected-candidate contract
 
-Updated **2026-11-09**. This chat executes `plugins/tmar-edit-surface/**`. Coordination and host/kernel/MCP changes remain with the coordinator; live Tube CAD/candidate work remains with Tube. No merge or live-session change is authorized by this checkpoint.
+Updated **2026-11-10, Europe/Rome**. Current result: **`diagnosis-complete-fixed-target-contract-infeasible`**. Candidate 1 remains frozen with STOP; no corrected candidate or native run exists.
 
 ## Reconcile before resuming
 
 Assigned worktree: `C:\Users\mrhz\.codex\worktrees\edit-surface-tubo-periodic\tmar-scan-desktop-zebra`.
 Branch: `codex/edit-surface-tubo-periodic`.
-Parent acquired by the coordinator for this increment: **`2849cc01855fef259553bf603eecf243554ec2e2`**. That checkpoint prepared the saved modified candidate. The saved-pair contracts at `1887859` and the preparation at `2849cc0` remain acquired and were not replayed. Obtain the exact new HEAD and remote ref from Git before continuing. The other `codex/edit-surface` worktree is outside scope.
+Acquired parent for this increment: **`acf8b75a1a0b79d19d2ce100dc8215ebc5e9fc11`**. Local HEAD and remote were reconciled before work. Obtain the exact new HEAD and remote ref from Git; do not infer them from this self-referential checkpoint file.
 
-The original `EditSurface.tsx` WIP and all **149 files inherited by this increment** remain unchanged. The current final preservation manifest protects **173 files**, including the new private preflights, driver, builds, logs, consumed marker and negative receipt:
+Ownership remains `plugins/tmar-edit-surface/**`. Coordination and host/kernel/MCP remain with “ScanRuler TMART APP Desktop 3”; Tube live CAD remains outside scope. No merge, installation or live-session action is authorized here.
 
-`evidence/candidate-qualification-2849cc0.local/preservation-final.local.json`
+Original `EditSurface.tsx` WIP SHA-256:
+`b0f36d211ed7dec985621b5836563b6a7205ad7cae793f4341fadf15c6f85024`.
 
-SHA-256: **`7952cee9ffba4d1d4fdb61f118ea3d9b8f6085ac5d5e4abbb7cf7897057b56a7`**. Include this manifest and the subsequent commit/push receipts in the next baseline. No consumed marker may be reset.
+The other worktree/branch `codex/edit-surface` remains at `0fb2565d38f84f0967fcf6019d5f6a7332b74ce9` and was not modified.
 
-The previous 146-file manifest remains preserved:
+Final preservation manifest: `evidence/candidate-diagnosis-acf8b75.local/preservation-final.local.json`.
+**191 protected files**, comprising 176 inherited files and 15 new private artifacts.
+SHA-256 **`5a2a86cec65f49dcdee5c9c381da3a084aa79f2f6d3c420996f6ba24196e21d6`**.
+Include this manifest and subsequent commit/push receipts in the next baseline. All old manifests, receipts, STOPs and consumed markers remain intact. Never overwrite a marker.
 
-`evidence/modified-candidate-1887859.local/preservation-final.local.json`
+Checkout/kernel remain the previously acquired `0.9.4 / occt-wasm 5.7.1`. The read-only comparison with `0.9.10 / 5.15.0` is already acquired; no repeated API audit or update is needed.
 
-SHA-256: `35168a99af24d3876f38d268a07d1f56f598ae563974b50a9dec519e3581aa44`.
+## DONE — targeted diagnosis after acf8b75
 
-The manifest itself and later commit/push receipts must enter the next baseline. The earlier 127-file manifest (SHA-256 `de9c4680960bb05a072317e733745cffd6ed387d599f7d9cf815a86f6a0020d6`) remains preserved. Never overwrite a manifest or consumed marker.
+See [the correction contract](EXPERIMENTAL-CANDIDATE-CORRECTION.md) and [new criterion-linked evidence](evidence/candidate-diagnosis-20261110/README.md).
 
-Checkout / installed kernel remain `0.9.4 / occt-wasm 5.7.1`. The earlier read-only API comparison with `0.9.10 / 5.15.0` remains acquired in `evidence/recovered-rim-adapter-20261109/API-COMPARISON.md`. Do not repeat it or install/update anything to reproduce this checkpoint.
+- Both saved angular witnesses are already outside the `1e-4` normal-chord criterion in the **T6b target field**. Target-to-stored point differences are at most `3.460539360856138e-13` / `6.14460121687973e-13 mm/V`.
+- A necessary-condition proof excludes **any** realization with coefficient D1 fidelity <=`1e-9 mm/V` to those same fixed targets, with boundary, support, U basis and maps fixed. Necessary pointwise D1 change lower bounds are **`0.00013870211014614664` / `0.00014455948739709146 mm/V`**. They are lower bounds, not sufficient corrections or a new solve.
+- A new finite binary64 storage search found an **unapplied** local patch: only Z of 323/U205/V10, flat index 2470, moves one ULP toward the source. Stored cap norm upper `4.999999999999921 mm/V`; separate D1 L1 upper `8.160670372482024e-13` and D2 L1 upper `2.2737367544323167e-10`, both under their `1e-9` limits. Patch SHA-256 `8e8017b33ffa243de2dac3b8aa042c160430205be425243cdb0a3d84bc5aaf0e`. No epsilon was added to 5.
+- The U205 patch **cannot change either saved angular witness**: joint 74 is on span U35, with cubic active indices <=108; joint 75 uses only 321/322. The patch does not repair the angular incompatibility.
+- New tangent-only exact rational evidence covers **330/330 cells** of joint 74, zero unresolved: chord upper **`3.991146044755004e-12`**, below `1e-10`. Boundary fingerprints and maps establish applicability to the preserved edges; inward-only changes do not alter this tangent.
+- New targeted historical-residual evidence covers **1661 points on 74 and 1654 on 75**, all within `1e-3 mm/V`; maximum uppers `0.0006702716323938` / `0.00016349952982484567`. Original parameter arrays, exact affine rounded maps and both seam limits were used. These are sampled results only; the angular witnesses have larger residuals and are not those historical samples.
+- Five new pure helpers and four test files were added; **32 unique new tests passed**, with final targeted TypeScript checks. Initial narrowing/optional-periodic typecheck failures are preserved. No acquired tests, complete qualification runner, preparation or solve were rerun.
+- All six diagnostic scopes completed in one new run, **2026-11-09T23:08:20Z–23:08:52Z**, with no technical errors. That is **10 November 00:08 Europe/Rome**. All 176 inherited protected files were verified.
+
+New preflight SHA-256: **`23e2747c766dc33f2e9f938e53c4fe93d88f228ca13d8b5210c941bef610d8f2`**.
+
+New receipt: `evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.receipt.json`, **954,048 bytes**, SHA-256 **`28d0e77e9b59ae00051eee6d349940e68a4d86fa49d7764fcd917e034659a870`**.
+
+New consumed marker: `evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.run-once`. Do not replay or reset.
+
+Candidate1 SHA-256 remains `4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a`. Its qualification receipt `4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d` retains STOP and its original inconclusive entries; the new evidence is separate.
+
+## NEXT
+
+The requested diagnosis and concrete correction contract are complete. Reuse their evidence without re-running these scopes.
+
+The proposed successor requires a **distinct applied target T2**, with immutable T6b retained as reference. This is a substantial change to the numerical target and is **proposed, not adopted or solved**. The explicit proposal minimizes the maximum coefficient deviation from T6b, then sum-squared deviation, while preserving all other criteria and protected freedoms. Freeze/hash T2 before binary64 pole realization; do not derive it after the fact from stored poles.
+
+Only after the target-revision decision may a new constrained correction be attempted under [correction-contract.json](evidence/candidate-diagnosis-20261110/correction-contract.json). No old solve is to be reopened. Keep the same editable 323 rows 9/10 and 321 rows 1/2; all other rows, 322/324, basis, frame and maps remain protected. Feasibility with these remaining conditions is **not established** and must be demonstrated by a new artifact and complete applicable evidence. The local U205 patch is not automatically applicable to T2.
+
+Future proofs must distinguish target change, exact stored derivative cap, D1 fidelity, D2 source-relative change, pole motion, surface displacement, seam displacement, joint chords, regularity/orientation, periodic seams and historical samples. Surface/seam 0.05 mm budgets remain measured from the original source, not merely from candidate1.
+
+Reuse only with verified identities or a quantitative applicability proof: fixed-support and boundary-tangent evidence may survive unchanged inputs; normal/chord/residual and modified-support evidence do not automatically survive new inward fields. The qualified rim 323/V0–324/V1 remains distinct from bundle joints 74/75.
+
+## WAIT / scope limits
+
+**Mathematical block:** fixed T6b + D1 fidelity 1e-9 + normal chord 1e-4 cannot hold together with the protected boundaries/support/maps. No missing whole-Tube dimensional band caused this block. Do not keep searching pole roundings under the excluded strict contract.
+
+The next construction depends on adopting the concrete T2 target revision described above. No representation change, protected-DOF release or threshold relaxation is proposed at this checkpoint. Their necessity has not been demonstrated.
+
+Native work remains gated by favorable evidence for **every required coefficient criterion on the same corrected candidate**. Its separate contract retains curve/surface gap 1e-7 mm, native/model direction chord 1e-8, coherent supports and U-seam 3D curves with both pcurves, orientations and chain rule. No native marker was consumed here.
+
+Candidate1, WIP, original bundle, all receipts and consumed markers remain preserved. Historical STOP **`reopened-own-support-mismatch`**, receipt `32f2b99c16c5f4ddf4177c5b8ec2431ebd9cc7c417dcf502595ed779b87fcc92`, remains separate and unchanged. No CAD live, host/kernel/MCP update or merge. No local result transfers automatically to the complete Tube. AIRBOX remains paused. No direct delivery to another chat/coordinator is inferred.
+
+## Acquired history through acf8b75 — retained, never replayed
+
+The following historical sections describe their original checkpoints and evidence. The current result and NEXT above take precedence.
 
 ## DONE — NEXT from 360d460 completed
 
@@ -142,17 +187,3 @@ New receipt:
 `evidence/candidate-qualification-2849cc0.local/continuous-qualification-1.local.receipt.json`
 
 SHA-256: **`4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d`**, 126,563 bytes. The marker must not be replayed or reset. The saved candidate and all earlier markers/STOPs remain unchanged. Zero preparation, solve, fit, kernel initialization, native construction, STEP import/export, live CAD operation, host/kernel/MCP update or merge occurred.
-
-## NEXT
-
-Use these evidence files directly. An eventual successor candidate needs a distinct correction contract addressing **both** the stored 5 mm/V coefficient cap and the continuous normal-chord violations on joints 74/75. The unresolved joint 74 tangent-chord and historical sampled-residual questions require their own targeted evidence; do not rerun the complete consumed qualification to recover them.
-
-Do not silently adjust candidate 1, loosen any criterion or repeat preparation/solve. The accepted scope here was qualification of the saved candidate. A new candidate must be identified with its own inputs, coefficient changes, hashes and evidence before a native gate can be reconsidered.
-
-The prospective native contract remains distinct: coherent modified supports, both U-seam 3D curves and their two pcurves, topology/provenance, parameters, orientations and consistency budgets 1e-7 mm / 1e-8 direction chord. **No native runner was consumed in this increment.** The old `reopened-own-support-mismatch` STOP remains a separate historical result.
-
-## WAIT / scope limits
-
-The native step is blocked by the three demonstrated local criterion violations on candidate 1, independently of the three inconclusive entries. No missing whole-Tube dimensional band caused this stop. The user explicitly allowed these isolated checks to proceed without those bands, and all requested independent analysis scopes were executed.
-
-Whole-Tube physical acceptance remains outside this local result. The qualified rim 323/V0–324/V1, edge #207767, is distinct from the two bundle joints and was not retested. No local PASS or STOP is automatically transferred to the complete Tube. AIRBOX stays paused; ownership of host/kernel/MCP and coordination remains with the coordinator. Original handoff/archive provenance remains in earlier reports; no full transcript access or direct cross-chat delivery is inferred.

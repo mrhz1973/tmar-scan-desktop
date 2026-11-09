@@ -1,0 +1,89 @@
+{
+  "schema": "TMAR_CANDIDATE_DIAGNOSIS_VERIFICATION_V1",
+  "baseCommit": "acf8b75a1a0b79d19d2ce100dc8215ebc5e9fc11",
+  "reportedDateEuropeRome": "2026-11-10",
+  "pureTests": {
+    "uniqueNewTests": 32,
+    "testFiles": 4,
+    "passed": 32,
+    "acquiredTestsReplayed": 0,
+    "failedInitialTypecheckPreserved": true,
+    "finalTypecheckPassed": true
+  },
+  "driver": {
+    "failedInitialOptionalPeriodicTypecheckPreserved": true,
+    "finalTypecheckPassed": true,
+    "staticPeerReviewCompleted": true,
+    "runtimeImportAllowlistVerified": true,
+    "oldRunnerImported": false
+  },
+  "execution": {
+    "startedAtUtc": "2026-11-09T23:08:20.861Z",
+    "finishedAtUtc": "2026-11-09T23:08:52.656Z",
+    "diagnosticRuns": 1,
+    "exitCode": 0,
+    "status": "diagnosis-complete-fixed-target-contract-infeasible",
+    "technicalScopeErrors": [],
+    "scopesCompleted": 6,
+    "preparations": 0,
+    "solves": 0,
+    "oldRunnersReplayed": 0,
+    "nativeRuns": 0,
+    "liveCadActions": 0,
+    "updates": 0,
+    "merges": 0
+  },
+  "records": [
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/driver-build-1.local.json",
+      "bytes": 762,
+      "sha256": "e63840df09c3799ca6a98acd88c1795696ceb89cd6dc8f5ce7993a777a49a961"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/driver-build-2.local.json",
+      "bytes": 2540,
+      "sha256": "073deb5fd4090e0dc22afbfae55c64f92af52a670468787bc6def58e499ad26c"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/new-code-verification-1.local.json",
+      "bytes": 3281,
+      "sha256": "d42f135929f5cfb1533a7116551a95544215e3a9e1b6067c05003d6983663bea"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/new-code-verification-2.local.json",
+      "bytes": 5015,
+      "sha256": "d62217a5bea631308a40b129f082af49da29abf9e726929d9abccbb11890371b"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.execution.json",
+      "bytes": 2760,
+      "sha256": "f1afcde121590a8055d45da52e9d17063aa4be6c48f1a0fca7cd3acc2dd2c052"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.preflight.json",
+      "bytes": 9465,
+      "sha256": "23e2747c766dc33f2e9f938e53c4fe93d88f228ca13d8b5210c941bef610d8f2"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.receipt.json",
+      "bytes": 954048,
+      "sha256": "28d0e77e9b59ae00051eee6d349940e68a4d86fa49d7764fcd917e034659a870"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.run-once",
+      "bytes": 395,
+      "sha256": "3f78629eb940d3a5b9cac3e56186143093aa34f2cf07b94e17d018d6bfd88f94"
+    }
+  ],
+  "inheritedProtectedFilesVerified": 176,
+  "nativeGateSatisfied": false,
+  "tubeAccepted": false,
+  "finalPreservation": {
+    "protectedCount": 191,
+    "inheritedCount": 176,
+    "newPrivateCount": 15,
+    "manifestPath": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/preservation-final.local.json",
+    "manifestSha256": "5a2a86cec65f49dcdee5c9c381da3a084aa79f2f6d3c420996f6ba24196e21d6",
+    "manifestAndLaterCommitPushReceiptsEnterNextBaseline": true
+  }
+}

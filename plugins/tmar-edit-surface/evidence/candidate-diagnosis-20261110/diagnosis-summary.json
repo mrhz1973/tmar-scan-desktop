@@ -1,0 +1,672 @@
+{
+  "schema": "TMAR_PUBLIC_CANDIDATE_CORRECTION_DIAGNOSIS_V1",
+  "reportedDateEuropeRome": "2026-11-10",
+  "startedAtUtc": "2026-11-09T23:08:20.861Z",
+  "finishedAtUtc": "2026-11-09T23:08:52.656Z",
+  "baseCommit": "acf8b75a1a0b79d19d2ce100dc8215ebc5e9fc11",
+  "status": "diagnosis-complete-fixed-target-contract-infeasible",
+  "candidateId": "tubo-6b-derivative-storage-candidate-1",
+  "candidateSha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+  "receipt": {
+    "bytes": 954048,
+    "sha256": "28d0e77e9b59ae00051eee6d349940e68a4d86fa49d7764fcd917e034659a870"
+  },
+  "preflightSha256": "23e2747c766dc33f2e9f938e53c4fe93d88f228ca13d8b5210c941bef610d8f2",
+  "priorQualificationReceiptSha256": "4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d",
+  "oldQualificationState": "STOP-preserved",
+  "fixedTargetContractInfeasible": true,
+  "infeasibleJointsWithFixedTargets": [
+    "74",
+    "75"
+  ],
+  "angularWitnesses": [
+    {
+      "joint": "74",
+      "classifications": {
+        "diagnostic": "fixed-target-D1-fidelity-incompatible-with-normal-chord",
+        "target": "outside-declared-criterion",
+        "stored": "outside-declared-criterion"
+      },
+      "suppliedWitnessCount": 2,
+      "distinctPointCount": 1,
+      "witnessAddress": {
+        "cell": 49,
+        "localDomain": [
+          0,
+          0.5
+        ],
+        "endpoint": 1
+      },
+      "normalizedParameter": {
+        "numerator": "50413044305871384029814682367603",
+        "denominator": "302591466858740851766255808303360"
+      },
+      "lateral": {
+        "uSpan": 35,
+        "nativeParameter": [
+          41.98584109392032,
+          41.98584109392033
+        ],
+        "edge": "V1",
+        "inwardSign": -1,
+        "seamSide": "interior"
+      },
+      "support": {
+        "uSpan": 14,
+        "nativeParameter": [
+          40.398636988511434,
+          40.39863698851144
+        ],
+        "edge": "V0",
+        "referenceSign": -1,
+        "seamSide": "interior"
+      },
+      "targetNormalChord": [
+        0.0001277575802380674,
+        0.00012775758024605638
+      ],
+      "storedNormalChord": [
+        0.0001277575802720825,
+        0.00012775758028028597
+      ],
+      "targetMinusStoredInwardNormMmPerV": [
+        3.45139230059325e-13,
+        3.460539360856138e-13
+      ],
+      "targetStoredNormalChordDifference": [
+        -4.221856154604243e-14,
+        -2.6026110520188658e-14
+      ],
+      "targetNormalResidualMmPerV": [
+        0.0012767860726457401,
+        0.0012767860726672386
+      ],
+      "storedNormalResidualMmPerV": [
+        0.0012767860729863975,
+        0.0012767860730089245
+      ],
+      "feasibility": {
+        "classification": "infeasible-with-fixed-target-and-D1-fidelity",
+        "maximumD1FidelityMmPerV": 1e-9,
+        "normalPerturbationUpper": 2.4305074479068196e-7,
+        "maximumUnitNormalChangeUpper": 2.0012370546360107e-10,
+        "anyAdmissibleNormalChordLower": 0.0001277573801143619,
+        "necessaryPointwiseD1ChangeLowerMmPerV": 0.00013870211014614664,
+        "allAllowedPointPerturbationsRemainRegular": true,
+        "projectedAbsoluteNormalResidualForD1Ball": [
+          0.00127678507264574,
+          0.0012767870726672387
+        ],
+        "supportAbsoluteNormalResidualForD1Ball": [
+          0.0012767850725105593,
+          0.0012767870725386903
+        ],
+        "fixedAssumptions": [
+          "target-inward-coefficient-field",
+          "lateral-boundary-tangent-and-U-basis",
+          "support-geometry",
+          "parameter-correspondence",
+          "inward-orientations"
+        ],
+        "coefficientToPointImplication": "nonnegative-periodic-U-basis-partition-of-unity",
+        "infeasibilityIsNecessaryConditionOnly": true,
+        "candidateConstructed": false
+      },
+      "normalizedPartitionSha256": "5d1abbc415955b600106addfa73435f61835027f6172595570dbbd4f80d1b6f3",
+      "oldPartitionIdentityVerified": true
+    },
+    {
+      "joint": "75",
+      "classifications": {
+        "diagnostic": "fixed-target-D1-fidelity-incompatible-with-normal-chord",
+        "target": "outside-declared-criterion",
+        "stored": "outside-declared-criterion"
+      },
+      "suppliedWitnessCount": 2,
+      "distinctPointCount": 1,
+      "witnessAddress": {
+        "cell": 105,
+        "localDomain": [
+          0,
+          0.5
+        ],
+        "endpoint": 1
+      },
+      "normalizedParameter": {
+        "numerator": "89932652107708333681605718590739",
+        "denominator": "284980496742898328833352176310584"
+      },
+      "lateral": {
+        "uSpan": 75,
+        "nativeParameter": [
+          74.89922682787277,
+          74.89922682787278
+        ],
+        "edge": "V0",
+        "inwardSign": 1,
+        "seamSide": "interior"
+      },
+      "support": {
+        "uSpan": 30,
+        "nativeParameter": [
+          76.52136827617765,
+          76.52136827617767
+        ],
+        "edge": "V1",
+        "referenceSign": 1,
+        "seamSide": "interior"
+      },
+      "targetNormalChord": [
+        0.00011927966344900997,
+        0.00011927966345271496
+      ],
+      "storedNormalChord": [
+        0.00011927966348945138,
+        0.00011927966349326281
+      ],
+      "targetMinusStoredInwardNormMmPerV": [
+        6.124018988297348e-13,
+        6.14460121687973e-13
+      ],
+      "targetStoredNormalChordDifference": [
+        -4.4252836529749823e-14,
+        -3.6736415233613866e-14
+      ],
+      "targetNormalResidualMmPerV": [
+        0.0017887248998463337,
+        0.001788724899863826
+      ],
+      "storedNormalResidualMmPerV": [
+        0.0017887249004531686,
+        0.0017887249004714203
+      ],
+      "feasibility": {
+        "classification": "infeasible-with-fixed-target-and-D1-fidelity",
+        "maximumD1FidelityMmPerV": 1e-9,
+        "normalPerturbationUpper": 2.3731405121892821e-7,
+        "maximumUnitNormalChangeUpper": 1.3336837170742396e-10,
+        "anyAdmissibleNormalChordLower": 0.00011927953008063825,
+        "necessaryPointwiseD1ChangeLowerMmPerV": 0.00014455948739709146,
+        "allAllowedPointPerturbationsRemainRegular": true,
+        "projectedAbsoluteNormalResidualForD1Ball": [
+          0.0017887238917549417,
+          0.001788725891770912
+        ],
+        "supportAbsoluteNormalResidualForD1Ball": [
+          0.0017887238998463336,
+          0.0017887258998638262
+        ],
+        "fixedAssumptions": [
+          "target-inward-coefficient-field",
+          "lateral-boundary-tangent-and-U-basis",
+          "support-geometry",
+          "parameter-correspondence",
+          "inward-orientations"
+        ],
+        "coefficientToPointImplication": "nonnegative-periodic-U-basis-partition-of-unity",
+        "infeasibilityIsNecessaryConditionOnly": true,
+        "candidateConstructed": false
+      },
+      "normalizedPartitionSha256": "517590caf1c5cb5cb07cec0fd7fe8d419b8dbc3c560560b18acf88606c553744",
+      "oldPartitionIdentityVerified": true
+    }
+  ],
+  "storageLocalProposal": {
+    "status": "local-storage-proposal",
+    "face": 323,
+    "uIndex": 205,
+    "flatPoleIndex": 2470,
+    "rowV": 10,
+    "onlyAxis": "Z",
+    "binary64StepsTowardSource": 1,
+    "deltaCoordinateMm": 1.4210854715202004e-14,
+    "applied": false,
+    "secondPoleUnchanged": true,
+    "boundaryPoleUnchanged": true,
+    "before": {
+      "localCriteriaSatisfied": false,
+      "targetChange": {
+        "status": "within-coefficient-cap",
+        "norm": "Euclidean",
+        "limit": 5,
+        "exactSquaredNorm": {
+          "numerator": "2028240960365157984317570516710241",
+          "denominator": "81129638414606681695789005144064"
+        },
+        "normInterval": {
+          "lower": 4.9999999999999885,
+          "upper": 4.999999999999989
+        },
+        "exactSquaredMarginToCap": {
+          "numerator": "9058077154611891359",
+          "denominator": "81129638414606681695789005144064"
+        },
+        "squaredMarginSign": "positive"
+      },
+      "storedChange": {
+        "status": "coefficient-cap-exceeded",
+        "norm": "Euclidean",
+        "limit": 5,
+        "exactSquaredNorm": {
+          "numerator": "50706024009130411147210519808",
+          "denominator": "2028240960365170645274427025"
+        },
+        "normInterval": {
+          "lower": 5.000000000000056,
+          "upper": 5.000000000000057
+        },
+        "exactSquaredMarginToCap": {
+          "numerator": "-1145015349844183",
+          "denominator": "2028240960365170645274427025"
+        },
+        "squaredMarginSign": "negative"
+      },
+      "targetFidelityD1": {
+        "status": "within-residual-bound",
+        "norm": "L1",
+        "limit": 1e-9,
+        "exactL1Norm": {
+          "numerator": "329941249917546167",
+          "denominator": "405648192073033768766915215360"
+        },
+        "normInterval": {
+          "lower": 8.133679783740853e-13,
+          "upper": 8.133679783740854e-13
+        },
+        "exactMarginToTolerance": {
+          "numerator": "217603578969651170672941001181",
+          "denominator": "217780714829400810044690887096999608320"
+        },
+        "marginSign": "positive"
+      },
+      "sourceChangeD2": {
+        "status": "within-residual-bound",
+        "norm": "L1",
+        "limit": 1e-9,
+        "exactL1Norm": {
+          "numerator": "0",
+          "denominator": "1"
+        },
+        "normInterval": {
+          "lower": 0,
+          "upper": 0
+        },
+        "exactMarginToTolerance": {
+          "numerator": "4835703278458517",
+          "denominator": "4835703278458516698824704"
+        },
+        "marginSign": "positive"
+      }
+    },
+    "after": {
+      "localCriteriaSatisfied": true,
+      "targetChange": {
+        "status": "within-coefficient-cap",
+        "norm": "Euclidean",
+        "limit": 5,
+        "exactSquaredNorm": {
+          "numerator": "2028240960365157984317570516710241",
+          "denominator": "81129638414606681695789005144064"
+        },
+        "normInterval": {
+          "lower": 4.9999999999999885,
+          "upper": 4.999999999999989
+        },
+        "exactSquaredMarginToCap": {
+          "numerator": "9058077154611891359",
+          "denominator": "81129638414606681695789005144064"
+        },
+        "squaredMarginSign": "positive"
+      },
+      "storedChange": {
+        "status": "within-coefficient-cap",
+        "norm": "Euclidean",
+        "limit": 5,
+        "exactSquaredNorm": {
+          "numerator": "50706024009127650215272195328",
+          "denominator": "2028240960365170645274427025"
+        },
+        "normInterval": {
+          "lower": 4.99999999999992,
+          "upper": 4.999999999999921
+        },
+        "exactSquaredMarginToCap": {
+          "numerator": "1615916588480297",
+          "denominator": "2028240960365170645274427025"
+        },
+        "squaredMarginSign": "positive"
+      },
+      "targetFidelityD1": {
+        "status": "within-residual-bound",
+        "norm": "L1",
+        "limit": 1e-9,
+        "exactL1Norm": {
+          "numerator": "331036118270130401",
+          "denominator": "405648192073033768766915215360"
+        },
+        "normInterval": {
+          "lower": 8.160670372482023e-13,
+          "upper": 8.160670372482024e-13
+        },
+        "exactMarginToTolerance": {
+          "numerator": "217602991166680198837676599773",
+          "denominator": "217780714829400810044690887096999608320"
+        },
+        "marginSign": "positive"
+      },
+      "sourceChangeD2": {
+        "status": "within-residual-bound",
+        "norm": "L1",
+        "limit": 1e-9,
+        "exactL1Norm": {
+          "numerator": "2305843009213693952",
+          "denominator": "10141204801825853226372135125"
+        },
+        "normInterval": {
+          "lower": 2.2737367544323165e-10,
+          "upper": 2.2737367544323167e-10
+        },
+        "exactMarginToTolerance": {
+          "numerator": "37889484708443222063265535479293731278119417",
+          "denominator": "49039857307708530579753036629095226125926822576128000"
+        },
+        "marginSign": "positive"
+      }
+    },
+    "search": {
+      "maxFirstStepsPerAxis": 4,
+      "maxSecondStepsPerAxis": 1,
+      "maxTrials": 4096,
+      "counts": {
+        "evaluatedPairs": 2,
+        "firstVectorsVisited": 2,
+        "rejectedTargetCap": 0,
+        "rejectedStoredCap": 1,
+        "rejectedD1Fidelity": 0,
+        "rejectedD2Change": 0,
+        "secondNeighborhoodsPrunedByFirstCriteria": 1
+      },
+      "order": "B-total-steps-then-lexicographic;C-saved-then-neighbors-toward-exact-D2-ideal",
+      "declaredNeighborhoodExhausted": false,
+      "budgetExhausted": false,
+      "searchExhaustionDoesNotProveImpossibility": true
+    },
+    "patchArtifact": {
+      "bytes": 3607,
+      "sha256": "8e8017b33ffa243de2dac3b8aa042c160430205be425243cdb0a3d84bc5aaf0e"
+    },
+    "conditionalOther237Reuse": true,
+    "wholeCandidateQualified": false,
+    "doesNotAffectSavedWitnesses": {
+      "joint74": "U span 35; cubic active indices k..k+3 with 35<=k<=105 and k+3<=108; U205 absent",
+      "joint75": "candidate face323 absent from joint321/322"
+    },
+    "sourceOfStructuralApplicability": "saved span35, nu238, mu0=3, cubic validator 1<=mu_i<=3; no new geometry evaluation"
+  },
+  "tangent74": {
+    "status": "exact-periodic-boundary-tangent-chord-analysis",
+    "classification": "within-declared-tangent-chord",
+    "criterion": 1e-10,
+    "maximumTangentChordUpper": 3.991146044755004e-12,
+    "totalCommonCells": 330,
+    "checkedCells": 330,
+    "coverageComplete": true,
+    "certifiedLeaves": 330,
+    "unresolvedLeaves": 0,
+    "subdivisions": 0,
+    "orientationPrerequisiteEstablished": true,
+    "nativeFloorPrerequisiteEstablished": [
+      true,
+      true
+    ],
+    "minimumNativeTangentNormLower": [
+      0.9607269686842241,
+      0.9984725438449279
+    ],
+    "normalizedPartitionSha256": "5d1abbc415955b600106addfa73435f61835027f6172595570dbbd4f80d1b6f3",
+    "exactArithmetic": {
+      "operations": 345627,
+      "maximumObservedBits": 5311
+    },
+    "applicability": {
+      "joint": "74",
+      "lateralFace": "323",
+      "sourceBoundaryFingerprint": "4f8ae7f8f202648e8a2cf88498e84f80f57ff15b0f20603fe3c6029df968567b",
+      "candidateBoundaryFingerprint": "4f8ae7f8f202648e8a2cf88498e84f80f57ff15b0f20603fe3c6029df968567b",
+      "fixedSupportBoundaryFingerprint": "1cd957947393d959e2d69e1c7bdd9f1897bbd62633ab7091bc3bffbb7ca33ed7",
+      "targetFloat64LE": "c78521dd5ac876bab43ea589003d488d552c8de0aafbc351da150d874921cce7",
+      "targetWitnessesApplyToExactSavedParameters": true,
+      "tangentIndependentOfEditableInwardRows": true,
+      "futureTangentReuseRequiresIdenticalBoundariesBasesAndMaps": true,
+      "historicalResidualReuseForChangedInwardForbiddenWithoutNewEvidence": true
+    },
+    "previousInconclusiveReceiptUnchanged": true
+  },
+  "historicalResiduals": [
+    {
+      "joint": "74",
+      "status": "within-historical-sampled-residual-criterion",
+      "maximumResidualMmPerV": 0.001,
+      "expectedPoints": 1661,
+      "checkedPoints": 1661,
+      "outsidePoints": 0,
+      "inconclusivePoints": 0,
+      "groups": {
+        "training": {
+          "checkedPoints": 950,
+          "boundedPoints": 950,
+          "certifiedPoints": 950,
+          "outsidePoints": 0,
+          "inconclusivePoints": 0,
+          "maximumProjectedResidual": [
+            0.00014642442067041138,
+            0.0001464244208069264
+          ],
+          "maximumSupportResidual": [
+            0.0001464244152291315,
+            0.00014642441532696488
+          ],
+          "maximumCombinedResidual": [
+            0.00014642442067041138,
+            0.0001464244208069264
+          ],
+          "largestUpperAt": {
+            "group": "training",
+            "ordinal": 835,
+            "sourceIndex": 833,
+            "edgeParameter": 207.38114800821182,
+            "lateralU": 215.52885382305521,
+            "supportU": 207.38114800821182,
+            "seamSide": null
+          },
+          "boundsComplete": true,
+          "diagnosticOnlyPartialMaxima": null
+        },
+        "holdout": {
+          "checkedPoints": 711,
+          "boundedPoints": 711,
+          "certifiedPoints": 711,
+          "outsidePoints": 0,
+          "inconclusivePoints": 0,
+          "maximumProjectedResidual": [
+            0.0006702716322742201,
+            0.0006702716323938
+          ],
+          "maximumSupportResidual": [
+            0.000670271625203765,
+            0.0006702716253495347
+          ],
+          "maximumCombinedResidual": [
+            0.0006702716322742201,
+            0.0006702716323938
+          ],
+          "largestUpperAt": {
+            "group": "holdout",
+            "ordinal": 634,
+            "sourceIndex": 634,
+            "edgeParameter": 210.2364059214332,
+            "lateralU": 218.49629069625377,
+            "supportU": 210.2364059214332,
+            "seamSide": null
+          },
+          "boundsComplete": true,
+          "diagnosticOnlyPartialMaxima": null
+        }
+      },
+      "witnesses": [],
+      "unresolved": [],
+      "coverage": "supplied-historical-training-and-holdout-points-only",
+      "parameterRounding": "existing-exact-positive-affine-nearest-ties-to-even-binary64-mapper",
+      "seamConvention": "training-first-point-left-at-Uend-and-right-at-Ustart",
+      "residualDefinitions": [
+        "abs(M-dot-unit(T-lateral-cross-R))",
+        "abs(M-dot-unit(T-support-cross-R))"
+      ],
+      "mappingIsIncreasing": true,
+      "oldPassTransferred": false,
+      "oldRunnerReplayed": false,
+      "continuousResidualCertified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "snapshotSha256": "b1833ae29625324c7db9d2a419937135f6944c09a1525a7f0ab3f3e243dce54c",
+      "parameterMappingsSha256": "2d5d10111b9eed5baeb7353301527e251c39d271fb6ff69fcb4151043deb71b8",
+      "sourceCandidateSha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+      "oldHistoricalReceiptUsedOnlyForContractDefinition": true
+    },
+    {
+      "joint": "75",
+      "status": "within-historical-sampled-residual-criterion",
+      "maximumResidualMmPerV": 0.001,
+      "expectedPoints": 1654,
+      "checkedPoints": 1654,
+      "outsidePoints": 0,
+      "inconclusivePoints": 0,
+      "groups": {
+        "training": {
+          "checkedPoints": 946,
+          "boundedPoints": 946,
+          "certifiedPoints": 946,
+          "outsidePoints": 0,
+          "inconclusivePoints": 0,
+          "maximumProjectedResidual": [
+            0.00005493803216163322,
+            0.00005493803218216299
+          ],
+          "maximumSupportResidual": [
+            0.000054938028237058574,
+            0.000054938028256864366
+          ],
+          "maximumCombinedResidual": [
+            0.00005493803216163322,
+            0.00005493803218216299
+          ],
+          "largestUpperAt": {
+            "group": "training",
+            "ordinal": 813,
+            "sourceIndex": 811,
+            "edgeParameter": 200.387840561105,
+            "lateralU": 200.387840561105,
+            "supportU": 204.72777083378324,
+            "seamSide": null
+          },
+          "boundsComplete": true,
+          "diagnosticOnlyPartialMaxima": null
+        },
+        "holdout": {
+          "checkedPoints": 708,
+          "boundedPoints": 708,
+          "certifiedPoints": 708,
+          "outsidePoints": 0,
+          "inconclusivePoints": 0,
+          "maximumProjectedResidual": [
+            0.00016349952778633387,
+            0.000163499527878568
+          ],
+          "maximumSupportResidual": [
+            0.00016349952974325396,
+            0.00016349952982484567
+          ],
+          "maximumCombinedResidual": [
+            0.00016349952974325396,
+            0.00016349952982484567
+          ],
+          "largestUpperAt": {
+            "group": "holdout",
+            "ordinal": 624,
+            "sourceIndex": 624,
+            "edgeParameter": 206.32228923607457,
+            "lateralU": 206.32228923607457,
+            "supportU": 210.79074573761,
+            "seamSide": null
+          },
+          "boundsComplete": true,
+          "diagnosticOnlyPartialMaxima": null
+        }
+      },
+      "witnesses": [],
+      "unresolved": [],
+      "coverage": "supplied-historical-training-and-holdout-points-only",
+      "parameterRounding": "existing-exact-positive-affine-nearest-ties-to-even-binary64-mapper",
+      "seamConvention": "training-first-point-left-at-Uend-and-right-at-Ustart",
+      "residualDefinitions": [
+        "abs(M-dot-unit(T-lateral-cross-R))",
+        "abs(M-dot-unit(T-support-cross-R))"
+      ],
+      "mappingIsIncreasing": true,
+      "oldPassTransferred": false,
+      "oldRunnerReplayed": false,
+      "continuousResidualCertified": false,
+      "nativeCadCertified": false,
+      "tubeAccepted": false,
+      "snapshotSha256": "b1833ae29625324c7db9d2a419937135f6944c09a1525a7f0ab3f3e243dce54c",
+      "parameterMappingsSha256": "f86afd4e98555232180f03162902fd30c4a9dc40f95d7925dd0841f9381aaffd",
+      "sourceCandidateSha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+      "oldHistoricalReceiptUsedOnlyForContractDefinition": true
+    }
+  ],
+  "applicability": [
+    {
+      "joint": "74",
+      "lateralFace": "323",
+      "sourceBoundaryFingerprint": "4f8ae7f8f202648e8a2cf88498e84f80f57ff15b0f20603fe3c6029df968567b",
+      "candidateBoundaryFingerprint": "4f8ae7f8f202648e8a2cf88498e84f80f57ff15b0f20603fe3c6029df968567b",
+      "fixedSupportBoundaryFingerprint": "1cd957947393d959e2d69e1c7bdd9f1897bbd62633ab7091bc3bffbb7ca33ed7",
+      "targetFloat64LE": "c78521dd5ac876bab43ea589003d488d552c8de0aafbc351da150d874921cce7",
+      "targetWitnessesApplyToExactSavedParameters": true,
+      "tangentIndependentOfEditableInwardRows": true,
+      "futureTangentReuseRequiresIdenticalBoundariesBasesAndMaps": true,
+      "historicalResidualReuseForChangedInwardForbiddenWithoutNewEvidence": true
+    },
+    {
+      "joint": "75",
+      "lateralFace": "321",
+      "sourceBoundaryFingerprint": "484173c24c5d9abccfda863624931a4345accf70ec86888075efb81d24ef1bf1",
+      "candidateBoundaryFingerprint": "484173c24c5d9abccfda863624931a4345accf70ec86888075efb81d24ef1bf1",
+      "fixedSupportBoundaryFingerprint": "fc5d8c02368503db3a0963438e3ac3b9bd67f2929a483bfb207ae9824d7f8869",
+      "targetFloat64LE": "522b667ae6cbe5bed96c16c3bff0d15ed8016fe8ddd125db6fa2aae068eb0730",
+      "targetWitnessesApplyToExactSavedParameters": true,
+      "tangentIndependentOfEditableInwardRows": true,
+      "futureTangentReuseRequiresIdenticalBoundariesBasesAndMaps": true,
+      "historicalResidualReuseForChangedInwardForbiddenWithoutNewEvidence": true
+    }
+  ],
+  "preservation": {
+    "inheritedProtectedFilesVerified": 176,
+    "preservationVerified": true
+  },
+  "verification": {
+    "newPureTests": 32,
+    "newTestFiles": 4,
+    "oldRunnersReplayed": 0,
+    "preparations": 0,
+    "solves": 0,
+    "nativeRuns": 0,
+    "liveCadActions": 0,
+    "updates": 0,
+    "merges": 0,
+    "technicalScopeErrors": []
+  },
+  "correctedCandidateMaterialized": false,
+  "nativeGateSatisfied": false,
+  "tubeAccepted": false
+}

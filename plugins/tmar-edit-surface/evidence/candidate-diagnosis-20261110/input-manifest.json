@@ -1,0 +1,258 @@
+{
+  "schema": "TMAR_PUBLIC_CANDIDATE_DIAGNOSIS_INPUT_MANIFEST_V1",
+  "baseCommit": "acf8b75a1a0b79d19d2ce100dc8215ebc5e9fc11",
+  "candidateId": "tubo-6b-derivative-storage-candidate-1",
+  "preflightSha256": "23e2747c766dc33f2e9f938e53c4fe93d88f228ca13d8b5210c941bef610d8f2",
+  "inputs": [
+    {
+      "path": "plugins/tmar-edit-surface/evidence/modified-candidate-1887859.local/candidate-1.coefficients.local.json",
+      "bytes": 1112885,
+      "sha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-qualification-2849cc0.local/continuous-qualification-1.local.receipt.json",
+      "bytes": 126563,
+      "sha256": "4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/modified-candidate-1887859.local/candidate-preparation-1.local.receipt.json",
+      "bytes": 11842,
+      "sha256": "9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777"
+    },
+    {
+      "path": "C:\\Users\\mrhz\\Documents\\ChatGPT\\TMART Fusion MCP\\outputs\\tubo-finale-RE_20261101T011008252Z\\PROVA_EDIT_SURFACE_20261107_TUBO\\QA_GUARDIE\\ORACOLO_SVD\\bundle_storage_6b.json",
+      "bytes": 61764,
+      "sha256": "4e6bcf262c2897d45e1689ab0e72c19fd0f2aeb67ec76dcd2aa5a53a1cc75b37"
+    },
+    {
+      "path": "C:\\Users\\mrhz\\Documents\\ChatGPT\\TMART Fusion MCP\\outputs\\tubo-finale-RE_20261101T011008252Z\\PROVA_EDIT_SURFACE_20261107_TUBO\\QA_GUARDIE\\ORACOLO_SVD\\snapshot_sistemi_sparsi.json",
+      "bytes": 4157782,
+      "sha256": "b1833ae29625324c7db9d2a419937135f6944c09a1525a7f0ab3f3e243dce54c"
+    },
+    {
+      "path": "C:\\Users\\mrhz\\Documents\\ChatGPT\\TMART Fusion MCP\\outputs\\tubo-finale-RE_20261101T011008252Z\\PROVA_EDIT_SURFACE_20261107_TUBO\\Tubo_BASE_COPIA.step",
+      "bytes": 27555617,
+      "sha256": "6b711960fcded7972ded41ed1ceaa2f09e2dd8332fc7ee980b76d2514c94e8ae"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/baseline.local.json",
+      "bytes": 41830,
+      "sha256": "e08636521d43f5e43a2c2513f441917017b61a2ff3ca1b015fb4f63d76711baf"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/diagnostic-request.local.json",
+      "bytes": 2956,
+      "sha256": "4a6e4384dd3aef9be381deaeca11957a1a6ffc37e2cc220eb5bc7154f30ab3ae"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tests/tube-storage-oracle-6b-exact-chord-private.local.receipt.json",
+      "bytes": 6714,
+      "sha256": "55b97acc4c4f5d2c09c477c8b49c8526352d3c3daf1aba27ff7ce9575682076a"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/new-code-verification-1.local.json",
+      "bytes": 3281,
+      "sha256": "d42f135929f5cfb1533a7116551a95544215e3a9e1b6067c05003d6983663bea"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/new-code-verification-2.local.json",
+      "bytes": 5015,
+      "sha256": "d62217a5bea631308a40b129f082af49da29abf9e726929d9abccbb11890371b"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/driver-build-1.local.json",
+      "bytes": 762,
+      "sha256": "e63840df09c3799ca6a98acd88c1795696ceb89cd6dc8f5ce7993a777a49a961"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/driver-build-2.local.json",
+      "bytes": 2540,
+      "sha256": "073deb5fd4090e0dc22afbfae55c64f92af52a670468787bc6def58e499ad26c"
+    }
+  ],
+  "codeFiles": [
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicCurveWitness.ts",
+      "bytes": 5632,
+      "sha256": "1bf66dfd5fe408ac586878b88914032164d9f8329792764bfc82d3e1ffc2a784"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicSurfaceRefinement.ts",
+      "bytes": 6427,
+      "sha256": "30c620732b207f497e76e9519e9356dce2beff3e5f758b12e51aff1fbaa28cde"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicSeamDerivativeGap.ts",
+      "bytes": 4927,
+      "sha256": "ae7fcabe39f28be6241b66bd798e9a8dfa9ff04f3115448439882b0251d9b26b"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tangencyCoefficientIntervals.ts",
+      "bytes": 2144,
+      "sha256": "8e503dbebc0252a0047608314e986d3fafaacef4bfbe7d98b1fafb8f17661be5"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalCandidateJointPoint.ts",
+      "bytes": 19452,
+      "sha256": "48628266c5ae7882e83da26e88031fe0b63659b8e1cf5ef6867422b46d10ec63"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalCandidateTargetWitness.ts",
+      "bytes": 9721,
+      "sha256": "b39316a2c872cc5768c034e3df1a033cdd0fcae4c347f870e616fc4f6e8b5912"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalQuinticStorageQuantization.ts",
+      "bytes": 17226,
+      "sha256": "d65dc375c7f94a3d1d52b4d716cf1a46721abb08776278382995191372891d39"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalJointTangentExact.ts",
+      "bytes": 23448,
+      "sha256": "fbb50c557024289ec29c759efec9b3f9a4df034794354b2f898c0c5d7cd87f42"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalPeriodicAffineKnotMap.ts",
+      "bytes": 3569,
+      "sha256": "b7782f73f6eb42f4113c436310d2009dc5250efc76fd0f587498af2d82f7fed3"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalCandidateHistoricalResidual.ts",
+      "bytes": 8225,
+      "sha256": "f52c28105a7e5a353eb36fe75dc417b70371e30187e11e81622400268261b8a3"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tests/experimentalCandidateCorrectionDiagnosisOnce.local.ts",
+      "bytes": 15844,
+      "sha256": "70a0a89a9d8fddf1b10463067058e1a7c2f83ac72844a716442febdab8e72294"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tests/experimentalCandidateTargetWitness.test.ts",
+      "bytes": 9009,
+      "sha256": "891b4eed5ef67471b988851081e8a5e717c4a53ea8f8dd80faac7bebb4d6dcd4"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tests/experimentalQuinticStorageQuantization.test.ts",
+      "bytes": 10804,
+      "sha256": "0d90600617f9bc8b61162063b7f5b104bac1c4007bdc33fe11acaabb46c8c35c"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tests/experimentalJointTangentExact.test.ts",
+      "bytes": 6633,
+      "sha256": "09626a833091e7bc698b3d4371a4edc11aad5bb56087ad20e51d986ed8d8f28c"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/tests/experimentalCandidateHistoricalResidual.test.ts",
+      "bytes": 3589,
+      "sha256": "24a69c9a87292d29520b41172be9b9611c5de17544136d6262764f8e5b6a6701"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/brep.ts",
+      "bytes": 9975,
+      "sha256": "c71d266391f12ac1b8b5d02d3a104584a8f0bb5d03bf45a7848bd90bdcbf8cdc"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/experimentalCandidateJointDifferential.ts",
+      "bytes": 22054,
+      "sha256": "cf408d028601b55404234d1aa18643ab5873c225549d30b85b3215f44cad6a27"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.cjs",
+      "bytes": 86778,
+      "sha256": "a2915b93197db9d480be047c0648f0a1db0b05dfbc67d4b78118097002789506"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.meta.json",
+      "bytes": 7676,
+      "sha256": "a33d5c3b9513d78a6b4e9a8c75b2fc70bb28dc4ef4ade3df6b030c3351c766ab"
+    }
+  ],
+  "newPrivateFiles": [
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/baseline.local.json",
+      "bytes": 41830,
+      "sha256": "e08636521d43f5e43a2c2513f441917017b61a2ff3ca1b015fb4f63d76711baf"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/diagnostic-request.local.json",
+      "bytes": 2956,
+      "sha256": "4a6e4384dd3aef9be381deaeca11957a1a6ffc37e2cc220eb5bc7154f30ab3ae"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/driver-build-1.local.json",
+      "bytes": 762,
+      "sha256": "e63840df09c3799ca6a98acd88c1795696ceb89cd6dc8f5ce7993a777a49a961"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/driver-build-2.local.json",
+      "bytes": 2540,
+      "sha256": "073deb5fd4090e0dc22afbfae55c64f92af52a670468787bc6def58e499ad26c"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/local-storage-proposal-205.local.json",
+      "bytes": 3607,
+      "sha256": "8e8017b33ffa243de2dac3b8aa042c160430205be425243cdb0a3d84bc5aaf0e"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/new-code-verification-1.local.json",
+      "bytes": 3281,
+      "sha256": "d42f135929f5cfb1533a7116551a95544215e3a9e1b6067c05003d6983663bea"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/new-code-verification-2.local.json",
+      "bytes": 5015,
+      "sha256": "d62217a5bea631308a40b129f082af49da29abf9e726929d9abccbb11890371b"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.cjs",
+      "bytes": 86778,
+      "sha256": "a2915b93197db9d480be047c0648f0a1db0b05dfbc67d4b78118097002789506"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.execution.json",
+      "bytes": 2760,
+      "sha256": "f1afcde121590a8055d45da52e9d17063aa4be6c48f1a0fca7cd3acc2dd2c052"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.meta.json",
+      "bytes": 7676,
+      "sha256": "a33d5c3b9513d78a6b4e9a8c75b2fc70bb28dc4ef4ade3df6b030c3351c766ab"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.preflight.json",
+      "bytes": 9465,
+      "sha256": "23e2747c766dc33f2e9f938e53c4fe93d88f228ca13d8b5210c941bef610d8f2"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.progress.jsonl",
+      "bytes": 1883,
+      "sha256": "d5544ee260d6d17ee1f6a286ebefd0fe51fa86fc1f540ba79d7a7f480a806a68"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.receipt.json",
+      "bytes": 954048,
+      "sha256": "28d0e77e9b59ae00051eee6d349940e68a4d86fa49d7764fcd917e034659a870"
+    },
+    {
+      "path": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/targeted-diagnosis-1.local.run-once",
+      "bytes": 395,
+      "sha256": "3f78629eb940d3a5b9cac3e56186143093aa34f2cf07b94e17d018d6bfd88f94"
+    }
+  ],
+  "scopeRestrictions": {
+    "oldMarkersImmutable": true,
+    "candidate1Immutable": true,
+    "newCandidateMaterialized": false,
+    "liveCad": false,
+    "updates": false,
+    "merge": false
+  },
+  "finalPreservation": {
+    "protectedCount": 191,
+    "inheritedCount": 176,
+    "newPrivateCount": 15,
+    "manifestPath": "plugins/tmar-edit-surface/evidence/candidate-diagnosis-acf8b75.local/preservation-final.local.json",
+    "manifestSha256": "5a2a86cec65f49dcdee5c9c381da3a084aa79f2f6d3c420996f6ba24196e21d6",
+    "manifestAndLaterCommitPushReceiptsEnterNextBaseline": true
+  }
+}

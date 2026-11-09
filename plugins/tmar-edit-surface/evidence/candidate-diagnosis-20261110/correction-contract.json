@@ -1,0 +1,279 @@
+{
+  "schema": "TMAR_CANDIDATE_CORRECTION_CONTRACT_V1",
+  "contractId": "tubo-6b-correction-contract-acf8b75-1",
+  "dateEuropeRome": "2026-11-10",
+  "baseCommit": "acf8b75a1a0b79d19d2ce100dc8215ebc5e9fc11",
+  "status": "strict-target-contract-infeasible-target-revision-proposed-not-applied",
+  "candidate1": {
+    "id": "tubo-6b-derivative-storage-candidate-1",
+    "sha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+    "qualification": "STOP-frozen",
+    "receiptSha256": "4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d"
+  },
+  "inputs": {
+    "bundleSha256": "4e6bcf262c2897d45e1689ab0e72c19fd0f2aeb67ec76dcd2aa5a53a1cc75b37",
+    "sourceStepSha256": "6b711960fcded7972ded41ed1ceaa2f09e2dd8332fc7ee980b76d2514c94e8ae",
+    "snapshotSha256": "b1833ae29625324c7db9d2a419937135f6944c09a1525a7f0ab3f3e243dce54c",
+    "preparationReceiptSha256": "9859fb45965821441fc8cd6a6e439ca21bad0c88843c9a672c008a04bcbf5777",
+    "diagnosticReceiptSha256": "28d0e77e9b59ae00051eee6d349940e68a4d86fa49d7764fcd917e034659a870",
+    "diagnosticPreflightSha256": "23e2747c766dc33f2e9f938e53c4fe93d88f228ca13d8b5210c941bef610d8f2",
+    "targetT6bFloat64LE": {
+      "321": "522b667ae6cbe5bed96c16c3bff0d15ed8016fe8ddd125db6fa2aae068eb0730",
+      "323": "c78521dd5ac876bab43ea589003d488d552c8de0aafbc351da150d874921cce7"
+    }
+  },
+  "relations": [
+    {
+      "joint": 74,
+      "lateral": 323,
+      "lateralV": 1,
+      "support": 322,
+      "supportV": 0,
+      "lateralUPeriod": 252.00932454753,
+      "supportUPeriod": 242.48253589446,
+      "lateralInwardSign": -1,
+      "supportReferenceSign": -1
+    },
+    {
+      "joint": 75,
+      "lateral": 321,
+      "lateralV": 0,
+      "support": 322,
+      "supportV": 1,
+      "lateralUPeriod": 237.3422596445,
+      "supportUPeriod": 242.48253589446,
+      "lateralInwardSign": 1,
+      "supportReferenceSign": 1
+    }
+  ],
+  "qualifiedRimDistinct": {
+    "lateral": 323,
+    "lateralV": 0,
+    "support": 324,
+    "supportV": 1,
+    "edgeStepId": 207767,
+    "status": "acquired-distinct-contract-no-replay"
+  },
+  "editable": {
+    "zeroBased": true,
+    "UColumns": 238,
+    "faces": {
+      "321": {
+        "rowsV": [
+          1,
+          2
+        ],
+        "bandV": [
+          0,
+          0.05
+        ]
+      },
+      "323": {
+        "rowsV": [
+          9,
+          10
+        ],
+        "bandV": [
+          0.95,
+          1
+        ]
+      }
+    }
+  },
+  "protected": {
+    "faces": [
+      322,
+      324
+    ],
+    "allOtherLateralPoleRows": true,
+    "naturalVBoundaryPoles": true,
+    "farEdgeJets": true,
+    "degrees": true,
+    "knots": true,
+    "multiplicities": true,
+    "weights": true,
+    "periodicity": true,
+    "sourceFrame": true,
+    "parameterMaps": true,
+    "originalBundle": true,
+    "candidate1": true,
+    "originalWip": true,
+    "allReceiptsAndSTOPsAndConsumedMarkers": true
+  },
+  "criteria": {
+    "targetChange": {
+      "maximum": 5,
+      "units": "mm/native-V",
+      "norm": "Euclidean",
+      "reference": "rounded original bundle base",
+      "coverage": "each238 coefficient per lateral"
+    },
+    "storedChange": {
+      "maximum": 5,
+      "units": "mm/native-V",
+      "norm": "Euclidean-exact-binary64-rational",
+      "reference": "exact derivative of original source poles",
+      "epsilonSlack": 0,
+      "coverage": "each238 coefficient per lateral"
+    },
+    "D1Fidelity": {
+      "maximum": 1e-9,
+      "units": "mm/native-V",
+      "reference": "applied target frozen before pole quantization",
+      "conservativeNormAllowed": "L1",
+      "strictAppliedTarget": "T6b",
+      "proposedAppliedTarget": "T2"
+    },
+    "D2Change": {
+      "maximum": 1e-9,
+      "units": "mm/native-V-squared",
+      "reference": "original source",
+      "conservativeNormAllowed": "L1"
+    },
+    "jointPosition": {
+      "maximum": 0.000001,
+      "units": "mm",
+      "continuous": true
+    },
+    "jointTangentChord": {
+      "maximum": 1e-10,
+      "positiveDot": true,
+      "regularVectors": true,
+      "continuous": true
+    },
+    "jointNormalChord": {
+      "maximum": 0.0001,
+      "positiveDot": true,
+      "regularVectors": true,
+      "continuous": true
+    },
+    "positiveScale": {
+      "minimum": 0.0625,
+      "positiveDenominator": true,
+      "continuous": true
+    },
+    "nativeTangentNorm": {
+      "minimum": 1e-8,
+      "units": "mm/native-U"
+    },
+    "nativeTransverseNorm": {
+      "minimum": 1e-8,
+      "units": "mm/native-V"
+    },
+    "supportRegularity": {
+      "faces": [
+        321,
+        322,
+        323
+      ],
+      "strictlyPositiveNativeNormalNorm": true,
+      "allClosedNativeCells": true
+    },
+    "supportRelativeOrientation": {
+      "positiveSourceCandidateNormalDot": true,
+      "allClosedNativeCells": true
+    },
+    "USeams": {
+      "faces": [
+        321,
+        322,
+        323
+      ],
+      "positionClosed": true,
+      "absoluteDerivativeJumpMaximum": 1e-9,
+      "sourceRelativeSignedJumpChangeMaximum": 1e-9,
+      "derivativeUnits": "mm/native-U",
+      "normalChordMaximum": 0.0001,
+      "allVAndBothOneSidedLimits": true
+    },
+    "surfaceDisplacement": {
+      "maximum": 0.05,
+      "units": "mm",
+      "reference": "original source at corresponding parameters",
+      "continuous": true
+    },
+    "seamCurveDisplacement": {
+      "maximum": 0.05,
+      "units": "mm",
+      "reference": "original source seam curve",
+      "continuous": true
+    },
+    "poleMovement": {
+      "descriptiveOnly": true,
+      "noImplicitSurfaceTolerance": true
+    },
+    "historicalNormalResidual": {
+      "maximum": 0.001,
+      "units": "mm/native-V",
+      "coverage": "original mapped sample contract only",
+      "bothResidualDefinitions": true,
+      "newEvidenceRequiredWhenInwardChanges": true
+    }
+  },
+  "strictFeasibility": {
+    "status": "infeasible",
+    "evidenceJoints": [
+      74,
+      75
+    ],
+    "necessaryPointwiseD1ChangeLowerMmPerV": {
+      "74": 0.00013870211014614664,
+      "75": 0.00014455948739709146
+    },
+    "allowedD1FidelityMmPerV": 1e-9
+  },
+  "proposal": {
+    "adopted": false,
+    "substantialChange": "new applied target T2 and a separate constrained correction problem",
+    "referenceTarget": "immutable T6b",
+    "appliedTargetArtifact": null,
+    "appliedTargetSha256": null,
+    "correctedCandidateId": null,
+    "correctedCandidateSha256": null,
+    "targetBeforeQuantization": true,
+    "primaryObjective": "minimize maximum Euclidean coefficient deviation T2-T6b over both laterals",
+    "secondaryObjective": "minimize sum squared coefficient deviations",
+    "otherCriteriaUnchanged": true,
+    "protectedDegreesOfFreedomUnchanged": true,
+    "globalFeasibility": "not-established",
+    "oldSolveReplayed": false,
+    "proposalConstructionRequiresTargetRevisionDecision": true
+  },
+  "unappliedStoragePatch": {
+    "sha256": "8e8017b33ffa243de2dac3b8aa042c160430205be425243cdb0a3d84bc5aaf0e",
+    "scope": "323/U205/V10/Z-only-one-binary64-step",
+    "applicableOnlyToCandidate1Hash": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+    "notAutomaticPartOfT2": true,
+    "doesNotChangeSavedAngularWitnesses": true
+  },
+  "requiredNewEvidence": [
+    "manifest and frozen T2 before storage",
+    "actual saved pole deltas and candidate hash",
+    "all target and stored coefficient caps",
+    "D1 fidelity and D2 source-relative change separately",
+    "both joint normal chords over entire exact partitions",
+    "positive scale and native floors",
+    "support regularity and relative orientation",
+    "both lateral U seams and their actual3D curves",
+    "surface and seam displacements from original source",
+    "historical residual sample contract for the new candidate",
+    "criterion-by-criterion identity or quantitative applicability for reused evidence"
+  ],
+  "nativeContract": {
+    "gate": "all required coefficient criteria favorable for the same corrected candidate",
+    "supportCurvePcurveConsistency": true,
+    "curveSurfaceGapMaximumMm": 1e-7,
+    "directionChordNativeModelMaximum": 1e-8,
+    "jointNormalChordMaximum": 0.0001,
+    "tangentChainRule": "Su*u'(t)+Sv*v'(t)",
+    "newInputsHashesMarkerReceiptRequired": true,
+    "historicalSTOPPreserved": true,
+    "runAllowedNow": false
+  },
+  "limits": {
+    "liveCad": false,
+    "hostKernelMcpUpdates": false,
+    "merge": false,
+    "wholeTubeAcceptance": false
+  }
+}

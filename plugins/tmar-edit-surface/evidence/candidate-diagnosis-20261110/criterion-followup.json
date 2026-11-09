@@ -1,0 +1,119 @@
+{
+  "schema": "TMAR_CANDIDATE_TARGETED_CRITERION_FOLLOWUP_V1",
+  "candidateId": "tubo-6b-derivative-storage-candidate-1",
+  "candidateSha256": "4b1e81b166e373707a9e0df1063bf757de6303e71a02d9a818631b3036b4350a",
+  "priorReceiptSha256": "4c3694a521fafd83440c5434ede700ea5b717366219b84c23045dc14cb4eef4d",
+  "newReceiptSha256": "28d0e77e9b59ae00051eee6d349940e68a4d86fa49d7764fcd917e034659a870",
+  "oldMatrixModified": false,
+  "oldSTOPPreserved": true,
+  "evidencePointersRelativeTo": "new private receipt",
+  "entries": [
+    {
+      "id": "derivative-cap-323-storedChange",
+      "priorStatus": "outside-declared-criterion",
+      "candidate1Status": "outside-declared-criterion-preserved",
+      "diagnostic": "one-binary64-step-unapplied-local-proposal",
+      "proposalCapNorm": {
+        "lower": 4.99999999999992,
+        "upper": 4.999999999999921
+      },
+      "proposalOnly": true,
+      "evidence": "#/scopes/storage-323-U205",
+      "reuseCondition": "Only an exact application of the saved patch with all other coefficients identical permits composition with the other237 stored-cap certificates; no such candidate exists."
+    },
+    {
+      "id": "joint-74-normalChord",
+      "priorStatus": "outside-declared-criterion",
+      "candidate1Status": "outside-declared-criterion-preserved",
+      "targetStatus": "outside-declared-criterion",
+      "fixedTargetFidelityContract": "infeasible",
+      "threshold": 0.0001,
+      "targetChord": [
+        0.0001277575802380674,
+        0.00012775758024605638
+      ],
+      "storedChord": [
+        0.0001277575802720825,
+        0.00012775758028028597
+      ],
+      "necessaryD1ChangeLowerMmPerV": 0.00013870211014614664,
+      "evidence": "#/scopes/target-witness-74"
+    },
+    {
+      "id": "joint-75-normalChord",
+      "priorStatus": "outside-declared-criterion",
+      "candidate1Status": "outside-declared-criterion-preserved",
+      "targetStatus": "outside-declared-criterion",
+      "fixedTargetFidelityContract": "infeasible",
+      "threshold": 0.0001,
+      "targetChord": [
+        0.00011927966344900997,
+        0.00011927966345271496
+      ],
+      "storedChord": [
+        0.00011927966348945138,
+        0.00011927966349326281
+      ],
+      "necessaryD1ChangeLowerMmPerV": 0.00014455948739709146,
+      "evidence": "#/scopes/target-witness-75"
+    },
+    {
+      "id": "joint-74-tangentChord",
+      "priorStatus": "inconclusive",
+      "newTargetedStatus": "within-declared-criterion",
+      "threshold": 1e-10,
+      "valueUpper": 3.991146044755004e-12,
+      "coverage": {
+        "cells": 330,
+        "leaves": 330,
+        "unresolved": 0
+      },
+      "evidence": "#/scopes/tangent-74-exact",
+      "futureReuseCondition": "identical boundary coefficients, bases, weights, positive affine maps and one-sided conventions; inward-only edits do not affect this criterion"
+    },
+    {
+      "id": "joint-74-historical-sampled-normal-residual",
+      "priorStatus": "inconclusive",
+      "newTargetedStatus": "within-declared-criterion",
+      "threshold": 0.001,
+      "units": "mm/native-V",
+      "coverage": {
+        "training": 950,
+        "holdout": 711
+      },
+      "valueTraining": [
+        0.00014642442067041138,
+        0.0001464244208069264
+      ],
+      "valueHoldout": [
+        0.0006702716322742201,
+        0.0006702716323938
+      ],
+      "evidence": "#/scopes/historical-residual-74",
+      "futureReuseCondition": "Same candidate and exact mapped sample parameters; changing inward coefficients requires a new applicable proof. No continuous bound follows."
+    },
+    {
+      "id": "joint-75-historical-sampled-normal-residual",
+      "priorStatus": "inconclusive",
+      "newTargetedStatus": "within-declared-criterion",
+      "threshold": 0.001,
+      "units": "mm/native-V",
+      "coverage": {
+        "training": 946,
+        "holdout": 708
+      },
+      "valueTraining": [
+        0.00005493803216163322,
+        0.00005493803218216299
+      ],
+      "valueHoldout": [
+        0.00016349952974325396,
+        0.00016349952982484567
+      ],
+      "evidence": "#/scopes/historical-residual-75",
+      "futureReuseCondition": "Same candidate and exact mapped sample parameters; changing inward coefficients requires a new applicable proof. No continuous bound follows."
+    }
+  ],
+  "nativeGateSatisfied": false,
+  "correctedCandidateMaterialized": false
+}
