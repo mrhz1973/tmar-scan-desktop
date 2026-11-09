@@ -1,0 +1,428 @@
+{
+  "schema": "TMAR_SAVED_RIM_AFFINE_PUBLIC_EVIDENCE_V1",
+  "baseCommit": "b699c6eb08a73621774adab2f00c821297ef4173",
+  "collectedAtUtc": "2026-11-09T12:43:53.479Z",
+  "privateReceipt": {
+    "name": "rim-affine-1.local.receipt.json",
+    "sha256": "2127916903deb8cd368e7792ffa655600784fcc92fa4c3cff8ccdc1b94457aed",
+    "bytes": 11740
+  },
+  "unitTests": {
+    "exitCode": 0,
+    "passed": 8,
+    "path": "tests/experimentalPeriodicCurveAffineDifference.test.ts",
+    "receiptSha256": "5b62da40a0187670924b9611c30d5963a0c1c56ea67f1840f41ebb941336dd40"
+  },
+  "typecheck": {
+    "exitCode": 0,
+    "receiptSha256": "cd2df90fd1aab7366d893e73dc46a72c76906fc5c0e8e35628f56bf963e8b593"
+  },
+  "execution": {
+    "exitCode": 0,
+    "receiptSha256": "ed59c62359ff2fd08d2f6430f46660eb79faa811116392bf7b1869b5cd3b5cce"
+  },
+  "analysis": {
+    "schema": "TMAR_SAVED_RIM_AFFINE_COEFFICIENT_V1",
+    "status": "saved-rim-continuous-coefficient-bounds-computed",
+    "baseCommit": "b699c6eb08a73621774adab2f00c821297ef4173",
+    "startedAtUtc": "2026-11-09T12:43:52.792Z",
+    "stage": "complete-without-native-or-tube-qualification",
+    "inputs": [
+      {
+        "path": "plugins\\tmar-edit-surface\\evidence\\recovered-rim-6b-8540f37.local\\pair-sewn-before-step.brep",
+        "sha256": "a03b57c7b416952efe642094a818c249b2f996a952f25f1ce4408275be79567b"
+      },
+      {
+        "path": "plugins\\tmar-edit-surface\\evidence\\recovered-rim-6b-8540f37.local\\pair-reopened.brep",
+        "sha256": "29623dd22e2442777a9abdba1610b981e4c718d19b186beb1cbdd59932499b89"
+      },
+      {
+        "path": "plugins\\tmar-edit-surface\\evidence\\recovered-rim-support-1abf89d.local\\coefficient-analysis-1.local.receipt.json",
+        "sha256": "6fd01a409c2721fb6f18abc8086578dc37e0a20a027f7ccccdf2563a6d170d12"
+      },
+      {
+        "path": "plugins\\tmar-edit-surface\\evidence\\recovered-rim-6b-8540f37.local\\pair-roundtrip-1.local.receipt.json",
+        "sha256": "32f2b99c16c5f4ddf4177c5b8ec2431ebd9cc7c417dcf502595ed779b87fcc92"
+      }
+    ],
+    "sourceFiles": [
+      {
+        "path": "plugins/tmar-edit-surface/brep.ts",
+        "sha256": "c71d266391f12ac1b8b5d02d3a104584a8f0bb5d03bf45a7848bd90bdcbf8cdc"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/experimentalPeriodicCurveWitness.ts",
+        "sha256": "1bf66dfd5fe408ac586878b88914032164d9f8329792764bfc82d3e1ffc2a784"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/experimentalPeriodicSurfaceRefinement.ts",
+        "sha256": "30c620732b207f497e76e9519e9356dce2beff3e5f758b12e51aff1fbaa28cde"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/experimentalPeriodicSeamDerivativeGap.ts",
+        "sha256": "ae7fcabe39f28be6241b66bd798e9a8dfa9ff04f3115448439882b0251d9b26b"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/tangencyCoefficientIntervals.ts",
+        "sha256": "8e503dbebc0252a0047608314e986d3fafaacef4bfbe7d98b1fafb8f17661be5"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/experimentalPeriodicCurveAffineDifference.ts",
+        "sha256": "f79958ba1119f4dbf81e755251f20147a91959c17ec31280e96a5d94b75b5df6"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/tests/experimentalRecoveredRimAffineOnce.local.ts",
+        "sha256": "9baf54fdffbd9e2c5e7d0059024774b92a1f9ad2eaa7ac267d18c589fb63396b"
+      },
+      {
+        "path": "plugins/tmar-edit-surface/evidence/recovered-rim-affine-correspondence-20261109/PLAN.md",
+        "sha256": "1becb2b3fad394eeb43dca204c413d43a5ee8e4bba88c4c3b190336ec0e68d78"
+      }
+    ],
+    "runnerSha256": "9baf54fdffbd9e2c5e7d0059024774b92a1f9ad2eaa7ac267d18c589fb63396b",
+    "preflightSha256": "7e19a803fe518cec7652636d9df1dc83c0f736bcbb9253d0ac687a51089c2150",
+    "scope": "three continuous coefficient-model comparisons of already saved data; no native CAD or Tube qualification",
+    "comparisons": [
+      {
+        "name": "pre-clamped-rim-to-post-periodic-rim",
+        "status": "bounded",
+        "maximumCurveDifferenceUpper": 2.5200029563077225e-11,
+        "checkedCells": 378,
+        "checkedControlPairs": 1512,
+        "maxCells": 1024,
+        "maxExactBits": 8192,
+        "worstCell": {
+          "cell": 108,
+          "originalSpan": 67,
+          "candidateSpan": 67,
+          "upperBound": 2.5200029563077225e-11
+        },
+        "originalDomain": [
+          0,
+          252.00932454753
+        ],
+        "candidateDomain": [
+          0,
+          252.00932454753
+        ],
+        "correspondence": "exact-positive-affine-full-domain",
+        "boundMethod": "exact-rational-partition-bernstein-interval-l1-hull",
+        "evidenceScope": "periodic-polynomial-curve-coefficient-model",
+        "nativeCadCertified": false,
+        "correspondenceUsed": "identity-original-parameter",
+        "normalizedPartitionCount": 379,
+        "normalizedPartitionSha256": "1f46460549a4ae4b4952c832ec67b2312bd7661038da3cddd0b4551c2f600872",
+        "original": {
+          "degree": 3,
+          "periodic": true,
+          "poles": 238,
+          "knots": 237,
+          "endpointMultiplicities": [
+            3,
+            3
+          ],
+          "domain": [
+            0,
+            252.00932454753
+          ],
+          "coefficientSha256": "2b94bd5568f6e4a3cb79a3315c9c822b0525e97dffcf41dea28231f74d1e59ed"
+        },
+        "candidate": {
+          "degree": 3,
+          "periodic": true,
+          "poles": 238,
+          "knots": 237,
+          "endpointMultiplicities": [
+            3,
+            3
+          ],
+          "domain": [
+            0,
+            252.00932454753
+          ],
+          "coefficientSha256": "0772d2e14e8bd9282fcd1263a45ded55cd078cdcf4e855f3f45afecebd1c6732"
+        },
+        "comparisonWithExistingRimTolerance": {
+          "toleranceMm": 1e-7,
+          "belowInCoefficientModel": true,
+          "nativeCadAcceptance": false,
+          "tubeAcceptance": false
+        }
+      },
+      {
+        "name": "post-rim-to-post-323-V-min",
+        "status": "bounded",
+        "maximumCurveDifferenceUpper": 1.5931700403371003e-14,
+        "checkedCells": 236,
+        "checkedControlPairs": 944,
+        "maxCells": 1024,
+        "maxExactBits": 8192,
+        "worstCell": {
+          "cell": 210,
+          "originalSpan": 210,
+          "candidateSpan": 210,
+          "upperBound": 1.5931700403371003e-14
+        },
+        "originalDomain": [
+          0,
+          252.00932454753
+        ],
+        "candidateDomain": [
+          0,
+          252.00932454753
+        ],
+        "correspondence": "exact-positive-affine-full-domain",
+        "boundMethod": "exact-rational-partition-bernstein-interval-l1-hull",
+        "evidenceScope": "periodic-polynomial-curve-coefficient-model",
+        "nativeCadCertified": false,
+        "correspondenceUsed": "identity-original-parameter",
+        "normalizedPartitionCount": 237,
+        "normalizedPartitionSha256": "8f3b32b4d75da90b0920e74575f892162427c0403030db8f43e5f75dfe4ec8b7",
+        "original": {
+          "degree": 3,
+          "periodic": true,
+          "poles": 238,
+          "knots": 237,
+          "endpointMultiplicities": [
+            3,
+            3
+          ],
+          "domain": [
+            0,
+            252.00932454753
+          ],
+          "coefficientSha256": "0772d2e14e8bd9282fcd1263a45ded55cd078cdcf4e855f3f45afecebd1c6732"
+        },
+        "candidate": {
+          "degree": 3,
+          "periodic": true,
+          "poles": 238,
+          "knots": 237,
+          "endpointMultiplicities": [
+            3,
+            3
+          ],
+          "domain": [
+            0,
+            252.00932454753
+          ],
+          "coefficientSha256": "d3764235c912d24ab299c6ec0caade5cf8768b84b185674308268593143f8b00"
+        },
+        "comparisonWithExistingRimTolerance": {
+          "toleranceMm": 1e-7,
+          "belowInCoefficientModel": true,
+          "nativeCadAcceptance": false,
+          "tubeAcceptance": false
+        }
+      },
+      {
+        "name": "post-rim-to-post-324-V-max-affine",
+        "status": "bounded",
+        "maximumCurveDifferenceUpper": 2.1633226460204837e-11,
+        "checkedCells": 471,
+        "checkedControlPairs": 1884,
+        "maxCells": 1024,
+        "maxExactBits": 8192,
+        "worstCell": {
+          "cell": 364,
+          "originalSpan": 182,
+          "candidateSpan": 182,
+          "upperBound": 2.1633226460204837e-11
+        },
+        "originalDomain": [
+          0,
+          252.00932454753
+        ],
+        "candidateDomain": [
+          0,
+          261.52535017517
+        ],
+        "correspondence": "exact-positive-affine-full-domain",
+        "boundMethod": "exact-rational-partition-bernstein-interval-l1-hull",
+        "evidenceScope": "periodic-polynomial-curve-coefficient-model",
+        "nativeCadCertified": false,
+        "correspondenceUsed": "exact-affine-pcurve-324",
+        "normalizedPartitionCount": 472,
+        "normalizedPartitionSha256": "6354d59823361a24b14f50045d34e3323aa9f0cbcff9a6b42cbb7c98c3fc4b81",
+        "original": {
+          "degree": 3,
+          "periodic": true,
+          "poles": 238,
+          "knots": 237,
+          "endpointMultiplicities": [
+            3,
+            3
+          ],
+          "domain": [
+            0,
+            252.00932454753
+          ],
+          "coefficientSha256": "0772d2e14e8bd9282fcd1263a45ded55cd078cdcf4e855f3f45afecebd1c6732"
+        },
+        "candidate": {
+          "degree": 3,
+          "periodic": true,
+          "poles": 238,
+          "knots": 237,
+          "endpointMultiplicities": [
+            3,
+            3
+          ],
+          "domain": [
+            0,
+            261.52535017517
+          ],
+          "coefficientSha256": "4d2041dddb30a4058313f7efb511d0cb7cf2720e1028c4cae3e99bed743491f8"
+        },
+        "comparisonWithExistingRimTolerance": {
+          "toleranceMm": 1e-7,
+          "belowInCoefficientModel": true,
+          "nativeCadAcceptance": false,
+          "tubeAcceptance": false
+        }
+      }
+    ],
+    "actions": {
+      "exactCanonicalizations": 1,
+      "curvePairsBounded": 3,
+      "coefficientCells": 1085,
+      "topologyAuditsReplayed": 0,
+      "supportProofsReplayed": 0,
+      "kernelInitializations": 0,
+      "cadSamples": 0,
+      "fromBrep": 0,
+      "stepImports": 0,
+      "stepExports": 0,
+      "sewing": 0,
+      "liveCadActions": 0,
+      "healing": 0,
+      "fitting": 0,
+      "deformation": 0,
+      "volumeMeasurements": 0
+    },
+    "canonicalization": {
+      "status": "canonicalized",
+      "curve": {
+        "degree": 3,
+        "periodic": true,
+        "poles": 238,
+        "knots": 237,
+        "endpointMultiplicities": [
+          3,
+          3
+        ],
+        "domain": [
+          0,
+          252.00932454753
+        ],
+        "coefficientSha256": "2b94bd5568f6e4a3cb79a3315c9c822b0525e97dffcf41dea28231f74d1e59ed"
+      },
+      "exactRepresentationIdentity": true,
+      "evidenceScope": "closed-clamped-to-periodic-coefficient-model",
+      "nativeCadCertified": false,
+      "before": {
+        "degree": 3,
+        "periodic": false,
+        "poles": 239,
+        "knots": 237,
+        "endpointMultiplicities": [
+          4,
+          4
+        ],
+        "domain": [
+          0,
+          252.00932454753
+        ],
+        "coefficientSha256": "67630c6477c910dffde9411b5d72e36a5cb22cd2b75b57eafca9b537912c4f17"
+      },
+      "afterStep": {
+        "degree": 3,
+        "periodic": true,
+        "poles": 238,
+        "knots": 237,
+        "endpointMultiplicities": [
+          3,
+          3
+        ],
+        "domain": [
+          0,
+          252.00932454753
+        ],
+        "coefficientSha256": "0772d2e14e8bd9282fcd1263a45ded55cd078cdcf4e855f3f45afecebd1c6732"
+      }
+    },
+    "boundaryAssociations": [
+      {
+        "faceIndex": 323,
+        "side": "V-min",
+        "pcurve": [
+          1,
+          0,
+          0,
+          1,
+          0
+        ],
+        "supportIndex": 1,
+        "curve": {
+          "degree": 3,
+          "periodic": true,
+          "poles": 238,
+          "knots": 237,
+          "endpointMultiplicities": [
+            3,
+            3
+          ],
+          "domain": [
+            0,
+            252.00932454753
+          ],
+          "coefficientSha256": "d3764235c912d24ab299c6ec0caade5cf8768b84b185674308268593143f8b00"
+        }
+      },
+      {
+        "faceIndex": 324,
+        "side": "V-max",
+        "pcurve": [
+          7,
+          0,
+          0,
+          1,
+          2,
+          2,
+          0,
+          1,
+          261.52535017517,
+          1,
+          0,
+          2,
+          252.00932454753,
+          2
+        ],
+        "supportIndex": 2,
+        "curve": {
+          "degree": 3,
+          "periodic": true,
+          "poles": 238,
+          "knots": 237,
+          "endpointMultiplicities": [
+            3,
+            3
+          ],
+          "domain": [
+            0,
+            261.52535017517
+          ],
+          "coefficientSha256": "4d2041dddb30a4058313f7efb511d0cb7cf2720e1028c4cae3e99bed743491f8"
+        }
+      }
+    ],
+    "protected86Unchanged": true,
+    "sourceStepUnchanged": true,
+    "allSavedInputsUnchanged": true,
+    "analyzerSourcesUnchanged": true,
+    "oldCadStopPreserved": true,
+    "nativeCadCertified": false,
+    "tubeAccepted": false,
+    "completedAtUtc": "2026-11-09T12:43:53.479Z"
+  }
+}
