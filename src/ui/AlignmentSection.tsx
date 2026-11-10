@@ -23,6 +23,8 @@ import { InfoDot } from './InfoDot'
 import { providersFor } from './RefSelect'
 import { useLength } from '../app/useUnits'
 import { ScaleBox } from './ScaleBox'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** What the levelled direction becomes, said the way a person holds a part:
  *  which side of it the picked face is. The face's outward direction maps onto
@@ -50,11 +52,13 @@ const EDGE_CHOICES: { axis: AxisDir; label: string }[] = [
 
 /** Numbered heading of one alignment step. */
 function StepHead({ n, text, optional }: { n: number; text: string; optional?: boolean }) {
+  useTmarLanguage()
+
   return (
     <div className="stephead">
       <span className="stepno">{n}</span>
-      {text}
-      {optional && <span className="step-opt">optional</span>}
+      {tmarText(text)}
+      {optional && <span className="step-opt">{tmarText("optional")}</span>}
     </div>
   )
 }
@@ -97,6 +101,8 @@ function AlignSelect({
   onChange: (id: number | null) => void
   onPick: () => void
 }) {
+  useTmarLanguage()
+
   const options = providersFor(roles, elements)
   const selectValue = picking
     ? '__pick__'
@@ -107,7 +113,7 @@ function AlignSelect({
         : ''
   return (
     <label className="field">
-      <span>{label}</span>
+      <span>{tmarText(label)}</span>
       <select
         data-test={testId}
         value={selectValue}
@@ -117,10 +123,10 @@ function AlignSelect({
             onChange(e.target.value === '' ? null : Number(e.target.value))
         }}
       >
-        <option value="">Select…</option>
+        <option value="">{tmarText("Select…")}</option>
         {picks >= need && !picking && (
           <option value="__picked__">
-            {need === 1 ? 'Picked point ✓' : `${need} picked points ✓`}
+            {need === 1 ? tmarText("Picked point ✓") : tmarText("{0} picked points ✓", [need])}
           </option>
         )}
         {options.map((el) => (
@@ -129,9 +135,7 @@ function AlignSelect({
           </option>
         ))}
         <option value="__pick__">
-          {picking
-            ? `Picking — ${picks} / ${need} on the scan…`
-            : `+ Pick ${need === 1 ? 'a point' : `${need} points`} on the scan…`}
+          {picking ? tmarText("Picking — {0} / {1} on the scan…", [picks, need]) : tmarText("+ Pick {0} on the scan…", [need === 1 ? tmarText("a point") : tmarText("{0} points", [need])])}
         </option>
       </select>
     </label>
@@ -163,6 +167,8 @@ export function AlignmentSection({
   /** Scale the scan to its true size. */
   onApplyScale: (factor: number, references: ScaleReference[]) => void
 }) {
+  useTmarLanguage()
+
   const fileName = useStore((s) => s.fileName)
   const busy = useStore((s) => s.busy)
   const elements = useStore((s) => s.elements)
@@ -205,67 +211,33 @@ export function AlignmentSection({
 
   return (
     <div className="group">
-      <div className="sec-head">
-        Alignment
-        <InfoDot title="Alignment">
+      <div className="sec-head">{tmarText("Alignment")}<InfoDot title={tmarText("Alignment")}>
+          <p>{tmarText("Where X, Y, Z and the zero point sit on the part. Until it is set the scan lies in whatever pose the scanner left it in, so heights, offsets and anything measured against an axis mean nothing.")}</p>
           <p>
-            Where X, Y, Z and the zero point sit on the part. Until it is set the scan lies in
-            whatever pose the scanner left it in, so heights, offsets and anything measured
-            against an axis mean nothing.
-          </p>
+            <b>{tmarText("Auto-align")}</b>{tmarText(" reads the pose off the scan itself: the directions most of its faces are square to, the axis its round walls run along, and the side it stood on — an open scan is open where it sat, and a flat rim it ends in counts as the face that is missing. It opens the same three steps filled in, previewed on the part — change which side is down or which way X runs, or replace a step, before anything is applied. A part with no flat faces and no round walls gets its principal axes, which is a guess.")}</p>
           <p>
-            <b>Auto-align</b> reads the pose off the scan itself: the directions most of its faces
-            are square to, the axis its round walls run along, and the side it stood on — an open
-            scan is open where it sat, and a flat rim it ends in counts as the face that is
-            missing. It opens the
-            same three steps filled in, previewed on the part — change which side is down or which
-            way X runs, or replace a step, before anything is applied. A part with no flat faces
-            and no round walls gets its principal axes, which is a guess.
-          </p>
+            <b>{tmarText("Align part")}</b>{tmarText(" places it in up to three steps — set a face on a coordinate plane, run an edge or a bore along an axis, put the zero point on a corner. Each step takes a measured element — the accurate choice, it averages thousands of scan points — or points clicked straight on the scan, and the viewport previews every choice against the coordinate planes before anything is applied.")}</p>
           <p>
-            <b>Align part</b> places it in up to three steps — set a face on a coordinate plane,
-            run an edge or a bore along an axis, put the zero point on a corner. Each step takes a
-            measured element — the accurate choice, it averages thousands of scan points — or
-            points clicked straight on the scan, and the viewport previews every choice against
-            the coordinate planes before anything is applied.
-          </p>
+            <b>{tmarText("Use symmetry")}</b>{tmarText(", in the Align part box, settles the pose on the part’s own mirror plane: the plane is searched for on the scan — or taken from a symmetry plane already measured — the axis nearest its normal is turned onto it, and the zero point is put on it. The plane is then a coordinate plane of the part, which is what a sketch on the middle and a Mirror want. With no pose set up yet it starts from Auto-align’s.")}</p>
           <p>
-            <b>Use symmetry</b>, in the Align part box, settles the pose on the part’s own mirror
-            plane: the plane is searched for on the scan — or taken from a symmetry plane already
-            measured — the axis nearest its normal is turned onto it, and the zero point is put on
-            it. The plane is then a coordinate plane of the part, which is what a sketch on the
-            middle and a Mirror want. With no pose set up yet it starts from Auto-align’s.
-          </p>
+            <b>{tmarText("Move / rotate by numbers")}</b>{tmarText(" applies a transform you already know instead. Both are baked into the part, and ")}<b>{tmarText("Reset alignment")}</b>{tmarText(" puts it back.")}</p>
           <p>
-            <b>Move / rotate by numbers</b> applies a transform you already know instead. Both are
-            baked into the part, and <b>Reset alignment</b> puts it back.
-          </p>
-          <p>
-            <b>Scale part</b> makes the scan its true size — for a photogrammetry scan, which has none
-            of its own — from a length measured on it and the same length taken on the real part.
-          </p>
+            <b>{tmarText("Scale part")}</b>{tmarText(" makes the scan its true size — for a photogrammetry scan, which has none of its own — from a length measured on it and the same length taken on the real part.")}</p>
         </InfoDot>
       </div>
       {alignDraft === null && scaleDraft !== null ? (
         <ScaleBox refusal={refusal} onApply={onApplyScale} />
       ) : alignDraft === null && manual !== null ? (
         <div className="draftbox">
-          <div className="sec-head">
-            Move / rotate part
-            <InfoDot title="Move / rotate part">
-              <p>
-                How far to move the part ({len.word()}) and how far to turn it (°) along the global axes.
-              </p>
-              <p>
-                It turns about the zero point first — about X, then Y, then Z — and moves after
-                that, so a rotation and an offset entered together behave the same way every time.
-              </p>
+          <div className="sec-head">{tmarText("Move / rotate part")}<InfoDot title={tmarText("Move / rotate part")}>
+              <p>{tmarText("How far to move the part (")}{len.word()}{tmarText(") and how far to turn it (°) along the global axes.")}</p>
+              <p>{tmarText("It turns about the zero point first — about X, then Y, then Z — and moves after that, so a rotation and an offset entered together behave the same way every time.")}</p>
             </InfoDot>
           </div>
           {MANUAL_FIELDS.map((f, i) => (
             <label className="field" key={f.key}>
               <span>
-                {f.label} ({f.unit === 'length' ? len.word() : f.unit})
+                {tmarText(f.label)} ({f.unit === 'length' ? len.word() : f.unit})
               </span>
               <input
                 type="number"
@@ -296,13 +268,9 @@ export function AlignmentSection({
               )
               setManual(null)
             }}
-          >
-            Move part
-          </button>
+          >{tmarText("Move part")}</button>
           <div className="toolrow">
-            <button data-test="cancel-manual" onClick={() => setManual(null)}>
-              Cancel
-            </button>
+            <button data-test="cancel-manual" onClick={() => setManual(null)}>{tmarText("Cancel")}</button>
           </div>
         </div>
       ) : alignDraft === null ? (
@@ -312,25 +280,19 @@ export function AlignmentSection({
             data-test="auto-align"
             disabled={!fileName || busy}
             onClick={onAutoAlign}
-          >
-            Auto-align
-          </button>
+          >{tmarText("Auto-align")}</button>
           <button
             className="block"
             data-test="start-alignment"
             disabled={!fileName || busy}
             onClick={onStartAlignment}
-          >
-            Align part
-          </button>
+          >{tmarText("Align part")}</button>
           <button
             className="block"
             data-test="start-manual"
             disabled={!fileName || busy}
             onClick={() => setManual([NaN, NaN, NaN, NaN, NaN, NaN])}
-          >
-            Move / rotate by numbers
-          </button>
+          >{tmarText("Move / rotate by numbers")}</button>
           <button
             className="block"
             data-test="start-scale"
@@ -339,21 +301,14 @@ export function AlignmentSection({
               setManual(null)
               startScale()
             }}
-          >
-            Scale part
-          </button>
+          >{tmarText("Scale part")}</button>
           {noSize && (
             <p className="hint" data-test="scale-size-note">
-              {noSize.why === 'meshroom'
-                ? 'This looks like Meshroom’s output: photogrammetry gives a part no true size. '
-                : `This scan is ${len.fmt(2 * modelSize, 3)} across — ${noSize.why === 'small' ? 'small' : 'large'} for a part, so its units are likely off. `}
-              Scale it from a length measured on the real part.
-            </p>
+              {noSize.why === 'meshroom' ? tmarText("This looks like Meshroom’s output: photogrammetry gives a part no true size. ") : tmarText("This scan is {0} across — {1} for a part, so its units are likely off. ", [len.fmt(2 * modelSize, 3), noSize.why === 'small' ? tmarText("small") : tmarText("large")])}{tmarText("Scale it from a length measured on the real part.")}</p>
           )}
           {scanScale && (
-            <p className="hint" data-test="scale-record">
-              Scaled ×{+scanScale.factor.toPrecision(6)}
-              {scanScale.references.length > 0 && ` from ${scanScale.references.map((r) => r.label).join(', ')}`}.
+            <p className="hint" data-test="scale-record">{tmarText("Scaled ×")}{+scanScale.factor.toPrecision(6)}
+              {scanScale.references.length > 0 && (tmarText(" from {0}", [scanScale.references.map((r) => r.label).join(', ')]))}.
             </p>
           )}
           {appliedAlignment !== null && (
@@ -362,52 +317,30 @@ export function AlignmentSection({
               data-test="reset-alignment"
               disabled={busy}
               onClick={onResetAlignment}
-            >
-              Reset alignment
-            </button>
+            >{tmarText("Reset alignment")}</button>
           )}
         </>
       ) : (
         <div className="draftbox">
-          <div className="sec-head">
-            Align part
-            <InfoDot title="Align part">
+          <div className="sec-head">{tmarText("Align part")}<InfoDot title={tmarText("Align part")}>
+              <p>{tmarText("Three steps, and only the first is required. The coordinate planes in the viewport are where the part is going; it moves live with every choice, and nothing is applied until ")}<b>{tmarText("Confirm alignment")}</b>{tmarText(" is pressed.")}</p>
               <p>
-                Three steps, and only the first is required. The coordinate planes in the viewport
-                are where the part is going; it moves live with every choice, and nothing is
-                applied until <b>Confirm alignment</b> is pressed.
-              </p>
+                <b>{tmarText("1 · Set on a plane")}</b>{tmarText(" — use a measured plane or cylinder, or pick 3 points on one face of the part. Then say which side of the part that face is: the bottom lands on the floor plane, a front lands on the front plane, and so on.")}</p>
               <p>
-                <b>1 · Set on a plane</b> — use a measured plane or cylinder, or pick 3 points
-                on one face of the part. Then say which side of the part that face is: the
-                bottom lands on the floor plane, a front lands on the front plane, and so on.
-              </p>
+                <b>{tmarText("2 · Align with an axis")}</b>{tmarText(" — use a measured plane or cylinder (its normal or its axis is the direction), or pick 2 points along an edge, and say which way that direction should run, so the part cannot spin on the plane. An element averages thousands of scan points where a pick is one spot of noise, so fit the face or the bore first when the direction has to hold. Picked, the edge runs from your 1st point to your 2nd.")}</p>
               <p>
-                <b>2 · Align with an axis</b> — use a measured plane or cylinder (its normal or
-                its axis is the direction), or pick 2 points along an edge, and say which way
-                that direction should run, so the part cannot spin on the plane. An element
-                averages thousands of scan points where a pick is one spot of noise, so fit the
-                face or the bore first when the direction has to hold. Picked, the edge runs
-                from your 1st point to your 2nd.
-              </p>
-              <p>
-                <b>3 · Move to zero point</b> — pick the corner or feature that becomes X0 Y0 Z0.
-                A zero point on its own works too, if all you want is to move the origin.
-              </p>
-              <p>
-                Whatever a step already fixes it also zeroes — a face set on the floor sits at
-                height 0 — and the first alignment centres the part on whatever is still free.
-              </p>
+                <b>{tmarText("3 · Move to zero point")}</b>{tmarText(" — pick the corner or feature that becomes X0 Y0 Z0. A zero point on its own works too, if all you want is to move the origin.")}</p>
+              <p>{tmarText("Whatever a step already fixes it also zeroes — a face set on the floor sits at height 0 — and the first alignment centres the part on whatever is still free.")}</p>
             </InfoDot>
           </div>
           {alignDraft.proposal && (
             <p className="hint" data-test="align-proposal">
-              {alignDraft.proposal}
+              {tmarText(alignDraft.proposal)}
             </p>
           )}
-          <StepHead n={1} text="Set on a plane" />
+          <StepHead n={1} text={tmarText("Set on a plane")} />
           <AlignSelect
-            label="Face"
+            label={tmarText("Face")}
             roles={['plane', 'axis']}
             value={alignDraft.primary}
             picks={alignDraft.primaryPicks.length}
@@ -419,7 +352,7 @@ export function AlignmentSection({
             onPick={() => beginAlignmentPick('primary')}
           />
           <label className="field">
-            <span>It is the part’s</span>
+            <span>{tmarText("It is the part’s")}</span>
             <select
               data-test="align-primary-axis"
               value={alignDraft.primaryAxis}
@@ -427,14 +360,14 @@ export function AlignmentSection({
             >
               {FACE_CHOICES.map((c) => (
                 <option key={c.axis} value={c.axis}>
-                  {c.label}
+                  {tmarText(c.label)}
                 </option>
               ))}
             </select>
           </label>
-          <StepHead n={2} text="Align with an axis" optional />
+          <StepHead n={2} text={tmarText("Align with an axis")} optional />
           <AlignSelect
-            label="Direction"
+            label={tmarText("Direction")}
             roles={['plane', 'axis']}
             value={alignDraft.secondary}
             picks={alignDraft.secondaryPicks.length}
@@ -447,7 +380,7 @@ export function AlignmentSection({
           />
           {(alignDraft.secondary !== null || alignDraft.secondaryPicks.length > 0) && (
             <label className="field">
-              <span>It runs</span>
+              <span>{tmarText("It runs")}</span>
               <select
                 data-test="align-secondary-axis"
                 value={alignDraft.secondaryAxis}
@@ -457,15 +390,15 @@ export function AlignmentSection({
                   (c) => axisIndex(c.axis) !== axisIndex(alignDraft.primaryAxis),
                 ).map((c) => (
                   <option key={c.axis} value={c.axis}>
-                    {c.label}
+                    {tmarText(c.label)}
                   </option>
                 ))}
               </select>
             </label>
           )}
-          <StepHead n={3} text="Move to zero point" optional />
+          <StepHead n={3} text={tmarText("Move to zero point")} optional />
           <AlignSelect
-            label="Zero point"
+            label={tmarText("Zero point")}
             roles={['point']}
             value={alignDraft.origin}
             picks={alignDraft.originPicks.length}
@@ -482,7 +415,7 @@ export function AlignmentSection({
               cannot make an alignment at all. */}
           {alignError && (
             <p className="alarmtext" data-test="align-error">
-              {alignError}
+              {tmarText(alignError)}
             </p>
           )}
 
@@ -490,33 +423,25 @@ export function AlignmentSection({
             className="block"
             data-test="align-symmetry"
             disabled={busy || alignDraft.pickSlot !== null}
-            title="Find the part’s mirror plane on the scan — or use a symmetry plane already measured — and settle this pose on it: the axis nearest its normal turned onto it, the zero point put on it. With nothing set up yet, Auto-align’s pose is the start. Nothing is applied until Confirm alignment is pressed"
+            title={tmarText("Find the part’s mirror plane on the scan — or use a symmetry plane already measured — and settle this pose on it: the axis nearest its normal turned onto it, the zero point put on it. With nothing set up yet, Auto-align’s pose is the start. Nothing is applied until Confirm alignment is pressed")}
             onClick={onAlignSymmetry}
-          >
-            Use symmetry
-          </button>
+          >{tmarText("Use symmetry")}</button>
           <button
             className="primary block"
             data-test="apply-alignment"
             data-confirm={1}
             disabled={!alignReady || busy}
             onClick={() => alignReady && onApplyAlignment(alignReady.rigid)}
-          >
-            Confirm alignment
-          </button>
+          >{tmarText("Confirm alignment")}</button>
           <div className="toolrow">
             {alignDraft.pickSlot !== null && (
               <button
                 data-test="align-undo-pick"
                 disabled={alignSlotPicks(alignDraft, alignDraft.pickSlot).length === 0}
                 onClick={undoAlignmentPick}
-              >
-                Undo point
-              </button>
+              >{tmarText("Undo point")}</button>
             )}
-            <button data-test="cancel-alignment" onClick={cancelAlignment}>
-              Cancel
-            </button>
+            <button data-test="cancel-alignment" onClick={cancelAlignment}>{tmarText("Cancel")}</button>
           </div>
         </div>
       )}

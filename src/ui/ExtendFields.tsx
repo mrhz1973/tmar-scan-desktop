@@ -19,6 +19,8 @@ import {
   type ExtendSide,
   type ExtendableFit,
 } from '../core/elements/extend'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 const SIDE_LABEL: Record<ExtendSide, string> = {
   start: 'Start',
@@ -30,6 +32,8 @@ const SIDE_LABEL: Record<ExtendSide, string> = {
 }
 
 export function ExtendFields({ fit }: { fit: ExtendableFit }) {
+  useTmarLanguage()
+
   const extend = useStore((s) => s.draft?.extend)
   const setDraftExtend = useStore((s) => s.setDraftExtend)
   const squareDraftExtend = useStore((s) => s.squareDraftExtend)
@@ -44,36 +48,16 @@ export function ExtendFields({ fit }: { fit: ExtendableFit }) {
   return (
     <div className="extend">
       <div className="g-label">
-        <span>
-          Extend
-          <InfoDot title="Extending an element">
+        <span>{tmarText("Extend")}<InfoDot title={tmarText("Extending an element")}>
+            <p>{tmarText("How far past the surface it was measured on the element is ")}<b>{tmarText("drawn and exported")}</b>{tmarText(". A cylinder grows out of each end, a plane out of each of its four edges — type the lengths here, or drag the grips on the element itself in the viewport.")}</p>
             <p>
-              How far past the surface it was measured on the element is <b>drawn and exported</b>.
-              A cylinder grows out of each end, a plane out of each of its four edges — type the
-              lengths here, or drag the grips on the element itself in the viewport.
-            </p>
-            <p>
-              <b>U</b> and <b>V</b> are the patch's own two axes, the ones its extents are reported
-              along. The four fields sit in the same order as the four grips.
-            </p>
-            <p>
-              Nothing measured changes: the fit, its sigma and the patch size it reports stay the
-              surface the scan actually covered, and a dimension still warns when it leaves it. Only
-              the shape you see and the shape CAD receives get longer. Negative values pull an edge
-              back in.
-            </p>
-            <p>
-              The one exception is a cylinder with <b>Fit only inside the span</b> on: the best fit
-              then uses only the scanned surface between the two ends as drawn. Pull an end in past
-              a rim the scanner caught badly — the mouth of a bore, a chamfer — and that part stops
-              pulling on the axis and the diameter.
-            </p>
+              <b>{tmarText("U")}</b>{tmarText(" and ")}<b>{tmarText("V")}</b>{tmarText(" are the patch's own two axes, the ones its extents are reported along. The four fields sit in the same order as the four grips.")}</p>
+            <p>{tmarText("Nothing measured changes: the fit, its sigma and the patch size it reports stay the surface the scan actually covered, and a dimension still warns when it leaves it. Only the shape you see and the shape CAD receives get longer. Negative values pull an edge back in.")}</p>
+            <p>{tmarText("The one exception is a cylinder with ")}<b>{tmarText("Fit only inside the span")}</b>{tmarText(" on: the best fit then uses only the scanned surface between the two ends as drawn. Pull an end in past a rim the scanner caught badly — the mouth of a bore, a chamfer — and that part stops pulling on the axis and the diameter.")}</p>
           </InfoDot>
         </span>
         <b data-test="extend-size">
-          {plane
-            ? `${len.fmt(spans[0], 2, { bare: true })} × ${len.fmt(spans[1], 2)}`
-            : `${len.fmt(spans[0], 3)} long`}
+          {plane ? tmarText("{0} × {1}", [len.fmt(spans[0], 2, { bare: true }), len.fmt(spans[1], 2)]) : tmarText("{0} long", [len.fmt(spans[0], 3)])}
         </b>
       </div>
 
@@ -81,7 +65,7 @@ export function ExtendFields({ fit }: { fit: ExtendableFit }) {
         {sides(ext).map((side) => (
           <SideField
             key={side}
-            label={SIDE_LABEL[side]}
+            label={tmarText(SIDE_LABEL[side])}
             value={sideValue(ext, side)}
             testId={`extend-${side}`}
             onCommit={(v) => setDraftExtend(side, v)}
@@ -90,25 +74,15 @@ export function ExtendFields({ fit }: { fit: ExtendableFit }) {
       </div>
 
       {!plane && (
-        <label className="checkrow" title="Use only the scanned surface between the two ends as drawn">
+        <label className="checkrow" title={tmarText("Use only the scanned surface between the two ends as drawn")}>
           <input
             type="checkbox"
             data-test="extend-fit-inside"
             checked={fitsInside(ext)}
             onChange={(e) => setDraftFitInside(e.target.checked)}
-          />
-          Fit only inside the span
-          <InfoDot title="Fitting inside the span">
-            <p>
-              Pull an end in with a negative value, and with this on the surface beyond that end is
-              left out of the best fit — for the mouth of a bore the scanner rounded off, or a
-              chamfer that got swept into the cylinder.
-            </p>
-            <p>
-              The fit re-runs whenever an end moves. Its diameter, sigma and point count are then
-              the surface inside the span alone; the length it reports is still how far the scan
-              reached, so the two numbers here stay measured from the same ends.
-            </p>
+          />{tmarText("Fit only inside the span")}<InfoDot title={tmarText("Fitting inside the span")}>
+            <p>{tmarText("Pull an end in with a negative value, and with this on the surface beyond that end is left out of the best fit — for the mouth of a bore the scanner rounded off, or a chamfer that got swept into the cylinder.")}</p>
+            <p>{tmarText("The fit re-runs whenever an end moves. Its diameter, sigma and point count are then the surface inside the span alone; the length it reports is still how far the scan reached, so the two numbers here stay measured from the same ends.")}</p>
           </InfoDot>
         </label>
       )}
@@ -117,20 +91,16 @@ export function ExtendFields({ fit }: { fit: ExtendableFit }) {
         {plane && (
           <button
             data-test="extend-square"
-            title="Grow the shorter axis out to the longer one, so the patch is square"
+            title={tmarText("Grow the shorter axis out to the longer one, so the patch is square")}
             onClick={squareDraftExtend}
-          >
-            Make square
-          </button>
+          >{tmarText("Make square")}</button>
         )}
         <button
           data-test="extend-reset"
           disabled={!isExtended(ext)}
-          title="Back to exactly the measured surface"
+          title={tmarText("Back to exactly the measured surface")}
           onClick={resetDraftExtend}
-        >
-          Reset
-        </button>
+        >{tmarText("Reset")}</button>
       </div>
     </div>
   )
@@ -151,11 +121,13 @@ function SideField({
   testId: string
   onCommit: (v: number) => void
 }) {
+  useTmarLanguage()
+
   const u = useFieldUnits('length', undefined)
   const shown = u.text(round(value))
   return (
     <label className="extend-field">
-      <span>{label}</span>
+      <span>{tmarText(label)}</span>
       <input
         type="number"
         step="any"

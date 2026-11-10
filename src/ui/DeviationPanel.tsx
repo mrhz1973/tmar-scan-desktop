@@ -31,6 +31,8 @@ import { VolumeSection } from './VolumeSection'
 import { ExportMeshButton } from './ExportMeshButton'
 import type { MeshFormat } from '../core/exportMesh'
 import type { Vec3 } from '../core/types'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 const SOURCES: { id: DeviationSource; label: string; what: string }[] = [
   { id: 'reference', label: 'Reference model', what: 'the nominal CAD part, best-fitted onto the scan' },
@@ -99,6 +101,8 @@ export function DeviationPanel({
   /** Frame a box of the reference's frame in the viewport. */
   onFrame: (min: Vec3, max: Vec3) => void
 }) {
+  useTmarLanguage()
+
   const scanName = useStore((s) => s.fileName)
   const scanTriangles = useStore((s) => s.triangleCount)
   const scanBusy = useStore((s) => s.busy)
@@ -188,24 +192,10 @@ export function DeviationPanel({
   return (
     <aside className="panel">
       <div className={aside}>
-        <div className="sec-head">
-          Measure against
-          <InfoDot title="What the deviation is measured from">
-            <p>
-              Both choices paint the same map onto the scan — a signed distance, warm where there
-              is too much material and cool where there is too little. They differ in what the zero
-              of that scale is.
-            </p>
-            <p>
-              A <b>reference model</b> is the whole nominal part. It answers "is this the shape it
-              was drawn as", and needs the CAD file loaded and best-fitted onto the scan first.
-            </p>
-            <p>
-              A <b>fitted element</b> is one plane, cylinder or sphere you measured on this scan in
-              the 3D Measure workspace. It answers "is this face flat, is this bore round, does this
-              surface sit where the datum says" — and since it was measured on the scan it is
-              already in the scan's frame, so there is no reference file and no alignment.
-            </p>
+        <div className="sec-head">{tmarText("Measure against")}<InfoDot title={tmarText("What the deviation is measured from")}>
+            <p>{tmarText("Both choices paint the same map onto the scan — a signed distance, warm where there is too much material and cool where there is too little. They differ in what the zero of that scale is.")}</p>
+            <p><b>{tmarText("A reference model")}</b>{tmarText(" is the whole nominal part. It answers \"is this the shape it was drawn as\", and needs the CAD file loaded and best-fitted onto the scan first.")}</p>
+            <p><b>{tmarText("A fitted element")}</b>{tmarText(" is one plane, cylinder or sphere you measured on this scan in the 3D Measure workspace. It answers \"is this face flat, is this bore round, does this surface sit where the datum says\" — and since it was measured on the scan it is already in the scan's frame, so there is no reference file and no alignment.")}</p>
           </InfoDot>
         </div>
         <div className="sourcerow">
@@ -214,11 +204,11 @@ export function DeviationPanel({
               key={s.id}
               data-test={`source-${s.id}`}
               className={d.source === s.id ? 'on' : undefined}
-              title={`Measure the scan against ${s.what}`}
+              title={tmarText("Measure the scan against {0}", [tmarText(s.what)])}
               disabled={busy}
               onClick={() => d.setSource(s.id)}
             >
-              {s.label}
+              {tmarText(s.label)}
             </button>
           ))}
         </div>
@@ -226,26 +216,14 @@ export function DeviationPanel({
 
       <div className={aside}>
         <div className="sec-head">
-          {onElement ? 'Model' : 'Models'}
-          <InfoDot title={onElement ? 'The scan' : 'Scan and reference'}>
+          {onElement ? tmarText("Model") : tmarText("Models")}
+          <InfoDot title={onElement ? tmarText("The scan") : tmarText("Scan and reference")}>
             {onElement ? (
-              <p>
-                The part as measured — an <b>STL</b>, <b>PLY</b> or <b>OBJ</b> in millimetres. Drop
-                it anywhere in the window. Measuring against an element needs nothing else: the
-                element is measured on this same scan.
-              </p>
+              <p>{tmarText("The part as measured — an ")}<b>{tmarText("STL")}</b>, <b>{tmarText("PLY")}</b>{tmarText(" or ")}<b>{tmarText("OBJ")}</b>{tmarText(" in millimetres. Drop it anywhere in the window. Measuring against an element needs nothing else: the element is measured on this same scan.")}</p>
             ) : (
               <>
-                <p>
-                  The part as scanned, and the nominal CAD part it should match. Drop either one
-                  anywhere in the window. Nothing is uploaded.
-                </p>
-                <p>
-                  The scan is an <b>STL</b>, <b>PLY</b> or <b>OBJ</b> in millimetres. The reference
-                  takes those too, and also a <b>STEP</b> file straight from CAD — its exact
-                  surfaces are tessellated here, finely enough that the conversion sits well below
-                  anything the scan can resolve.
-                </p>
+                <p>{tmarText("The part as scanned, and the nominal CAD part it should match. Drop either one anywhere in the window. Nothing is uploaded.")}</p>
+                <p>{tmarText("The scan is an ")}<b>{tmarText("STL")}</b>, <b>{tmarText("PLY")}</b>{tmarText(" or ")}<b>{tmarText("OBJ")}</b>{tmarText(" in millimetres. The reference takes those too, and also a ")}<b>{tmarText("STEP")}</b>{tmarText(" file straight from CAD — its exact surfaces are tessellated here, finely enough that the conversion sits well below anything the scan can resolve.")}</p>
               </>
             )}
           </InfoDot>
@@ -303,19 +281,10 @@ export function DeviationPanel({
 
       {!onElement && (
       <div className={aside}>
-        <div className="sec-head">
-          Best fit
-          <InfoDot title="Best fit">
+        <div className="sec-head">{tmarText("Best fit")}<InfoDot title={tmarText("Best fit")}>
+            <p>{tmarText("Brings the scan onto the reference before anything is measured. Rotation and translation only — no scale, so a scanner scale error stays visible in the map instead of being quietly absorbed by the alignment.")}</p>
             <p>
-              Brings the scan onto the reference before anything is measured. Rotation and
-              translation only — no scale, so a scanner scale error stays visible in the map instead
-              of being quietly absorbed by the alignment.
-            </p>
-            <p>
-              <b>Align automatically</b> searches for the pose on its own and is what you want
-              almost always. <b>Align by picking points</b> is the fallback for a part it gets wrong
-              — usually one symmetric enough to match the wrong way round.
-            </p>
+              <b>{tmarText("Align automatically")}</b>{tmarText(" searches for the pose on its own and is what you want almost always. ")}<b>{tmarText("Align by picking points")}</b>{tmarText(" is the fallback for a part it gets wrong — usually one symmetric enough to match the wrong way round.")}</p>
           </InfoDot>
         </div>
         <button
@@ -327,11 +296,9 @@ export function DeviationPanel({
         >
           {d.alignStatus === 'running' ? (
             <>
-              <span className="spinner" />
-              Aligning…
-            </>
+              <span className="spinner" />{tmarText("Aligning…")}</>
           ) : (
-            'Align automatically'
+            tmarText('Align automatically')
           )}
         </button>
         {/* A fit can run for a minute on a large reference, and the answer is
@@ -344,10 +311,10 @@ export function DeviationPanel({
             className="block"
             data-test="align-stop"
             disabled={d.alignStopping}
-            title="Stop the fit where it is — the alignment in hand is kept and nothing is measured. Esc does the same."
+            title={tmarText("Stop the fit where it is — the alignment in hand is kept and nothing is measured. Esc does the same.")}
             onClick={onStopAlign}
           >
-            {d.alignStopping ? 'Stopping…' : 'Stop aligning'}
+            {d.alignStopping ? tmarText("Stopping…") : tmarText("Stop aligning")}
           </button>
         ) : (
           <button
@@ -355,36 +322,25 @@ export function DeviationPanel({
             data-test="align-points"
             disabled={!ready || busy}
             onClick={onPickPoints}
-          >
-            Align by picking points…
-          </button>
+          >{tmarText("Align by picking points…")}</button>
         )}
 
-        {d.alignMessage && <p className="alarmtext">{d.alignMessage}</p>}
+        {d.alignMessage && <p className="alarmtext">{tmarText(d.alignMessage)}</p>}
 
         {/* A reference modelled on the scan stands in the scan's own frame:
             no fit was run, which is worth saying since the map then shows
             the model's own offsets. */}
         {aligned && d.align!.source === 'built' && (
-          <p className="hint" data-test="align-built">
-            No best fit was run: the reference was modelled on this scan, in its frame, so the map
-            shows the model's own offsets. <i>Align automatically</i> fits it anyway.
-          </p>
+          <p className="hint" data-test="align-built">{tmarText("No best fit was run: the reference was modelled on this scan, in its frame, so the map shows the model's own offsets. ")}<i>{tmarText("Align automatically")}</i>{tmarText(" fits it anyway.")}</p>
         )}
         {aligned && (
           <>
             {d.align!.underconstrained && (
-              <p className="warnnote">
-                ⚠ The marked surface faces one way only, so the fit could correct the distance
-                across it and nothing else — the part is still free to slide along it. Mark a second
-                surface facing another way to pin it down.
-              </p>
+              <p className="warnnote">{tmarText("⚠ The marked surface faces one way only, so the fit could correct the distance across it and nothing else — the part is still free to slide along it. Mark a second surface facing another way to pin it down.")}</p>
             )}
             {suspect && (
               <p className="alarmtext">
-                {d.align!.ambiguous
-                  ? 'Another starting pose fitted almost as well — this part may be symmetric enough to match the wrong way round. Check it against the reference, and pick points if it is wrong.'
-                  : 'The scan is still far from the reference after fitting. Try aligning by picking points.'}
+                {d.align!.ambiguous ? tmarText("Another starting pose fitted almost as well — this part may be symmetric enough to match the wrong way round. Check it against the reference, and pick points if it is wrong.") : tmarText("The scan is still far from the reference after fitting. Try aligning by picking points.")}
               </p>
             )}
             {d.mapStatus !== 'ready' && (
@@ -397,11 +353,9 @@ export function DeviationPanel({
               >
                 {d.mapStatus === 'running' ? (
                   <>
-                    <span className="spinner" />
-                    Measuring…
-                  </>
+                    <span className="spinner" />{tmarText("Measuring…")}</>
                 ) : (
-                  'Measure deviation'
+                  tmarText('Measure deviation')
                 )}
               </button>
             )}
@@ -412,20 +366,10 @@ export function DeviationPanel({
 
       {!onElement && aligned && (
         <div className="group">
-          <div className="sec-head">
-            Local fine fit
-            <InfoDot title="Local fine fit">
-              <p>An optional second step, once the global fit is in — most parts do not need it.</p>
-              <p>
-                Scan spray, print supports, risers, fixturing and any geometry the reference does
-                not have all pull on the whole-scan fit, and no number of passes will shake them
-                loose. Mark the surfaces that really are the part and the fit is computed on those
-                alone.
-              </p>
-              <p>
-                Only the alignment narrows: the map that follows is still measured everywhere on the
-                scan.
-              </p>
+          <div className="sec-head">{tmarText("Local fine fit")}<InfoDot title={tmarText("Local fine fit")}>
+              <p>{tmarText("An optional second step, once the global fit is in — most parts do not need it.")}</p>
+              <p>{tmarText("Scan spray, print supports, risers, fixturing and any geometry the reference does not have all pull on the whole-scan fit, and no number of passes will shake them loose. Mark the surfaces that really are the part and the fit is computed on those alone.")}</p>
+              <p>{tmarText("Only the alignment narrows: the map that follows is still measured everywhere on the scan.")}</p>
             </InfoDot>
           </div>
 
@@ -435,16 +379,12 @@ export function DeviationPanel({
               data-test="local-start"
               disabled={busy}
               onClick={onStartMarking}
-            >
-              Mark surface to fit on…
-            </button>
+            >{tmarText("Mark surface to fit on…")}</button>
           ) : (
             <>
               {!d.showScan && (
-                <p className="warnnote">
-                  ⚠ The scan is hidden, so there is nothing to mark on — show it again with the{' '}
-                  <b>Scan</b> key on the view bar. What is already marked is still there.
-                </p>
+                <p className="warnnote">{tmarText("⚠ The scan is hidden, so there is nothing to mark on — show it again with the")}{' '}
+                  <b>{tmarText("Scan")}</b>{tmarText(" key on the view bar. What is already marked is still there.")}</p>
               )}
               <MarkTools
                 escapeNote="Esc a second time closes this step and clears the marking."
@@ -452,7 +392,7 @@ export function DeviationPanel({
               />
 
               <NumberField
-                label="Max search distance"
+                label={tmarText("Max search distance")}
                 testId="local-max-distance"
                 value={d.localMaxDistance}
                 step={0.1}
@@ -461,16 +401,9 @@ export function DeviationPanel({
                 onCommit={d.setLocalMaxDistance}
                 hint={
                   <>
-                    <p>
-                      How far a marked point may reach for reference surface while the fine fit
-                      runs.
-                    </p>
-                    <p>
-                      Keep it tight: the global fit already has the part within{' '}
-                      {inches ? 'a few thousandths, so 0.04 in' : 'a few tenths, so a millimetre'} is
-                      generous. Raising it lets the marked surface reach a neighbouring feature and
-                      settle onto that instead.
-                    </p>
+                    <p>{tmarText("How far a marked point may reach for reference surface while the fine fit runs.")}</p>
+                    <p>{tmarText("Keep it tight: the global fit already has the part within")}{' '}
+                      {inches ? tmarText("a few thousandths, so 0.04 in") : tmarText("a few tenths, so a millimetre")}{tmarText(" is generous. Raising it lets the marked surface reach a neighbouring feature and settle onto that instead.")}</p>
                   </>
                 }
               />
@@ -484,11 +417,9 @@ export function DeviationPanel({
               >
                 {d.alignStatus === 'running' ? (
                   <>
-                    <span className="spinner" />
-                    Fine fitting…
-                  </>
+                    <span className="spinner" />{tmarText("Fine fitting…")}</>
                 ) : (
-                  'Fit on marked surface'
+                  tmarText('Fit on marked surface')
                 )}
               </button>
               {d.alignStatus === 'running' && (
@@ -496,26 +427,21 @@ export function DeviationPanel({
                   className="block"
                   data-test="local-stop"
                   disabled={d.alignStopping}
-                  title="Stop the fit where it is — the alignment in hand is kept, the marking stays as it is, and nothing is measured. Esc does the same."
+                  title={tmarText("Stop the fit where it is — the alignment in hand is kept, the marking stays as it is, and nothing is measured. Esc does the same.")}
                   onClick={onStopAlign}
                 >
-                  {d.alignStopping ? 'Stopping…' : 'Stop fitting'}
+                  {d.alignStopping ? tmarText("Stopping…") : tmarText("Stop fitting")}
                 </button>
               )}
               {!enough && (
-                <p className="hint">
-                  Drag on the scan to mark the surface to fit on — at least {MIN_LOCAL_POINTS}{' '}
-                  points. Right-drag rubs out, Shift-drag still orbits.
-                </p>
+                <p className="hint">{tmarText("Drag on the scan to mark the surface to fit on — at least ")}{MIN_LOCAL_POINTS}{' '}{tmarText("points. Right-drag rubs out, Shift-drag still orbits.")}</p>
               )}
               <button
                 className="block"
                 data-test="mark-done"
-                title="Closes this step and clears the marking — Esc does the same, once the camera has its buttons back"
+                title={tmarText("Closes this step and clears the marking — Esc does the same, once the camera has its buttons back")}
                 onClick={onStopMarking}
-              >
-                Put the marking tools away
-              </button>
+              >{tmarText("Put the marking tools away")}</button>
             </>
           )}
 
@@ -525,9 +451,7 @@ export function DeviationPanel({
               data-test="local-revert"
               disabled={busy}
               onClick={onRevertLocal}
-            >
-              Back to the global fit
-            </button>
+            >{tmarText("Back to the global fit")}</button>
           )}
         </div>
       )}
@@ -537,29 +461,13 @@ export function DeviationPanel({
       {hasMap && (
         <>
           <div className={aside}>
-            <div className="sec-head">
-              Colour scale
-              <InfoDot title="Colour scale">
+            <div className="sec-head">{tmarText("Colour scale")}<InfoDot title={tmarText("Colour scale")}>
+                <p>{tmarText("How the measured deviation is painted onto the scan. Zero always sits at the centre of the scale, on green; anything past either end is drawn in a dark cap so it cannot be mistaken for the limit itself.")}</p>
                 <p>
-                  How the measured deviation is painted onto the scan. Zero always sits at the
-                  centre of the scale, on green; anything past either end is drawn in a dark cap so
-                  it cannot be mistaken for the limit itself.
-                </p>
-                <p>
-                  <b>Positive is outside the reference</b> — material the reference does not have,
-                  painted warm. <b>Negative is inside it</b> — material the reference has and the
-                  scan does not, painted cool. Both ends of the scale say so beside the map.
-                </p>
-                <p>
-                  The slider is logarithmic, so the same control serves{' '}
-                  {inches ? 'a 0.001 in print and a 0.2 in' : `a 0.02 ${len.word()} print and a 5 ${len.word()}`}{' '}
-                  warp. <b>Bands</b> replaces the continuous ramp with discrete steps, which is
-                  easier to read off a screenshot or a printed report.
-                </p>
-                <p>
-                  Showing and hiding what is on the stage changes nothing that was measured — it
-                  only changes what you are looking at.
-                </p>
+                  <b>{tmarText("Positive is outside the reference")}</b>{tmarText(" — material the reference does not have, painted warm. ")}<b>{tmarText("Negative is inside it")}</b>{tmarText(" — material the reference has and the scan does not, painted cool. Both ends of the scale say so beside the map.")}</p>
+                <p>{tmarText("The slider is logarithmic, so the same control serves")}{' '}
+                  {inches ? tmarText("a 0.001 in print and a 0.2 in") : tmarText("a 0.02 {0} print and a 5 {1}", [len.word(), len.word()])}{' '}{tmarText("warp. ")}<b>{tmarText("Bands")}</b>{tmarText(" replaces the continuous ramp with discrete steps, which is easier to read off a screenshot or a printed report.")}</p>
+                <p>{tmarText("Showing and hiding what is on the stage changes nothing that was measured — it only changes what you are looking at.")}</p>
               </InfoDot>
             </div>
             <input
@@ -576,14 +484,14 @@ export function DeviationPanel({
               onChange={(e) => d.setRange(len.fromDisplay(Number((10 ** Number(e.target.value)).toPrecision(2))))}
             />
             <NumberField
-              label="Range ±"
+              label={tmarText("Range ±")}
               testId="range-value"
               value={d.range}
               step={0.01}
               min={0.0001}
               kind="length"
               onCommit={d.setRange}
-              hint="Half-width of the colour scale. Zero always sits at the centre, on green; positive is outside the reference, negative inside it, and anything past either end is drawn in a dark cap."
+              hint={tmarText("Half-width of the colour scale. Zero always sits at the centre, on green; positive is outside the reference, negative inside it, and anything past either end is drawn in a dark cap.")}
             />
             <ScaleControls
               bands={d.bands}
@@ -600,36 +508,13 @@ export function DeviationPanel({
           </div>
 
           <div className={aside}>
-            <div className="sec-head">
-              Deformation
-              <InfoDot title="Animated deformation">
-                <p>
-                  Plays the map as motion, the way an FE package animates a deformed shape: the part
-                  moves from the shape it should have to the shape it was measured at, with the
-                  deviation multiplied by the <b>scale</b>, and back again, on a loop.
-                </p>
-                <p>
-                  Each point moves along the line its deviation was measured on —{' '}
-                  {onElement ? 'straight off the element' : 'straight off the reference surface'} —
-                  so a warp, a twist or a wall leaning in shows as the part bending that way.
-                </p>
-                <p>
-                  What is exaggerated is how the part as a whole has deformed. The motion is
-                  smoothed over about a hundredth of the part’s size, so the scanner’s
-                  noise and the edges of holes stay at their true size and ride along instead of
-                  being blown up into fur. A reading past the end of the <b>colour scale</b> moves
-                  only as far as the end, and points with no reading, the grey ones, stay where
-                  they are — widen the range to let more of the part move.
-                </p>
-                <p>
-                  The scale starts where the end of the colour scale moves by about a twentieth of
-                  the part, and follows the range until you set one. At <b>1×</b> the part moves
-                  exactly as far as it is out.
-                </p>
-                <p>
-                  Only the picture moves. The colours, the figures, the hover reading and the pins
-                  are the part as measured, and so is an exported scan.
-                </p>
+            <div className="sec-head">{tmarText("Deformation")}<InfoDot title={tmarText("Animated deformation")}>
+                <p>{tmarText("Plays the map as motion, the way an FE package animates a deformed shape: the part moves from the shape it should have to the shape it was measured at, with the deviation multiplied by the ")}<b>{tmarText("scale")}</b>{tmarText(", and back again, on a loop.")}</p>
+                <p>{tmarText("Each point moves along the line its deviation was measured on —")}{' '}
+                  {onElement ? tmarText("straight off the element") : tmarText("straight off the reference surface")}{tmarText(" — so a warp, a twist or a wall leaning in shows as the part bending that way.")}</p>
+                <p>{tmarText("What is exaggerated is how the part as a whole has deformed. The motion is smoothed over about a hundredth of the part’s size, so the scanner’s noise and the edges of holes stay at their true size and ride along instead of being blown up into fur. A reading past the end of the ")}<b>{tmarText("colour scale")}</b>{tmarText(" moves only as far as the end, and points with no reading, the grey ones, stay where they are — widen the range to let more of the part move.")}</p>
+                <p>{tmarText("The scale starts where the end of the colour scale moves by about a twentieth of the part, and follows the range until you set one. At ")}<b>{tmarText("1×")}</b>{tmarText(" the part moves exactly as far as it is out.")}</p>
+                <p>{tmarText("Only the picture moves. The colours, the figures, the hover reading and the pins are the part as measured, and so is an exported scan.")}</p>
               </InfoDot>
             </div>
             <button
@@ -640,7 +525,7 @@ export function DeviationPanel({
               disabled={d.marking}
               onClick={() => d.setAnimate(!d.animate)}
             >
-              {d.animate ? 'Stop the animation' : 'Animate the deformation'}
+              {d.animate ? tmarText("Stop the animation") : tmarText("Animate the deformation")}
             </button>
             <input
               className="slider"
@@ -656,29 +541,25 @@ export function DeviationPanel({
               onChange={(e) => d.setAnimScale(Number((10 ** Number(e.target.value)).toPrecision(2)))}
             />
             <NumberField
-              label="Scale"
+              label={tmarText("Scale")}
               testId="anim-scale"
               value={d.animScale}
               step={1}
               min={MIN_DEFLECTION_SCALE}
               unit="×"
               onCommit={(v) => d.setAnimScale(Math.min(v, MAX_DEFLECTION_SCALE))}
-              hint={`How many times the deviation is exaggerated at the far end of the loop. 1× is the part as measured; 20× moves a ${
-                inches ? '0.005 in deviation by 0.1 in' : `0.1 ${len.word()} deviation by 2 ${len.word()}`
-              }.`}
+              hint={tmarText("How many times the deviation is exaggerated at the far end of the loop. 1× is the part as measured; 20× moves a {0}.", [inches ? tmarText("0.005 in deviation by 0.1 in") : tmarText("0.1 {0} deviation by 2 {1}", [len.word(), len.word()])])}
             />
             {d.animate && !d.showScan && (
-              <p className="hint">
-                The scan is hidden, so there is nothing to watch move — show it again with the{' '}
-                <b>Scan</b> key on the view bar.
-              </p>
+              <p className="hint">{tmarText("The scan is hidden, so there is nothing to watch move — show it again with the")}{' '}
+                <b>{tmarText("Scan")}</b>{tmarText(" key on the view bar.")}</p>
             )}
           </div>
 
           <div className={aside}>
-            <div className="sec-head">What counts as measured</div>
+            <div className="sec-head">{tmarText("What counts as measured")}</div>
             <NumberField
-              label="Max search distance"
+              label={tmarText("Max search distance")}
               testId="max-distance"
               value={d.maxDistance}
               step={0.1}
@@ -688,27 +569,15 @@ export function DeviationPanel({
               hint={
                 onElement ? (
                   <>
-                    <p>How far off the element a scan point may be and still be measured.</p>
-                    <p>
-                      Beyond it the surface is left in plain grey and kept out of the statistics —
-                      which is what keeps a neighbouring feature inside the element's footprint from
-                      being reported as enormous error.
-                    </p>
-                    <p>
-                      Display only, so it can be dialled either way with the map following
-                      immediately. How far the element reaches <i>sideways</i> is set by extending
-                      it in the 3D Measure workspace.
-                    </p>
+                    <p>{tmarText("How far off the element a scan point may be and still be measured.")}</p>
+                    <p>{tmarText("Beyond it the surface is left in plain grey and kept out of the statistics — which is what keeps a neighbouring feature inside the element's footprint from being reported as enormous error.")}</p>
+                    <p>{tmarText("Display only, so it can be dialled either way with the map following immediately. How far the element reaches ")}<i>{tmarText("sideways")}</i>{tmarText(" is set by extending it in the 3D Measure workspace.")}</p>
                   </>
                 ) : (
                   <>
-                    <p>How far a scan point may look for reference surface.</p>
-                    <p>
-                      Beyond it there is nothing to deviate from, so that surface is left in plain
-                      grey and kept out of the statistics — which is what stops scan spray and a
-                      stray fixture from being reported as enormous error.
-                    </p>
-                    <p>Display only: it never affects the alignment.</p>
+                    <p>{tmarText("How far a scan point may look for reference surface.")}</p>
+                    <p>{tmarText("Beyond it there is nothing to deviate from, so that surface is left in plain grey and kept out of the statistics — which is what stops scan spray and a stray fixture from being reported as enormous error.")}</p>
+                    <p>{tmarText("Display only: it never affects the alignment.")}</p>
                   </>
                 )
               }
@@ -722,31 +591,23 @@ export function DeviationPanel({
                     checked={d.targetFacingDeg !== null}
                     onChange={(e) => d.setTargetFacing(e.target.checked ? 60 : null)}
                   />
-                  <span>Surface must face the element</span>
-                  <InfoDot title="Surface must face the element">
-                    <p>
-                      An element is a surface with a side to it, and only the scan surface lying on
-                      that side is the surface being measured. A plane fitted on the top of a{' '}
-                      {inches ? '0.4 in' : `10 ${len.word()}`} plate reaches the underside of it too
-                      — and would report it as {inches ? '0.4 in' : 'ten millimetres'} of missing
-                      material.
-                    </p>
-                    <p>
-                      With this on, a scan point whose own normal points away from the element's is
-                      left out, so the far side of a wall and the back of a rib stay grey.
-                    </p>
+                  <span>{tmarText("Surface must face the element")}</span>
+                  <InfoDot title={tmarText("Surface must face the element")}>
+                    <p>{tmarText("An element is a surface with a side to it, and only the scan surface lying on that side is the surface being measured. A plane fitted on the top of a")}{' '}
+                      {inches ? tmarText("0.4 in") : tmarText("10 {0}", [len.word()])}{tmarText(" plate reaches the underside of it too — and would report it as ")}{inches ? tmarText("0.4 in") : tmarText("ten millimetres")}{tmarText(" of missing material.")}</p>
+                    <p>{tmarText("With this on, a scan point whose own normal points away from the element's is left out, so the far side of a wall and the back of a rib stay grey.")}</p>
                   </InfoDot>
                 </label>
                 {d.targetFacingDeg !== null && (
                   <NumberField
-                    label="Max. deviation of normals"
+                    label={tmarText("Max. deviation of normals")}
                     testId="facing-deg"
                     value={d.targetFacingDeg}
                     step={5}
                     min={1}
                     unit="°"
                     onCommit={(v) => d.setTargetFacing(v)}
-                    hint="How far the scan may be from facing the way the element faces and still count. Wide enough to keep a genuinely warped surface, tight enough to leave the other side of a wall out."
+                    hint={tmarText("How far the scan may be from facing the way the element faces and still count. Wide enough to keep a genuinely warped surface, tight enough to leave the other side of a wall out.")}
                   />
                 )}
               </>
@@ -761,29 +622,16 @@ export function DeviationPanel({
                     checked={d.mapFacingDeg !== null}
                     onChange={(e) => onMapFacing(e.target.checked ? DEFAULT_MAP_FACING_DEG : null)}
                   />
-                  <span>Reference must face the same way</span>
-                  <InfoDot title="Reference must face the same way">
-                    <p>
-                      The nearest reference surface is not always the one a point came off. Across
-                      a thin wall, a point sunk more than half the wall's thickness is nearer the
-                      far side of the wall than its own — and reads too small, or with the wrong
-                      sign once it is through.
-                    </p>
-                    <p>
-                      With this on, reference surface facing away from the scan at that point is
-                      stepped over, and the point is measured against the nearest surface that
-                      faces its way. A point with no such surface anywhere near is left grey.
-                    </p>
-                    <p>
-                      Everywhere else the reading is the plain closest point, as before. Which way
-                      the scan faces is read off its own normals. Changing this measures the map
-                      again.
-                    </p>
+                  <span>{tmarText("Reference must face the same way")}</span>
+                  <InfoDot title={tmarText("Reference must face the same way")}>
+                    <p>{tmarText("The nearest reference surface is not always the one a point came off. Across a thin wall, a point sunk more than half the wall's thickness is nearer the far side of the wall than its own — and reads too small, or with the wrong sign once it is through.")}</p>
+                    <p>{tmarText("With this on, reference surface facing away from the scan at that point is stepped over, and the point is measured against the nearest surface that faces its way. A point with no such surface anywhere near is left grey.")}</p>
+                    <p>{tmarText("Everywhere else the reading is the plain closest point, as before. Which way the scan faces is read off its own normals. Changing this measures the map again.")}</p>
                   </InfoDot>
                 </label>
                 {d.mapFacingDeg !== null && (
                   <NumberField
-                    label="Max. deviation of normals"
+                    label={tmarText("Max. deviation of normals")}
                     testId="map-facing-deg"
                     value={d.mapFacingDeg}
                     step={5}
@@ -791,13 +639,13 @@ export function DeviationPanel({
                     unit="°"
                     disabled={busy}
                     onCommit={(v) => onMapFacing(v)}
-                    hint="How far the reference surface may be from facing the way the scan does and still be measured against. 90° steps over only surface facing away. Tighter also re-reads the steep sides of edges the scan has rounded over, against the face beside the nearest one."
+                    hint={tmarText("How far the reference surface may be from facing the way the scan does and still be measured against. 90° steps over only surface facing away. Tighter also re-reads the steep sides of edges the scan has rounded over, against the face beside the nearest one.")}
                   />
                 )}
               </>
             )}
             <NumberField
-              label="Tolerance ±"
+              label={tmarText("Tolerance ±")}
               value={d.tolerance}
               step={0.01}
               min={0.0001}
@@ -805,14 +653,8 @@ export function DeviationPanel({
               onCommit={d.setTolerance}
               hint={
                 <>
-                  <p>
-                    The band the <b>within ±{setting(d.tolerance)}</b> figure under the scale counts.
-                  </p>
-                  <p>
-                    It is a tally, not a filter: it does not change the colours or what was
-                    measured. Set the range to the same number if you want the map itself to draw
-                    the line.
-                  </p>
+                  <p>{tmarText("The band the ")}<b>{tmarText("within ±")}{setting(d.tolerance)}</b>{tmarText(" figure under the scale counts.")}</p>
+                  <p>{tmarText("It is a tally, not a filter: it does not change the colours or what was measured. Set the range to the same number if you want the map itself to draw the line.")}</p>
                 </>
               }
             />
@@ -837,7 +679,7 @@ export function DeviationPanel({
           {hasMap && (
             // Its figures are the map in hand's and its settings the new ones'
             // until the map being measured lands.
-            <CopyButton className="block" label="Copy report" disabled={onElement && d.elementStatus === 'running'} onCopy={onCopy} />
+            <CopyButton className="block" label={tmarText("Copy report")} disabled={onElement && d.elementStatus === 'running'} onCopy={onCopy} />
           )}
           <ExportMeshButton
             block
@@ -845,9 +687,7 @@ export function DeviationPanel({
             disabled={scanBusy}
             onExport={onExportMesh}
             title={
-              onElement
-                ? 'Save the scan as an STL or a 3MF where it now stands'
-                : 'Save the scan as an STL or a 3MF where it now stands — the best fit onto the reference is baked in'
+              onElement ? tmarText("Save the scan as an STL or a 3MF where it now stands") : tmarText("Save the scan as an STL or a 3MF where it now stands — the best fit onto the reference is baked in")
             }
           />
         </div>

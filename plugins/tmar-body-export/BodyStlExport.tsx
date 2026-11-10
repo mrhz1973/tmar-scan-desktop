@@ -12,8 +12,12 @@ import { useCommandActivity } from '../../src/commands/activity'
 import { useStore } from '../../src/state/store'
 import { reEditorOpen, useReverse } from '../reverse/state/reStore'
 import { bodyStlResult, bodyStepResult, DEFAULT_CHORD_MM, exportSelection, validChord, type ExportScope } from './bodyExport'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 export function BodyStlExport() {
+  useTmarLanguage()
+
   const [open, setOpen] = useState(false)
   const [format, setFormat] = useState<'step' | 'stl'>('step')
   const [scope, setScope] = useState<ExportScope>('visible')
@@ -52,21 +56,21 @@ export function BodyStlExport() {
     } finally { inFlight.current = false; setExporting(false) }
   }
   return <div className="group" data-test="tmar-body-export">
-    <button ref={button} className="block" data-test="export-body" disabled={working || !re.bodies.length} onClick={() => setOpen(true)} title="Choose STEP or STL, then choose the CAD bodies to save">Export body…</button>
+    <button ref={button} className="block" data-test="export-body" disabled={working || !re.bodies.length} onClick={() => setOpen(true)} title={tmarText("Choose STEP or STL, then choose the CAD bodies to save")}>{tmarText("Export body…")}</button>
     {open && <div className="modalback" onClick={close}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="body-export-title" data-test="body-export-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="modalhead"><h2 id="body-export-title">Export body</h2><button className="x" aria-label="Close export" disabled={exporting} onClick={close}>×</button></div>
-        <label className="field"><span>File format</span><select autoFocus data-test="body-export-format" value={format} disabled={exporting} onChange={(e) => setFormat(e.target.value as 'step' | 'stl')}>
-          <option value="step">STEP — CAD geometry</option><option value="stl">STL — triangle mesh</option>
+        <div className="modalhead"><h2 id="body-export-title">{tmarText("Export body")}</h2><button className="x" aria-label={tmarText("Close export")} disabled={exporting} onClick={close}>{tmarText("×")}</button></div>
+        <label className="field"><span>{tmarText("File format")}</span><select autoFocus data-test="body-export-format" value={format} disabled={exporting} onChange={(e) => setFormat(e.target.value as 'step' | 'stl')}>
+          <option value="step">{tmarText("STEP — CAD geometry")}</option><option value="stl">{tmarText("STL — triangle mesh")}</option>
         </select></label>
-        <label className="field"><span>Bodies to export</span><select data-test="body-stl-scope" value={scope} disabled={exporting} onChange={(e) => setScope(e.target.value as ExportScope)}>
-          <option value="visible">{format === 'stl' ? 'Visible solid bodies' : 'Visible bodies'}</option><option value="selected">Selected body-list items</option>
+        <label className="field"><span>{tmarText("Bodies to export")}</span><select data-test="body-stl-scope" value={scope} disabled={exporting} onChange={(e) => setScope(e.target.value as ExportScope)}>
+          <option value="visible">{format === 'stl' ? tmarText("Visible solid bodies") : tmarText("Visible bodies")}</option><option value="selected">{tmarText("Selected body-list items")}</option>
         </select></label>
-        {format === 'stl' && <NumberField label="Chord tolerance" value={chord} kind="length" step={0.01} min={0.0001} testId="body-stl-chord" disabled={exporting} onCommit={setChord} hint={`Maximum ${fmtLen(1, units)}. Finer triangles produce larger files.`}/>}
-        <p className="hint">{format === 'stl' ? 'CAD solids only. STL has no unit metadata: import as millimetres. Multiple bodies share one file without a Boolean union.' : 'Save CAD geometry, including selected sheets. Keep the project to preserve the feature history and notes.'}</p>
-        {blocked && <p className="hint" data-test="body-stl-blocked">{blocked}</p>}
-        <div className="toolrow"><button disabled={exporting} onClick={close}>Cancel</button>
-          <button className="primary" data-test="export-body-save" disabled={!!blocked} onClick={() => void download()}>{exporting ? 'Exporting…' : `Save ${format.toUpperCase()} (${selected.ids.length})`}</button>
+        {format === 'stl' && <NumberField label={tmarText("Chord tolerance")} value={chord} kind="length" step={0.01} min={0.0001} testId="body-stl-chord" disabled={exporting} onCommit={setChord} hint={tmarText("Maximum {0}. Finer triangles produce larger files.", [fmtLen(1, units)])}/>}
+        <p className="hint">{format === 'stl' ? tmarText("CAD solids only. STL has no unit metadata: import as millimetres. Multiple bodies share one file without a Boolean union.") : tmarText("Save CAD geometry, including selected sheets. Keep the project to preserve the feature history and notes.")}</p>
+        {blocked && <p className="hint" data-test="body-stl-blocked">{tmarText(blocked)}</p>}
+        <div className="toolrow"><button disabled={exporting} onClick={close}>{tmarText("Cancel")}</button>
+          <button className="primary" data-test="export-body-save" disabled={!!blocked} onClick={() => void download()}>{exporting ? tmarText("Exporting…") : tmarText("Save {0} ({1})", [format.toUpperCase(), selected.ids.length])}</button>
         </div>
       </div>
     </div>}

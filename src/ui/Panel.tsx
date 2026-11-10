@@ -34,6 +34,8 @@ import { SectionEditor } from './SectionEditor'
 import { ExportMeshButton } from './ExportMeshButton'
 import type { MeshFormat } from '../core/exportMesh'
 import { useUnits } from '../app/useUnits'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** The picture on each element type's key. */
 const KIND_ICON: Record<(typeof ELEMENT_KINDS)[number]['id'], IconName> = {
@@ -127,6 +129,8 @@ export function Panel({
   /** Search the scan for its mirror plane, for the open symmetry-plane draft. */
   onFindSymmetry: () => void
 }) {
+  useTmarLanguage()
+
   const fileName = useStore((s) => s.fileName)
   const busy = useStore((s) => s.busy)
   // Every reading in the lists is written in the units shown.
@@ -204,17 +208,9 @@ export function Panel({
   return (
     <aside className="panel">
       <div className="group">
-        <div className="sec-head">
-          Model
-          <InfoDot title="The scan">
-            <p>
-              The part as measured — an <b>STL</b>, <b>PLY</b> or <b>OBJ</b> from your scanner. Drop
-              it anywhere in the window, or use the button.
-            </p>
-            <p>
-              Units are assumed to be millimetres. Nothing is uploaded: the file is read and the
-              whole measurement runs in this browser.
-            </p>
+        <div className="sec-head">{tmarText("Model")}<InfoDot title={tmarText("The scan")}>
+            <p>{tmarText("The part as measured — an ")}<b>{tmarText("STL")}</b>, <b>{tmarText("PLY")}</b>{tmarText(" or ")}<b>{tmarText("OBJ")}</b>{tmarText(" from your scanner. Drop it anywhere in the window, or use the button.")}</p>
+            <p>{tmarText("Units are assumed to be millimetres. Nothing is uploaded: the file is read and the whole measurement runs in this browser.")}</p>
           </InfoDot>
         </div>
         <ModelSlotBlock
@@ -238,33 +234,13 @@ export function Panel({
 
       {sectionDraft === null && (
         <div className="group">
-          <div className="sec-head">
-            Create element
-            <InfoDot title="Elements">
+          <div className="sec-head">{tmarText("Create element")}<InfoDot title={tmarText("Elements")}>
+              <p>{tmarText("Every measurement here starts with an element — a plane, a cylinder, a sphere, a circle, a point or a line. Dimensions are then measured between them, never between raw triangles.")}</p>
+              <p>{tmarText("An element is either ")}<b>{tmarText("fitted")}</b>{tmarText(" to the scan, by clicking the feature and letting the tool find the surface; ")}<b>{tmarText("picked")}</b>{tmarText(" straight off the mesh, for a single point; or ")}<b>{tmarText("constructed")}</b>{tmarText(" from elements you already have — an axis through two circles, a midpoint between two points, a plane offset from another.")}</p>
+              <p>{tmarText("Which of those a kind offers appears as ")}<i>{tmarText("Created")}</i>{tmarText(" once you choose it.")}</p>
+              <p>{tmarText("The kind stays in hand after ")}<b>{tmarText("Create")}</b>{tmarText(", ready for the next one, as a sketch tool does — ")}<b>{tmarText("Cancel")}</b>{tmarText(" or ")}<b>{tmarText("Esc")}</b>{tmarText(" puts it down; on a box with picks in it,")}<b>{tmarText(" Esc")}</b>{tmarText(" first empties the box.")}</p>
               <p>
-                Every measurement here starts with an element — a plane, a cylinder, a sphere, a
-                circle, a point or a line. Dimensions are then measured between them, never between
-                raw triangles.
-              </p>
-              <p>
-                An element is either <b>fitted</b> to the scan, by clicking the feature and letting
-                the tool find the surface; <b>picked</b> straight off the mesh, for a single point;
-                or <b>constructed</b> from elements you already have — an axis through two circles,
-                a midpoint between two points, a plane offset from another.
-              </p>
-              <p>
-                Which of those a kind offers appears as <i>Created</i> once you choose it.
-              </p>
-              <p>
-                The kind stays in hand after <b>Create</b>, ready for the next one, as a sketch
-                tool does — <b>Cancel</b> or <b>Esc</b> puts it down; on a box with picks in it,
-                <b> Esc</b> first empties the box.
-              </p>
-              <p>
-                <b>Section</b> is not an element but a cut: the scan sliced with a plane taken
-                across an element&apos;s direction, to be measured on the sheet of the 2D Measure
-                workspace.
-              </p>
+                <b>{tmarText("Section")}</b>{tmarText(" is not an element but a cut: the scan sliced with a plane taken across an element's direction, to be measured on the sheet of the 2D Measure workspace.")}</p>
             </InfoDot>
           </div>
           <div className={pulseKind && !busy ? 'kindrow featurekeys three pulse' : 'kindrow featurekeys three'}>
@@ -282,17 +258,17 @@ export function Panel({
                 onClick={() => onStartDraft(k.id)}
               >
                 <Icon name={KIND_ICON[k.id]} />
-                <span>{k.label}</span>
+                <span>{tmarText(k.label)}</span>
               </button>
             ))}
             <button
               data-test="fit-section"
               disabled={!fileName || busy || dimDraft !== null}
-              title="Cut the scan with a plane, to measure the cut in the 2D Measure workspace"
+              title={tmarText("Cut the scan with a plane, to measure the cut in the 2D Measure workspace")}
               onClick={onStartSection}
             >
               <Icon name="section" />
-              <span>Section</span>
+              <span>{tmarText("Section")}</span>
             </button>
           </div>
         </div>
@@ -306,25 +282,15 @@ export function Panel({
       {discarded?.selection && !draft && !alignDraft && !sectionDraft && (
         <div className="group" data-test="discarded-draft">
           <div className="g-label">
-            <span>
-              Discarded{' '}
-              {discarded.editId !== undefined
-                ? `edit of ${elements.find((e) => e.id === discarded.editId)?.name ?? 'element'}`
-                : elementKindInfo(discarded.kind).noun}
+            <span>{tmarText("Discarded")}{' '}
+              {discarded.editId !== undefined ? tmarText("edit of {0}", [elements.find((e) => e.id === discarded.editId)?.name ?? (tmarText("element"))]) : tmarText(elementKindInfo(discarded.kind).noun)}
             </span>
-            <b>{discarded.selection.length.toLocaleString('en-US')} points</b>
+            <b>{discarded.selection.length.toLocaleString('en-US')}{tmarText(" points")}</b>
           </div>
-          <p className="hint">
-            Its marked surface is kept until the next element is started — bring it back to carry
-            on where you were, marking and all.
-          </p>
+          <p className="hint">{tmarText("Its marked surface is kept until the next element is started — bring it back to carry on where you were, marking and all.")}</p>
           <div className="toolrow">
-            <button data-test="restore-draft" onClick={onRestoreDraft}>
-              Restore
-            </button>
-            <button data-test="forget-draft" onClick={forgetDiscarded}>
-              Forget
-            </button>
+            <button data-test="restore-draft" onClick={onRestoreDraft}>{tmarText("Restore")}</button>
+            <button data-test="forget-draft" onClick={forgetDiscarded}>{tmarText("Forget")}</button>
           </div>
         </div>
       )}
@@ -345,10 +311,10 @@ export function Panel({
       {elements.length > 0 && (
         <div className="group">
           <div className="g-label">
-            <span>Elements</span>
+            <span>{tmarText("Elements")}</span>
             <ShowAllButton
               anyVisible={elements.some((e) => e.visible)}
-              what="elements"
+              what={tmarText("elements")}
               testId="elements-show-all"
               onSet={setAllElementsVisible}
             />
@@ -360,17 +326,15 @@ export function Panel({
               name={el.name}
               color={el.color}
               visible={el.visible}
-              title={linkedTitle(el)}
+              title={tmarText(linkedTitle(el))}
               reading={
                 el.status === 'fitting' ? (
                   <b className="working">
-                    <span className="spinner" />
-                    fitting
-                  </b>
+                    <span className="spinner" />{tmarText("fitting")}</b>
                 ) : el.fit ? (
                   <b>{formatPrimary(el.fit, units)}</b>
                 ) : (
-                  <b className="warn" title={el.message}>
+                  <b className="warn" title={tmarText(el.message)}>
                     ⚠
                   </b>
                 )
@@ -390,10 +354,10 @@ export function Panel({
       {sections.length > 0 && (
         <div className="group">
           <div className="g-label">
-            <span>Sections</span>
+            <span>{tmarText("Sections")}</span>
             <ShowAllButton
               anyVisible={sections.some((sec) => sec.visible)}
-              what="sections"
+              what={tmarText("sections")}
               testId="sections-show-all"
               onSet={setAllSectionsVisible}
             />
@@ -419,18 +383,18 @@ export function Panel({
                 visible={sec.visible}
                 reading={
                   sec.cut ? (
-                    <b title={where}>
-                      {shadow ? `${shadow.loops} · ${shadow.area}` : `${chains} edge${chains === 1 ? '' : 's'}`}
-                      {measured > 0 && ` · ${measured} element${measured === 1 ? '' : 's'}`}
+                    <b title={tmarText(where)}>
+                      {shadow ? tmarText("{0} · {1}", [shadow.loops, shadow.area]) : tmarText("{0} edge{1}", [chains, chains === 1 ? '' : tmarText("s")])}
+                      {measured > 0 && (tmarText(" · {0} element{1}", [measured, measured === 1 ? '' : tmarText("s")]))}
                     </b>
                   ) : sec.message ? (
-                    <b className="warn" title={sec.message}>
+                    <b className="warn" title={tmarText(sec.message)}>
                       ⚠
                     </b>
                   ) : (
                     <b className="working">
                       <span className="spinner" />
-                      {sec.kind === 'shadow' ? 'projecting' : 'cutting'}
+                      {sec.kind === 'shadow' ? tmarText("projecting") : tmarText("cutting")}
                     </b>
                   )
                 }
@@ -443,10 +407,7 @@ export function Panel({
               />
             )
           })}
-          <p className="hint">
-            Measure a section in the <b>2D Measure</b> workspace. What you fit on its sheet is drawn
-            on the cut here and goes into the STEP file with the section.
-          </p>
+          <p className="hint">{tmarText("Measure a section in the ")}<b>{tmarText("2D Measure")}</b>{tmarText(" workspace. What you fit on its sheet is drawn on the cut here and goes into the STEP file with the section.")}</p>
         </div>
       )}
 
@@ -457,32 +418,13 @@ export function Panel({
         <>
           <div className="divider" />
           <label className="field">
-            <span>
-              STEP as
-              <InfoDot title="What the STEP file contains">
+            <span>{tmarText("STEP as")}<InfoDot title={tmarText("What the STEP file contains")}>
                 <p>
-                  <b>Solids &amp; faces:</b> each element as geometry CAD can build on — a plane as a
-                  bounded planar face with real edges, a cylinder and a sphere as closed solid
-                  bodies, each its own named body in the tree. Sketch on them, offset them, cut with
-                  them.
-                </p>
+                  <b>{tmarText("Solids & faces:")}</b>{tmarText(" each element as geometry CAD can build on — a plane as a bounded planar face with real edges, a cylinder and a sphere as closed solid bodies, each its own named body in the tree. Sketch on them, offset them, cut with them.")}</p>
                 <p>
-                  <b>Construction surfaces:</b> the same geometry as trimmed analytic surfaces and
-                  curves in one set, with no topology — the form metrology packages hand measured
-                  datums over in. Unmistakably reference geometry rather than a part, and the safer
-                  choice for an importer that chokes on bodies.
-                </p>
-                <p>
-                  Points and lines are points and lines either way. Whatever an element has been
-                  extended to is what gets written, and a sphere, cylinder or circle given an
-                  assumed Ø when it was created is written at that Ø — everything else as measured.
-                </p>
-                <p>
-                  What was measured on a section's sheet in 2D Measure — its points, lines, circles
-                  and arcs — comes too, as curves lying in the cutting plane, in a group named after
-                  the section. Cut a section through a bore, fit its circle on the sheet, and CAD
-                  gets a circle in space to sketch on.
-                </p>
+                  <b>{tmarText("Construction surfaces:")}</b>{tmarText(" the same geometry as trimmed analytic surfaces and curves in one set, with no topology — the form metrology packages hand measured datums over in. Unmistakably reference geometry rather than a part, and the safer choice for an importer that chokes on bodies.")}</p>
+                <p>{tmarText("Points and lines are points and lines either way. Whatever an element has been extended to is what gets written, and a sphere, cylinder or circle given an assumed Ø when it was created is written at that Ø — everything else as measured.")}</p>
+                <p>{tmarText("What was measured on a section's sheet in 2D Measure — its points, lines, circles and arcs — comes too, as curves lying in the cutting plane, in a group named after the section. Cut a section through a bore, fit its circle on the sheet, and CAD gets a circle in space to sketch on.")}</p>
               </InfoDot>
             </span>
             <select
@@ -490,28 +432,17 @@ export function Panel({
               value={stepStyle}
               onChange={(e) => setStepStyle(e.target.value as StepStyle)}
             >
-              <option value="solids">Solids &amp; faces</option>
-              <option value="surfaces">Construction surfaces</option>
+              <option value="solids">{tmarText("Solids & faces")}</option>
+              <option value="surfaces">{tmarText("Construction surfaces")}</option>
             </select>
           </label>
           <label className="field">
-            <span>
-              Point cloud as
-              <InfoDot title="What the point cloud contains">
+            <span>{tmarText("Point cloud as")}<InfoDot title={tmarText("What the point cloud contains")}>
+                <p>{tmarText("Every vertex of the scan with its normal, where the part now stands — any alignment or move you applied comes with it — for the reverse-engineering tools that model over points rather than triangles. Millimetres, like everything here.")}</p>
                 <p>
-                  Every vertex of the scan with its normal, where the part now stands — any
-                  alignment or move you applied comes with it — for the reverse-engineering tools
-                  that model over points rather than triangles. Millimetres, like everything here.
-                </p>
+                  <b>{tmarText("PLY:")}</b>{tmarText(" binary and compact, read by Geomagic, CloudCompare, MeshLab, ReCap and most others. Points only, no faces — a reader that wants a cloud gets a cloud.")}</p>
                 <p>
-                  <b>PLY:</b> binary and compact, read by Geomagic, CloudCompare, MeshLab, ReCap and
-                  most others. Points only, no faces — a reader that wants a cloud gets a cloud.
-                </p>
-                <p>
-                  <b>XYZ text:</b> one point per line, x y z nx ny nz — the universal fallback, the
-                  same file ASC readers take. Autodesk ReCap turns either into an RCP for AutoCAD
-                  and Inventor.
-                </p>
+                  <b>{tmarText("XYZ text:")}</b>{tmarText(" one point per line, x y z nx ny nz — the universal fallback, the same file ASC readers take. Autodesk ReCap turns either into an RCP for AutoCAD and Inventor.")}</p>
               </InfoDot>
             </span>
             <select
@@ -519,13 +450,13 @@ export function Panel({
               value={cloudFormat}
               onChange={(e) => setCloudFormat(e.target.value as CloudFormat)}
             >
-              <option value="ply">PLY (binary, with normals)</option>
-              <option value="xyz">XYZ text (x y z nx ny nz)</option>
+              <option value="ply">{tmarText("PLY (binary, with normals)")}</option>
+              <option value="xyz">{tmarText("XYZ text (x y z nx ny nz)")}</option>
             </select>
           </label>
           <div className="toolrow">
             <CopyButton
-              label="Copy summary"
+              label={tmarText("Copy summary")}
               disabled={elements.every((e) => !e.fit)}
               onCopy={onCopy}
             />
@@ -533,24 +464,20 @@ export function Panel({
               data-test="export-step"
               disabled={elements.every((e) => !e.fit) && !anyMeasuredOnSections && !anyBlock}
               onClick={onExportStep}
-              title="Export the created elements — and what was measured on the sections, and the extruded shadows — as analytic geometry in a STEP file"
-            >
-              Export STEP
-            </button>
+              title={tmarText("Export the created elements — and what was measured on the sections, and the extruded shadows — as analytic geometry in a STEP file")}
+            >{tmarText("Export STEP")}</button>
             <ExportMeshButton
               testId="export-mesh"
               disabled={busy}
               onExport={onExportMesh}
-              title="Save the scan as an STL or a 3MF where it now stands — any alignment or move you applied comes with it"
+              title={tmarText("Save the scan as an STL or a 3MF where it now stands — any alignment or move you applied comes with it")}
             />
             <button
               data-test="export-cloud"
               disabled={busy}
               onClick={onExportCloud}
-              title="Save the scan as a point cloud where it now stands — every vertex with its normal, any alignment or move you applied included"
-            >
-              Export cloud
-            </button>
+              title={tmarText("Save the scan as a point cloud where it now stands — every vertex with its normal, any alignment or move you applied included")}
+            >{tmarText("Export cloud")}</button>
           </div>
         </>
       )}
@@ -570,6 +497,8 @@ function ModelSlotBlock({
   busy: boolean
   onOpenScan: (file: File) => void
 }) {
+  useTmarLanguage()
+
   return (
     <>
       <ModelSlot
@@ -580,7 +509,7 @@ function ModelSlotBlock({
         busy={busy}
         onOpen={onOpenScan}
       />
-      {!fileName && <p className="hint">Drop it anywhere in the window.</p>}
+      {!fileName && <p className="hint">{tmarText("Drop it anywhere in the window.")}</p>}
     </>
   )
 }

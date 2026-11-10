@@ -8,9 +8,13 @@ import { reEditorOpen, selectionItems, useReverse } from '../reverse/state/reSto
 import { EditSurfaceIcon } from './EditSurfaceIcon'
 import { workspaceHost } from './workspaceHost'
 import './workspaceSurface.css'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 /** The shared host binds one actual project body before the editor opens. */
 export function WorkspaceEntry() {
+  useTmarLanguage()
+
   const [choosing, setChoosing] = useState(false)
   const [bodyId, setBodyId] = useState('')
   const [opening, setOpening] = useState(false)
@@ -43,19 +47,19 @@ export function WorkspaceEntry() {
     setChoosing(true)
   }
   return <div className="es-feature-entry" data-test="edit-surface-entry">
-    <button type="button" data-test="feature-edit-surface" aria-label="Edit Surface"
-      title="Modifica i poli di una faccia CAD nella vista principale."
+    <button type="button" data-test="feature-edit-surface" aria-label={tmarText("Edit Surface")}
+      title={tmarText("Modifica i poli di una faccia CAD nella vista principale.")}
       disabled={unavailable || !bodies.length || busy || running || building || editing || playback || opening} onClick={begin}>
-      <EditSurfaceIcon /><span>Edit Surface</span>
+      <EditSurfaceIcon /><span>{tmarText("Edit Surface")}</span>
     </button>
     {choosing && createPortal(<div className="workspace-surface-choose-back">
-      <section className="workspace-surface-choose" role="dialog" aria-modal="true" aria-label="Scegli corpo CAD">
-        <h2>Scegli il corpo CAD</h2>
-        <label>Corpo <select data-test="surface-source-body" value={bodyId} onChange={e => setBodyId(e.target.value)}>
-          <option value="">Scegli…</option>{bodies.map(body => <option key={body.id} value={body.id}>{body.name}</option>)}
+      <section className="workspace-surface-choose" role="dialog" aria-modal="true" aria-label={tmarText("Scegli corpo CAD")}>
+        <h2>{tmarText("Scegli il corpo CAD")}</h2>
+        <label>{tmarText("Corpo ")}<select data-test="surface-source-body" value={bodyId} onChange={e => setBodyId(e.target.value)}>
+          <option value="">{tmarText("Scegli…")}</option>{bodies.map(body => <option key={body.id} value={body.id}>{body.name}</option>)}
         </select></label>
-        <div><button type="button" disabled={!bodyId || opening} onClick={() => void open(Number(bodyId))}>Continua</button>
-          <button type="button" disabled={opening} onClick={() => setChoosing(false)}>Annulla</button></div>
+        <div><button type="button" disabled={!bodyId || opening} onClick={() => void open(Number(bodyId))}>{tmarText("Continua")}</button>
+          <button type="button" disabled={opening} onClick={() => setChoosing(false)}>{tmarText("Annulla")}</button></div>
       </section>
     </div>, document.body)}
   </div>

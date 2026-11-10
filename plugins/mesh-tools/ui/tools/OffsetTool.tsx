@@ -10,6 +10,8 @@ import { MarkTools } from '../../../../src/ui/MarkTools'
 import { NumberField } from '../../../../src/ui/NumberField'
 import { useMeshTools } from '../../state/meshStore'
 import { typedLen } from '../meshFormat'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../../../src/i18n'
+
 
 export function OffsetTool({
   ready,
@@ -22,6 +24,8 @@ export function OffsetTool({
   onOffset: () => void
   onClear: () => void
 }) {
+  useTmarLanguage()
+
   // Only what the panel reads: the whole store would render it again on
   // every write to it, the cut preview's while its offset is dragged.
   const m = useMeshTools(
@@ -45,36 +49,19 @@ export function OffsetTool({
 
   return (
     <div className="group" data-test="offset-tool">
-      <div className="sec-head">
-        Shrink / expand
-        <InfoDot title="Shrinking or expanding the surface">
+      <div className="sec-head">{tmarText("Shrink / expand")}<InfoDot title={tmarText("Shrinking or expanding the surface")}>
+          <p>{tmarText("Every point of the surface moved along its normal by the same distance: out to")}{' '}
+            <b>{tmarText("expand")}</b>{tmarText(", in to ")}<b>{tmarText("shrink")}</b>{tmarText(". Not a scale — a ")}{ex.ball} {w}{tmarText(" ball expanded by")}{' '}
+            {ex.by} {w}{tmarText(" is ")}{ex.across} {w}{tmarText(" across, and a bore in the part comes out ")}{ex.bore} {w}{' '}{tmarText("narrower, where scaling would widen it. For the thickness a scanning spray added, a clearance on a mating part, a print that came out a little fat.")}</p>
+          <p>{tmarText("Each point moves so that every face around it ends the distance from where it was — even thickness, as a CAD offset has it. On a sharp edge the point moves further, square to neither face, so both faces end the distance out and the edge stays sharp. Where the surface would fold over itself — a dent shrunk past its depth, a spike of scatter — the points are eased until it does not.")}</p>
           <p>
-            Every point of the surface moved along its normal by the same distance: out to{' '}
-            <b>expand</b>, in to <b>shrink</b>. Not a scale — a {ex.ball} {w} ball expanded by{' '}
-            {ex.by} {w} is {ex.across} {w} across, and a bore in the part comes out {ex.bore} {w}{' '}
-            narrower, where scaling would widen it. For the thickness a scanning spray added, a
-            clearance on a mating part, a print that came out a little fat.
-          </p>
-          <p>
-            Each point moves so that every face around it ends the distance from where it was —
-            even thickness, as a CAD offset has it. On a sharp edge the point moves further, square
-            to neither face, so both faces end the distance out and the edge stays sharp. Where
-            the surface would fold over itself — a dent shrunk past its depth, a spike of scatter
-            — the points are eased until it does not.
-          </p>
-          <p>
-            <b>Marked region</b> moves only the surface you mark with a window, the brush or a
-            lasso, as a step — like a face pushed. Where the face beside it runs along the move —
-            marked up to a machined edge — that face is stretched or shortened with it and the
-            edge stays sharp; elsewhere a wall joins the step to the surface around it. The edit
-            is made on the edited copy; <b>Ctrl+Z</b> puts it back.
-          </p>
+            <b>{tmarText("Marked region")}</b>{tmarText(" moves only the surface you mark with a window, the brush or a lasso, as a step — like a face pushed. Where the face beside it runs along the move — marked up to a machined edge — that face is stretched or shortened with it and the edge stays sharp; elsewhere a wall joins the step to the surface around it. The edit is made on the edited copy; ")}<b>{tmarText("Ctrl+Z")}</b>{tmarText(" puts it back.")}</p>
         </InfoDot>
       </div>
 
       <div className="field">
-        <span>Move</span>
-        <div className="moderow" role="radiogroup" aria-label="What to move">
+        <span>{tmarText("Move")}</span>
+        <div className="moderow" role="radiogroup" aria-label={tmarText("What to move")}>
           {(['all', 'marked'] as const).map((scope) => (
             <button
               key={scope}
@@ -84,9 +71,9 @@ export function OffsetTool({
               data-test={`offset-scope-${scope}`}
               disabled={busy}
               onClick={() => m.setOffsetScope(scope)}
-              title={scope === 'all' ? 'Move the whole surface' : 'Move only a region you mark on the part, as a step'}
+              title={scope === 'all' ? tmarText("Move the whole surface") : tmarText("Move only a region you mark on the part, as a step")}
             >
-              {scope === 'all' ? 'Whole part' : 'Marked region'}
+              {scope === 'all' ? tmarText("Whole part") : tmarText("Marked region")}
             </button>
           ))}
         </div>
@@ -94,8 +81,8 @@ export function OffsetTool({
       {regional && <MarkTools escapeNote="The marking stays until it is moved or cleared." onClear={onClear} />}
 
       <div className="field">
-        <span>Direction</span>
-        <div className="moderow" role="radiogroup" aria-label="Which way to move">
+        <span>{tmarText("Direction")}</span>
+        <div className="moderow" role="radiogroup" aria-label={tmarText("Which way to move")}>
           {(['expand', 'shrink'] as const).map((direction) => (
             <button
               key={direction}
@@ -105,16 +92,16 @@ export function OffsetTool({
               data-test={`offset-${direction}`}
               disabled={busy}
               onClick={() => m.setOffsetDirection(direction)}
-              title={direction === 'expand' ? 'Out along the normal — the part grows, its bores narrow' : 'In along the normal — the part shrinks, its bores widen'}
+              title={direction === 'expand' ? tmarText("Out along the normal — the part grows, its bores narrow") : tmarText("In along the normal — the part shrinks, its bores widen")}
             >
-              {direction === 'expand' ? 'Expand' : 'Shrink'}
+              {direction === 'expand' ? tmarText("Expand") : tmarText("Shrink")}
             </button>
           ))}
         </div>
       </div>
 
       <NumberField
-        label="Distance"
+        label={tmarText("Distance")}
         testId="offset-distance"
         value={m.offsetDistance}
         step={0.01}
@@ -122,7 +109,7 @@ export function OffsetTool({
         kind="length"
         disabled={busy}
         onCommit={m.setOffsetDistance}
-        hint="How far the surface moves along its normal. Meant for corrections small against the part's features: a slot narrower than twice the distance closes over itself when the part is expanded, as a rib thinner than it does when it is shrunk."
+        hint={tmarText("How far the surface moves along its normal. Meant for corrections small against the part's features: a slot narrower than twice the distance closes over itself when the part is expanded, as a rib thinner than it does when it is shrunk.")}
       />
 
       <button
@@ -135,14 +122,14 @@ export function OffsetTool({
         {m.editing ? (
           <>
             <span className="spinner" />
-            {expand ? 'Expanding…' : 'Shrinking…'}
+            {expand ? tmarText("Expanding…") : tmarText("Shrinking…")}
           </>
         ) : (
-          `${expand ? 'Expand' : 'Shrink'} ${regional ? 'the marked region ' : ''}by ${typedLen(m.offsetDistance, len.units)}`
+          tmarText('{0} {1}by {2}', [tmarText(expand ? 'Expand' : 'Shrink'), regional ? tmarText('the marked region ') : '', typedLen(m.offsetDistance, len.units)])
         )}
       </button>
       {regional && marked === 0 && (
-        <p className="hint">Mark the surface to move — pick Window, Brush or Lasso above.</p>
+        <p className="hint">{tmarText("Mark the surface to move — pick Window, Brush or Lasso above.")}</p>
       )}
     </div>
   )

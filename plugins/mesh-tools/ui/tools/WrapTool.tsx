@@ -10,6 +10,8 @@ import { useLength } from '../../../../src/app/useUnits'
 import type { WrapEdges } from '../../core/wrap'
 import { useMeshTools, wrapStale } from '../../state/meshStore'
 import { count, typedLen } from '../meshFormat'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../../../src/i18n'
+
 
 const EDGES: { id: WrapEdges; label: string; title: string }[] = [
   { id: 'sharp', label: 'Sharp', title: 'Rebuild the part’s sharp edges and corners on the wrap — for a machined or moulded part. A wrap grown keeps its rounds' },
@@ -31,6 +33,8 @@ export function WrapTool({
   onApply: () => void
   onDiscard: () => void
 }) {
+  useTmarLanguage()
+
   // Only what the panel reads: the whole store would render it again on
   // every write to it.
   const m = useMeshTools(
@@ -53,40 +57,22 @@ export function WrapTool({
   const made = m.wrapMade
   const r = made?.report
   const running = m.wrapStatus === 'running'
-  const n = (k: number, one: string, many: string) => `${count(k)} ${k === 1 ? one : many}`
+  const n = (k: number, one: string, many: string) => `${count(k)} ${tmarText(k === 1 ? one : many)}`
   const seconds = r ? r.stages.reduce((t, s) => t + s.ms, 0) / 1000 : 0
 
   return (
     <>
       <div className="group" data-test="wrap-tool">
-        <div className="sec-head">
-          Wrap
-          <InfoDot title="Wrapping a part in one closed skin">
-            <p>
-              One closed skin round the part, for a mesh that is a mess inside: an assembly exported
-              as one file, channels and bosses inside a casting, shells that overlap or face the wrong
-              way, a scan with cracks. Everything inside goes, and the skin is easy to print or slice.
-            </p>
-            <p>
-              Think of a ball rolled all over the part from outside: the wrap is where it stopped. It
-              lies on the part wherever the ball touched it, and bridges every opening the ball could
-              not get through — every slot, hole or crack narrower than <b>Close gaps under</b>. Keep
-              that small: a groove narrower than it is closed over too.
-            </p>
-            <p>
-              An open sheet has no inside, so it wraps to nothing: <b>Grow by</b> half the thickness
-              it should have, and it comes out a solid that thick. Grown, the whole wrap stands that
-              far off the part.
-            </p>
-            <p>
-              The result is a preview, the bridges in amber. <b>Apply</b> makes it the edited copy, one
-              step of the undo history.
-            </p>
+        <div className="sec-head">{tmarText("Wrap")}<InfoDot title={tmarText("Wrapping a part in one closed skin")}>
+            <p>{tmarText("One closed skin round the part, for a mesh that is a mess inside: an assembly exported as one file, channels and bosses inside a casting, shells that overlap or face the wrong way, a scan with cracks. Everything inside goes, and the skin is easy to print or slice.")}</p>
+            <p>{tmarText("Think of a ball rolled all over the part from outside: the wrap is where it stopped. It lies on the part wherever the ball touched it, and bridges every opening the ball could not get through — every slot, hole or crack narrower than ")}<b>{tmarText("Close gaps under")}</b>{tmarText(". Keep that small: a groove narrower than it is closed over too.")}</p>
+            <p>{tmarText("An open sheet has no inside, so it wraps to nothing: ")}<b>{tmarText("Grow by")}</b>{tmarText(" half the thickness it should have, and it comes out a solid that thick. Grown, the whole wrap stands that far off the part.")}</p>
+            <p>{tmarText("The result is a preview, the bridges in amber. ")}<b>{tmarText("Apply")}</b>{tmarText(" makes it the edited copy, one step of the undo history.")}</p>
           </InfoDot>
         </div>
 
         <NumberField
-          label="Close gaps under"
+          label={tmarText("Close gaps under")}
           testId="wrap-gap"
           value={m.wrapGap}
           step={0.1}
@@ -96,17 +82,14 @@ export function WrapTool({
           onCommit={m.setWrapGap}
           hint={
             <>
-              <p>Openings narrower than this are bridged; wider ones the wrap follows down.</p>
-              <p>
-                It starts at a two-hundredth of the part's size. The work grows as the gap shrinks: on a
-                large part a fine gap is closed on a coarser grid, and the result says so.
-              </p>
+              <p>{tmarText("Openings narrower than this are bridged; wider ones the wrap follows down.")}</p>
+              <p>{tmarText("It starts at a two-hundredth of the part's size. The work grows as the gap shrinks: on a large part a fine gap is closed on a coarser grid, and the result says so.")}</p>
             </>
           }
         />
 
         <NumberField
-          label="Grow by"
+          label={tmarText("Grow by")}
           testId="wrap-grow"
           value={m.wrapGrow}
           step={0.1}
@@ -114,16 +97,13 @@ export function WrapTool({
           kind="length"
           disabled={busy}
           onCommit={m.setWrapGrow}
-          hint="How far the wrap stands off the part all round. 0 lays it on the part; an open sheet needs half the thickness it should have — at most the gap."
+          hint={tmarText("How far the wrap stands off the part all round. 0 lays it on the part; an open sheet needs half the thickness it should have — at most the gap.")}
         />
         {m.wrapOpen !== null && m.wrapOpen > 0 && m.wrapGrow === 0 && (
-          <p className="hint" data-test="wrap-open">
-            The mesh has {n(m.wrapOpen, 'open edge', 'open edges')}. Where it is a sheet rather than the
-            skin of a solid it has no inside, and wraps to nothing unless grown.
-          </p>
+          <p className="hint" data-test="wrap-open">{tmarText("The mesh has ")}{n(m.wrapOpen, 'open edge', 'open edges')}{tmarText(". Where it is a sheet rather than the skin of a solid it has no inside, and wraps to nothing unless grown.")}</p>
         )}
 
-        <div className="moderow" role="radiogroup" aria-label="Edges">
+        <div className="moderow" role="radiogroup" aria-label={tmarText("Edges")}>
           {EDGES.map((x) => (
             <button
               key={x.id}
@@ -133,9 +113,9 @@ export function WrapTool({
               data-test={`wrap-edges-${x.id}`}
               disabled={busy}
               onClick={() => m.setWrapEdges(x.id)}
-              title={x.title}
+              title={tmarText(x.title)}
             >
-              {x.label}
+              {tmarText(x.id === 'smooth' ? 'Rounded' : x.label)}
             </button>
           ))}
         </div>
@@ -143,120 +123,95 @@ export function WrapTool({
         {running ? (
           <div className="toolrow">
             <button className="primary" disabled data-test="wrap-run">
-              <span className="spinner" />
-              Wrapping…
-            </button>
-            <button data-test="wrap-cancel" onClick={onCancel} title="Stop the wrap — the mesh stays as it is">
-              Cancel
-            </button>
+              <span className="spinner" />{tmarText("Wrapping…")}</button>
+            <button data-test="wrap-cancel" onClick={onCancel} title={tmarText("Stop the wrap — the mesh stays as it is")}>{tmarText("Cancel")}</button>
           </div>
         ) : (
           <button className="primary block" data-test="wrap-run" data-confirm={made && !stale ? undefined : 1} disabled={!ready || busy} onClick={onWrap}>
-            {made ? 'Wrap again' : 'Wrap'}
+            {made ? tmarText("Wrap again") : tmarText("Wrap")}
           </button>
         )}
         {running && m.wrapStage && (
           <p className="hint" data-test="wrap-stage">
-            {m.wrapStage}
+            {tmarText(m.wrapStage)}
           </p>
         )}
-        {m.wrapMessage && <p className="alarmtext">{m.wrapMessage}</p>}
+        {m.wrapMessage && <p className="alarmtext">{tmarText(m.wrapMessage)}</p>}
       </div>
 
       {r && made && (
         <div className="group" data-test="wrap-result">
           <div className="dro hero">
             <div className="dro-label">
-              <span>Wrap</span>
+              <span>{tmarText("Wrap")}</span>
               <span>{n(r.shells, 'shell', 'shells')}</span>
             </div>
             <div className="dro-window" data-test="wrap-triangles">
               <b>{count(r.triangles)}</b>
-              <span>TRIANGLES</span>
+              <span>{tmarText("TRIANGLES")}</span>
             </div>
-            <div className="dro-note">
-              from {count(r.inputTriangles)} · gaps under {typedLen(r.settings.gap, len.units)} closed
-              {r.settings.grow > 0 ? ` · grown ${typedLen(r.settings.grow, len.units)}` : ''}
+            <div className="dro-note">{tmarText("from ")}{count(r.inputTriangles)}{tmarText(" · gaps under ")}{typedLen(r.settings.gap, len.units)}{tmarText(" closed")}{r.settings.grow > 0 ? tmarText(" · grown {0}", [typedLen(r.settings.grow, len.units)]) : ''}
             </div>
           </div>
 
           <div className="kv" data-test="wrap-dropped">
-            <span className="name">Triangles inside, dropped</span>
+            <span className="name">{tmarText("Triangles inside, dropped")}</span>
             <b>{count(r.dropped)}</b>
           </div>
           {r.settings.edges === 'sharp' && r.settings.grow === 0 && (
             <div className="kv" data-test="wrap-sharp">
-              <span className="name">Edges put back</span>
+              <span className="name">{tmarText("Edges put back")}</span>
               <b>
-                {count(r.sharpEdges)} points{r.sharpCorners > 0 ? ` · ${count(r.sharpCorners)} corner${r.sharpCorners === 1 ? '' : 's'}` : ''}
+                {count(r.sharpEdges)}{tmarText(" points")}{r.sharpCorners > 0 ? tmarText(" · {0} corner{1}", [count(r.sharpCorners), r.sharpCorners === 1 ? '' : tmarText("s")]) : ''}
               </b>
             </div>
           )}
           <div className="kv" data-test="wrap-bridged">
-            <span className="name">Bridging openings</span>
+            <span className="name">{tmarText("Bridging openings")}</span>
             <b>{len.area(r.bridgedArea, 1)}</b>
           </div>
           <div className="kv">
-            <span className="name">Volume</span>
+            <span className="name">{tmarText("Volume")}</span>
             <b>
-              {made.volumeBefore !== null ? `${len.vol(made.volumeBefore, 1)} → ` : ''}
+              {made.volumeBefore !== null ? tmarText("{0} → ", [len.vol(made.volumeBefore, 1)]) : ''}
               {len.vol(r.volume, 1)}
             </b>
           </div>
           <div className="kv">
-            <span className="name">
-              Grid
-              <InfoDot title="How it was worked out">
+            <span className="name">{tmarText("Grid")}<InfoDot title={tmarText("How it was worked out")}>
+                <p>{tmarText("The wrap is found on a grid a sixth of the gap across, and every vertex where it touches the part is then moved onto the part's own triangles — so it lies on the part as exactly as the part is meshed, whatever the grid.")}</p>
                 <p>
-                  The wrap is found on a grid a sixth of the gap across, and every vertex where it touches
-                  the part is then moved onto the part's own triangles — so it lies on the part as exactly
-                  as the part is meshed, whatever the grid.
-                </p>
-                <p>
-                  {r.stages.map((s) => `${s.name} ${(s.ms / 1000).toFixed(2)} s`).join(' · ')}
+                  {r.stages.map((s) => `${tmarText(s.name)} ${(s.ms / 1000).toFixed(2)} s`).join(' · ')}
                 </p>
               </InfoDot>
             </span>
             <b>
-              {len.fmt(r.cell, 3)} · {seconds.toFixed(1)} s
-            </b>
+              {len.fmt(r.cell, 3)} · {seconds.toFixed(1)}{tmarText(" s")}</b>
           </div>
           {r.warning && (
             <p className="warnnote" data-test="wrap-warning">
-              ⚠ {r.warning}
+              ⚠ {tmarText(r.warning)}
             </p>
           )}
           {r.coarsened && r.fullGap !== null && (
-            <p className="warnnote" data-test="wrap-coarsened">
-              ⚠ The part is too large for a grid this fine: it was worked out on a coarser one, so gaps
-              near {typedLen(r.settings.gap, len.units)} are judged less exactly. At this size{' '}
-              {typedLen(r.fullGap, len.units)} is the smallest gap closed as exactly.
-            </p>
+            <p className="warnnote" data-test="wrap-coarsened">{tmarText("⚠ The part is too large for a grid this fine: it was worked out on a coarser one, so gaps near ")}{typedLen(r.settings.gap, len.units)}{tmarText(" are judged less exactly. At this size")}{' '}
+              {typedLen(r.fullGap, len.units)}{tmarText(" is the smallest gap closed as exactly.")}</p>
           )}
           {stale && (
-            <p className="hint" data-test="wrap-stale">
-              The settings have changed since this was wrapped — wrap again to use them. Apply takes the
-              wrap on screen.
-            </p>
+            <p className="hint" data-test="wrap-stale">{tmarText("The settings have changed since this was wrapped — wrap again to use them. Apply takes the wrap on screen.")}</p>
           )}
 
           <div className="divider" />
-          <p className="hint" data-test="wrap-preview">
-            A preview: nothing has changed yet. The amber is where it bridges an opening.
-          </p>
+          <p className="hint" data-test="wrap-preview">{tmarText("A preview: nothing has changed yet. The amber is where it bridges an opening.")}</p>
           <div className="toolrow">
-            <button data-test="wrap-discard" disabled={busy} onClick={onDiscard} title="Put the wrap away — the mesh is as it was">
-              Discard
-            </button>
+            <button data-test="wrap-discard" disabled={busy} onClick={onDiscard} title={tmarText("Put the wrap away — the mesh is as it was")}>{tmarText("Discard")}</button>
             <button
               className="primary"
               data-test="wrap-apply"
               disabled={busy}
               onClick={onApply}
-              title="Make the wrap the edited copy, ready for Use for analysis — Ctrl+Z puts the mesh back"
-            >
-              Apply
-            </button>
+              title={tmarText("Make the wrap the edited copy, ready for Use for analysis — Ctrl+Z puts the mesh back")}
+            >{tmarText("Apply")}</button>
           </div>
         </div>
       )}

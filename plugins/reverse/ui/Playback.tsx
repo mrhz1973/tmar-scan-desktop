@@ -19,9 +19,13 @@ import { PLAYBACK_STEPS_MS, useRePrefs } from '../state/rePrefs'
 import { reEditorOpen, useReverse } from '../state/reStore'
 import { bodyFeatureReading, FEATURE_ICONS, keyParameter } from './featureReading'
 import { KeyIcon } from './reIcons'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 /** The key in the feature list's heading that plays the list from the top. */
 export function PlaybackKey() {
+  useTmarLanguage()
+
   const total = useReverse((s) => s.features.length + s.rolledBack.length)
   const editorOpen = useReverse(reEditorOpen)
   return (
@@ -29,12 +33,10 @@ export function PlaybackKey() {
       className="x eye all playkey"
       data-test="playback-start"
       disabled={editorOpen || total === 0}
-      title={editorOpen ? 'Finish what is open first' : 'Play the feature list back step by step: the part built up from nothing, one feature at a time, each held a moment — for recording how it was made. Space holds it, the arrows step it, Escape ends it'}
+      title={editorOpen ? tmarText("Finish what is open first") : tmarText("Play the feature list back step by step: the part built up from nothing, one feature at a time, each held a moment — for recording how it was made. Space holds it, the arrows step it, Escape ends it")}
       onClick={() => startPlayback()}
     >
-      <KeyIcon name="play" size={13} />
-      Play
-    </button>
+      <KeyIcon name="play" size={13} />{tmarText("Play")}</button>
   )
 }
 
@@ -51,6 +53,8 @@ function useSteps(): number[] {
  *  whether the viewport names it, and whether the sketches are passed
  *  over. */
 export function PlaybackBar() {
+  useTmarLanguage()
+
   const playback = useReverse((s) => s.playback)
   const steps = useSteps()
   const stepMs = useRePrefs((s) => s.playbackStepMs)
@@ -62,43 +66,38 @@ export function PlaybackBar() {
   return (
     <div className="playbar" data-test="playback-bar">
       <div className="playkeys">
-        <button data-test="playback-back" disabled={playbackStepFrom(playback.at, -1, steps) === null} title="One step back — the playback held there (←)" aria-label="Step back" onClick={() => stepPlayback(-1)}>
+        <button data-test="playback-back" disabled={playbackStepFrom(playback.at, -1, steps) === null} title={tmarText("One step back — the playback held there (←)")} aria-label={tmarText("Step back")} onClick={() => stepPlayback(-1)}>
           <KeyIcon name="stepBack" size={16} />
         </button>
         {playback.playing ? (
-          <button data-test="playback-pause" title="Hold the playback at this step (Space)" aria-label="Pause" onClick={() => pausePlayback()}>
+          <button data-test="playback-pause" title={tmarText("Hold the playback at this step (Space)")} aria-label={tmarText("Pause")} onClick={() => pausePlayback()}>
             <KeyIcon name="pause" size={16} />
           </button>
         ) : (
-          <button data-test="playback-play" title={atEnd ? 'Play again from the top (Space)' : 'Carry on from this step (Space)'} aria-label="Play" onClick={() => resumePlayback()}>
+          <button data-test="playback-play" title={atEnd ? tmarText("Play again from the top (Space)") : tmarText("Carry on from this step (Space)")} aria-label={tmarText("Play")} onClick={() => resumePlayback()}>
             <KeyIcon name="play" size={16} />
           </button>
         )}
-        <button data-test="playback-forward" disabled={atEnd} title="One step on — the playback held there (→)" aria-label="Step forward" onClick={() => stepPlayback(1)}>
+        <button data-test="playback-forward" disabled={atEnd} title={tmarText("One step on — the playback held there (→)")} aria-label={tmarText("Step forward")} onClick={() => stepPlayback(1)}>
           <KeyIcon name="stepForward" size={16} />
         </button>
-        <button data-test="playback-stop" title="End the playback — the rollback bar back where it stood (Escape)" aria-label="Stop" onClick={() => stopPlayback()}>
+        <button data-test="playback-stop" title={tmarText("End the playback — the rollback bar back where it stood (Escape)")} aria-label={tmarText("Stop")} onClick={() => stopPlayback()}>
           <KeyIcon name="stop" size={16} />
         </button>
       </div>
-      <label className="playhold" title="How long each step is held once it is built">
-        <span>Hold</span>
+      <label className="playhold" title={tmarText("How long each step is held once it is built")}>
+        <span>{tmarText("Hold")}</span>
         <select data-test="playback-hold" value={stepMs} onChange={(e) => useRePrefs.getState().setPlaybackStepMs(Number(e.target.value))}>
           {holds.map((ms) => (
             <option key={ms} value={ms}>
-              {ms / 1000} s
-            </option>
+              {ms / 1000}{tmarText(" s")}</option>
           ))}
         </select>
       </label>
-      <label className="playcaption" title="Name each step in the top left of the viewport, for the recording">
-        <input type="checkbox" data-test="playback-caption" checked={caption} onChange={(e) => useRePrefs.getState().setPlaybackCaption(e.target.checked)} />
-        Caption
-      </label>
-      <label className="playcaption" title="Pass over the sketches: only the steps that change the geometry are shown, each profile going straight to the body made of it">
-        <input type="checkbox" data-test="playback-skip-sketches" checked={skipSketches} onChange={(e) => useRePrefs.getState().setPlaybackSkipSketches(e.target.checked)} />
-        Skip sketches
-      </label>
+      <label className="playcaption" title={tmarText("Name each step in the top left of the viewport, for the recording")}>
+        <input type="checkbox" data-test="playback-caption" checked={caption} onChange={(e) => useRePrefs.getState().setPlaybackCaption(e.target.checked)} />{tmarText("Caption")}</label>
+      <label className="playcaption" title={tmarText("Pass over the sketches: only the steps that change the geometry are shown, each profile going straight to the body made of it")}>
+        <input type="checkbox" data-test="playback-skip-sketches" checked={skipSketches} onChange={(e) => useRePrefs.getState().setPlaybackSkipSketches(e.target.checked)} />{tmarText("Skip sketches")}</label>
     </div>
   )
 }
@@ -109,10 +108,10 @@ function captionReading(f: Feature, bodyName: (id: number) => string, units: Dis
   const ctx = { sections: store.sections, elements: store.elements }
   switch (f.kind) {
     case 'sketch':
-      return `on ${describePlaneRef(f.plane, ctx, units)}`
+      return tmarText('on {0}', [describePlaneRef(f.plane, ctx, units)])
     case 'extrude':
     case 'revolve':
-      return `${f.op === 'new' ? 'New body' : f.op === 'join' ? 'Join' : 'Cut'} · ${keyParameter(f, units)}`
+      return `${tmarText(f.op === 'new' ? 'New body' : f.op === 'join' ? 'Join' : 'Cut')} · ${keyParameter(f, units)}`
     default:
       return bodyFeatureReading(f, bodyName, ctx, units).text
   }
@@ -121,6 +120,8 @@ function captionReading(f: Feature, bodyName: (id: number) => string, units: Dis
 /** The caption on the stage while the list plays: the step and its total,
  *  and the feature the step built — or, before the first, the scan. */
 export function PlaybackCaption() {
+  useTmarLanguage()
+
   const playback = useReverse((s) => s.playback)
   const features = useReverse((s) => s.features)
   const steps = useSteps()
@@ -135,14 +136,13 @@ export function PlaybackCaption() {
   const failed = f && results[f.id]?.status === 'failed'
   return (
     <div className="playcaption-card" data-test="playback-caption-card">
-      <div className="playstep">
-        Step {steps.filter((n) => n > 0 && n <= playback.at).length} / {steps.length - 1}
+      <div className="playstep">{tmarText("Step ")}{steps.filter((n) => n > 0 && n <= playback.at).length} / {steps.length - 1}
       </div>
       <div className="playname">
         {f ? <KeyIcon name={FEATURE_ICONS[f.kind]} size={20} /> : <Icon name="scan" size={20} />}
-        <span>{f ? f.name : fileName ? 'The scan' : 'An empty stage'}</span>
+        <span>{f ? f.name : fileName ? tmarText("The scan") : tmarText("An empty stage")}</span>
       </div>
-      {f && <div className={'playreading' + (failed ? ' warn' : '')}>{failed ? '⚠ did not build' : captionReading(f, bodyName, units)}</div>}
+      {f && <div className={'playreading' + (failed ? ' warn' : '')}>{failed ? tmarText("⚠ did not build") : captionReading(f, bodyName, units)}</div>}
       {!f && fileName && <div className="playreading">{fileName}</div>}
     </div>
   )

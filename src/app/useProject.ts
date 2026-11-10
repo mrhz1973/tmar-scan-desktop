@@ -34,6 +34,8 @@ import type { PackedProject } from '../commands/host'
 import type { ImportQueue } from './importQueue'
 import { prepareScan, prepareNominal, prepareImage, runImport, type PreparedScan, type PreparedNominal, type PreparedImage } from './imports'
 import { bundleFiles } from './scanFiles'
+import { coreText as tmarText } from '../i18n'
+
 
 /** A project by its name: `.scanruler`, or that with a count a browser
  *  put after it (isProjectName). */
@@ -225,7 +227,7 @@ export function useProject({
       if (!committed) image?.bitmap.close()
       await meshClient.discardImport([scan?.id, nominal?.id].filter((id): id is number => id !== undefined))
     }
-  }, () => settled || !sessionIsDirty() || window.confirm('Opening a project replaces the measurements in this session. Continue?'))
+  }, () => settled || !sessionIsDirty() || window.confirm(tmarText('Opening a project replaces the measurements in this session. Continue?')))
 
   /** Start a new project in place of the session: the scan, the reference
    *  and the image closed, every measurement and every workspace's work let
@@ -247,7 +249,7 @@ export function useProject({
     sceneRef.current?.frameAll()
     useStore.setState({ busy: false, statusText: 'New project.' })
     recovery.markSaved(capture())
-  }, () => settled || !recovery.dirty || window.confirm('Start a new project? The changes in this one that are not saved are lost.'))
+  }, () => settled || !recovery.dirty || window.confirm(tmarText('Start a new project? The changes in this one that are not saved are lost.')))
 
   return { saveProject, packProject, openProject, newProject, recovery }
 }

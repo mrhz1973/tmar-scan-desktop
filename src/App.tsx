@@ -113,6 +113,8 @@ import { prepareImage, runImport, type PreparedImage } from './app/imports'
 import { plugins } from './plugins/registry'
 import type { PluginHost, PluginRuntime } from './plugins/api'
 import { markHintOf, openSlotHintOf, paintHintOf, stageHintOf } from './app/stageHints'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from './i18n'
+
 
 /** What a plugin without a hook adds: nothing. */
 const NO_RUNTIME: PluginRuntime = {}
@@ -133,6 +135,8 @@ export default function App() {
 }
 
 function Workbench() {
+  useTmarLanguage()
+
   const embeddedEditorOpen = useWorkspaceEditor(s => s.phase !== 'closed')
   useEffect(() => {
     if (!embeddedEditorOpen) return
@@ -178,7 +182,7 @@ function Workbench() {
     openScan(file, undefined, () => {
       const s = useStore.getState()
       const held = s.elements.length + s.dimensions.length + s.sections.length
-      return held === 0 || window.confirm(`Opening ${file.name} replaces the scan, and the ${held === 1 ? 'measurement' : `${held} measurements`} on it — elements, dimensions and sections — go with it. Continue?`)
+      return held === 0 || window.confirm(tmarText(`Opening ${file.name} replaces the scan, and the ${held === 1 ? 'measurement' : `${held} measurements`} on it — elements, dimensions and sections — go with it. Continue?`))
     })
   // In development the viewport, the worker and the Measure store are
   // reachable from the console and the browser checks — nothing in a
@@ -314,7 +318,7 @@ function Workbench() {
       const f = useFlat.getState()
       const sheet = f.subject.kind === 'image' ? f : f.sheets.image
       const held = sheet ? sheet.elements.length + sheet.dimensions.length + sheet.counts.length + sheet.notes.length : 0
-      return held === 0 || window.confirm(`Opening ${file.name} replaces the image, and the ${held === 1 ? 'item' : `${held} items`} measured on it — elements, dimensions, counts and notes — go with it. Continue?`)
+      return held === 0 || window.confirm(tmarText(`Opening ${file.name} replaces the image, and the ${held === 1 ? 'item' : `${held} items`} measured on it — elements, dimensions, counts and notes — go with it. Continue?`))
     })
 
   /** A section laid flat for the 2D sheet: its cut projected into its own
@@ -663,7 +667,7 @@ function Workbench() {
       const d = useDeviation.getState()
       if (!d.nominalName) return true
       const lose = [d.align ? 'the best-fit alignment to it' : null, d.probes.length > 0 ? `${d.probes.length === 1 ? 'the pin' : `${d.probes.length} pins`} on its map` : null].filter(Boolean)
-      return lose.length === 0 || window.confirm(`Opening ${file.name} replaces the reference part. Lost with it: ${lose.join(' and ')}. Continue?`)
+      return lose.length === 0 || window.confirm(tmarText(`Opening ${file.name} replaces the reference part. Lost with it: ${lose.join(' and ')}. Continue?`))
     })
 
   // ---- Deviation from a fitted element -------------------------------------
@@ -1738,10 +1742,10 @@ function Workbench() {
               plugin={active}
               cancelDraft={handleCancelDraft}
             />
-            {!splitOpen && pluginSplit}
+            {!splitOpen && (pluginSplit)}
             {splitOpen && (
               <div className="splitcap">
-                <b>Scan</b>
+                <b>{tmarText("Scan")}</b>
                 <span>{fileName}</span>
               </div>
             )}
@@ -1823,7 +1827,7 @@ function Workbench() {
               }
             />
           )}
-          {!picking && active?.overlay}
+          {!picking && (active?.overlay)}
           {!picking && onThickness && hasThicknessMap && (
             <MapLegend
               id="thickness"
@@ -1838,8 +1842,8 @@ function Workbench() {
           )}
           {onFlat && !flatImageName && flatSubject.kind === 'image' && (
             <StartPane
-              title="Measuring a flatbed scan"
-              blurb="Scan the part face-down on a flatbed scanner and open the image — then fit points, lines and circles to its edges and measure between them, the way a measuring microscope does. PNG or JPEG, at the highest optical resolution you have. Everything stays in this browser."
+              title={tmarText("Measuring a flatbed scan")}
+              blurb={tmarText("Scan the part face-down on a flatbed scanner and open the image — then fit points, lines and circles to its edges and measure between them, the way a measuring microscope does. PNG or JPEG, at the highest optical resolution you have. Everything stays in this browser.")}
               slots={[
                 {
                   role: 'Image',
@@ -1855,26 +1859,10 @@ function Workbench() {
             <StartPane
               skip={active?.startPane?.skip}
               title={
-                active?.startPane
-                  ? active.startPane.title
-                  : onDeviation
-                  ? source === 'element'
-                    ? 'Deviation from a fitted element'
-                    : 'Deviation from a nominal part'
-                  : onThickness
-                    ? 'Wall thickness'
-                    : 'Fitting elements'
+                active?.startPane ? tmarText(active.startPane.title) : onDeviation ? source === 'element' ? tmarText("Deviation from a fitted element") : tmarText("Deviation from a nominal part") : onThickness ? tmarText("Wall thickness") : tmarText("Fitting elements")
               }
               blurb={
-                active?.startPane
-                  ? active.startPane.blurb
-                  : onDeviation
-                  ? source === 'element'
-                    ? 'Load a scan, fit a plane, cylinder or sphere on it in the 3D Measure workspace, then map how far the surface strays from that ideal. No reference model, no alignment. STL, PLY, OBJ, 3MF or STEP, in millimetres — everything stays in this browser.'
-                    : 'Load both, then best-fit the scan onto the reference and read the difference off the part. Scan and reference as STL, PLY, OBJ, 3MF in millimetres or a STEP file straight from CAD — everything stays in this browser.'
-                  : onThickness
-                    ? 'Load a scan and measure how thick its walls are, everywhere at once. No reference model, no alignment. STL, PLY, OBJ, 3MF or STEP, in millimetres — everything stays in this browser.'
-                      : 'Load a scan, then pick features on it to fit spheres, cylinders and planes and measure between them. STL, PLY, OBJ, 3MF or STEP, in millimetres — everything stays in this browser.'
+                active?.startPane ? tmarText(active.startPane.blurb) : onDeviation ? source === 'element' ? tmarText("Load a scan, fit a plane, cylinder or sphere on it in the 3D Measure workspace, then map how far the surface strays from that ideal. No reference model, no alignment. STL, PLY, OBJ, 3MF or STEP, in millimetres — everything stays in this browser.") : tmarText("Load both, then best-fit the scan onto the reference and read the difference off the part. Scan and reference as STL, PLY, OBJ, 3MF in millimetres or a STEP file straight from CAD — everything stays in this browser.") : onThickness ? tmarText("Load a scan and measure how thick its walls are, everywhere at once. No reference model, no alignment. STL, PLY, OBJ, 3MF or STEP, in millimetres — everything stays in this browser.") : tmarText("Load a scan, then pick features on it to fit spheres, cylinders and planes and measure between them. STL, PLY, OBJ, 3MF or STEP, in millimetres — everything stays in this browser.")
               }
               slots={startSlots}
               onOpenSample={openSample}
@@ -1896,55 +1884,43 @@ function Workbench() {
               outstanding says so here instead — the reference that has yet to be
               loaded, or the element that has yet to be chosen. */}
           {onDeviation && source === 'reference' && !picking && fileName && !nominalName && (
-            <div className="hintchip" data-test="need-reference-chip">
-              Scan loaded — open the reference model in the panel, or drop it anywhere
-            </div>
+            <div className="hintchip" data-test="need-reference-chip">{tmarText("Scan loaded — open the reference model in the panel, or drop it anywhere")}</div>
           )}
           {onDeviation && source === 'reference' && !picking && !align && fileName && nominalName && (
-            <div className="hintchip" data-test="ready-chip">
-              Both models loaded — align to fit the scan onto the reference
-            </div>
+            <div className="hintchip" data-test="ready-chip">{tmarText("Both models loaded — align to fit the scan onto the reference")}</div>
           )}
           {onDeviation && source === 'element' && !picking && fileName && targetId === null && (
             <div className="hintchip" data-test="need-element-chip">
-              {elements.some((e) => e.fit && e.kind !== 'point' && e.kind !== 'line')
-                ? 'Click the element to measure against — or choose it in the panel'
-                : 'No plane, cylinder or sphere yet — fit one in the 3D Measure workspace'}
+              {elements.some((e) => e.fit && e.kind !== 'point' && e.kind !== 'line') ? tmarText("Click the element to measure against — or choose it in the panel") : tmarText("No plane, cylinder or sphere yet — fit one in the 3D Measure workspace")}
             </div>
           )}
           {onThickness && !picking && !hasThicknessMap && fileName && (
-            <div className="hintchip" data-test="thickness-ready-chip">
-              Part loaded — measure its wall thickness in the panel
-            </div>
+            <div className="hintchip" data-test="thickness-ready-chip">{tmarText("Part loaded — measure its wall thickness in the panel")}</div>
           )}
           {/* Not a hint but an alarm: every number this workspace shows rests
               on the scale, and until one has been measured the scale is only
               what the file claims about itself — or nothing at all. */}
           {onFlat && flatSubject.kind === 'image' && flatImageName && flatCalSource !== 'measured' && (
             <div className="warnchip" data-test="flat-uncalibrated-chip">
-              {flatCalSource === 'metadata'
-                ? 'UNCALIBRATED — sizes use the file’s nominal dpi. Calibrate against a known length in the panel.'
-                : 'UNCALIBRATED — the file declares no scale, so sizes are pixels. Calibrate against a known length in the panel.'}
+              {flatCalSource === 'metadata' ? tmarText("UNCALIBRATED — sizes use the file’s nominal dpi. Calibrate against a known length in the panel.") : tmarText("UNCALIBRATED — the file declares no scale, so sizes are pixels. Calibrate against a known length in the panel.")}
             </div>
           )}
-          {stageHint && workspace === 'elements' && <div className="hintchip">{stageHint}</div>}
+          {stageHint && workspace === 'elements' && <div className="hintchip">{tmarText(stageHint)}</div>}
           {!stageHint && workspace === 'elements' && fileName && hintText && (
             <div className="hintchip" data-test="hint-chip">
-              {hintText}
+              {tmarText(hintText)}
             </div>
           )}
           {markHint && !picking && (
             <div className="hintchip" data-test="mark-chip">
-              {markHint}
+              {tmarText(markHint)}
             </div>
           )}
           <BusyOverlay />
-          {errorText && <div className="toast">{errorText}</div>}
+          {errorText && <div className="toast">{tmarText(errorText)}</div>}
           {dragging && (
             <div className="drop-overlay">
-              {onFlat
-                ? 'Drop your PNG / JPEG scan here'
-                : `Drop your STL / PLY / OBJ / 3MF${onDeviation ? ' / STEP' : ''} here`}
+              {onFlat ? tmarText("Drop your PNG / JPEG scan here") : tmarText("Drop your STL / PLY / OBJ / 3MF{0} here", [onDeviation ? tmarText(" / STEP") : ''])}
             </div>
           )}
         </div>

@@ -6,6 +6,8 @@
 // the way the eye does; picks and marking follow whichever is on screen.
 
 import { useStore } from '../state/store'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** A box drawn the way the view is: square-on in parallel, narrowing to
  *  the back in perspective — the icon shows the mode the view is in. */
@@ -22,6 +24,8 @@ function ProjectionIcon({ perspective }: { perspective: boolean }) {
 }
 
 export function ProjectionButton() {
+  useTmarLanguage()
+
   const projection = useStore((s) => s.projection)
   const setProjection = useStore((s) => s.setProjection)
   const perspective = projection === 'perspective'
@@ -30,10 +34,8 @@ export function ProjectionButton() {
       type="button"
       className="viewfit viewprojection"
       data-test="view-projection"
-      title={perspective
-        ? 'Perspective view — click to draw the view in parallel (orthographic), as measuring wants it'
-        : 'Parallel (orthographic) view — click to draw the view in perspective'}
-      aria-label={perspective ? 'Perspective view' : 'Orthographic view'}
+      title={perspective ? tmarText("Perspective view — click to draw the view in parallel (orthographic), as measuring wants it") : tmarText("Parallel (orthographic) view — click to draw the view in perspective")}
+      aria-label={perspective ? tmarText("Perspective view") : tmarText("Orthographic view")}
       aria-pressed={perspective}
       onClick={() => setProjection(perspective ? 'orthographic' : 'perspective')}
     >

@@ -4,6 +4,8 @@
 // the count.
 
 import { Icon } from './icons'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function ShowAllButton({
   anyVisible,
@@ -17,15 +19,17 @@ export function ShowAllButton({
   testId?: string
   onSet: (visible: boolean) => void
 }) {
+  useTmarLanguage()
+
   return (
     <button
       className="x eye all"
       data-test={testId}
-      title={anyVisible ? `Hide all ${what} in the viewport` : `Show all ${what}`}
+      title={anyVisible ? tmarText("Hide all {0} in the viewport", [what]) : tmarText("Show all {0}", [what])}
       onClick={() => onSet(!anyVisible)}
     >
       <Icon name={anyVisible ? 'eye' : 'eyeOff'} size={13} />
-      {anyVisible ? 'Hide all' : 'Show all'}
+      {anyVisible ? tmarText("Hide all") : tmarText("Show all")}
     </button>
   )
 }

@@ -22,6 +22,8 @@ import { Icon } from '../../../src/ui/icons'
 import { ShowAllButton } from '../../../src/ui/ShowAllButton'
 import { KeyIcon } from './reIcons'
 import { useDismiss } from '../../../src/ui/useDismiss'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 /** How far in a row stands for each component it is in, px. */
 const INDENT_PX = 14
@@ -73,11 +75,11 @@ function pickOf(keys: readonly RowKey[]): ListPick {
  *  a component". */
 function pickWords(pick: ListPick, bodies: readonly BodyInfo[], folders: readonly BodyFolder[]): string {
   if (pick.bodies.length + pick.folders.length === 1) {
-    return pick.bodies.length === 1 ? (bodies.find((b) => b.id === pick.bodies[0])?.name ?? 'Body') : (folders.find((f) => f.id === pick.folders[0])?.name ?? 'Component')
+    return pick.bodies.length === 1 ? (bodies.find((b) => b.id === pick.bodies[0])?.name ?? tmarText('Body')) : (folders.find((f) => f.id === pick.folders[0])?.name ?? tmarText('Component'))
   }
-  const n = (count: number, one: string, many: string) => (count === 0 ? '' : count === 1 ? `a ${one}` : `${count} ${many}`)
+  const n = (count: number, one: string, many: string) => (count === 0 ? '' : count === 1 ? tmarText('a {0}', [tmarText(one)]) : tmarText('{0} {1}', [count, tmarText(many)]))
   const parts = [n(pick.bodies.length, 'body', 'bodies'), n(pick.folders.length, 'component', 'components')].filter(Boolean)
-  const text = parts.join(' and ')
+  const text = parts.join(tmarText(' and '))
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
@@ -95,6 +97,8 @@ interface MenuItem {
  * right-click menu of the rows.
  */
 export function BodyList({ bodies, children }: { bodies: BodyInfo[]; children?: ReactNode }) {
+  useTmarLanguage()
+
   const re = useReverse
   const folders = useReverse((s) => s.bodyFolders)
   const closed = useReverse((s) => s.closedFolders)
@@ -291,58 +295,46 @@ export function BodyList({ bodies, children }: { bodies: BodyInfo[]; children?: 
       }}
     >
       <div className="g-label">
-        <span>Bodies</span>
+        <span>{tmarText("Bodies")}</span>
         {bodies.length > 0 && (
           <button
             className="x newfolder"
             data-test="body-folder-new"
-            title={pickCount > 0 && !move ? `A new component holding ${pickWords(listPick, bodies, folders).toLowerCase()} — a folder to sort bodies into` : "A new component — a folder to sort bodies into, an assembly's parts by what they make up: drag bodies onto it, or pick rows first to put them in"}
+            title={pickCount > 0 && !move ? tmarText("A new component holding {0} — a folder to sort bodies into", [pickWords(listPick, bodies, folders).toLowerCase()]) : tmarText("A new component — a folder to sort bodies into, an assembly's parts by what they make up: drag bodies onto it, or pick rows first to put them in")}
             onClick={newFolder}
           >
-            <KeyIcon name="component" size={13} />
-            Component
-          </button>
+            <KeyIcon name="component" size={13} />{tmarText("Component")}</button>
         )}
-        {bodies.length > 0 && <ShowAllButton anyVisible={bodies.some((b) => b.visible)} what="bodies" testId="bodies-show-all" onSet={(v) => re.getState().setAllBodiesVisible(v)} />}
+        {bodies.length > 0 && <ShowAllButton anyVisible={bodies.some((b) => b.visible)} what={tmarText("bodies")} testId="bodies-show-all" onSet={(v) => re.getState().setAllBodiesVisible(v)} />}
         <b>{bodies.length}</b>
       </div>
       {children}
       {rows}
       {dragging && accepts(null) && (
-        <div className={'bodydrop' + (dropAt === null ? ' on' : '')} data-test="body-drop-top" {...dropOn(null)}>
-          Drop here to take it out of its component
-        </div>
+        <div className={'bodydrop' + (dropAt === null ? ' on' : '')} data-test="body-drop-top" {...dropOn(null)}>{tmarText("Drop here to take it out of its component")}</div>
       )}
       {move && bodies.length > 1 && (
-        <p className="hint" data-test="body-list-move-hint">
-          Click rows to put bodies into the Move or take them out — a component's row all of its bodies; Shift+click puts in every row up to it.
-        </p>
+        <p className="hint" data-test="body-list-move-hint">{tmarText("Click rows to put bodies into the Move or take them out — a component's row all of its bodies; Shift+click puts in every row up to it.")}</p>
       )}
       {!move && pickCount > 0 && (
         <div className="bodysel" data-test="body-selection">
           <span data-test="body-selection-words">{pickWords(listPick, bodies, folders)}</span>
-          <button data-test="body-selection-move" disabled={pickedBodies.length === 0 || editorOpen} title={editorOpen ? 'Finish what is open first' : 'Move and turn these bodies together — or copies of them — by the gizmo or by numbers'} onClick={() => re.getState().startFeature('moveBody', { bodies: pickedBodies })}>
-            <KeyIcon name="moveBody" size={14} />
-            Move
-          </button>
-          <button data-test="body-selection-component" title="Put what is picked into a new component" onClick={newFolder}>
-            <KeyIcon name="component" size={14} />
-            Component
-          </button>
+          <button data-test="body-selection-move" disabled={pickedBodies.length === 0 || editorOpen} title={editorOpen ? tmarText("Finish what is open first") : tmarText("Move and turn these bodies together — or copies of them — by the gizmo or by numbers")} onClick={() => re.getState().startFeature('moveBody', { bodies: pickedBodies })}>
+            <KeyIcon name="moveBody" size={14} />{tmarText("Move")}</button>
+          <button data-test="body-selection-component" title={tmarText("Put what is picked into a new component")} onClick={newFolder}>
+            <KeyIcon name="component" size={14} />{tmarText("Component")}</button>
           {pickedBodies.length > 0 && pickedBodies.length < bodies.length && (
-            <button data-test="body-selection-isolate" title={alone ? 'Show every body again' : 'Hide every body but these'} onClick={() => (alone ? re.getState().setAllBodiesVisible(true) : isolateBodies(pickedBodies))}>
-              {alone ? 'Show all' : 'Hide others'}
+            <button data-test="body-selection-isolate" title={alone ? tmarText("Show every body again") : tmarText("Hide every body but these")} onClick={() => (alone ? re.getState().setAllBodiesVisible(true) : isolateBodies(pickedBodies))}>
+              {alone ? tmarText("Show all") : tmarText("Hide others")}
             </button>
           )}
-          <button className="x" data-test="body-selection-clear" title="Let the rows go (Escape)" onClick={() => re.getState().setListSelection(NO_PICK)}>
+          <button className="x" data-test="body-selection-clear" title={tmarText("Let the rows go (Escape)")} onClick={() => re.getState().setListSelection(NO_PICK)}>
             ✕
           </button>
         </div>
       )}
       {bodies.length > 0 && (
-        <p className="hint">
-          Drawn solid, the scan a see-through veil over them. The view bar's Opaque key turns that round; its Scan key puts the scan away, its Bodies key the bodies — the map staying on the scan. Ctrl+click or Shift+click rows to pick several, and drag them onto a component to put them in; right-click a row for more.
-        </p>
+        <p className="hint">{tmarText("Drawn solid, the scan a see-through veil over them. The view bar's Opaque key turns that round; its Scan key puts the scan away, its Bodies key the bodies — the map staying on the scan. Ctrl+click or Shift+click rows to pick several, and drag them onto a component to put them in; right-click a row for more.")}</p>
       )}
       {menu && <BodyMenu at={menu} bodies={bodies} folders={folders} editorOpen={editorOpen} setNaming={setNaming} close={() => setMenu(null)} />}
     </div>
@@ -397,6 +389,8 @@ function FolderRow({
   onMenu: (x: number, y: number) => void
   rowEvents: RowEvents
 }) {
+  useTmarLanguage()
+
   const re = useReverse
   const visible = inside.some((b) => b.visible)
   const ids = inside.map((b) => b.id)
@@ -411,7 +405,7 @@ function FolderRow({
       data-test="body-folder"
       data-folder={f.id}
       aria-selected={m.selected}
-      title={`${f.name} — ${inside.length} bod${inside.length === 1 ? 'y' : 'ies'}. Drag bodies onto it to put them in; right-click for more`}
+      title={tmarText("{0} — {1} bod{2}. Drag bodies onto it to put them in; right-click for more", [f.name, inside.length, inside.length === 1 ? tmarText("y") : tmarText("ies")])}
       onPointerEnter={() => hoverRows(ids.length > 0 ? ids : null)}
       onPointerLeave={() => hoverRows(null)}
       // Shift+click spans rows; the text under it is not to be selected.
@@ -424,7 +418,7 @@ function FolderRow({
       {...rowEvents}
       draggable={!naming}
     >
-      <button className="x fold" data-test="body-folder-fold" aria-expanded={open} title={open ? `Close ${f.name}` : `Open ${f.name}`} onClick={() => re.getState().setFolderOpen(f.id, !open)}>
+      <button className="x fold" data-test="body-folder-fold" aria-expanded={open} title={open ? tmarText("Close {0}", [f.name]) : tmarText("Open {0}", [f.name])} onClick={() => re.getState().setFolderOpen(f.id, !open)}>
         {open ? '▾' : '▸'}
       </button>
       <span className="kind">
@@ -436,7 +430,7 @@ function FolderRow({
           data-test="body-folder-name-input"
           autoFocus
           defaultValue={f.name}
-          placeholder="Name"
+          placeholder={tmarText("Name")}
           onFocus={(e) => e.currentTarget.select()}
           onKeyDown={(e) => {
             e.stopPropagation()
@@ -446,12 +440,12 @@ function FolderRow({
           onBlur={(e) => name(e.currentTarget.value)}
         />
       ) : (
-        <span className="name" data-test="body-folder-name" title="Double-click to name the component" onDoubleClick={() => setNaming(true)}>
+        <span className="name" data-test="body-folder-name" title={tmarText("Double-click to name the component")} onDoubleClick={() => setNaming(true)}>
           {f.name}
         </span>
       )}
       <b>{inside.length}</b>
-      <button className={'x eye' + (visible ? '' : ' off')} data-test="body-folder-visible" disabled={inside.length === 0} title={visible ? `Hide every body in ${f.name}` : `Show every body in ${f.name}`} onClick={() => re.getState().setBodiesVisible(ids, !visible)}>
+      <button className={'x eye' + (visible ? '' : ' off')} data-test="body-folder-visible" disabled={inside.length === 0} title={visible ? tmarText("Hide every body in {0}", [f.name]) : tmarText("Show every body in {0}", [f.name])} onClick={() => re.getState().setBodiesVisible(ids, !visible)}>
         <Icon name={visible ? 'eye' : 'eyeOff'} size={14} />
       </button>
     </div>
@@ -462,6 +456,8 @@ function FolderRow({
  *  renamed by a double click, as the STEP file names the part; what it
  *  holds, and its eye. A name or a colour given is one undo step. */
 function BodyRow({ body: b, depth, onPick, onMenu, rowEvents, ...m }: RowMarks & { body: BodyInfo; depth: number; onPick: (e: MouseEvent) => void; onMenu: (x: number, y: number) => void; rowEvents: RowEvents }) {
+  useTmarLanguage()
+
   const re = useReverse
   const own = useReverse((s) => s.bodyStyles[b.id])
   const len = useLength()
@@ -494,14 +490,14 @@ function BodyRow({ body: b, depth, onPick, onMenu, rowEvents, ...m }: RowMarks &
         {...rowEvents}
         draggable={!naming}
       >
-        <button className="dot swatchkey" data-test="body-color" style={{ background: b.color ?? bodyColor(b.id) }} aria-expanded={painting} aria-label={`Colour of ${b.name}`} title="Colour the body — the STEP file carries it" onClick={() => setPainting(!painting)} />
+        <button className="dot swatchkey" data-test="body-color" style={{ background: b.color ?? bodyColor(b.id) }} aria-expanded={painting} aria-label={tmarText("Colour of {0}", [b.name])} title={tmarText("Colour the body — the STEP file carries it")} onClick={() => setPainting(!painting)} />
         {naming ? (
           <input
             className="name rename"
             data-test="body-name-input"
             autoFocus
             defaultValue={own?.name ?? b.name}
-            placeholder="Name"
+            placeholder={tmarText("Name")}
             onKeyDown={(e) => {
               e.stopPropagation()
               if (e.key === 'Enter') name(e.currentTarget.value)
@@ -510,25 +506,23 @@ function BodyRow({ body: b, depth, onPick, onMenu, rowEvents, ...m }: RowMarks &
             onBlur={(e) => name(e.currentTarget.value)}
           />
         ) : (
-          <span className="name" data-test="body-name" title="Double-click to name the body — the name it has in a STEP file; cleared, it is Solid n again" onDoubleClick={() => setNaming(true)}>
+          <span className="name" data-test="body-name" title={tmarText("Double-click to name the body — the name it has in a STEP file; cleared, it is Solid n again")} onDoubleClick={() => setNaming(true)}>
             {b.name}
           </span>
         )}
-        <b title={`${b.faces} faces · ${b.triangles.toLocaleString('en-US')} triangles drawn`}>
-          {b.surface ? 'surface' : b.closed ? len.vol(b.volume, 1) : '⚠ open'}
+        <b title={tmarText("{0} faces · {1} triangles drawn", [b.faces, b.triangles.toLocaleString('en-US')])}>
+          {b.surface ? tmarText("surface") : b.closed ? len.vol(b.volume, 1) : tmarText("⚠ open")}
         </b>
-        <button className={'x eye' + (b.visible ? '' : ' off')} data-test="body-visible" title={b.visible ? 'Hide the body' : 'Show the body'} onClick={() => re.getState().toggleBodyVisible(b.id)}>
+        <button className={'x eye' + (b.visible ? '' : ' off')} data-test="body-visible" title={b.visible ? tmarText("Hide the body") : tmarText("Show the body")} onClick={() => re.getState().toggleBodyVisible(b.id)}>
           <Icon name={b.visible ? 'eye' : 'eyeOff'} size={14} />
         </button>
       </div>
       {painting && (
-        <div className="swatches" role="radiogroup" aria-label={`Colour of ${b.name}`} data-test="body-swatches" style={{ paddingLeft: 18 + depth * INDENT_PX }}>
+        <div className="swatches" role="radiogroup" aria-label={tmarText("Colour of {0}", [b.name])} data-test="body-swatches" style={{ paddingLeft: 18 + depth * INDENT_PX }}>
           {BODY_SWATCHES.map((sw) => (
-            <button key={sw.name} role="radio" aria-checked={own?.color === sw.color} className={own?.color === sw.color ? 'on' : undefined} style={{ background: sw.color }} title={sw.name[0].toUpperCase() + sw.name.slice(1)} aria-label={sw.name} data-test="body-swatch" onClick={() => paint(sw.color)} />
+            <button key={sw.name} role="radio" aria-checked={own?.color === sw.color} className={own?.color === sw.color ? 'on' : undefined} style={{ background: sw.color }} title={tmarText(sw.name[0].toUpperCase() + sw.name.slice(1))} aria-label={tmarText(sw.name[0].toUpperCase() + sw.name.slice(1))} data-test="body-swatch" onClick={() => paint(sw.color)} />
           ))}
-          <button className="auto" role="radio" aria-checked={!own?.color} data-test="body-swatch-auto" title="The colour the body had — by the feature that made it" onClick={() => paint(null)}>
-            Auto
-          </button>
+          <button className="auto" role="radio" aria-checked={!own?.color} data-test="body-swatch-auto" title={tmarText("The colour the body had — by the feature that made it")} onClick={() => paint(null)}>{tmarText("Auto")}</button>
         </div>
       )}
     </>
@@ -584,6 +578,8 @@ function menuItems(pick: ListPick, bodies: readonly BodyInfo[], folders: readonl
 /** The menu of the rows picked, where the right click was: a click on an
  *  item, outside it, Escape or a scroll closes it. */
 function BodyMenu({ at, bodies, folders, editorOpen, setNaming, close }: { at: { x: number; y: number; pick: ListPick }; bodies: readonly BodyInfo[]; folders: readonly BodyFolder[]; editorOpen: boolean; setNaming: (id: number | null) => void; close: () => void }) {
+  useTmarLanguage()
+
   // Escape closes the menu and goes no further: the workspace's own Escape
   // would let the rows picked go with it.
   useDismiss(true, close, { outside: '.re-menu' })
@@ -601,13 +597,13 @@ function BodyMenu({ at, bodies, folders, editorOpen, setNaming, close }: { at: {
           key={item.key}
           role="menuitem"
           data-test={`body-menu-${item.key}`}
-          title={item.title}
+          title={tmarText(item.title)}
           onClick={() => {
             close()
             item.run()
           }}
         >
-          {item.label}
+          {tmarText(item.label)}
         </button>
       ))}
     </div>

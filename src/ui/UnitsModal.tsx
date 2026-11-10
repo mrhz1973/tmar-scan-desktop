@@ -9,8 +9,12 @@ import { useEffect, useState } from 'react'
 import { MESH_UNITS, type MeshUnits } from '../core/meshUnits'
 import { usePrefs } from '../state/prefsStore'
 import { useUnitsPrompt } from '../state/unitsPromptStore'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function UnitsModal() {
+  useTmarLanguage()
+
   const request = useUnitsPrompt((s) => s.request)
   const answer = useUnitsPrompt((s) => s.answer)
   const cancel = useUnitsPrompt((s) => s.cancel)
@@ -59,17 +63,12 @@ export function UnitsModal() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modalhead">
-          <h2 id="units-title">Units of {request.fileName}</h2>
-          <button className="x" data-test="units-cancel" onClick={cancel} aria-label="Cancel">
-            ×
-          </button>
+          <h2 id="units-title">{tmarText("Units of ")}{request.fileName}</h2>
+          <button className="x" data-test="units-cancel" onClick={cancel} aria-label={tmarText("Cancel")}>{tmarText("×")}</button>
         </div>
-        <p className="dim">
-          An STL file carries no units — a 1 in it is whatever the program that wrote it meant.
-          Say what this one is in and it is read in millimetres, like everything measured here.
-        </p>
+        <p className="dim">{tmarText("An STL file carries no units — a 1 in it is whatever the program that wrote it meant. Say what this one is in and it is read in millimetres, like everything measured here.")}</p>
         <div className="setting">
-          <span id="units-label">Coordinates in</span>
+          <span id="units-label">{tmarText("Coordinates in")}</span>
           <div className="keys" role="radiogroup" aria-labelledby="units-label">
             {MESH_UNITS.map((u) => (
               <button
@@ -80,7 +79,7 @@ export function UnitsModal() {
                 data-test={`units-${u.id}`}
                 onClick={() => setUnits(u.id)}
               >
-                {u.label}
+                {tmarText(u.label)}
               </button>
             ))}
           </div>
@@ -93,15 +92,11 @@ export function UnitsModal() {
             onChange={(e) => setRemember(e.target.checked)}
           />
           <span>
-            <b>Don't ask again</b> — read every STL in these units. Settings brings the question
-            back.
-          </span>
+            <b>{tmarText("Don't ask again")}</b>{tmarText(" — read every STL in these units. Settings brings the question back.")}</span>
         </label>
         <div className="modalfoot">
-          <button onClick={cancel}>Cancel</button>
-          <button className="primary" data-test="units-open" onClick={() => answer(units, remember)}>
-            Open
-          </button>
+          <button onClick={cancel}>{tmarText("Cancel")}</button>
+          <button className="primary" data-test="units-open" onClick={() => answer(units, remember)}>{tmarText("Open")}</button>
         </div>
       </div>
     </div>

@@ -22,6 +22,8 @@ import { useStore } from '../state/store'
 import { Icon } from './icons'
 import { anyChanged, PartKey, PartOption, type ViewSwitch } from './PartKey'
 import { SectionViewKeys } from './SectionViewKeys'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function ViewBar({
   partKeys,
@@ -45,6 +47,8 @@ export function ViewBar({
   viewDirection: () => Vec3
   stageCentre: () => Vec3
 }) {
+  useTmarLanguage()
+
   const fileName = useStore((s) => s.fileName)
   const scanHidden = useStore((s) => s.scanHidden)
   const setScanHidden = useStore((s) => s.setScanHidden)
@@ -144,40 +148,40 @@ export function ViewBar({
           <div className="keys" data-test="part-keys">
             <PartKey
               icon={<Icon name="scan" size={16} />}
-              label="Scan"
+              label={tmarText("Scan")}
               testId="toggle-scan"
               shown={scanShown}
-              title="Show the scan, or put it away. How it is drawn is in the menu over the key"
+              title={tmarText("Show the scan, or put it away. How it is drawn is in the menu over the key")}
               changed={anyChanged([scanSeeThrough, scanMesh, scanBackfaces, ...(scanColors ? [scanColours] : [])]) || Boolean(scanKey?.menuChanged)}
             >
               <PartOption
                 icon={<Icon name="transparent" size={16} />}
-                label="Transparent"
+                label={tmarText("Transparent")}
                 testId="toggle-translucent"
                 value={scanSeeThrough}
-                title="Draw the scan transparent — what lies inside it, the fitted elements and the pinned readings show instead of hiding behind the surface in front of them"
+                title={tmarText("Draw the scan transparent — what lies inside it, the fitted elements and the pinned readings show instead of hiding behind the surface in front of them")}
               />
               <PartOption
                 icon={<Icon name="mesh" size={16} />}
-                label="Mesh"
+                label={tmarText("Mesh")}
                 testId="toggle-wireframe"
                 value={scanMesh}
-                title="Draw the triangle edges on the scan, to see how fine it is and where it is patchy. The mesh comes up as you zoom in: from a distance the triangles are smaller than a pixel, and the edges fade out rather than turning the part black"
+                title={tmarText("Draw the triangle edges on the scan, to see how fine it is and where it is patchy. The mesh comes up as you zoom in: from a distance the triangles are smaller than a pixel, and the edges fade out rather than turning the part black")}
               />
               <PartOption
                 icon={<Icon name="backfaces" size={16} />}
-                label="Backfaces"
+                label={tmarText("Backfaces")}
                 testId="toggle-backfaces"
                 value={scanBackfaces}
-                title="Colour the far side of every triangle — holes in the scan and inverted normals stop looking like solid part"
+                title={tmarText("Colour the far side of every triangle — holes in the scan and inverted normals stop looking like solid part")}
               />
               {scanColors && (
                 <PartOption
                   icon={<Icon name="scanColours" size={16} />}
-                  label="Colours"
+                  label={tmarText("Colours")}
                   testId="toggle-scan-colours"
                   value={scanColours}
-                  title="Show the scan in the colours it was captured in — its texture — or plain, in the stage's scan colour. Maps and tints are drawn over either"
+                  title={tmarText("Show the scan in the colours it was captured in — its texture — or plain, in the stage's scan colour. Maps and tints are drawn over either")}
                 />
               )}
               {scanKey?.menu}
@@ -185,32 +189,32 @@ export function ViewBar({
             {onDeviation && onReference && (
               <PartKey
                 icon={<Icon name="model" size={16} />}
-                label="Reference"
+                label={tmarText("Reference")}
                 testId="toggle-reference"
                 shown={referenceShown}
-                title="Show the reference, or put it away — inside the scan it is a ghost, solid with the scan put away, which is how it is checked to be the right part"
+                title={tmarText("Show the reference, or put it away — inside the scan it is a ghost, solid with the scan put away, which is how it is checked to be the right part")}
                 changed={anyChanged([referenceSeeThrough, referenceMesh, referenceBackfaces])}
               >
                 <PartOption
                   icon={<Icon name="transparent" size={16} />}
-                  label="Transparent"
+                  label={tmarText("Transparent")}
                   testId="toggle-reference-translucent"
                   value={referenceSeeThrough}
-                  title="Draw the reference transparent while it is solid"
+                  title={tmarText("Draw the reference transparent while it is solid")}
                 />
                 <PartOption
                   icon={<Icon name="mesh" size={16} />}
-                  label="Mesh"
+                  label={tmarText("Mesh")}
                   testId="toggle-reference-wireframe"
                   value={referenceMesh}
-                  title="Draw the triangle edges on the reference — how finely the model was exported"
+                  title={tmarText("Draw the triangle edges on the reference — how finely the model was exported")}
                 />
                 <PartOption
                   icon={<Icon name="backfaces" size={16} />}
-                  label="Backfaces"
+                  label={tmarText("Backfaces")}
                   testId="toggle-reference-backfaces"
                   value={referenceBackfaces}
-                  title="Colour the far side of every triangle of the reference while it is solid — holes and inverted normals in the model stop looking like solid part"
+                  title={tmarText("Colour the far side of every triangle of the reference while it is solid — holes and inverted normals in the model stop looking like solid part")}
                 />
               </PartKey>
             )}
@@ -218,18 +222,18 @@ export function ViewBar({
             {elementsWorkspace && (
               <PartKey
                 icon={<Icon name="elCylinder" size={16} />}
-                label="Elements"
+                label={tmarText("Elements")}
                 testId="toggle-elements"
                 shown={elementsShown}
-                title="Show the elements, the dimensions and the sections on the part, or put them all away — each one's own eye in the list stays as it is"
+                title={tmarText("Show the elements, the dimensions and the sections on the part, or put them all away — each one's own eye in the list stays as it is")}
                 changed={anyChanged([labels])}
               >
                 <PartOption
                   icon={<Icon name="labels" size={16} />}
-                  label="Labels"
+                  label={tmarText("Labels")}
                   testId="toggle-labels"
                   value={labels}
-                  title="Show the name tags and readouts on the part. The fitted elements, the sections and the dimension lines stay either way"
+                  title={tmarText("Show the name tags and readouts on the part. The fitted elements, the sections and the dimension lines stay either way")}
                 />
               </PartKey>
             )}
@@ -245,14 +249,10 @@ export function ViewBar({
                 disabled={!canSplit}
                 onClick={() => setSplit(!split)}
                 title={
-                  canSplit
-                    ? 'Show the scan and the reference in two viewports that turn, pan and zoom together'
-                    : 'Load both the scan and the reference to compare them side by side'
+                  canSplit ? tmarText("Show the scan and the reference in two viewports that turn, pan and zoom together") : tmarText("Load both the scan and the reference to compare them side by side")
                 }
               >
-                <Icon name="splitView" size={16} />
-                Split view
-              </button>
+                <Icon name="splitView" size={16} />{tmarText("Split view")}</button>
             )}
             <button
               className={showMap ? 'on' : undefined}
@@ -261,14 +261,10 @@ export function ViewBar({
               disabled={!hasMap}
               onClick={() => setShowMap(!showMap)}
               title={
-                hasMap
-                  ? 'Paint the measured deviation onto the scan. Off leaves the bare surface — nothing measured is lost, and the figures, the readings and the pins all still report it.'
-                  : 'Nothing measured yet — the colour plot appears with the map'
+                hasMap ? tmarText("Paint the measured deviation onto the scan. Off leaves the bare surface — nothing measured is lost, and the figures, the readings and the pins all still report it.") : tmarText("Nothing measured yet — the colour plot appears with the map")
               }
             >
-              <Icon name="colourPlot" size={16} />
-              Colour plot
-            </button>
+              <Icon name="colourPlot" size={16} />{tmarText("Colour plot")}</button>
             {onReference && (
               <button
                 className={mapOn === 'reference' ? 'on' : undefined}
@@ -277,13 +273,11 @@ export function ViewBar({
                 disabled={!hasMap}
                 onClick={() => setMapOn(mapOn === 'reference' ? 'scan' : 'reference')}
                 title={
-                  hasMap
-                    ? 'Paint the map on the reference instead of the scan: the reference coloured by its distance to the scan. It shows reference material the scan does not have, and grey where no scan stands behind the reference.'
-                    : 'Nothing measured yet — the map on the reference comes with the map'
+                  hasMap ? tmarText("Paint the map on the reference instead of the scan: the reference coloured by its distance to the scan. It shows reference material the scan does not have, and grey where no scan stands behind the reference.") : tmarText("Nothing measured yet — the map on the reference comes with the map")
                 }
               >
                 <Icon name="colourPlot" size={16} />
-                {referenceRunning ? 'On reference…' : 'On reference'}
+                {referenceRunning ? tmarText("On reference…") : tmarText("On reference")}
               </button>
             )}
           </div>
@@ -301,11 +295,9 @@ export function ViewBar({
                 if (view.on) view.close()
                 else view.open(viewDirection(), stageCentre())
               }}
-              title="Cut the parts open at a plane to look inside — the scan, the reference and everything measured on them. Closed parts are closed where they are cut; an open scan stays a shell. Slide the plane with the arrow, tilt it with the rings"
+              title={tmarText("Cut the parts open at a plane to look inside — the scan, the reference and everything measured on them. Closed parts are closed where they are cut; an open scan stays a shell. Slide the plane with the arrow, tilt it with the rings")}
             >
-              <Icon name="sectionView" size={16} />
-              Section
-            </button>
+              <Icon name="sectionView" size={16} />{tmarText("Section")}</button>
           </div>
         )}
       </div>

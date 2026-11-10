@@ -6,6 +6,8 @@
 import type { ReactNode } from 'react'
 import { Icon, type IconName } from './icons'
 import { RowTools } from './RowTools'
+import { useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function ElementRow({
   name,
@@ -65,6 +67,8 @@ export function ElementRow({
    *  hover, lit in the viewport. */
   onHover?: (on: boolean) => void
 }) {
+  useTmarLanguage()
+
   // A double click on the row opens it too, as a feature row in a CAD
   // tree does — with the same standing down as the ✎ key.
   const canEdit = !editorOpen && !editDisabled

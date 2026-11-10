@@ -7,15 +7,19 @@
 import { verdictLines, type Verdict } from '../core/dimensions'
 import { ValueWindow, type ReadValue } from './DroValue'
 import { RowTools } from './RowTools'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function WarningNote({ text }: { text: string }) {
-  return <p className="warnnote">⚠ {text}</p>
+  useTmarLanguage()
+  return <p className="warnnote">⚠ {tmarText(text)}</p>
 }
 
 /** How a reading stands to the limit typed for it: the allowance restated
  *  and the signed deviation, with the alarm under them when it is over —
  *  or, when the two would say the same number, the alarm alone. */
 export function VerdictNote({ verdict }: { verdict: Verdict }) {
+  useTmarLanguage()
   const lines = verdictLines(verdict)
   const alarm = verdict.pass ? undefined : lines[lines.length - 1]
   const note = lines.length > 1 || verdict.pass ? lines[0] : undefined
@@ -23,12 +27,12 @@ export function VerdictNote({ verdict }: { verdict: Verdict }) {
     <>
       {note && (
         <div className="dro-note verdict" data-test="verdict">
-          {note}
+          {tmarText(note)}
         </div>
       )}
       {alarm && (
         <p className="warnnote fail" data-test="fail">
-          ✕ {alarm}
+          ✕ {tmarText(alarm)}
         </p>
       )}
     </>
@@ -63,11 +67,13 @@ export function DimensionRow({
   onToggleVisible: () => void
   onDelete: () => void
 }) {
+  useTmarLanguage()
+
   return (
     <div className={'dro hero dim' + (visible ? '' : ' ghost')} data-test={`${testPrefix}-row`}>
       <div className="dro-label">
         <span>
-          {name} · {value.label}
+          {name} · {tmarText(value.label)}
         </span>
         <span className="dro-tools">
           <span className="dro-title">{title}</span>
@@ -89,9 +95,9 @@ export function DimensionRow({
       </div>
       <ValueWindow value={value} testId={`${testPrefix}-value`} over={verdict ? !verdict.pass : false} />
       {verdict && <VerdictNote verdict={verdict} />}
-      {value.detail && !value.invalid && <div className="dro-note">{value.detail}</div>}
+      {value.detail && !value.invalid && <div className="dro-note">{tmarText(value.detail)}</div>}
       {(value.warning ?? value.invalid) && (
-        <WarningNote text={(value.warning ?? value.invalid)!} />
+        <WarningNote text={tmarText((value.warning ?? value.invalid)!)} />
       )}
     </div>
   )

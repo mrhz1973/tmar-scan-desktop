@@ -6,6 +6,8 @@ import { useRef, type RefObject } from 'react'
 import { SCAN_ACCEPT, SCAN_FORMATS } from '../core/formats'
 import { usePulse } from '../app/useHints'
 import { bundleFiles } from '../app/scanFiles'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** A file input out of sight, opened through `inputRef` by the key that
  *  stands for it, and emptied after every pick so the same file can come
@@ -51,6 +53,8 @@ export function ModelSlot({
   formats?: string
   onOpen: (file: File) => void
 }) {
+  useTmarLanguage()
+
   const inputRef = useRef<HTMLInputElement>(null)
   const slot = role.toLowerCase()
   const pulse = usePulse(`open-${slot}`)
@@ -62,8 +66,8 @@ export function ModelSlot({
         style={{ background: name ? dotColor : 'transparent', borderColor: dotColor }}
       />
       <div className="slotname">
-        <b title={name ?? undefined}>{name ?? `No ${role.toLowerCase()} loaded`}</b>
-        <span>{name ? detail : formats}</span>
+        <b title={name ?? undefined}>{name ?? (tmarText("No {0} loaded", [tmarText(role.toLowerCase())]))}</b>
+        <span>{tmarText(name ? detail : formats)}</span>
       </div>
       <button
         data-test={`open-${slot}`}
@@ -71,7 +75,7 @@ export function ModelSlot({
         disabled={busy}
         onClick={() => inputRef.current?.click()}
       >
-        {name ? 'Replace…' : 'Open…'}
+        {name ? tmarText("Replace…") : tmarText("Open…")}
       </button>
     </div>
   )

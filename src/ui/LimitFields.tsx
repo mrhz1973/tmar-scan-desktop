@@ -9,6 +9,8 @@ import { useRef } from 'react'
 import { bandFollows, editBand, type DimensionFamily, type DimensionUnit, type Limit } from '../core/dimensions'
 import { InfoDot } from './InfoDot'
 import { useFieldUnits } from './NumberField'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** A number that may be left out: empty commits undefined. Committed on
  *  blur or Enter like NumberField, so a half-typed "0." never judges a
@@ -35,6 +37,8 @@ export function OptionalNumber({
   testId: string
   onCommit: (v: number | undefined) => void
 }) {
+  useTmarLanguage()
+
   const ref = useRef<HTMLInputElement>(null)
   const u = useFieldUnits(kind, unit)
   const shown = value === undefined ? '' : u.text(value)
@@ -46,7 +50,7 @@ export function OptionalNumber({
         data-test={testId}
         step={u.step(step)}
         min={u.min(min)}
-        placeholder={placeholder}
+        placeholder={tmarText(placeholder)}
         defaultValue={shown}
         key={shown}
         onBlur={(e) => {
@@ -87,6 +91,8 @@ export function LimitFields({
   limit: Limit | undefined
   onChange: (limit: Limit | undefined) => void
 }) {
+  useTmarLanguage()
+
   const step = unit === '°' ? 0.01 : 0.001
   // A limit in millimetres is a length; one in degrees keeps its unit.
   const kind = unit === 'mm' ? ('length' as const) : undefined
@@ -94,22 +100,14 @@ export function LimitFields({
   if (family === 'tolerance') {
     return (
       <label className="field">
-        <span>
-          Limit
-          <InfoDot title="Limit">
-            <p>
-              The tolerance value off the drawing&apos;s feature control frame: the zone may be this
-              wide and no wider. Leave it empty to read the value without judging it.
-            </p>
-            <p>
-              With a limit the row and the pin say how far inside or over it the reading stands, and
-              turn red when it is over. The copied summary says PASS or FAIL.
-            </p>
+        <span>{tmarText("Limit")}<InfoDot title={tmarText("Limit")}>
+            <p>{tmarText("The tolerance value off the drawing's feature control frame: the zone may be this wide and no wider. Leave it empty to read the value without judging it.")}</p>
+            <p>{tmarText("With a limit the row and the pin say how far inside or over it the reading stands, and turn red when it is over. The copied summary says PASS or FAIL.")}</p>
           </InfoDot>
         </span>
         <OptionalNumber
           value={limit?.kind === 'max' ? limit.max : undefined}
-          placeholder="none"
+          placeholder={tmarText("none")}
           step={step}
           min={0}
           kind={kind}
@@ -125,23 +123,14 @@ export function LimitFields({
   return (
     <>
       <label className="field">
-        <span>
-          Nominal
-          <InfoDot title="Nominal and tolerance">
-            <p>
-              What the drawing says the value should be, and how far either side of it is still
-              good. Leave the nominal empty to read the value without judging it; leave − empty for
-              a symmetric tolerance.
-            </p>
-            <p>
-              With a nominal the row and the pin show the deviation from it, and turn red when it is
-              outside the tolerance. The copied summary says PASS or FAIL.
-            </p>
+        <span>{tmarText("Nominal")}<InfoDot title={tmarText("Nominal and tolerance")}>
+            <p>{tmarText("What the drawing says the value should be, and how far either side of it is still good. Leave the nominal empty to read the value without judging it; leave − empty for a symmetric tolerance.")}</p>
+            <p>{tmarText("With a nominal the row and the pin show the deviation from it, and turn red when it is outside the tolerance. The copied summary says PASS or FAIL.")}</p>
           </InfoDot>
         </span>
         <OptionalNumber
           value={band?.nominal}
-          placeholder="none"
+          placeholder={tmarText("none")}
           step={step}
           min={-Infinity}
           kind={kind}
@@ -152,7 +141,7 @@ export function LimitFields({
       </label>
       {band && (
         <label className="field">
-          <span>Tolerance</span>
+          <span>{tmarText("Tolerance")}</span>
           <span className="tolpair">
             <b>+</b>
             <OptionalNumber
@@ -168,7 +157,7 @@ export function LimitFields({
             <b>−</b>
             <OptionalNumber
               value={bandFollows(band) ? undefined : band.minus}
-              placeholder={fieldText(band.plus)}
+              placeholder={tmarText(fieldText(band.plus))}
               step={step}
               min={0}
               kind={kind}

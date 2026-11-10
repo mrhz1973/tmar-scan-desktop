@@ -18,6 +18,8 @@ import { Icon, type IconName } from './icons'
 import { InfoDot } from './InfoDot'
 import { modLabel } from './platform'
 import { useLength } from '../app/useUnits'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** The marking modes, with plain navigation as one of them. A gesture takes
  *  both plain mouse drags away from the camera for as long as it is on, so
@@ -63,6 +65,8 @@ export function BrushNumber({ diameter, setDiameter, testId }: BrushDiameter & {
 
 /** The brush's diameter to drag, over the range the part's size gives. */
 export function BrushSlider({ diameter, setDiameter, brush }: BrushDiameter & { brush: { min: number; max: number } }) {
+  useTmarLanguage()
+
   return (
     <input
       className="slider"
@@ -71,7 +75,7 @@ export function BrushSlider({ diameter, setDiameter, brush }: BrushDiameter & { 
       max={brush.max}
       step={(brush.max - brush.min) / 200}
       value={Math.min(Math.max(diameter, brush.min), brush.max)}
-      aria-label="Brush diameter"
+      aria-label={tmarText("Brush diameter")}
       onChange={(e) => setDiameter(Number(e.target.value))}
     />
   )
@@ -90,6 +94,8 @@ export function MarkTools({
   /** Rub out the whole marking. */
   onClear: () => void
 }) {
+  useTmarLanguage()
+
   // Everything the controls draw, and not `inverts`: that is a request counter for the
   // viewport that holds the marking, bumped on every Invert and drawn by nobody here.
   const m = useMark(
@@ -135,34 +141,24 @@ export function MarkTools({
             className={activeGesture === g.id ? 'withicon on' : 'withicon'}
             data-test={`mark-${g.id ?? 'navigate'}`}
             aria-pressed={activeGesture === g.id}
-            title={g.title}
+            title={tmarText(g.title)}
             // Clicking the live gesture again hands the camera back — the same
             // key that armed it disarms it.
             onClick={() => m.setGesture(m.gesture === g.id ? null : g.id)}
           >
             <Icon name={g.icon} size={16} />
-            {g.label}
+            {tmarText(g.label)}
           </button>
         ))}
       </div>
       <p className="hint" data-test="mark-navigation-hint" data-shift-held={navigating}>
-        {navigating ? `Shift: temporary Navigate. Release Shift to return to ${m.gesture}. ` : m.gesture === null
-          ? 'Marking is off — the camera has both drags back.'
-          : 'Left-drag marks, right-drag rubs out. Hold Shift for normal left/right mouse navigation; release to resume this marking tool.'}
-        <InfoDot title="Marking tools" testId="mark-help">
+        {navigating ? tmarText("Shift: temporary Navigate. Release Shift to return to {0}. ", [m.gesture]) : m.gesture === null ? tmarText("Marking is off — the camera has both drags back.") : tmarText("Left-drag marks, right-drag rubs out. Hold Shift for normal left/right mouse navigation; release to resume this marking tool.")}
+        <InfoDot title={tmarText("Marking tools")} testId="mark-help">
           <p>
-            <b>Window</b> marks every triangle inside a dragged rectangle. <b>Brush</b> paints with a
-            round tip, for working along an edge. <b>Lasso</b> takes everything inside a free
-            outline.
-          </p>
+            <b>{tmarText("Window")}</b>{tmarText(" marks every triangle inside a dragged rectangle. ")}<b>{tmarText("Brush")}</b>{tmarText(" paints with a round tip, for working along an edge. ")}<b>{tmarText("Lasso")}</b>{tmarText(" takes everything inside a free outline.")}</p>
+          <p>{tmarText("While a tool is live it takes both plain drags: left marks, right rubs out, and Alt inverts either way. With the brush, ")}{modLabel}{tmarText("-drag draws a straight line. Shift-drag still orbits and the middle button is untouched.")}</p>
           <p>
-            While a tool is live it takes both plain drags: left marks, right rubs out, and Alt
-            inverts either way. With the brush, {modLabel}-drag draws a straight line. Shift-drag
-            still orbits and the middle button is untouched.
-          </p>
-          <p>
-            <b>Navigate</b>, Esc, or clicking the live tool again hands the drags back to the camera;
-            what is marked stays marked. {escapeNote}
+            <b>{tmarText("Navigate")}</b>{tmarText(", Esc, or clicking the live tool again hands the drags back to the camera; what is marked stays marked. ")}{tmarText(escapeNote)}
           </p>
         </InfoDot>
       </p>
@@ -170,7 +166,7 @@ export function MarkTools({
       {m.gesture === 'brush' && (
         <>
           <label className="field">
-            <span>Brush Ø ({len.word()})</span>
+            <span>{tmarText("Brush Ø (")}{len.word()})</span>
             <BrushNumber diameter={m.diameter} setDiameter={m.setDiameter} testId="mark-brush-diameter" />
           </label>
           <BrushSlider diameter={m.diameter} setDiameter={m.setDiameter} brush={brush} />
@@ -181,16 +177,11 @@ export function MarkTools({
               checked={m.straight}
               onChange={(e) => m.setStraight(e.target.checked)}
             />
-            <span>Straight lines</span>
-            <InfoDot title="Straight lines">
+            <span>{tmarText("Straight lines")}</span>
+            <InfoDot title={tmarText("Straight lines")}>
+              <p>{tmarText("Each drag marks one straight line from where you press to where you let go. An outline shows what it will take, and nothing is marked until you let go.")}</p>
               <p>
-                Each drag marks one straight line from where you press to where you let go. An outline
-                shows what it will take, and nothing is marked until you let go.
-              </p>
-              <p>
-                {modLabel}-drag does the same without this switch, and with the switch on it draws
-                freehand. The line is straight on the screen and lies on whatever surface is under it.
-              </p>
+                {modLabel}{tmarText("-drag does the same without this switch, and with the switch on it draws freehand. The line is straight on the screen and lies on whatever surface is under it.")}</p>
             </InfoDot>
           </label>
         </>
@@ -203,17 +194,10 @@ export function MarkTools({
           checked={m.backfaces}
           onChange={(e) => m.setBackfaces(e.target.checked)}
         />
-        <span>Mark through the part</span>
-        <InfoDot title="Mark through the part">
-          <p>
-            Off, only surface you can see is taken: it has to face you, and a window or lasso
-            takes only the surface in front, not what a nearer wall or rib hides behind it. A
-            window dragged over a closed part cannot quietly mark the far wall as well.
-          </p>
-          <p>
-            On, the gesture goes straight through — useful for taking a whole rib or boss in one
-            sweep, and for a scan whose normals came out inverted.
-          </p>
+        <span>{tmarText("Mark through the part")}</span>
+        <InfoDot title={tmarText("Mark through the part")}>
+          <p>{tmarText("Off, only surface you can see is taken: it has to face you, and a window or lasso takes only the surface in front, not what a nearer wall or rib hides behind it. A window dragged over a closed part cannot quietly mark the far wall as well.")}</p>
+          <p>{tmarText("On, the gesture goes straight through — useful for taking a whole rib or boss in one sweep, and for a scan whose normals came out inverted.")}</p>
         </InfoDot>
       </label>
 
@@ -223,30 +207,26 @@ export function MarkTools({
           data-test="mark-erase"
           aria-pressed={m.erase}
           onClick={() => m.setErase(!m.erase)}
-          title="The gesture takes marking away instead of laying it down — the right button always does, and Alt inverts either way"
+          title={tmarText("The gesture takes marking away instead of laying it down — the right button always does, and Alt inverts either way")}
         >
           <Icon name="erase" size={16} />
-          {m.erase ? 'Erasing' : 'Erase'}
+          {m.erase ? tmarText("Erasing") : tmarText("Erase")}
         </button>
         <button
           className="withicon"
           data-test="mark-invert"
           disabled={m.count === 0}
           onClick={m.invert}
-          title="Mark everything that is not marked and rub out what is — to take all but a small piece, mark the piece and invert"
+          title={tmarText("Mark everything that is not marked and rub out what is — to take all but a small piece, mark the piece and invert")}
         >
-          <Icon name="markInvert" size={16} />
-          Invert
-        </button>
-        <button data-test="mark-clear" disabled={m.count === 0} onClick={onClear}>
-          Clear marking
-        </button>
+          <Icon name="markInvert" size={16} />{tmarText("Invert")}</button>
+        <button data-test="mark-clear" disabled={m.count === 0} onClick={onClear}>{tmarText("Clear marking")}</button>
       </div>
 
       {showCount && (
         <div className="kv">
-          <span className="name">Marked</span>
-          <b data-test="mark-count">{m.count.toLocaleString('en-US')} points</b>
+          <span className="name">{tmarText("Marked")}</span>
+          <b data-test="mark-count">{m.count.toLocaleString('en-US')}{tmarText(" points")}</b>
         </div>
       )}
     </>
@@ -269,17 +249,17 @@ export function markChipText(
   /** The brush's straight-line switch. */
   straight = false,
 ): string {
-  const tally = count === 0 ? '' : ` · ${count.toLocaleString('en-US')} points marked`
+  const tally = count === 0 ? '' : tmarText(' · {0} points marked', [count.toLocaleString('en-US')])
   if (gesture === null) {
-    return `Marking off — orbit and pan as usual · pick a tool in the panel to mark${tally} · ${escape.idle}`
+    return tmarText('Marking off — orbit and pan as usual · pick a tool in the panel to mark{0} · {1}', [tally, tmarText(escape.idle)])
   }
   const verb =
     gesture === 'window'
-      ? `Drag a window over ${target}`
+      ? tmarText('Drag a window over {0}', [tmarText(target)])
       : gesture === 'lasso'
-        ? `Draw a lasso around ${target}`
+        ? tmarText('Draw a lasso around {0}', [tmarText(target)])
         : straight
-          ? `Drag a straight line over ${target} · ${modLabel}-drag draws freehand`
-          : `Drag the brush over ${target} · ${modLabel}-drag draws a straight line`
-  return `${verb}${tally} · right-drag rubs out · Shift-drag orbits · ${escape.live}`
+          ? tmarText('Drag a straight line over {0} · {1}-drag draws freehand', [tmarText(target), modLabel])
+          : tmarText('Drag the brush over {0} · {1}-drag draws a straight line', [tmarText(target), modLabel])
+  return tmarText('{0}{1} · right-drag rubs out · Shift-drag orbits · {2}', [verb, tally, tmarText(escape.live)])
 }

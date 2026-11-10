@@ -12,6 +12,8 @@ import { KeyIcon } from '../reverse/ui/reIcons'
 import { noteWorkspace } from '../reverse/app/noteWorkspaces'
 import { placementBlockNow } from './notePlacement'
 import { clearNoteFocus, useNoteFocus } from './noteFocus'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 const STORAGE_KEY = 'tmar.quickNotes.shortcut'
 export const validNoteKey = (key: string): boolean => key === '' || /^[a-z]$/.test(key)
@@ -50,28 +52,30 @@ export function armNote(): boolean {
   return true
 }
 export function NoteShortcutSettings() {
+  useTmarLanguage()
+
   const key = useNoteShortcut((s) => s.key), setKey = useNoteShortcut((s) => s.setKey)
-  return <section aria-label="Note shortcuts" data-test="note-shortcut-settings">
-    <h3>Shortcuts</h3>
-    <label className="setting">Add note
-      <select data-test="note-shortcut" value={key} onChange={(e) => setKey(e.target.value)}>
-        <option value="">Disabled</option>
+  return <section aria-label={tmarText("Note shortcuts")} data-test="note-shortcut-settings">
+    <h3>{tmarText("Shortcuts")}</h3>
+    <label className="setting">{tmarText("Add note")}<select data-test="note-shortcut" value={key} onChange={(e) => setKey(e.target.value)}>
+        <option value="">{tmarText("Disabled")}</option>
         {'abcdefghijklmnopqrstuvwxyz'.split('').map((letter) => <option key={letter} value={letter}>{letter.toUpperCase()}</option>)}
       </select>
     </label>
-    <p className="hint">One unmodified letter in workspaces with local notes (including Mesh Tools when installed). Inactive while typing, in dialogs or while a CAD editor is open. Does not enable an agent connection.</p>
-    <button data-test="note-shortcut-reset" onClick={() => setKey('n')}>Reset to N</button>
+    <p className="hint">{tmarText("One unmodified letter in workspaces with local notes (including Mesh Tools when installed). Inactive while typing, in dialogs or while a CAD editor is open. Does not enable an agent connection.")}</p>
+    <button data-test="note-shortcut-reset" onClick={() => setKey('n')}>{tmarText("Reset to N")}</button>
   </section>
 }
 export function QuickNoteButton() {
+  useTmarLanguage()
+
   const workspace = useShell((s) => s.workspace)
   const placing = useNotes((s) => s.placing)
   const key = useNoteShortcut((s) => s.key)
   if (workspace !== 'reverse' && !noteWorkspace(workspace)) return null
   return <div className="keys"><button data-test="quick-note" aria-pressed={placing}
-    className={placing ? 'on' : undefined} title={`Add a local note${key ? ` (${key.toUpperCase()})` : ''}`} onClick={armNote}>
-    <KeyIcon name="note" size={16} />Note
-  </button></div>
+    className={placing ? 'on' : undefined} title={tmarText("Add a local note{0}", [key ? tmarText(" ({0})", [key.toUpperCase()]) : ''])} onClick={armNote}>
+    <KeyIcon name="note" size={16} />{tmarText("Note")}</button></div>
 }
 export function useQuickAccess(): void {
   useEffect(() => {

@@ -14,6 +14,8 @@ import { useStore } from '../../../src/state/store'
 import { Icon } from '../../../src/ui/icons'
 import { KeyIcon, type KeyIconName } from './reIcons'
 import { useDismiss } from '../../../src/ui/useDismiss'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 /** The rows the list draws a feature as, above and below the rollback bar,
  *  in the list's order. */
@@ -71,6 +73,8 @@ function itemsFor(f: Feature, all: readonly Feature[]): MenuItem[] {
  * keeps it shut. Returns the menu to draw, or null.
  */
 export function useFeatureMenu(list: RefObject<HTMLElement | null>, locked: boolean): ReactElement | null {
+  useTmarLanguage()
+
   const [open, setOpen] = useState<{ x: number; y: number; feature: Feature } | null>(null)
   useEffect(() => {
     const el = list.current
@@ -102,14 +106,14 @@ export function useFeatureMenu(list: RefObject<HTMLElement | null>, locked: bool
         <button
           key={item.label}
           role="menuitem"
-          title={item.title}
+          title={tmarText(item.title)}
           onClick={() => {
             setOpen(null)
             if (reEditorOpen(useReverse.getState())) return
             useReverse.getState().setSuppressed(item.ids, item.on)
           }}
         >
-          {item.label}
+          {tmarText(item.label)}
         </button>
       ))}
     </div>
@@ -119,8 +123,10 @@ export function useFeatureMenu(list: RefObject<HTMLElement | null>, locked: bool
 /** The key in a built feature's row, where a sketch's row has its eye: a
  *  click suppresses the feature. */
 export function SuppressKey({ feature, locked }: { feature: Feature; locked: boolean }) {
+  useTmarLanguage()
+
   return (
-    <button className="x eye" data-test="feature-suppress" disabled={locked} title={locked ? 'Finish what is open first' : `Suppress ${feature.name} — leave it out of the build, its picks and numbers kept`} onClick={() => useReverse.getState().setSuppressed([feature.id], true)}>
+    <button className="x eye" data-test="feature-suppress" disabled={locked} title={locked ? tmarText("Finish what is open first") : tmarText("Suppress {0} — leave it out of the build, its picks and numbers kept", [feature.name])} onClick={() => useReverse.getState().setSuppressed([feature.id], true)}>
       <KeyIcon name="built" size={14} />
     </button>
   )
@@ -131,6 +137,8 @@ export function SuppressKey({ feature, locked }: { feature: Feature; locked: boo
  *  feature again — and the bin. Opened for editing once it is built
  *  again. */
 export function SuppressedRow({ feature, icon, locked }: { feature: Feature; icon: KeyIconName; locked: boolean }) {
+  useTmarLanguage()
+
   const restore = () => useReverse.getState().setSuppressed([feature.id], false)
   const remove = () => {
     const re = useReverse.getState()
@@ -138,19 +146,19 @@ export function SuppressedRow({ feature, icon, locked }: { feature: Feature; ico
     else re.removeFeature(feature.id)
   }
   return (
-    <div className="kv ghost suppressed" data-test="feature-row" data-suppressed="true" title={`${feature.name} is suppressed — left out of the build, its picks and numbers kept. Right-click the row for its menu.`}>
+    <div className="kv ghost suppressed" data-test="feature-row" data-suppressed="true" title={tmarText("{0} is suppressed — left out of the build, its picks and numbers kept. Right-click the row for its menu.", [feature.name])}>
       <span className="kind">
         <KeyIcon name={icon} size={15} />
       </span>
       <span className="name">{feature.name}</span>
-      <b>suppressed</b>
-      <button className="x edit" disabled title={`Build ${feature.name} again to edit it`}>
+      <b>{tmarText("suppressed")}</b>
+      <button className="x edit" disabled title={tmarText("Build {0} again to edit it", [feature.name])}>
         <Icon name="edit" size={14} />
       </button>
-      <button className="x eye off" data-test="feature-unsuppress" disabled={locked} title={locked ? 'Finish what is open first' : `Suppressed — build ${feature.name} again`} onClick={restore}>
+      <button className="x eye off" data-test="feature-unsuppress" disabled={locked} title={locked ? tmarText("Finish what is open first") : tmarText("Suppressed — build {0} again", [feature.name])} onClick={restore}>
         <KeyIcon name="suppressed" size={14} />
       </button>
-      <button className="x" disabled={locked} title={`Delete ${feature.name}`} onClick={remove}>
+      <button className="x" disabled={locked} title={tmarText("Delete {0}", [feature.name])} onClick={remove}>
         <Icon name="bin" size={14} />
       </button>
     </div>

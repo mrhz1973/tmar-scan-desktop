@@ -4,6 +4,8 @@
 // a copy right before unmount must not set state on a component that is gone.
 
 import { useEffect, useState } from 'react'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function CopyButton({
   label,
@@ -16,6 +18,8 @@ export function CopyButton({
   disabled?: boolean
   onCopy: () => void
 }) {
+  useTmarLanguage()
+
   // A click counter rather than a boolean, so copying again while the tick is
   // still up restarts the two seconds instead of quietly doing nothing.
   const [clicks, setClicks] = useState(0)
@@ -35,7 +39,7 @@ export function CopyButton({
         setClicks((n) => n + 1)
       }}
     >
-      {copied ? 'Copied ✓' : label}
+      {copied ? tmarText("Copied ✓") : label}
     </button>
   )
 }

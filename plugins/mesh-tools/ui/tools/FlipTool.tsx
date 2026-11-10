@@ -8,6 +8,8 @@ import { useStore } from '../../../../src/state/store'
 import { InfoDot } from '../../../../src/ui/InfoDot'
 import { MarkTools } from '../../../../src/ui/MarkTools'
 import { useMeshTools } from '../../state/meshStore'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../../../src/i18n'
+
 
 export type FlipScope = 'all' | 'marked'
 
@@ -22,6 +24,8 @@ export function FlipTool({
   onFlip: (scope: FlipScope) => void
   onClear: () => void
 }) {
+  useTmarLanguage()
+
   const marked = useMark((s) => s.count)
   const editing = useMeshTools((s) => s.editing)
   const backfaces = useStore((s) => s.showBackfaces)
@@ -34,37 +38,19 @@ export function FlipTool({
   const label = (scope: FlipScope, text: string) =>
     editing && asked === scope ? (
       <>
-        <span className="spinner" />
-        Flipping…
-      </>
+        <span className="spinner" />{tmarText("Flipping…")}</>
     ) : (
       text
     )
 
   return (
     <div className="group" data-test="flip-tool">
-      <div className="sec-head">
-        Flip normals
-        <InfoDot title="Flipping normals">
+      <div className="sec-head">{tmarText("Flip normals")}<InfoDot title={tmarText("Flipping normals")}>
+          <p>{tmarText("Which side of a surface is its outside is set by the order of each triangle's corners. A part exported inside-out faces in everywhere, and a scan stitched from patches can have some of them facing in — and the thickness map, the alignment,")}{' '}
+            <b>{tmarText("Shrink/expand")}</b>, <b>{tmarText("Shell/hollow")}</b>{tmarText(" and ")}<b>{tmarText("Boolean")}</b>{tmarText(" all go by which way the surface faces.")}</p>
+          <p>{tmarText("A part that plainly encloses its volume inside-out is turned the right way out when it is opened; an open scan, a sheet, or one with patches facing both ways is left as it was wound. ")}<b>{tmarText("Backfaces")}</b>{tmarText(", in the menu over the view bar's Scan key, colours the inside of every triangle, so surface facing the wrong way shows.")}</p>
           <p>
-            Which side of a surface is its outside is set by the order of each triangle's corners.
-            A part exported inside-out faces in everywhere, and a scan stitched from patches can
-            have some of them facing in — and the thickness map, the alignment,{' '}
-            <b>Shrink/expand</b>, <b>Shell/hollow</b> and <b>Boolean</b> all go by which way the
-            surface faces.
-          </p>
-          <p>
-            A part that plainly encloses its volume inside-out is turned the right way out when it
-            is opened; an open scan, a sheet, or one with patches facing both ways is left as it
-            was wound. <b>Backfaces</b>, in the menu over the view bar's Scan key, colours the
-            inside of every triangle, so surface facing the wrong way shows.
-          </p>
-          <p>
-            <b>Flip all</b> turns every triangle over. <b>Flip marked</b> turns over the surface
-            you mark with a <b>window</b>, a <b>brush</b> or a <b>lasso</b> — a triangle when all
-            three of its corners are marked, exactly the triangles shown in amber. Nothing moves.
-            It flips the edited copy; <b>Ctrl+Z</b> turns it back.
-          </p>
+            <b>{tmarText("Flip all")}</b>{tmarText(" turns every triangle over. ")}<b>{tmarText("Flip marked")}</b>{tmarText(" turns over the surface you mark with a ")}<b>{tmarText("window")}</b>{tmarText(", a ")}<b>{tmarText("brush")}</b>{tmarText(" or a ")}<b>{tmarText("lasso")}</b>{tmarText(" — a triangle when all three of its corners are marked, exactly the triangles shown in amber. Nothing moves. It flips the edited copy; ")}<b>{tmarText("Ctrl+Z")}</b>{tmarText(" turns it back.")}</p>
         </InfoDot>
       </div>
 
@@ -79,27 +65,25 @@ export function FlipTool({
           data-confirm={1}
           disabled={!ready || busy || marked === 0}
           onClick={() => flip('marked')}
-          title="Turn the marked surface over — the triangles with all three corners marked"
+          title={tmarText("Turn the marked surface over — the triangles with all three corners marked")}
         >
-          {label('marked', 'Flip marked')}
+          {label('marked', tmarText('Flip marked'))}
         </button>
         <button
           className={marked > 0 ? undefined : 'primary'}
           data-test="flip-all"
           disabled={!ready || busy}
           onClick={() => flip('all')}
-          title="Turn every triangle of the part over"
+          title={tmarText("Turn every triangle of the part over")}
         >
-          {label('all', 'Flip all')}
+          {label('all', tmarText('Flip all'))}
         </button>
       </div>
       {ready && marked === 0 && !editing && (
-        <p className="hint">Mark the surface that faces the wrong way — pick Window, Brush or Lasso — or flip the whole part.</p>
+        <p className="hint">{tmarText("Mark the surface that faces the wrong way — pick Window, Brush or Lasso — or flip the whole part.")}</p>
       )}
       {ready && !backfaces && (
-        <p className="hint" data-test="flip-backfaces-hint">
-          Turn on <b>Backfaces</b> over the Scan key to see which way the surface faces.
-        </p>
+        <p className="hint" data-test="flip-backfaces-hint">{tmarText("Turn on ")}<b>{tmarText("Backfaces")}</b>{tmarText(" over the Scan key to see which way the surface faces.")}</p>
       )}
     </div>
   )

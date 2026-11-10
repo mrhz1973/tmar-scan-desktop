@@ -10,8 +10,12 @@
 import { useStore } from '../state/store'
 import { useDeviation } from '../state/deviationStore'
 import { useThickness } from '../state/thicknessStore'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function BusyOverlay() {
+  useTmarLanguage()
+
   const loading = useStore((s) => s.busy)
   // A search run for the user — Auto-align, Use symmetry — that takes
   // seconds on a big scan, with nothing on the part to show for it until it
@@ -57,13 +61,13 @@ export function BusyOverlay() {
     <div className="busyoverlay" data-test="fitting-chip">
       <div className="busycard">
         <span className="spinner big" />
-        <b>{label}</b>
+        <b>{tmarText(label)}</b>
         {progress !== null && (
           <div className="busybar" data-test="busy-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
             <span style={{ width: `${Math.max(2, Math.min(100, progress * 100))}%` }} />
           </div>
         )}
-        {note && <span className="busynote">{note}</span>}
+        {note && <span className="busynote">{tmarText(note)}</span>}
       </div>
     </div>
   )

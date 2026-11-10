@@ -1,17 +1,29 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# Launcher VPS — sorgenti candidate
+# Launcher VPS — pagina pubblicata e anteprima isolata
 
 Ripristina il selettore italiano osservato il **10 novembre 2026**, mantenendo
 layout, collegamenti e separazione delle origini. Corregge gli accenti sostituiti
 da `?` e fornisce le due risorse che rispondevano 404:
 `/launcher-version.js` e `/tmar-live-versions.json`.
 
-Questi sorgenti non sono stati pubblicati sul VPS. La configurazione effettiva
-del launcher, del proxy e dei servizi esistenti non è ancora riprodotta in Git.
-Il server qui incluso è una **anteprima isolata su loopback**, non una
-sostituzione automatica del processo Python o del proxy esistente.
+**HTML e JavaScript pubblicati il 10 novembre 2026 alle 21:15 UTC (22:15 CET).**
+Il servizio Python preesistente rispondeva già correttamente; i due 404 pubblici
+dipendevano dalla configurazione precedente ancora caricata da Caddy. È stata
+validata e ricaricata via stdin la configurazione host, che conteneva già le
+rotte corrette. Il file montato nel container conservava invece il vecchio inode.
+I dettagli, i limiti del controllo e gli hash sono in [DEPLOYMENT-20261110.md](DEPLOYMENT-20261110.md).
+
+Il server Node qui incluso resta una **anteprima isolata su loopback**. Non è
+stato installato sul VPS: processo Python, hook di build e timer esistenti sono
+rimasti invariati. L'HTML evita inoltre di presentare Edit Surface come una
+funzione esclusiva del canale Dev.
 
 ## Contratto dei dati
+
+Il contratto di validazione seguente riguarda l'anteprima Node. Il backend
+Python live preesistente legge gli stessi metadati e restituisce un oggetto
+`error` quando non sono disponibili; il JavaScript pubblicato gestisce anche
+questa risposta mostrando `Non disponibile`.
 
 `metadata.mjs` legge i due file `current/tmar-preview-version.json` indicati
 esplicitamente, senza modificarli o cambiarne i collegamenti. Produce
@@ -81,9 +93,9 @@ esclusivamente come fixture nel controllo; non sono valori di produzione.
    candidata. Verificare poi launcher, JS, JSON, Stable, Dev ed esempi via
    HTTPS senza ricaricare una sessione di lavoro già aperta.
 
-Nessun file di servizio, configurazione Caddy, hook di build o comando di
-deploy è incluso. La pubblicazione resta separata dalla preparazione e dalla
-verifica locale di questi sorgenti.
+Per gli interventi futuri ripetere il preflight sui file e sulla configurazione
+realmente in uso. Il rapporto della pubblicazione documenta la modifica al
+routing; non introduce un secondo builder o un nuovo servizio.
 
 ## Provenienza
 

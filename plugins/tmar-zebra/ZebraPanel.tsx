@@ -15,10 +15,14 @@ import { ZebraLayer, type ZebraOptions, type ZebraTarget } from './ZebraLayer'
 import type { Orientation } from './pattern'
 import { enableZebra, useZebraUi, ZebraIcon } from './ZebraQuickButton'
 import './zebraControls.css'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 export function ZebraDeviationPanel() {
+  useTmarLanguage()
+
   const blocked = useDeviation(s=>s.split || s.picking || s.animate || s.alignStatus === 'running')
-  if (blocked) return <p className="hint" data-test="zebra-deviation-blocked">Zebra requires a still, single Deviation viewport. Split-view support remains planned.</p>
+  if (blocked) return <p className="hint" data-test="zebra-deviation-blocked">{tmarText("Zebra requires a still, single Deviation viewport. Split-view support remains planned.")}</p>
   return <ZebraPanel/>
 }
 export interface ZebraInspection {
@@ -31,6 +35,8 @@ export interface ZebraInspection {
   hint: string
 }
 export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}) {
+  useTmarLanguage()
+
   const workspace = useShell(s=>s.workspace), onDeviation = workspace === 'deviation'
   const referenceName = useDeviation(s=>s.nominalName), showScan = useDeviation(s=>s.showScan)
   const editingNote = useNotes(s=>s.editing)
@@ -85,16 +91,16 @@ export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}
 
   useEffect(() => { layer.current?.setOptions(options) }, [options])
 
-  return <section className="group" data-test="tmar-zebra" aria-label="Zebra surface analysis">
-    <div className="sec-head zebra-heading"><ZebraIcon/>Zebra surface analysis</div>
+  return <section className="group" data-test="tmar-zebra" aria-label={tmarText("Zebra surface analysis")}>
+    <div className="sec-head zebra-heading"><ZebraIcon/>{tmarText("Zebra surface analysis")}</div>
     <label className="field">
-      <span><input data-test="zebra-enabled" type="checkbox" checked={enabled} disabled={!!inspection?.blocked && !enabled} onChange={(e) => toggle(e.target.checked)} /> Show zebra stripes</span>
+      <span><input data-test="zebra-enabled" type="checkbox" checked={enabled} disabled={!!inspection?.blocked && !enabled} onChange={(e) => toggle(e.target.checked)} />{tmarText(" Show zebra stripes")}</span>
     </label>
-    {inspection?.blocked && <p className="hint" data-test="zebra-inspection-blocked">{inspection.blocked}</p>}
+    {inspection?.blocked && <p className="hint" data-test="zebra-inspection-blocked">{tmarText(inspection.blocked)}</p>}
     {enabled && <>
       <button className={'block' + (placing ? ' on' : '')} data-test="zebra-add-note" aria-pressed={placing}
         disabled={busy || !!editingNote || !!inspection?.noteBlocked || (onDeviation ? !hasScan || !showScan : !hasScan && !hasBody)}
-        title={inspection?.noteBlocked ?? (onDeviation ? 'Local notes in Deviation currently attach to the visible scan, not the STEP reference; save an open note first' : 'Pin a note on the scan or a CAD body while Zebra is visible; save an open note first')}
+        title={tmarText(inspection?.noteBlocked) ?? ((onDeviation ? tmarText("Local notes in Deviation currently attach to the visible scan, not the STEP reference; save an open note first") : tmarText("Pin a note on the scan or a CAD body while Zebra is visible; save an open note first")))}
         onClick={() => {
           if (inspection) { inspection.addNote(); return }
           const notes = useNotes.getState()
@@ -104,39 +110,33 @@ export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}
           notes.setPlacing(true)
           useStore.getState().setStatus(NOTE_PLACING)
         }}>
-        {placing ? 'Click the part · cancel note' : 'Add note on the part'}
+        {placing ? tmarText("Click the part · cancel note") : tmarText("Add note on the part")}
       </button>
-      <label className="field"><span>Analyze</span>
+      <label className="field"><span>{tmarText("Analyze")}</span>
         <select data-test="zebra-target" value={target} onChange={(e) => setTarget(e.target.value as ZebraTarget)}>
-          {!onDeviation && !inspection && <option value="visible">Visible CAD bodies</option>}
-          {!onDeviation && !inspection && <option value="selected">Selected CAD bodies</option>}
-          <option value="scan">{inspection?.label ?? 'Scan'}</option>
-          {onDeviation && <option value="reference" disabled={!referenceName}>Reference (STEP / mesh)</option>}
+          {!onDeviation && !inspection && <option value="visible">{tmarText("Visible CAD bodies")}</option>}
+          {!onDeviation && !inspection && <option value="selected">{tmarText("Selected CAD bodies")}</option>}
+          <option value="scan">{tmarText(inspection?.label) ?? (tmarText("Scan"))}</option>
+          {onDeviation && <option value="reference" disabled={!referenceName}>{tmarText("Reference (STEP / mesh)")}</option>}
         </select>
       </label>
-      <label className="field"><span>Stripe direction</span>
+      <label className="field"><span>{tmarText("Stripe direction")}</span>
         <select data-test="zebra-orientation" value={orientation} onChange={(e) => setOrientation(e.target.value as Orientation)}>
-          <option value="horizontal">Horizontal</option>
-          <option value="vertical">Vertical</option>
+          <option value="horizontal">{tmarText("Horizontal")}</option>
+          <option value="vertical">{tmarText("Vertical")}</option>
         </select>
       </label>
-      <label className="field"><span>Stripe width · {width}</span>
+      <label className="field"><span>{tmarText("Stripe width · ")}{width}</span>
         <input data-test="zebra-width" type="range" min="1" max="7" step="1" value={width} onChange={(e) => setWidth(Number(e.target.value))} />
       </label>
-      <label className="field"><span>Stripe color</span>
+      <label className="field"><span>{tmarText("Stripe color")}</span>
         <input data-test="zebra-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} />
       </label>
-      <p className="hint" data-test="zebra-status" role="status">{unavailable
-        ? 'The 3D view is unavailable.'
-        : count > 0 ? `Showing stripes on ${count} visible ${count === 1 ? 'object' : 'objects'}.`
-          : target === 'selected' ? 'Select visible CAD bodies in the body list.'
-            : target === 'reference' ? 'Load and show the reference in Surface Deviation. Hide the scan when it covers the reference.'
-            : target === 'scan' ? 'Show a scan with surface normals to analyze it.'
-              : 'Show a CAD body with surface normals to analyze it.'}</p>
-      {inspection && <p className="hint" data-test="mesh-zebra-help">{inspection.hint}</p>}
-      {inspection?.noteBlocked && <p className="hint" data-test="mesh-zebra-note-help">{inspection.noteBlocked}</p>}
-      {onDeviation && <p className="hint">Zebra temporarily replaces the selected object's shading, not its geometry or measurements. Turn it off to read the comparison colors. Notes remain scan-side in this workspace.</p>}
-      <p className="hint">Rotate the view to inspect reflected bands. This is a visual aid, not a numerical continuity measurement. Shading follows the displayed mesh normals.</p>
+      <p className="hint" data-test="zebra-status" role="status">{unavailable ? tmarText("The 3D view is unavailable.") : count > 0 ? tmarText("Showing stripes on {0} visible {1}.", [count, count === 1 ? tmarText("object") : tmarText("objects")]) : target === 'selected' ? tmarText("Select visible CAD bodies in the body list.") : target === 'reference' ? tmarText("Load and show the reference in Surface Deviation. Hide the scan when it covers the reference.") : target === 'scan' ? tmarText("Show a scan with surface normals to analyze it.") : tmarText("Show a CAD body with surface normals to analyze it.")}</p>
+      {inspection && <p className="hint" data-test="mesh-zebra-help">{tmarText(inspection.hint)}</p>}
+      {inspection?.noteBlocked && <p className="hint" data-test="mesh-zebra-note-help">{tmarText(inspection.noteBlocked)}</p>}
+      {onDeviation && <p className="hint">{tmarText("Zebra temporarily replaces the selected object's shading, not its geometry or measurements. Turn it off to read the comparison colors. Notes remain scan-side in this workspace.")}</p>}
+      <p className="hint">{tmarText("Rotate the view to inspect reflected bands. This is a visual aid, not a numerical continuity measurement. Shading follows the displayed mesh normals.")}</p>
     </>}
   </section>
 }

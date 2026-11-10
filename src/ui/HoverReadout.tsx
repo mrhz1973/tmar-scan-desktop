@@ -9,6 +9,7 @@
 // written belongs to the map it came off, not to the label that shows it.
 
 import { useEffect, useState } from 'react'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
 
 export interface HoverReading {
   text: string
@@ -23,6 +24,7 @@ export function HoverReadout({
 }: {
   register: (fn: ((reading: HoverReading | null) => void) | null) => void
 }) {
+  useTmarLanguage()
   const [reading, setReading] = useState<HoverReading | null>(null)
 
   useEffect(() => {
@@ -37,7 +39,7 @@ export function HoverReadout({
       data-test="hover-readout"
       style={{ left: reading.x + 16, top: reading.y + 16 }}
     >
-      {reading.text}
+      {tmarText(reading.text)}
     </div>
   )
 }

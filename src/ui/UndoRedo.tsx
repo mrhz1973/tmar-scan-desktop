@@ -13,8 +13,12 @@ import { useDeviation } from '../state/deviationStore'
 import { useThickness } from '../state/thicknessStore'
 import { Icon } from './icons'
 import { modLabel } from './platform'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function UndoRedo() {
+  useTmarLanguage()
+
   const history = useHistory()
   // Re-evaluate availability as computations and editors start or finish.
   useStore((s) => !!(s.busy || s.draft || s.dimDraft || s.alignDraft || s.sectionDraft))
@@ -31,11 +35,11 @@ export function UndoRedo() {
   const canRedo = !blocked && (local ? local.canRedo() : history.future.length > 0)
   const hint = blocked ? 'Finish the active operation or close its editor first' : null
   return <div className="undokeys" data-test="undo-keys">
-    <button className="ghost" data-test="undo" aria-label="Undo" disabled={!canUndo}
-      title={hint ?? `Undo${local ? ` ${local.label}` : history.past.at(-1) ? `: ${history.past.at(-1)!.label}` : ''} — ${modLabel}+Z`}
+    <button className="ghost" data-test="undo" aria-label={tmarText("Undo")} disabled={!canUndo}
+      title={hint ?? (tmarText("Undo{0} — {1}+Z", [local ? tmarText(" {0}", [tmarText(local.label)]) : history.past.at(-1) ? tmarText(": {0}", [tmarText(history.past.at(-1)!.label)]) : '', modLabel]))}
       onClick={() => void undo()}><Icon name="undo" size={16} /></button>
-    <button className="ghost" data-test="redo" aria-label="Redo" disabled={!canRedo}
-      title={hint ?? `Redo${local ? ` ${local.label}` : history.future.at(-1) ? `: ${history.future.at(-1)!.label}` : ''} — ${modLabel}+Y / ${modLabel}+Shift+Z`}
+    <button className="ghost" data-test="redo" aria-label={tmarText("Redo")} disabled={!canRedo}
+      title={hint ?? (tmarText("Redo{0} — {1}+Y / {2}+Shift+Z", [local ? tmarText(" {0}", [tmarText(local.label)]) : history.future.at(-1) ? tmarText(": {0}", [tmarText(history.future.at(-1)!.label)]) : '', modLabel, modLabel]))}
       onClick={() => void redo()}><Icon name="redo" size={16} /></button>
   </div>
 }

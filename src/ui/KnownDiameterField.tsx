@@ -11,8 +11,12 @@ import { InfoDot } from './InfoDot'
 import { useStore } from '../state/store'
 import { useLength, type BoundLength } from '../app/useUnits'
 import { useFieldUnits } from './NumberField'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function KnownDiameterField({ busy, onChange }: { busy: boolean; onChange: (mm: number | undefined) => void }) {
+  useTmarLanguage()
+
   const known = useStore((s) => s.draft?.settings.knownDiameter)
   const fit = useStore((s) => s.draft?.fit)
   const ref = useRef<HTMLInputElement>(null)
@@ -36,26 +40,11 @@ export function KnownDiameterField({ busy, onChange }: { busy: boolean; onChange
   return (
     <>
       <label className="field">
-        <span>
-          Known Ø
-          <InfoDot title="Known Ø">
-            <p>
-              The ball's diameter as it is <b>known</b> — a precision sphere, a gauge ball, the balls
-              of a ballbar. The fit then holds this diameter and places only the centre.
-            </p>
-            <p>
-              On a ball scanned only partly, the free fit's diameter and the centre's position
-              along the scanned cap trade off against each other: a surface that reads a few µm off
-              towards the edge of the cap moves both by several times that. Holding the true
-              diameter takes that freedom away, so centre distances come out right.
-            </p>
-            <p>
-              The other way round: a scan that reads uniformly large or small (spray, a scanner
-              offset) moves a held centre by about that much towards the scanned side. The
-              diameter the points give when it is free is shown below — it should be close to the
-              known one.
-            </p>
-            <p>Leave it empty for a free fit. It belongs to this sphere alone.</p>
+        <span>{tmarText("Known Ø")}<InfoDot title={tmarText("Known Ø")}>
+            <p>{tmarText("The ball's diameter as it is ")}<b>{tmarText("known")}</b>{tmarText(" — a precision sphere, a gauge ball, the balls of a ballbar. The fit then holds this diameter and places only the centre.")}</p>
+            <p>{tmarText("On a ball scanned only partly, the free fit's diameter and the centre's position along the scanned cap trade off against each other: a surface that reads a few µm off towards the edge of the cap moves both by several times that. Holding the true diameter takes that freedom away, so centre distances come out right.")}</p>
+            <p>{tmarText("The other way round: a scan that reads uniformly large or small (spray, a scanner offset) moves a held centre by about that much towards the scanned side. The diameter the points give when it is free is shown below — it should be close to the known one.")}</p>
+            <p>{tmarText("Leave it empty for a free fit. It belongs to this sphere alone.")}</p>
           </InfoDot>
         </span>
         <span className="unitfield">
@@ -65,7 +54,7 @@ export function KnownDiameterField({ busy, onChange }: { busy: boolean; onChange
             data-test="known-diameter"
             step={u.step(0.001)}
             min={u.min(0.001)}
-            placeholder="free"
+            placeholder={tmarText("free")}
             disabled={busy}
             defaultValue={shown}
             key={shown}
@@ -81,10 +70,8 @@ export function KnownDiameterField({ busy, onChange }: { busy: boolean; onChange
         </span>
       </label>
       {held && known !== undefined && (
-        <p className="dro-note" data-test="known-diameter-free">
-          Free fit Ø {len.fmt(held.freeDiameter, 4)} ({fine(held.freeDiameter - known, len, true)}) · centre moved{' '}
-          {fine(held.shift, len, false)} by holding it
-        </p>
+        <p className="dro-note" data-test="known-diameter-free">{tmarText("Free fit Ø ")}{len.fmt(held.freeDiameter, 4)} ({fine(held.freeDiameter - known, len, true)}{tmarText(") · centre moved")}{' '}
+          {fine(held.shift, len, false)}{tmarText(" by holding it")}</p>
       )}
     </>
   )

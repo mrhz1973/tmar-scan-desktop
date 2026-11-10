@@ -18,6 +18,8 @@ import { sceneOf } from '../../src/commands/host'
 import { reSceneOf } from '../reverse/viewer/reScene'
 import { withBoundsTree } from '../reverse/viewer/bodyPicks'
 import { snapAlong, type SnapHit } from './snap'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 export interface StripeSettings { orientation: 'horizontal' | 'vertical'; width: number; color: string }
 type LayerOptions = StripeSettings & { target: 'visible'; selectedIds: number[] }
@@ -43,6 +45,8 @@ interface Props {
   registerCancel: (fn: () => boolean) => void
 }
 export function SurfaceViewport(props: Props) {
+  useTmarLanguage()
+
   const host = useRef<HTMLDivElement>(null), current = useRef(props)
   const handle = useRef<HTMLButtonElement>(null)
   const handleLeader = useRef<HTMLDivElement>(null)
@@ -152,14 +156,14 @@ export function SurfaceViewport(props: Props) {
       if (!hit) { label.style.display='none'; return }
       const p=hit.point.clone().project(camera), rect=div.getBoundingClientRect()
       label.style.left=((p.x+1)*rect.width/2)+'px'; label.style.top=((1-p.y)*rect.height/2)+'px'
-      label.textContent='●  Agganciato: '+hit.label; label.style.display='block'
+      label.textContent=tmarText('●  Agganciato: ')+hit.label; label.style.display='block'
     }
     const showSnapError = (pointer: SurfacePointer) => {
       showSnap(null)
       const label=snapFeedback.current
       if (!label) return
       div.dataset.snapKind='error'
-      label.textContent='Magnete non disponibile per questo riferimento'
+      label.textContent=tmarText('Magnete non disponibile per questo riferimento')
       label.style.left=(pointer.clientX-div.getBoundingClientRect().left)+'px'
       label.style.top=(pointer.clientY-div.getBoundingClientRect().top)+'px'
       label.style.display='block'
@@ -427,8 +431,8 @@ export function SurfaceViewport(props: Props) {
   return <div ref={host} className="es-viewport" data-test="edit-surface-viewport" data-hidden-poles={props.hiddenPoles.length} data-direct-edges={props.directStrip?.paths.length ?? 0}>
     <div ref={snapFeedback} className="es-snap-feedback" data-test="surface-snap-feedback" style={{display:'none'}} />
     {edgeHandle && props.directStrip && !props.busy && <><div ref={handleLeader} className="es-direct-leader" style={{visibility:'hidden'}} /><button ref={handle} type="button" className="es-direct-handle" style={{visibility:'hidden'}}
-      data-test="strip-direct-handle" data-strip-direct-edge={edgeHandle.edge} data-strip-direct-anchor={edgeHandle.anchor.join(',')} aria-label="Trascina per duplicare il bordo libero"
-      title="Trascina per duplicare il bordo libero">D</button></>}
+      data-test="strip-direct-handle" data-strip-direct-edge={edgeHandle.edge} data-strip-direct-anchor={edgeHandle.anchor.join(',')} aria-label={tmarText("Trascina per duplicare il bordo libero")}
+      title={tmarText("Trascina per duplicare il bordo libero")}>{tmarText("D")}</button></>}
   </div>
 }
 function dispose(o: THREE.Object3D) { const m = o as THREE.Mesh; if (!m.userData.borrowedGeometry) m.geometry?.dispose(); if (Array.isArray(m.material)) m.material.forEach(a => a.dispose()); else m.material?.dispose() }

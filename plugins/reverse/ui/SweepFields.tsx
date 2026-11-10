@@ -8,6 +8,8 @@
 import type { SketchFeature } from '../core/features'
 import type { SweepRoute } from '../core/sweepRoute'
 import { InfoDot } from '../../../src/ui/InfoDot'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 export function SweepIcon({ size = 24 }: { size?: number }) {
   return (
@@ -19,11 +21,13 @@ export function SweepIcon({ size = 24 }: { size?: number }) {
 }
 
 export function SweepFields({ profile, path, route, sketches, onChange }: { profile: number | null; path: number | null; route?: SweepRoute; sketches: readonly SketchFeature[]; onChange: (patch: { profile?: number | null; path?: number | null }) => void }) {
+  useTmarLanguage()
+
   const select = (label: string, value: number | null, testId: string, set: (id: number | null) => void) => (
     <label className="field">
-      <span>{label}</span>
+      <span>{tmarText(label)}</span>
       <select data-test={testId} value={value ?? ''} onChange={(e) => set(e.target.value === '' ? null : Number(e.target.value))}>
-        <option value="">Select…</option>
+        <option value="">{tmarText("Select…")}</option>
         {sketches.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}
@@ -37,10 +41,9 @@ export function SweepFields({ profile, path, route, sketches, onChange }: { prof
     return (
       <>
         {select('Profile', profile, 'sweep-profile', (id) => onChange({ profile: id }))}
-        <p className="hint" data-test="sweep-route">
-          Along a route in 3D: {route.points.length} points, {bends} bend{bends === 1 ? '' : 's'}.
-          <InfoDot title="A route">
-            <p>The centreline's points came by a command, as reverse.scan.tube_trace reads them, and reverse.feature.update changes them; there is no drawing them here. It moves with the part and needs no sketch. The profile stands square to it at its start, with the start on it.</p>
+        <p className="hint" data-test="sweep-route">{tmarText("Along a route in 3D: ")}{route.points.length}{tmarText(" points, ")}{bends}{tmarText(" bend")}{bends === 1 ? '' : tmarText("s")}.
+          <InfoDot title={tmarText("A route")}>
+            <p>{tmarText("The centreline's points came by a command, as reverse.scan.tube_trace reads them, and reverse.feature.update changes them; there is no drawing them here. It moves with the part and needs no sketch. The profile stands square to it at its start, with the start on it.")}</p>
           </InfoDot>
         </p>
       </>
@@ -51,15 +54,11 @@ export function SweepFields({ profile, path, route, sketches, onChange }: { prof
       {select('Profile', profile, 'sweep-profile', (id) => onChange({ profile: id }))}
       {select('Path', path, 'sweep-path', (id) => onChange({ path: id }))}
       <div className="toolrow">
-        <button data-test="sweep-swap" disabled={profile === null && path === null} title="The profile's sketch for the path's, and the path's for the profile's" onClick={() => onChange({ profile: path, path: profile })}>
-          Swap profile and path
-        </button>
+        <button data-test="sweep-swap" disabled={profile === null && path === null} title={tmarText("The profile's sketch for the path's, and the path's for the profile's")} onClick={() => onChange({ profile: path, path: profile })}>{tmarText("Swap profile and path")}</button>
       </div>
-      <p className="hint">
-        The profile sketch's largest region is carried along the path sketch's one chain of lines and arcs, from the end nearest the profile.
-        <InfoDot title="A sweep">
-          <p>The section is held square to the path and turns as little as it can along it. Sketch the profile on a plane square to the path where it starts — one more than a degree off square is refused, saying by how much.</p>
-          <p>The path is lines and arcs end to end — one chain, no branch; a closed path is drawn as arcs, a circle having no end to start from. Holes in the profile are swept with it.</p>
+      <p className="hint">{tmarText("The profile sketch's largest region is carried along the path sketch's one chain of lines and arcs, from the end nearest the profile.")}<InfoDot title={tmarText("A sweep")}>
+          <p>{tmarText("The section is held square to the path and turns as little as it can along it. Sketch the profile on a plane square to the path where it starts — one more than a degree off square is refused, saying by how much.")}</p>
+          <p>{tmarText("The path is lines and arcs end to end — one chain, no branch; a closed path is drawn as arcs, a circle having no end to start from. Holes in the profile are swept with it.")}</p>
         </InfoDot>
       </p>
     </>

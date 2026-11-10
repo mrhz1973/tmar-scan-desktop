@@ -8,6 +8,8 @@ import { RefPicker } from '../../../src/ui/RefPicker'
 import { type PlaneRef } from '../core/features'
 import { coordinatePlaneOffers, worldPlaneKey } from '../core/resolve'
 import { useReverse } from '../state/reStore'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 /** The planes a sketch can lie on, or an extrusion reach to. */
 function planeOptions(): { key: string; label: string; ref: PlaneRef; group: string }[] {
@@ -21,7 +23,7 @@ function planeOptions(): { key: string; label: string; ref: PlaneRef; group: str
   // the scanner left it — at the origin they would miss it — and at zero,
   // the part's own, once it is aligned or there is no scan.
   const hasScan = store.fileName !== null
-  for (const o of coordinatePlaneOffers({ centre: hasScan ? store.modelCenter : null, atZero: !hasScan || store.appliedAlignment !== null })) out.push({ key: o.key, label: o.label, ref: o.ref, group: 'Coordinate planes' })
+  for (const o of coordinatePlaneOffers({ centre: hasScan ? store.modelCenter : null, atZero: !hasScan || store.appliedAlignment !== null })) out.push({ key: o.key, label: tmarText(o.label), ref: o.ref, group: 'Coordinate planes' })
   return out
 }
 
@@ -33,6 +35,8 @@ function planeKey(ref: PlaneRef): string {
  *  plane as a sheet through the scan with its name — so "Plane 2" is a
  *  place, not a label. The chosen plane stays shown while the box is open. */
 export function PlaneSelect({ value, testId, placeholder, onChange }: { value: PlaneRef | null; testId: string; placeholder: string; onChange: (ref: PlaneRef) => void }) {
+  useTmarLanguage()
+
   const options = planeOptions()
   const re = useReverse
   const hint = (key: string | null) => {

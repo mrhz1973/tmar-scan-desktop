@@ -11,8 +11,12 @@ import { useStore } from '../state/store'
 import { assumedWarning, measuredDiameter, type SizedFit } from '../core/elements/assumed'
 import { useLength } from '../app/useUnits'
 import { useFieldUnits } from './NumberField'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function AssumedField({ fit }: { fit: SizedFit }) {
+  useTmarLanguage()
+
   const assumed = useStore((s) => s.draft?.assumed)
   const setDraftAssumed = useStore((s) => s.setDraftAssumed)
   const ref = useRef<HTMLInputElement>(null)
@@ -38,20 +42,10 @@ export function AssumedField({ fit }: { fit: SizedFit }) {
   return (
     <>
       <label className="field">
-        <span>
-          Assumed Ø
-          <InfoDot title="Assumed Ø">
-            <p>
-              The diameter the feature was <b>designed</b> at, if you know it: what measures Ø{' '}
-              {len.units === 'in' ? '0.2495 in was probably drawn at Ø 0.25' : `5.98 ${len.word()} was probably drawn at Ø 6`}.
-              Leave it empty if you don't — nothing is guessed for you.
-            </p>
-            <p>
-              The element is drawn at this diameter, and the STEP export writes it instead of the
-              measured one, so CAD receives the feature as designed. Nothing measured changes: the
-              readouts, every dimension and every deviation map keep the fitted diameter. Elements
-              without one are drawn and exported as measured.
-            </p>
+        <span>{tmarText("Assumed Ø")}<InfoDot title={tmarText("Assumed Ø")}>
+            <p>{tmarText("The diameter the feature was ")}<b>{tmarText("designed")}</b>{tmarText(" at, if you know it: what measures Ø")}{' '}
+              {len.units === 'in' ? tmarText("0.2495 in was probably drawn at Ø 0.25") : tmarText("5.98 {0} was probably drawn at Ø 6", [len.word()])}{tmarText(". Leave it empty if you don't — nothing is guessed for you.")}</p>
+            <p>{tmarText("The element is drawn at this diameter, and the STEP export writes it instead of the measured one, so CAD receives the feature as designed. Nothing measured changes: the readouts, every dimension and every deviation map keep the fitted diameter. Elements without one are drawn and exported as measured.")}</p>
           </InfoDot>
         </span>
         <span className="unitfield">
@@ -61,7 +55,7 @@ export function AssumedField({ fit }: { fit: SizedFit }) {
             data-test="assumed-diameter"
             step={u.step(0.01)}
             min={u.min(0.001)}
-            placeholder={`measured ${len.fmt(measured, 3, { bare: true })}`}
+            placeholder={tmarText("measured {0}", [len.fmt(measured, 3, { bare: true })])}
             defaultValue={shown}
             key={shown}
             onBlur={(e) => {
@@ -79,7 +73,7 @@ export function AssumedField({ fit }: { fit: SizedFit }) {
       </label>
       {warning !== null && (
         <p className="warnnote" data-test="assumed-warning">
-          ⚠ {warning}
+          ⚠ {tmarText(warning)}
         </p>
       )}
     </>

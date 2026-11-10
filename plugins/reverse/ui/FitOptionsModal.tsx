@@ -15,10 +15,14 @@ import type { SketchChains } from '../app/useReverseWorkspace'
 import { DEFAULT_FIT_OPTIONS, type FitOptions } from '../core/fitOptions'
 import { useRePrefs } from '../state/rePrefs'
 import { useReverse } from '../state/reStore'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 const DETAIL_NAMES = ['Coarse', 'Coarser', 'Medium', 'Finer', 'Fine']
 
 export function FitOptionsModal({ open, onClose, chainsOf }: { open: boolean; onClose: () => void; chainsOf: () => SketchChains | null }) {
+  useTmarLanguage()
+
   const options = useRePrefs((s) => s.fitOptions)
   const setOptions = useRePrefs((s) => s.setFitOptions)
   const tolerance = useReverse((s) => s.sketchDraft?.tolerance ?? null)
@@ -88,14 +92,12 @@ export function FitOptionsModal({ open, onClose, chainsOf }: { open: boolean; on
         onPointerUp={() => (drag.current = null)}
         onPointerCancel={() => (drag.current = null)}
       >
-        <h2 id="fit-options-title">Fit options</h2>
-        <button className="x" data-test="fit-options-close" onClick={onClose} aria-label="Close">
-          ×
-        </button>
+        <h2 id="fit-options-title">{tmarText("Fit options")}</h2>
+        <button className="x" data-test="fit-options-close" onClick={onClose} aria-label={tmarText("Close")}>{tmarText("×")}</button>
       </div>
 
       <div className="setting">
-        <label htmlFor="fit-detail">Detail</label>
+        <label htmlFor="fit-detail">{tmarText("Detail")}</label>
         <div className="range">
           <input
             id="fit-detail"
@@ -110,25 +112,21 @@ export function FitOptionsModal({ open, onClose, chainsOf }: { open: boolean; on
             onKeyUp={commitDetail}
             onBlur={commitDetail}
           />
-          <output htmlFor="fit-detail">{DETAIL_NAMES[Math.min(4, Math.floor(detail * 5))]}</output>
+          <output htmlFor="fit-detail">{tmarText(DETAIL_NAMES[Math.min(4, Math.floor(detail * 5))])}</output>
         </div>
         <small>
-          <b>Coarse</b> gives few, long pieces: a wall that bows or wanders is one line, a blob in
-          a corner is cut out for the corner its sides make, and a round no bigger than the
-          wander becomes a sharp corner. <b>Fine</b> gives every small feature a piece of its
-          own.
-        </small>
+          <b>{tmarText("Coarse")}</b>{tmarText(" gives few, long pieces: a wall that bows or wanders is one line, a blob in a corner is cut out for the corner its sides make, and a round no bigger than the wander becomes a sharp corner. ")}<b>{tmarText("Fine")}</b>{tmarText(" gives every small feature a piece of its own.")}</small>
       </div>
 
       <div className="setting">
-        <label htmlFor="fit-tolerance">Fit tolerance</label>
+        <label htmlFor="fit-tolerance">{tmarText("Fit tolerance")}</label>
         <span className="unitfield">
           <NumberInput
             id="fit-tolerance"
             step={field.step(0.01)}
             min="0"
             data-test="sketch-tolerance"
-            placeholder="auto"
+            placeholder={tmarText("auto")}
             value={tolerance}
             text={field.text}
             onCommit={(typed) => {
@@ -139,25 +137,22 @@ export function FitOptionsModal({ open, onClose, chainsOf }: { open: boolean; on
               refit(options)
             }}
           />
-          <i>{field.word}</i>
+          <i>{tmarText(field.word)}</i>
         </span>
-        <small>
-          How far an arc may miss its slice points. Left blank the chain's own scatter decides; a
-          noisier scan wants it raised. Detail works on top of it.
-        </small>
+        <small>{tmarText("How far an arc may miss its slice points. Left blank the chain's own scatter decides; a noisier scan wants it raised. Detail works on top of it.")}</small>
       </div>
 
       <label className="checkrow">
         <input type="checkbox" data-test="fit-join" checked={options.joinCorners} onChange={(e) => change({ joinCorners: e.target.checked })} />
-        <span>Join corners — sides carried on to where they cross, fillets made tangent</span>
+        <span>{tmarText("Join corners — sides carried on to where they cross, fillets made tangent")}</span>
       </label>
 
       <label className="checkrow">
         <input type="checkbox" data-test="fit-align" checked={options.alignAxes} onChange={(e) => change({ alignAxes: e.target.checked })} />
-        <span>Align lines to the sheet's axes when they run close to one</span>
+        <span>{tmarText("Align lines to the sheet's axes when they run close to one")}</span>
       </label>
       <div className="setting indent">
-        <label htmlFor="fit-align-degrees">Within</label>
+        <label htmlFor="fit-align-degrees">{tmarText("Within")}</label>
         <span className="unitfield">
           <NumberInput
             id="fit-align-degrees"
@@ -182,21 +177,15 @@ export function FitOptionsModal({ open, onClose, chainsOf }: { open: boolean; on
           checked={options.alignDiagonals}
           onChange={(e) => change({ alignDiagonals: e.target.checked })}
         />
-        <span>Lines near 45° too</span>
+        <span>{tmarText("Lines near 45° too")}</span>
       </label>
-      <small className="dim">
-        Aligned lines get a horizontal or vertical relation, shown as an inferred chip that can be
-        taken off. The axes are the sheet's: on a part that lies askew, select a side and use
-        Align first.
-      </small>
+      <small className="dim">{tmarText("Aligned lines get a horizontal or vertical relation, shown as an inferred chip that can be taken off. The axes are the sheet's: on a part that lies askew, select a side and use Align first.")}</small>
 
       <div className="modalfoot">
         <span className="dim" data-test="fit-options-status">
-          {fittedCount > 0 ? `${pieces} piece${pieces === 1 ? '' : 's'} on ${fittedCount} chain${fittedCount === 1 ? '' : 's'} — changes refit them` : 'Takes effect on Fit all chains'}
+          {fittedCount > 0 ? tmarText("{0} piece{1} on {2} chain{3} — changes refit them", [pieces, pieces === 1 ? '' : tmarText("s"), fittedCount, fittedCount === 1 ? '' : tmarText("s")]) : tmarText("Takes effect on Fit all chains")}
         </span>
-        <button data-test="fit-options-reset" onClick={() => change({ ...DEFAULT_FIT_OPTIONS })}>
-          Reset
-        </button>
+        <button data-test="fit-options-reset" onClick={() => change({ ...DEFAULT_FIT_OPTIONS })}>{tmarText("Reset")}</button>
       </div>
     </div>
   )

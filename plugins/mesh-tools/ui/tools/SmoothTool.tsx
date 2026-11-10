@@ -9,6 +9,8 @@ import { InfoDot } from '../../../../src/ui/InfoDot'
 import { MarkTools } from '../../../../src/ui/MarkTools'
 import { NumberField } from '../../../../src/ui/NumberField'
 import { useMeshTools } from '../../state/meshStore'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../../../src/i18n'
+
 
 export function SmoothTool({
   ready,
@@ -21,6 +23,8 @@ export function SmoothTool({
   onSmooth: () => void
   onClear: () => void
 }) {
+  useTmarLanguage()
+
   // Only what the panel reads: the whole store would render it again on
   // every write to it, the cut preview's while its offset is dragged.
   const m = useMeshTools(
@@ -42,40 +46,20 @@ export function SmoothTool({
 
   return (
     <div className="group" data-test="smooth-tool">
-      <div className="sec-head">
-        Smooth
-        <InfoDot title="Smoothing the scan">
+      <div className="sec-head">{tmarText("Smooth")}<InfoDot title={tmarText("Smoothing the scan")}>
+          <p>{tmarText("A scanner's scatter is bumps across the surface: it makes a flat face read as orange peel, a reduction keep triangles for it, a thickness map speckle. Smoothing moves every point onto a surface fitted to the scan around it — a gently curved patch")}{' '}
+            <b>{tmarText("Smooth bumps up to")}</b>{tmarText(" across. A bump smaller than the patch is averaged away; a face, a bore or a fillet larger than it is what the patch fits, and stays where it was, so the part is not shrunk. Points move along the surface's normal only.")}</p>
+          <p>{tmarText("No point moves further than ")}<b>{tmarText("Move at most")}</b>{tmarText(" from its position at the start of this application. Repeating Smooth is cumulative. It starts well past the scatter of a good scan, to hold back only a fit that has run off; set it lower to be sure of what the part's shape can lose.")}</p>
           <p>
-            A scanner's scatter is bumps across the surface: it makes a flat face read as orange
-            peel, a reduction keep triangles for it, a thickness map speckle. Smoothing moves every
-            point onto a surface fitted to the scan around it — a gently curved patch{' '}
-            <b>Smooth bumps up to</b> across. A bump smaller than the patch is averaged away; a face,
-            a bore or a fillet larger than it is what the patch fits, and stays where it was, so the
-            part is not shrunk. Points move along the surface's normal only.
-          </p>
+            <b>{tmarText("Keep sharp edges")}</b>{tmarText(" fits each side of an edge where the surface turns by more than 30° on its own, so the faces are smoothed right up to the edge and the edge itself is left as scanned: a machined edge is detail, not noise. Smoothing changes the edited copy; ")}<b>{tmarText("Ctrl+Z")}</b>{tmarText(" puts it back.")}</p>
           <p>
-            No point moves further than <b>Move at most</b> from its position at the start of this application. Repeating Smooth is cumulative. It
-            starts well past the scatter of a good scan, to hold back only a fit that has run off;
-            set it lower to be sure of what the part's shape can lose.
-          </p>
-          <p>
-            <b>Keep sharp edges</b> fits each side of an edge where the surface turns by more than
-            30° on its own, so the faces are smoothed right up to the edge and the edge itself is
-            left as scanned: a machined edge is detail, not noise. Smoothing changes the edited
-            copy; <b>Ctrl+Z</b> puts it back.
-          </p>
-          <p>
-            <b>Marked region</b> smooths only the surface you mark with a window, the brush or a
-            lasso — a face that came out rough, leaving a textured one as it is. Each point moves
-            by less the nearer it is to the edge of the region, nothing at the edge itself, so the
-            smoothed patch runs into the scan around it without a step.
-          </p>
+            <b>{tmarText("Marked region")}</b>{tmarText(" smooths only the surface you mark with a window, the brush or a lasso — a face that came out rough, leaving a textured one as it is. Each point moves by less the nearer it is to the edge of the region, nothing at the edge itself, so the smoothed patch runs into the scan around it without a step.")}</p>
         </InfoDot>
       </div>
 
       <div className="field">
-        <span>Smooth</span>
-        <div className="moderow" role="radiogroup" aria-label="What to smooth">
+        <span>{tmarText("Smooth")}</span>
+        <div className="moderow" role="radiogroup" aria-label={tmarText("What to smooth")}>
           {(['all', 'marked'] as const).map((scope) => (
             <button
               key={scope}
@@ -85,9 +69,9 @@ export function SmoothTool({
               data-test={`smooth-scope-${scope}`}
               disabled={busy}
               onClick={() => m.setSmoothScope(scope)}
-              title={scope === 'all' ? 'Smooth the whole part' : 'Smooth only a region you mark on the part'}
+              title={scope === 'all' ? tmarText("Smooth the whole part") : tmarText("Smooth only a region you mark on the part")}
             >
-              {scope === 'all' ? 'Whole part' : 'Marked region'}
+              {scope === 'all' ? tmarText("Whole part") : tmarText("Marked region")}
             </button>
           ))}
         </div>
@@ -96,13 +80,11 @@ export function SmoothTool({
         <MarkTools escapeNote="The marking stays after Smooth so it can be applied again. Clear removes it; switching marking tools or changing mesh topology can invalidate it." onClear={onClear} />
       )}
 
-      <p className="hint" data-test="smooth-scope-summary" role="status">{regional
-        ? `Marked region only: ${marked.toLocaleString('en-US')} selected vertices. Unselected vertices will not move.`
-        : 'Whole part: this will smooth the entire working mesh. Choose Marked region for a local edit.'}</p>
+      <p className="hint" data-test="smooth-scope-summary" role="status">{regional ? tmarText("Marked region only: {0} selected vertices. Unselected vertices will not move.", [marked.toLocaleString('en-US')]) : tmarText("Whole part: this will smooth the entire working mesh. Choose Marked region for a local edit.")}</p>
       <PluginPanelExtensions slot="mesh.smooth.controls" />
 
       <NumberField
-        label="Smooth bumps up to"
+        label={tmarText("Smooth bumps up to")}
         testId="smooth-size"
         value={m.smoothSize}
         step={0.1}
@@ -110,10 +92,10 @@ export function SmoothTool({
         kind="length"
         disabled={busy}
         onCommit={m.setSmoothSize}
-        hint="Bumps smaller than this across are smoothed out; the part's shape larger than it stays. It starts at the orange peel a scanner leaves on a part this size."
+        hint={tmarText("Bumps smaller than this across are smoothed out; the part's shape larger than it stays. It starts at the orange peel a scanner leaves on a part this size.")}
       />
       <NumberField
-        label="Move at most"
+        label={tmarText("Move at most")}
         testId="smooth-limit"
         value={m.smoothLimit}
         step={0.01}
@@ -121,7 +103,7 @@ export function SmoothTool({
         kind="length"
         disabled={busy}
         onCommit={m.setSmoothLimit}
-        hint="Maximum movement per application, measured from the current copy. Repeated applications are cumulative; use the Deviation map to check total movement from the scan."
+        hint={tmarText("Maximum movement per application, measured from the current copy. Repeated applications are cumulative; use the Deviation map to check total movement from the scan.")}
       />
       <label className="checkrow">
         <input
@@ -131,7 +113,7 @@ export function SmoothTool({
           checked={m.smoothEdges}
           onChange={(e) => m.setSmoothEdges(e.target.checked)}
         />
-        <span>Keep sharp edges</span>
+        <span>{tmarText("Keep sharp edges")}</span>
       </label>
 
       <button
@@ -143,17 +125,15 @@ export function SmoothTool({
       >
         {m.editing ? (
           <>
-            <span className="spinner" />
-            Smoothing…
-          </>
+            <span className="spinner" />{tmarText("Smoothing…")}</>
         ) : regional ? (
-          'Smooth the marked region'
+          tmarText('Smooth the marked region')
         ) : (
-          'Smooth whole part'
+          tmarText('Smooth whole part')
         )}
       </button>
       {regional && marked === 0 && (
-        <p className="hint">Mark the surface to smooth — pick Window, Brush or Lasso above.</p>
+        <p className="hint">{tmarText("Mark the surface to smooth — pick Window, Brush or Lasso above.")}</p>
       )}
     </div>
   )

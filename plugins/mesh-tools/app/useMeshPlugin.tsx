@@ -26,6 +26,8 @@ import { exportTrimmedMesh } from './exportTrimmed'
 import { exportEditedMesh } from './exportEdited'
 import { useMeshWorkspace } from './useMeshWorkspace'
 import { createMeshToolsSession, installMeshToolsSession } from './meshToolsSession'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 const MESH_VIEWS: { id: MeshView; icon: IconName; label: string; title: string }[] = [
   {
@@ -91,6 +93,8 @@ const WRAP_VIEWS: { id: WrapView; icon: IconName; label: string; title: string }
 ]
 
 export function useMeshPlugin(host: PluginHost): PluginRuntime {
+  useTmarLanguage()
+
   const { sceneRef } = host
   // The workspace's verbs, which its commands run too — see
   // meshToolsSession. The maps it shows are the session's: how far the
@@ -347,7 +351,7 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
             zeroAt={0}
             // Signed from the reduced mesh's side: a scan point outside it is
             // the mesh cutting into the part there.
-            ends={{ high: 'mesh inside the scan', low: 'mesh outside the scan' }}
+            ends={{ high: tmarText('mesh inside the scan'), low: tmarText('mesh outside the scan') }}
           />
         )}
         {copyMapShown && copyStats && (
@@ -359,7 +363,7 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
               { label: 'max', value: len.fmt(copyStats.maxAbs, 3, { bare: true }) },
               { label: 'RMS', value: len.fmt(copyStats.rms, 3, { bare: true }) },
               ...(copyStats.added > 0
-                ? [{ label: 'added', value: `${((copyStats.added / (copyStats.added + copyStats.measured)) * 100).toFixed(1)} %` }]
+                ? [{ label: tmarText('added'), value: `${((copyStats.added / (copyStats.added + copyStats.measured)) * 100).toFixed(1)} %` }]
                 : []),
             ]}
             format={signed}
@@ -368,7 +372,7 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
             zeroAt={0}
             // Signed from the scan's side: a point of the copy outside the
             // scan is surface an edit moved out.
-            ends={{ high: 'copy outside the scan', low: 'copy inside the scan' }}
+            ends={{ high: tmarText('copy outside the scan'), low: tmarText('copy inside the scan') }}
           />
         )}
         {gapLegend && gapLegend.report.fit && (
@@ -377,10 +381,10 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
             unit={len.word()}
             scale={reductionScale(gapLegend.gapRange)}
             stats={[
-              { label: 'median', value: signed(gapLegend.report.fit.median) },
+              { label: tmarText('median'), value: signed(gapLegend.report.fit.median) },
               { label: '5 %', value: signed(gapLegend.report.fit.p05) },
               { label: '95 %', value: signed(gapLegend.report.fit.p95) },
-              { label: 'least', value: signed(gapLegend.report.fit.min) },
+              { label: tmarText('least'), value: signed(gapLegend.report.fit.min) },
             ]}
             format={signed}
             histogram={null}
@@ -388,20 +392,18 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
             zeroAt={0}
             // Against the offset: a point further off the part than it is
             // reads high, one nearer reads low.
-            ends={{ high: 'further off the part', low: 'nearer the part' }}
+            ends={{ high: tmarText('further off the part'), low: tmarText('nearer the part') }}
           />
         )}
         {tool === 'reduce' && !report && !applied && fileName && (
-          <div className="hintchip" data-test="mesh-ready-chip">
-            Part loaded — reduce the mesh in the panel
-          </div>
+          <div className="hintchip" data-test="mesh-ready-chip">{tmarText("Part loaded — reduce the mesh in the panel")}</div>
         )}
       </>
     ),
     viewKeys: (
       <>
         {tool === 'reduce' && (
-          <div className="keys" role="radiogroup" aria-label="What to show of the reduction">
+          <div className="keys" role="radiogroup" aria-label={tmarText("What to show of the reduction")}>
             {MESH_VIEWS.map((v) => (
               <button
                 key={v.id}
@@ -411,16 +413,16 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
                 data-test={`mesh-view-${v.id}`}
                 disabled={report === null}
                 onClick={() => setMeshView(v.id)}
-                title={report !== null ? v.title : 'Reduce the scan first — the view keys show the result'}
+                title={report !== null ? tmarText(v.title) : tmarText("Reduce the scan first — the view keys show the result")}
               >
                 <Icon name={v.icon} size={16} />
-                {v.label}
+                {tmarText(v.label)}
               </button>
             ))}
           </div>
         )}
         {tool === 'wrap' && (
-          <div className="keys" role="radiogroup" aria-label="What to show of the wrap">
+          <div className="keys" role="radiogroup" aria-label={tmarText("What to show of the wrap")}>
             {WRAP_VIEWS.map((v) => (
               <button
                 key={v.id}
@@ -430,16 +432,16 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
                 data-test={`wrap-view-${v.id}`}
                 disabled={!wrapMade}
                 onClick={() => setWrapView(v.id)}
-                title={wrapMade ? v.title : 'Wrap the part first — the view keys show the wrap'}
+                title={wrapMade ? tmarText(v.title) : tmarText("Wrap the part first — the view keys show the wrap")}
               >
                 <Icon name={v.icon} size={16} />
-                {v.label}
+                {tmarText(v.label)}
               </button>
             ))}
           </div>
         )}
         {tool === 'trim' && (
-          <div className="keys" role="radiogroup" aria-label="What to show of the trim">
+          <div className="keys" role="radiogroup" aria-label={tmarText("What to show of the trim")}>
             {TRIM_VIEWS.map((v) => (
               <button
                 key={v.id}
@@ -449,10 +451,10 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
                 data-test={`trim-view-${v.id}`}
                 disabled={!trimMade}
                 onClick={() => setTrimView(v.id)}
-                title={trimMade ? v.title : 'Trim a body to the break first — the view keys show the piece'}
+                title={trimMade ? tmarText(v.title) : tmarText("Trim a body to the break first — the view keys show the piece")}
               >
                 <Icon name={v.icon} size={16} />
-                {v.label}
+                {tmarText(v.label)}
               </button>
             ))}
           </div>
@@ -472,14 +474,10 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
               setCopyDeviation(true)
             }}
             title={
-              hasCopy
-                ? 'Colour the edited copy by how far it is from the scan in use — what smoothing moved, where a patch stands off the surface; surface an edit added is grey'
-                : 'Edit the scan first — the deviation shows how far the edited copy is from the scan in use'
+              hasCopy ? tmarText("Colour the edited copy by how far it is from the scan in use — what smoothing moved, where a patch stands off the surface; surface an edit added is grey") : tmarText("Edit the scan first — the deviation shows how far the edited copy is from the scan in use")
             }
           >
-            <Icon name="compare" size={16} />
-            Deviation
-          </button>
+            <Icon name="compare" size={16} />{tmarText("Deviation")}</button>
         </div>
       </>
     ),

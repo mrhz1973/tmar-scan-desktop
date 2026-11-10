@@ -7,9 +7,11 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { installWorkspaceEditorIntegration } from './plugins/workspaceEditorIntegration'
 import { installPlugins } from './plugins/registry'
+import { initializeLanguage } from './i18n'
 
 // Before anything renders: what the plugins register is part of the app
 // from its first frame.
+initializeLanguage()
 installPlugins()
 installWorkspaceEditorIntegration()
 

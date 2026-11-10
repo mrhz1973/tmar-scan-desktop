@@ -11,6 +11,8 @@ import { useRef, type InputHTMLAttributes, type ReactNode } from 'react'
 import { useUnits } from '../app/useUnits'
 import { fromDisplay, lengthInputText, lengthStep, toDisplay, unitWord, type DisplayUnits } from '../core/units'
 import { InfoDot } from './InfoDot'
+import { useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** What a field shows and accepts, given what it holds: the conversion a
  *  length field makes, or none. */
@@ -135,6 +137,8 @@ export function NumberField({
   hint?: ReactNode
   testId?: string
 }) {
+  useTmarLanguage()
+
   const ref = useRef<HTMLInputElement>(null)
   const u = useFieldUnits(kind, unit)
   const shown = u.text(value)

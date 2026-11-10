@@ -23,6 +23,8 @@ import { holdsProject, isProjectFile } from '../app/useProject'
 import { APP_VERSION } from '../version'
 import { PluginPanelExtensions } from '../plugins/panelExtensions'
 import type { RecoveryStatus } from '../app/useRecovery'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 const GITHUB_URL = 'https://github.com/CNCKitchen/scanruler'
 
@@ -54,6 +56,8 @@ const APP_TITLE = 'ScanRuler by CNC Kitchen'
  *  the scan's name, or the image's. Enter or leaving the field takes what
  *  was typed; Escape puts it back. */
 function ProjectName() {
+  useTmarLanguage()
+
   const name = useStore((s) => s.projectName)
   const fileName = useStore((s) => s.fileName)
   const imageName = useFlat((s) => s.imageName)
@@ -70,12 +74,12 @@ function ProjectName() {
     <input
       className="projectname"
       data-test="project-name"
-      aria-label="Project name"
+      aria-label={tmarText("Project name")}
       spellCheck={false}
       value={shown}
-      placeholder={placeholder}
+      placeholder={tmarText(placeholder)}
       size={Math.max(14, Math.min(32, (shown || placeholder).length + 1))}
-      title={`The project's name — what Save Project saves it under and every export is named on.${name ? '' : ` Unnamed, they go by ${fallback === 'project' ? 'the scan or the image it holds' : `“${fallback}”`}.`}`}
+      title={tmarText("The project's name — what Save Project saves it under and every export is named on.{0}", [name ? '' : tmarText(" Unnamed, they go by {0}.", [fallback === 'project' ? tmarText("the scan or the image it holds") : tmarText("“{0}”", [fallback])])])}
       onFocus={() => setTyped(name ?? '')}
       onChange={(e) => setTyped(e.target.value)}
       onBlur={() => {
@@ -186,6 +190,8 @@ export function TopBar({
   savable: boolean
   recovery: RecoveryStatus
 }) {
+  useTmarLanguage()
+
   const fileName = useStore((s) => s.fileName)
   const triangleCount = useStore((s) => s.triangleCount)
   const vertexCount = useStore((s) => s.vertexCount)
@@ -231,12 +237,10 @@ export function TopBar({
       {/* The version rides in the caption, and in the tooltip for the narrow
           layouts that drop the caption: a bug report needs the number, and
           the imprint carries it too. */}
-      <div className="brand" title={`ScanRuler v${APP_VERSION}`}>
-        <b>ScanRuler</b>
-        <span>
-          CNC Kitchen · 3D scan analysis ·{' '}
-          <i className="ver" data-test="app-version">
-            v{APP_VERSION}
+      <div className="brand" title={tmarText("ScanRuler v{0}", [APP_VERSION])}>
+        <b>{tmarText("ScanRuler")}</b>
+        <span>{tmarText("CNC Kitchen · 3D scan analysis ·")}{' '}
+          <i className="ver" data-test="app-version">{tmarText("v")}{APP_VERSION}
           </i>
         </span>
       </div>
@@ -251,13 +255,13 @@ export function TopBar({
             data-test={`workspace-${w.id}`}
             aria-selected={workspace === w.id}
             className={workspace === w.id ? 'on' : undefined}
-            title={`${w.label}\n${w.title}`}
-            aria-label={w.label}
+            title={tmarText("{0}\n{1}", [tmarText(w.label), tmarText(w.title)])}
+            aria-label={tmarText(w.label)}
             disabled={picking}
             onClick={() => setWorkspace(w.id)}
           >
             <Icon name={w.icon} size={16} />
-            <span className="wtxt">{w.label}</span>
+            <span className="wtxt">{tmarText(w.label)}</span>
           </button>
         ))}
       </div>
@@ -266,9 +270,8 @@ export function TopBar({
         <div className="partchip file-info" title={fileName}>
           <b>{fileName}</b>
           <span>
-            {triangleCount.toLocaleString('en-US')} triangles ·{' '}
-            {vertexCount.toLocaleString('en-US')} vertices
-          </span>
+            {triangleCount.toLocaleString('en-US')}{tmarText(" triangles ·")}{' '}
+            {vertexCount.toLocaleString('en-US')}{tmarText(" vertices")}</span>
         </div>
       )}
       <div className="grow" />
@@ -278,19 +281,18 @@ export function TopBar({
         <button
           className={`agentchip ${agent.status}`}
           data-test="agent-chip"
-          title={`${AGENT_STATUS[agent.status]}${agent.detail ? ` — ${agent.detail}` : ''}. Settings → Agents.`}
+          title={tmarText("{0}{1}. Settings → Agents.", [tmarText(AGENT_STATUS[agent.status]), agent.detail ? tmarText(" — {0}", [tmarText(agent.detail)]) : ''])}
           onClick={() => openSettings(true)}
         >
           <span className="agentlamp" />
-          <span className="btxt">
-            Agent: {agent.status === 'connected' ? 'connected' : agent.status === 'refused' ? 'turned away' : 'listening'}
+          <span className="btxt">{tmarText("Agent: ")}{agent.status === 'connected' ? tmarText("connected") : agent.status === 'refused' ? tmarText("turned away") : tmarText("listening")}
           </span>
         </button>
       )}
       <span className="project-save-status" data-test="project-save-status"
-        title={`${recovery.status || 'Checkpoints are stored only in this browser.'} Checkpoints and project files include completed work; finish active drawings before leaving. Save Project downloads a portable copy.`}>
-        {recovery.dirty ? 'Unsaved changes' : 'No unsaved changes'}
-        {recovery.status && <small role="status">{recovery.status}</small>}
+        title={tmarText("{0} Checkpoints and project files include completed work; finish active drawings before leaving. Save Project downloads a portable copy.", [tmarText(recovery.status || 'Checkpoints are stored only in this browser.')])}>
+        {recovery.dirty ? tmarText("Unsaved changes") : tmarText("No unsaved changes")}
+        {recovery.status && <small role="status">{tmarText(recovery.status)}</small>}
       </span>
       <UndoRedo />
       <input
@@ -307,30 +309,30 @@ export function TopBar({
         data-test="new-project"
         onClick={onNewProject}
         disabled={busy}
-        title="Start a new project: the scan, the reference and the image closed, every measurement and every workspace's work let go, the name taken off — after asking, when there are changes not saved"
+        title={tmarText("Start a new project: the scan, the reference and the image closed, every measurement and every workspace's work let go, the name taken off — after asking, when there are changes not saved")}
       >
         <Icon name="newProject" size={16} />
-        <span className="btxt">New<span className="ptxt"> Project</span></span>
+        <span className="btxt">{tmarText("New")}<span className="ptxt">{tmarText(" Project")}</span></span>
       </button>
       <button
         className="ghost withicon"
         data-test="save-project"
         onClick={onSaveProject}
         disabled={busy || !savable}
-        title={`Save the scan, the reference, the image and every measurement as one .${PROJECT_EXTENSION} file`}
+        title={tmarText("Save the scan, the reference, the image and every measurement as one .{0} file", [PROJECT_EXTENSION])}
       >
         <Icon name="save" size={16} />
-        <span className="btxt">Save<span className="ptxt"> Project</span></span>
+        <span className="btxt">{tmarText("Save")}<span className="ptxt">{tmarText(" Project")}</span></span>
       </button>
       <button
         className="ghost withicon"
         data-test="load-project"
         onClick={() => openRef.current?.click()}
         disabled={busy}
-        title={`Open a .${PROJECT_EXTENSION} project — or a plain scan or image to start fresh`}
+        title={tmarText("Open a .{0} project — or a plain scan or image to start fresh", [PROJECT_EXTENSION])}
       >
         <Icon name="load" size={16} />
-        <span className="btxt">Load<span className="ptxt"> Project</span></span>
+        <span className="btxt">{tmarText("Load")}<span className="ptxt">{tmarText(" Project")}</span></span>
       </button>
       {/* What is set once and left — the chassis, the colour mode, the mouse
           controls, the line weights, the hints. Beside the project keys
@@ -339,18 +341,18 @@ export function TopBar({
         className="ghost withicon"
         data-test="open-settings"
         onClick={() => openSettings(true)}
-        title="Interface theme, colour mode, mouse controls, line widths and guided hints"
+        title={tmarText("Interface theme, colour mode, mouse controls, line widths and guided hints")}
       >
         <Icon name="settings" size={16} />
-        <span className="btxt"> Settings</span>
+        <span className="btxt">{tmarText(" Settings")}</span>
       </button>
       <a
         className="iconbtn"
         href={GITHUB_URL}
         target="_blank"
         rel="noopener noreferrer"
-        title={sourceTitle()}
-        aria-label={sourceTitle()}
+        title={tmarText(sourceTitle())}
+        aria-label={tmarText(sourceTitle())}
       >
         <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />

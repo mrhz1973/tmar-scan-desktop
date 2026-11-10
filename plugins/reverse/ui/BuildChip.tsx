@@ -9,10 +9,14 @@
 
 import { useEffect, useState } from 'react'
 import { useReverse } from '../state/reStore'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 const SHOW_AFTER_MS = 300
 
 export function BuildChip() {
+  useTmarLanguage()
+
   const label = useReverse((s) =>
     s.kernelStatus === 'loading' && s.features.length + s.rolledBack.length > 0
       ? 'Loading the CAD kernel…'
@@ -32,7 +36,7 @@ export function BuildChip() {
   return (
     <div className="hintchip buildchip" data-test="build-chip">
       <span className="spinner" />
-      {label}
+      {tmarText(label)}
     </div>
   )
 }

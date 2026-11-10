@@ -15,6 +15,8 @@ import { ZebraPanel } from '../tmar-zebra/ZebraPanel'
 import { enableZebra, useZebraUi, ZebraIcon } from '../tmar-zebra/ZebraQuickButton'
 import { inspectionBlockNow, meshNoteBlockNow } from './meshNotes'
 import { meshTargetLabel } from './policy'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 /** Borrow the mesh actually on screen, never the hidden original behind an
  * edited/reduced copy. The existing Zebra layer owns only its own material. */
@@ -43,16 +45,20 @@ export function MeshZebraPanel() {
     hint: 'Zebra is a visual reflection overlay, not the numerical Accuracy/Deviation map. Switching it off restores the current colors and leaves all measurements and edits unchanged.' }} />
 }
 export function MeshZebraButton() {
+  useTmarLanguage()
+
   const workspace = useShell(s => s.workspace), enabled = useZebraUi(s => s.enabled)
   const { blocked } = useInspectionState()
   if (workspace !== 'mesh') return null
   return <div className="keys"><button data-test="zebra-quick-toggle" aria-pressed={enabled}
     className={enabled ? 'on' : undefined} disabled={!!blocked && !enabled}
-    title={blocked ?? 'Inspect the displayed mesh with Zebra; this does not measure deviation'}
+    title={tmarText(blocked) ?? (tmarText("Inspect the displayed mesh with Zebra; this does not measure deviation"))}
     onClick={() => { toggleMeshZebra(!enabled); if (!enabled) requestAnimationFrame(() => document.querySelector('[data-test=tmar-zebra]')?.scrollIntoView({block:'nearest'})) }}>
-    <ZebraIcon/>Zebra</button></div>
+    <ZebraIcon/>{tmarText("Zebra")}</button></div>
 }
 export function MeshNotesPanel() {
+  useTmarLanguage()
+
   const { noteBlocked } = useInspectionState()
   const placing = useNotes(s => s.placing)
   useEffect(() => {
@@ -66,8 +72,8 @@ export function MeshNotesPanel() {
     window.addEventListener('keydown', escape, true)
     return () => { window.removeEventListener('keydown', escape, true); useNotes.getState().setPlacing(false) }
   }, [])
-  return <section data-test="mesh-review-notes" aria-label="Mesh Tools notes">
+  return <section data-test="mesh-review-notes" aria-label={tmarText("Mesh Tools notes")}>
     <NoteList placementBlocked={noteBlocked}/>
-    <p className="hint" data-test="mesh-note-help">{noteBlocked ?? 'Local notes on the scan in use. The same notes, selection, focus and saved anchors are shared with Reverse engineer and Surface Deviation. No agent connection is required.'}</p>
+    <p className="hint" data-test="mesh-note-help">{tmarText(noteBlocked) ?? (tmarText("Local notes on the scan in use. The same notes, selection, focus and saved anchors are shared with Reverse engineer and Surface Deviation. No agent connection is required."))}</p>
   </section>
 }

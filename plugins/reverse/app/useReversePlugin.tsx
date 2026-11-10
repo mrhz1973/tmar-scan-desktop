@@ -50,6 +50,8 @@ import { useNotes } from '../state/noteStore'
 import { pinNoteOnBody, useNotePins, useNotesOn } from './useNotePins'
 import { useNetworkLayer } from './useNetworkLayer'
 import { readField } from '../ui/reLength'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 /** A scale held per millimetre — a deviation in millimetres, a curvature
  *  per millimetre — as the legend shows it, in the units shown: `power` 1
@@ -83,6 +85,8 @@ const SKETCH_PART_VIEWS: readonly { id: SketchPartView; icon: IconName; label: s
 ]
 
 export function useReversePlugin(host: PluginHost): PluginRuntime {
+  useTmarLanguage()
+
   useEffect(()=>watchAnnotations(),[])
   const { sceneRef, clientRef } = host
 
@@ -480,10 +484,10 @@ export function useReversePlugin(host: PluginHost): PluginRuntime {
     menu: sketchStage ? undefined : (
       <PartOption
         icon={<Icon name="curvature" size={16} />}
-        label="Curvature"
+        label={tmarText("Curvature")}
         testId="toggle-curvature"
         value={curvatureSwitch}
-        title="Colour the scan by how sharply it bends — flats green, convex rounds towards red, hollows towards blue, sharp edges dark. Where a flat ends and a round or a blend begins is where a surface region should end. While a feature is being set up its ghost takes the map over. Puts the Deviation key's map out"
+        title={tmarText("Colour the scan by how sharply it bends — flats green, convex rounds towards red, hollows towards blue, sharp edges dark. Where a flat ends and a round or a blend begins is where a surface region should end. While a feature is being set up its ghost takes the map over. Puts the Deviation key's map out")}
       />
     ),
     menuChanged: !sketchStage && anyChanged([curvatureSwitch]),
@@ -497,43 +501,43 @@ export function useReversePlugin(host: PluginHost): PluginRuntime {
     <>
       <PartKey
         icon={<Icon name="combine" size={16} />}
-        label="Bodies"
+        label={tmarText("Bodies")}
         testId="toggle-bodies"
         shown={{
           on: !bodiesHidden,
           set: (on) => re().setBodiesHidden(!on),
           disabled: hasBodies ? undefined : 'Build a body first',
         }}
-        title="Show the bodies, or put them away as a whole and leave the scan to stand alone — with the deviation map still on it, read against the bodies as they are. Each body's own eye in the panel takes it out of the model and the map instead"
+        title={tmarText("Show the bodies, or put them away as a whole and leave the scan to stand alone — with the deviation map still on it, read against the bodies as they are. Each body's own eye in the panel takes it out of the model and the map instead")}
         changed={anyChanged([bodiesSolid, overlapsSwitch]) || tangentEdges !== 'visible'}
       >
         <PartOption
           icon={<Icon name="transparent" size={16} />}
-          label="Transparent"
+          label={tmarText("Transparent")}
           testId="toggle-bodies-transparent"
           value={bodiesSolid}
-          title="Draw the bodies transparent — the scan, the elements and the bodies inside them show through. With the scan solid as well, each part shows where it stands proud of the other"
+          title={tmarText("Draw the bodies transparent — the scan, the elements and the bodies inside them show through. With the scan solid as well, each part shows where it stands proud of the other")}
         />
         <PartOption
           icon={<Icon name="opIntersect" size={16} />}
-          label="Overlaps"
+          label={tmarText("Overlaps")}
           testId="toggle-body-overlaps"
           value={overlapsSwitch}
-          title="Draw where two bodies run into each other in hatched red — what they share, over the faces of both that would otherwise fight for the same pixels. Off for bodies that overlap on purpose, a modifier volume for a slicer; saved with the project"
+          title={tmarText("Draw where two bodies run into each other in hatched red — what they share, over the faces of both that would otherwise fight for the same pixels. Off for bodies that overlap on purpose, a modifier volume for a slicer; saved with the project")}
         />
         <PartChoice
           icon={<KeyIcon name="tangentEdges" size={16} />}
-          label="Tangent edges"
+          label={tmarText("Tangent edges")}
           testId="tangent-edges"
           value={tangentEdges}
           options={TANGENT_EDGE_CHOICES}
           onChange={(mode) => re().setTangentEdges(mode)}
-          title={`How the edges are drawn where a round runs into a flat. ${NEVER_DRAWN}`}
+          title={tmarText("How the edges are drawn where a round runs into a flat. {0}", [tmarText(NEVER_DRAWN)])}
         />
       </PartKey>
       <PartKey
         icon={<Icon name="elCylinder" size={16} />}
-        label="Elements"
+        label={tmarText("Elements")}
         testId="toggle-elements"
         shown={{
           on: elementsShown,
@@ -542,22 +546,22 @@ export function useReversePlugin(host: PluginHost): PluginRuntime {
             ? undefined
             : 'Nothing measured yet — fit elements or cut sections in the 3D Measure workspace and they show here',
         }}
-        title="Show the elements and sections measured in the 3D Measure workspace on the part — the planes, cylinders and cuts the model is built against"
+        title={tmarText("Show the elements and sections measured in the 3D Measure workspace on the part — the planes, cylinders and cuts the model is built against")}
       />
       {notesOn && hasNotes && (
         <PartKey
           icon={<KeyIcon name="note" size={16} />}
-          label="Notes"
+          label={tmarText("Notes")}
           testId="toggle-notes"
           shown={{ on: pinsShown, set: (on) => useNotes.getState().setPinsShown(on) }}
-          title="Show the notes' pins on the part, or put them away. The notes stay, and the agent still reads them. Pinning or opening a note brings the pins back"
+          title={tmarText("Show the notes' pins on the part, or put them away. The notes stay, and the agent still reads them. Pinning or opening a note brings the pins back")}
         />
       )}
     </>
   )
   const sketchPartView: SketchPartView = !sketchModelShown ? 'none' : sketchSliced ? 'cut' : 'full'
   const viewKeys = sketchStage ? (
-    <div className="keys" role="radiogroup" aria-label="What of the part lies under the sketch">
+    <div className="keys" role="radiogroup" aria-label={tmarText("What of the part lies under the sketch")}>
       {SKETCH_PART_VIEWS.map((v) => (
         <button
           key={v.id}
@@ -569,10 +573,10 @@ export function useReversePlugin(host: PluginHost): PluginRuntime {
             re().setSketchModelShown(v.id !== 'none')
             if (v.id !== 'none') re().setSketchSliced(v.id === 'cut')
           }}
-          title={v.title}
+          title={tmarText(v.title)}
         >
           <Icon name={v.icon} size={16} />
-          {v.label}
+          {tmarText(v.label)}
         </button>
       ))}
     </div>
@@ -587,14 +591,10 @@ export function useReversePlugin(host: PluginHost): PluginRuntime {
         disabled={!hasBodies}
         onClick={() => re().setBodyMap(!bodyMap)}
         title={
-          hasBodies
-            ? 'Colour the scan by how far it lies from the bodies, on the deviation colour map at the range set in the feature boxes — outside the bodies up the ramp, inside down it — and violet where the scan lies deep inside them: a hole, a pocket or a slot the bodies lack. While a feature is being set up its ghost takes the map over. Puts the curvature colouring out'
-            : 'Build a body first — the map reads the scan against it'
+          hasBodies ? tmarText("Colour the scan by how far it lies from the bodies, on the deviation colour map at the range set in the feature boxes — outside the bodies up the ramp, inside down it — and violet where the scan lies deep inside them: a hole, a pocket or a slot the bodies lack. While a feature is being set up its ghost takes the map over. Puts the curvature colouring out") : tmarText("Build a body first — the map reads the scan against it")
         }
       >
-        <Icon name="compare" size={16} />
-        Deviation
-      </button>
+        <Icon name="compare" size={16} />{tmarText("Deviation")}</button>
     </div>
   )
 
@@ -735,17 +735,17 @@ export function useReversePlugin(host: PluginHost): PluginRuntime {
             unit={len.word()}
             scale={scaleShown(liveMapScale(mapReport.range), len.units, 1)}
             stats={[
-              { label: 'within', value: `${mapReport.within.toLocaleString()} / ${mapReport.points.toLocaleString()}`, wide: true },
-              { label: 'against', value: mapReport.source === 'ghost' ? 'the ghost' : 'the bodies' },
+              { label: tmarText('within'), value: `${mapReport.within.toLocaleString()} / ${mapReport.points.toLocaleString()}`, wide: true },
+              { label: tmarText('against'), value: mapReport.source === 'ghost' ? tmarText('the ghost') : tmarText('the bodies') },
               // The scan deep inside the bodies — violet on the map — is a
               // hole or a pocket the bodies lack, which no ramp would show.
-              ...(mapReport.farInside > 0 ? [{ label: 'deep inside (violet)', value: mapReport.farInside.toLocaleString(), wide: true }] : []),
+              ...(mapReport.farInside > 0 ? [{ label: tmarText('deep inside (violet)'), value: mapReport.farInside.toLocaleString(), wide: true }] : []),
             ]}
             format={signedShown(len.units)}
             histogram={null}
             showHistogram={false}
             zeroAt={0}
-            ends={{ high: 'scan outside the body', low: 'scan inside the body' }}
+            ends={{ high: tmarText('scan outside the body'), low: tmarText('scan inside the body') }}
             // Either end retyped sets the range: the ramp stays symmetric
             // about zero, so 0.5 at the top or the bottom reads ±0.5.
             // The figure typed is in the units shown.
@@ -759,20 +759,18 @@ export function useReversePlugin(host: PluginHost): PluginRuntime {
             scale={scaleShown(curvatureScale(curvature.range), len.units, -1)}
             // A curvature is hard to picture and a radius is not: the ends of
             // the scale as the cylinder that bends that much.
-            stats={[{ label: 'full colour at', value: `R ${len.fmt(1 / (2 * curvature.range), 1)}`, wide: true }]}
+            stats={[{ label: tmarText('full colour at'), value: `R ${len.fmt(1 / (2 * curvature.range), 1)}`, wide: true }]}
             format={(v) => v.toFixed(3)}
             histogram={null}
             showHistogram={false}
             zeroAt={0}
-            ends={{ high: 'convex — a round', low: 'concave — a hollow' }}
+            ends={{ high: tmarText('convex — a round'), low: tmarText('concave — a hollow') }}
           />
         )}
         {!sketchStage && <PlaybackCaption />}
         {!sketchStage && <BuildChip />}
         {!sketchStage && fileName && featureCount === 0 && (
-          <div className="hintchip" data-test="reverse-ready-chip">
-            Part loaded — choose a plane in the panel to sketch on
-          </div>
+          <div className="hintchip" data-test="reverse-ready-chip">{tmarText("Part loaded — choose a plane in the panel to sketch on")}</div>
         )}
       </>
     ),

@@ -16,6 +16,7 @@ import { alignSlotPicks, picksItsPoints, sectionDraftReady, type AlignDraft, typ
 import { dimensionRefsOf, isShadow } from '../state/sectionModel'
 import { markChipText } from '../ui/MarkTools'
 import type { ScaleDraft } from '../state/scaleModel'
+import { coreText as tmarText } from '../i18n'
 
 type DraftMode = CreationMethod['mode'] | null
 
@@ -39,12 +40,12 @@ export function openSlotHintOf(s: {
   if (!draft && scaling && scaling.pickRow !== null) {
     const row = scaling.refs[scaling.pickRow]
     const have = row?.kind === 'points' ? row.points.length : 0
-    return `Click the scan — ${have === 0 ? 'one end of the length' : 'its other end'} (point ${have + 1} of 2) · Esc to stop picking`
+    return `Click the scan — ${tmarText(have === 0 ? 'one end of the length' : 'its other end')} (point ${have + 1} of 2) · Esc to stop picking`
   }
   if (!draft && sectionDraft) {
     if (!sectionDraft.axis)
       return 'Click the element to cut along — a plane, cylinder, cone, line or circle — or one of the XY, YZ, XZ planes, or choose in the panel'
-    const verb = sectionDraft.editId !== undefined ? 'save' : 'create'
+    const verb = tmarText(sectionDraft.editId !== undefined ? 'save' : 'create')
     // A shadow's plane has no arrow: it is drawn in the middle of the part.
     if (isShadow(sectionDraft))
       return sectionDraftReady(sectionDraft)
@@ -64,7 +65,7 @@ export function openSlotHintOf(s: {
           : alignDraft.pickSlot === 'secondary'
             ? 'along the edge to align with the axis'
             : 'for the zero point'
-      return `Click the scan — point ${have + 1} of ${need} ${what} · Esc to stop picking`
+      return `Click the scan — point ${have + 1} of ${need} ${tmarText(what)} · Esc to stop picking`
     }
     if (alignDraft.proposal)
       return 'This is the pose the scan suggests — change a side or a direction in the panel if it is not yours, then press Confirm alignment'
@@ -76,11 +77,11 @@ export function openSlotHintOf(s: {
     const method = creationMethod(draft.kind, draft.method)
     if (draft.pickSlot != null)
       return picksItsPoints(draft)
-        ? `Click the scan or a point element for “${method.slots[draft.pickSlot].label}”`
-        : `Click the scan to pick “${method.slots[draft.pickSlot].label}” · Esc to stop picking`
+        ? `Click the scan or a point element for “${tmarText(method.slots[draft.pickSlot].label)}”`
+        : `Click the scan to pick “${tmarText(method.slots[draft.pickSlot].label)}” · Esc to stop picking`
     const empty = draft.refs.findIndex((r) => r === null)
     if (empty < 0) return null
-    return `Click an element in the viewport for “${method.slots[empty].label}” — or choose it in the panel`
+    return `Click an element in the viewport for “${tmarText(method.slots[empty].label)}” — or choose it in the panel`
   }
   if (draft || !dimDraft) return null
   const empty = dimDraft.refs.findIndex((r) => r === null)
@@ -94,7 +95,7 @@ export function openSlotHintOf(s: {
     return ok ? 'Enter or middle-click to add the dimension · Esc to cancel' : null
   }
   const label = dimensionTypeInfo(dimDraft.type).slots[empty].label
-  return `Click an element in the viewport for “${label}” — the dimension type follows what you pick`
+  return `Click an element in the viewport for “${tmarText(label)}” — the dimension type follows what you pick`
 }
 
 /** Marking a surface by hand has its own line — the same line the local fine
@@ -114,14 +115,14 @@ export function paintHintOf(s: {
   const { draft, painting, markGesture, markStraight, markCount, editingDraft } = s
   return !painting
     ? null
-    : markChipText(markGesture, markCount, `the ${elementKindInfo(draft!.kind).noun}`, {
+    : markChipText(markGesture, markCount, tmarText('the {0}', [tmarText(elementKindInfo(draft!.kind).noun)]), {
         idle: editingDraft ? 'Esc discards the changes' : 'Esc discards the element',
         live: 'Esc to navigate, twice to discard',
       }, markStraight) +
       (draft!.status === 'ready'
         ? editingDraft
-          ? ' · Enter or middle-click saves it'
-          : ' · Enter or middle-click creates it'
+          ? tmarText(' · Enter or middle-click saves it')
+          : tmarText(' · Enter or middle-click creates it')
         : '')
 }
 
@@ -144,13 +145,13 @@ export function stageHintOf(s: {
         : draft.picks.length === 0 && draft.status !== 'ready'
           ? draftMode === 'pick' && draft.kind === 'point'
             ? 'Click the point on the scan you want to measure to'
-            : `Click a point on the ${elementKindInfo(draft.kind).noun} you want to measure`
+            : `Click a point on the ${tmarText(elementKindInfo(draft.kind).noun)} you want to measure`
           : draft.status === 'ready'
-            ? `Enter or middle-click to ${editingDraft ? 'save' : 'create'} · Esc to discard · click again to ${
-                draftMode === 'pick' && draft.kind === 'point' ? 'move the point' : 'add points'
+            ? `Enter or middle-click to ${tmarText(editingDraft ? 'save' : 'create')} · Esc to discard · click again to ${
+                tmarText(draftMode === 'pick' && draft.kind === 'point' ? 'move the point' : 'add points')
               }`
             : draftMode === 'pick' && draft.picks.length > 0 && draft.status === 'empty'
-              ? `Point ${draft.picks.length} of ${creationMethod(draft.kind, draft.method).minPicks ?? 1} — keep clicking around the ${elementKindInfo(draft.kind).noun}`
+              ? `Point ${draft.picks.length} of ${creationMethod(draft.kind, draft.method).minPicks ?? 1} — keep clicking around the ${tmarText(elementKindInfo(draft.kind).noun)}`
               : null
 }
 

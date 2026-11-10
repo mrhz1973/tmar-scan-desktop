@@ -38,6 +38,8 @@ import { useLength } from '../../../src/app/useUnits'
 import type { LengthPresets } from '../../../src/core/units'
 import { CORNER_GAP_MM } from '../core/corners'
 import { BuildSays } from './featureFields'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 const TOOLS: { id: SketchTool; icon: KeyIconName; label: string; title: string }[] = [
   { id: 'select', icon: 'select', label: 'Select', title: 'Click a piece to select it, a second to pair it; click empty sheet to clear. Drag over empty sheet for a box: rightward it takes what lies wholly inside, leftward whatever it touches; hold Shift or Ctrl to add to the selection. Drag an end, a centre or a piece to move it — it snaps to other ends, the slice and the pieces, and a line moves square to itself; hold Ctrl to move it freely. The right button pans' },
@@ -108,6 +110,8 @@ const FLYOUT_CLOSE_MS = 180
  * way picked takes the tool up in that way and becomes the key's picture.
  */
 function ShapeToolKey({ shape, label, title, inHand, onPress }: { shape: keyof DrawModes; label: string; title: string; inHand: boolean; onPress: () => void }) {
+  useTmarLanguage()
+
   const current = useRePrefs((s) => s.drawModes[shape])
   const modes: DrawMode[] = DRAW_MODES[shape]
   const mode = modes.find((m) => m.id === current) ?? modes[0]
@@ -146,8 +150,8 @@ function ShapeToolKey({ shape, label, title, inHand, onPress }: { shape: keyof D
         aria-pressed={inHand}
         aria-haspopup="true"
         aria-expanded={open}
-        title={`${label} — ${title}`}
-        aria-label={label}
+        title={tmarText("{0} — {1}", [tmarText(label), tmarText(title)])}
+        aria-label={tmarText(label)}
         onClick={() => {
           // On a touch screen there is no resting on a key: pressed again
           // while in hand, it opens its ways.
@@ -158,7 +162,7 @@ function ShapeToolKey({ shape, label, title, inHand, onPress }: { shape: keyof D
         <KeyIcon name={mode.icon} size={22} />
       </button>
       {open && (
-        <div className="flyout" role="radiogroup" aria-label={`How the ${shape} is drawn`} data-test="sketch-draw-modes">
+        <div className="flyout" role="radiogroup" aria-label={tmarText("How the {0} is drawn", [shape])} data-test="sketch-draw-modes">
           {modes.map((m) => (
             <button
               key={m.id}
@@ -166,8 +170,8 @@ function ShapeToolKey({ shape, label, title, inHand, onPress }: { shape: keyof D
               aria-checked={mode.id === m.id}
               className={mode.id === m.id ? 'on' : undefined}
               data-test={`sketch-mode-${m.id}`}
-              title={`${m.label} — ${m.title}`}
-              aria-label={m.label}
+              title={tmarText("{0} — {1}", [tmarText(m.label), tmarText(m.title)])}
+              aria-label={tmarText(m.label)}
               onClick={() => {
                 // A way chosen half way through starts the shape afresh.
                 useRePrefs.getState().setDrawMode(shape, m.id as never)
@@ -228,12 +232,14 @@ function nominalKindOf(kind: Constraint['kind']): NominalKind {
 
 /** The chip beside a measured number: its rounding, one click to take. */
 function NominalChip({ value, kind, testId, onTake }: { value: number; kind: NominalKind; testId: string; onTake: (v: number) => void }) {
+  useTmarLanguage()
+
   const units = useLength().units
   const n = nominalOf(value, kind)
   if (n === null) return null
   return (
-    <button className="chip nominal" data-test={testId} tabIndex={-1} title="The round number this was probably designed at — click to take it" onClick={() => onTake(n)}>
-      → {nominalText(n, kind, units)}
+    <button className="chip nominal" data-test={testId} tabIndex={-1} title={tmarText("The round number this was probably designed at — click to take it")} onClick={() => onTake(n)}>
+      → {tmarText(nominalText(n, kind, units))}
     </button>
   )
 }
@@ -259,6 +265,8 @@ async function readPicture(file: File): Promise<{ src: string; width: number; he
  *  where that belongs, levelled by two points that should lie level, faded,
  *  or taken away. */
 function PictureRow({ draft }: { draft: SketchDraft }) {
+  useTmarLanguage()
+
   const re = useReverse.getState()
   const image = draft.image
   const pick = draft.imagePick ?? null
@@ -285,16 +293,14 @@ function PictureRow({ draft }: { draft: SketchDraft }) {
     return (
       <div className="toolrow">
         {input}
-        <button className="withicon" data-test="sketch-image-add" title="Lay a photo of the part or a dimensioned drawing under the sketch, to trace — then bring it to scale by two points a known length apart" onClick={() => file.current?.click()}>
-          <KeyIcon name="sketchImage" size={18} />
-          Picture…
-        </button>
+        <button className="withicon" data-test="sketch-image-add" title={tmarText("Lay a photo of the part or a dimensioned drawing under the sketch, to trace — then bring it to scale by two points a known length apart")} onClick={() => file.current?.click()}>
+          <KeyIcon name="sketchImage" size={18} />{tmarText("Picture…")}</button>
       </div>
     )
   }
   const key = (mode: ImagePickMode, label: string, title: string) => (
-    <button data-test={`sketch-image-${mode}`} className={pick?.mode === mode ? 'on' : undefined} aria-pressed={pick?.mode === mode} title={title} onClick={() => re.startImagePick(pick?.mode === mode ? null : mode)}>
-      {label}
+    <button data-test={`sketch-image-${mode}`} className={pick?.mode === mode ? 'on' : undefined} aria-pressed={pick?.mode === mode} title={tmarText(title)} onClick={() => re.startImagePick(pick?.mode === mode ? null : mode)}>
+      {tmarText(label)}
     </button>
   )
   return (
@@ -303,18 +309,16 @@ function PictureRow({ draft }: { draft: SketchDraft }) {
       <div className="kv">
         <KeyIcon name="sketchImage" size={16} />
         <span className="name" title={image.name}>
-          {image.name ?? 'Picture'}
+          {image.name ?? (tmarText("Picture"))}
         </span>
         {/* The picture's scale as each system reads one: micrometres a
             pixel, or pixels to the inch. */}
         {len.units === 'in' ? (
-          <b title="Pixels per inch of the picture">{(25.4 / image.mmPerPx).toFixed(0)} px/in</b>
+          <b title={tmarText("Pixels per inch of the picture")}>{(25.4 / image.mmPerPx).toFixed(0)}{tmarText(" px/in")}</b>
         ) : (
-          <b title="Micrometres per pixel of the picture">{(image.mmPerPx * 1000).toFixed(1)} µm/px</b>
+          <b title={tmarText("Micrometres per pixel of the picture")}>{(image.mmPerPx * 1000).toFixed(1)}{tmarText(" µm/px")}</b>
         )}
-        <button className="x" data-test="sketch-image-remove" title="Take the picture away" onClick={() => re.setSketchImage(null)}>
-          ×
-        </button>
+        <button className="x" data-test="sketch-image-remove" title={tmarText("Take the picture away")} onClick={() => re.setSketchImage(null)}>{tmarText("×")}</button>
       </div>
       <div className="toolrow">
         {key('scale', 'Scale', 'Bring the picture to scale: click two points on it, then type how far apart they are on the part')}
@@ -324,7 +328,7 @@ function PictureRow({ draft }: { draft: SketchDraft }) {
       {pick?.mode === 'scale' && pick.points.length >= 2 && (
         <div className="toolrow">
           <label className="field">
-            <span>Apart on the part</span>
+            <span>{tmarText("Apart on the part")}</span>
             <ExprInput
               value={length ?? 0}
               kind="length"
@@ -337,13 +341,11 @@ function PictureRow({ draft }: { draft: SketchDraft }) {
               onEnter={() => typed.current && re.scaleSketchImage(typed.current)}
             />
           </label>
-          <button className="primary" data-test="sketch-image-apply" disabled={!length} onClick={() => length && re.scaleSketchImage(length)}>
-            Scale
-          </button>
+          <button className="primary" data-test="sketch-image-apply" disabled={!length} onClick={() => length && re.scaleSketchImage(length)}>{tmarText("Scale")}</button>
         </div>
       )}
-      <label className="field" title="How much of the picture shows: faded, the scan and the pieces show through it">
-        <span>Shown</span>
+      <label className="field" title={tmarText("How much of the picture shows: faded, the scan and the pieces show through it")}>
+        <span>{tmarText("Shown")}</span>
         <input type="range" min={0.1} max={1} step={0.05} value={image.opacity} data-test="sketch-image-opacity" onChange={(e) => re.setSketchImage({ ...image, opacity: Number(e.target.value) })} />
       </label>
     </div>
@@ -362,10 +364,12 @@ function imagePickHint(pick: NonNullable<SketchDraft['imagePick']>): string {
  *  parameters taken for what it comes to — the copies are pieces of their
  *  own, and nothing keeps them following it. */
 function PatternNum({ label, value, unit, testId, onCommit }: { label: string; value: number; unit: '°' | '×' | 'length'; testId: string; onCommit: (v: number) => void }) {
+  useTmarLanguage()
+
   const len = useLength()
   return (
     <label className="field">
-      <span>{label}</span>
+      <span>{tmarText(label)}</span>
       <ExprInput value={value} kind={unit === '°' ? 'angle' : unit === 'length' ? 'length' : 'integer'} unit={unit === 'length' ? len.word() : unit} testId={testId} onCommit={(v) => onCommit(v)} />
     </label>
   )
@@ -378,6 +382,8 @@ const PATTERN_SPACING: LengthPresets = { mm: [10], in: [0.5] }
  *  — a row, or a grid with a second count — or round a centre, drawn on the
  *  sheet as they would land until applied. */
 function PatternBox({ spec, selected }: { spec: SketchPatternSpec; selected: number }) {
+  useTmarLanguage()
+
   const re = useReverse.getState()
   const set = (next: SketchPatternSpec) => re.setSketchPattern(next)
   const count = (v: number) => Math.max(1, Math.min(500, Math.round(Math.abs(v))))
@@ -385,43 +391,40 @@ function PatternBox({ spec, selected }: { spec: SketchPatternSpec; selected: num
   const spacing = useLength().presets(PATTERN_SPACING)[0]
   return (
     <div className="subbox" data-test="sketch-pattern-box">
-      <div className="moderow" role="radiogroup" aria-label="How the pieces are repeated">
+      <div className="moderow" role="radiogroup" aria-label={tmarText("How the pieces are repeated")}>
         <button role="radio" aria-checked={spec.kind === 'rectangular'} className={spec.kind === 'rectangular' ? 'on' : undefined} data-test="sketch-pattern-grid" onClick={() => spec.kind !== 'rectangular' && set({ kind: 'rectangular', step: [spacing, 0], count: 3 })}>
-          <KeyIcon name="sketchPattern" size={16} /> Grid
-        </button>
+          <KeyIcon name="sketchPattern" size={16} />{tmarText(" Grid")}</button>
         <button role="radio" aria-checked={spec.kind === 'circular'} className={spec.kind === 'circular' ? 'on' : undefined} data-test="sketch-pattern-round" onClick={() => spec.kind !== 'circular' && set({ kind: 'circular', centre: [0, 0], count: 6, angleDeg: 360 })}>
-          <KeyIcon name="sketchPatternRound" size={16} /> Round
-        </button>
+          <KeyIcon name="sketchPatternRound" size={16} />{tmarText(" Round")}</button>
       </div>
       {spec.kind === 'rectangular' ? (
         <>
-          <PatternNum label="Along X" value={spec.count} unit="×" testId="sketch-pattern-count" onCommit={(v) => set({ ...spec, count: count(v) })} />
-          <PatternNum label="X spacing" value={spec.step[0]} unit="length" testId="sketch-pattern-step" onCommit={(v) => set({ ...spec, step: [v, 0] })} />
-          <PatternNum label="Along Y" value={spec.count2 ?? 1} unit="×" testId="sketch-pattern-count2" onCommit={(v) => set({ ...spec, count2: count(v), step2: spec.step2 ?? [0, spec.step[0] || spacing] })} />
-          {(spec.count2 ?? 1) > 1 && <PatternNum label="Y spacing" value={spec.step2?.[1] ?? spacing} unit="length" testId="sketch-pattern-step2" onCommit={(v) => set({ ...spec, step2: [0, v] })} />}
+          <PatternNum label={tmarText("Along X")} value={spec.count} unit="×" testId="sketch-pattern-count" onCommit={(v) => set({ ...spec, count: count(v) })} />
+          <PatternNum label={tmarText("X spacing")} value={spec.step[0]} unit="length" testId="sketch-pattern-step" onCommit={(v) => set({ ...spec, step: [v, 0] })} />
+          <PatternNum label={tmarText("Along Y")} value={spec.count2 ?? 1} unit="×" testId="sketch-pattern-count2" onCommit={(v) => set({ ...spec, count2: count(v), step2: spec.step2 ?? [0, spec.step[0] || spacing] })} />
+          {(spec.count2 ?? 1) > 1 && <PatternNum label={tmarText("Y spacing")} value={spec.step2?.[1] ?? spacing} unit="length" testId="sketch-pattern-step2" onCommit={(v) => set({ ...spec, step2: [0, v] })} />}
         </>
       ) : (
         <>
-          <PatternNum label="Count" value={spec.count} unit="×" testId="sketch-pattern-count" onCommit={(v) => set({ ...spec, count: count(v) })} />
-          <PatternNum label="Over" value={spec.angleDeg} unit="°" testId="sketch-pattern-angle" onCommit={(v) => set({ ...spec, angleDeg: v })} />
-          <PatternNum label="Centre X" value={spec.centre[0]} unit="length" testId="sketch-pattern-cx" onCommit={(v) => set({ ...spec, centre: [v, spec.centre[1]] })} />
-          <PatternNum label="Centre Y" value={spec.centre[1]} unit="length" testId="sketch-pattern-cy" onCommit={(v) => set({ ...spec, centre: [spec.centre[0], v] })} />
+          <PatternNum label={tmarText("Count")} value={spec.count} unit="×" testId="sketch-pattern-count" onCommit={(v) => set({ ...spec, count: count(v) })} />
+          <PatternNum label={tmarText("Over")} value={spec.angleDeg} unit="°" testId="sketch-pattern-angle" onCommit={(v) => set({ ...spec, angleDeg: v })} />
+          <PatternNum label={tmarText("Centre X")} value={spec.centre[0]} unit="length" testId="sketch-pattern-cx" onCommit={(v) => set({ ...spec, centre: [v, spec.centre[1]] })} />
+          <PatternNum label={tmarText("Centre Y")} value={spec.centre[1]} unit="length" testId="sketch-pattern-cy" onCommit={(v) => set({ ...spec, centre: [spec.centre[0], v] })} />
         </>
       )}
-      <p className="hint">{spec.kind === 'rectangular' ? 'Counts take the selection itself in; a negative spacing runs the other way.' : '360° spreads the copies evenly round; less spans that angle, first to last.'}</p>
+      <p className="hint">{spec.kind === 'rectangular' ? tmarText("Counts take the selection itself in; a negative spacing runs the other way.") : tmarText("360° spreads the copies evenly round; less spans that angle, first to last.")}</p>
       <div className="toolrow">
-        <button className="primary" data-test="sketch-pattern-apply" disabled={selected === 0} onClick={() => re.applySketchPattern()}>
-          Pattern {selected} piece{selected === 1 ? '' : 's'}
+        <button className="primary" data-test="sketch-pattern-apply" disabled={selected === 0} onClick={() => re.applySketchPattern()}>{tmarText("Pattern ")}{selected}{tmarText(" piece")}{selected === 1 ? '' : tmarText("s")}
         </button>
-        <button data-test="sketch-pattern-cancel" onClick={() => re.cancelSketchPattern()}>
-          Cancel
-        </button>
+        <button data-test="sketch-pattern-cancel" onClick={() => re.cancelSketchPattern()}>{tmarText("Cancel")}</button>
       </div>
     </div>
   )
 }
 
 export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null }) {
+  useTmarLanguage()
+
   const draft = useReverse((s) => s.sketchDraft)
   const chainCount = useReverse((s) => s.chainCount)
   const chainsStatus = useReverse((s) => s.chainsStatus)
@@ -483,7 +486,7 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
   const unmetTitle = unmet
     .map((u) => {
       const c = sketch.constraints.find((x) => x.id === u.id)
-      return c ? `${constraintLabel(c, sketch)} — off by ${u.residual.toFixed(3)}` : `#${u.id}`
+      return c ? `${tmarText(constraintLabel(c, sketch))} — off by ${u.residual.toFixed(3)}` : `#${u.id}`
     })
     .join('\n')
   const solvedTitle =
@@ -550,41 +553,20 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
             : null)
 
   const finishKey = (testId: string) => (
-    <button className="primary block" data-test={testId} title="Finish the sketch — Enter or a middle click does the same. With nothing drawn, nothing is made." onClick={() => re.getState().commitSketch()}>
-      Finish sketch
-    </button>
+    <button className="primary block" data-test={testId} title={tmarText("Finish the sketch — Enter or a middle click does the same. With nothing drawn, nothing is made.")} onClick={() => re.getState().commitSketch()}>{tmarText("Finish sketch")}</button>
   )
 
   return (
     <div className="draftbox" data-test="sketch-editor" ref={boxRef}>
       <div className="sec-head">
-        {draft.featureId !== undefined ? `Edit ${draft.name}` : 'New sketch'}
-        <InfoDot title="Sketching">
+        {draft.featureId !== undefined ? tmarText("Edit {0}", [draft.name]) : tmarText("New sketch")}
+        <InfoDot title={tmarText("Sketching")}>
+          <p>{tmarText("The sketch lies on its plane — a section, a plane element, a coordinate plane or a face of a body — and is drawn on the part, which faces the plane and is cut open at it; the view bar's ")}<b>{tmarText("Model")}</b>{tmarText(" and ")}<b>{tmarText("Slice")}</b>{tmarText(" keys put the part away and show it whole.")}</p>
           <p>
-            The sketch lies on its plane — a section, a plane element, a coordinate plane or a
-            face of a body — and is drawn on the part, which faces the plane and is cut open at it;
-            the view bar's <b>Model</b> and <b>Slice</b> keys put the part away and show it whole.
-          </p>
+            <b>{tmarText("Fit all chains")}</b>{tmarText(" cuts every slice chain into lines and arcs, each keeping its slice points: the solver holds every piece to its points while the relations and the dimensions you type are met exactly. ")}<b>{tmarText("Infer corners")}</b>{tmarText(" joins ends within ")}{len.fmt(CORNER_GAP_MM, 0)}{tmarText(" and adds a tangency where a line runs into an arc; ")}<b>{tmarText("Close")}</b>{tmarText(" bridges what is left open.")}</p>
+          <p>{tmarText("Every closed region is filled faintly; ")}<b>{tmarText("Extrude")}</b>{tmarText(" and ")}<b>{tmarText("Revolve")}</b>{tmarText(" appear as soon as one closes and take it straight into a feature. ")}<b>{tmarText("Finish sketch")}</b>{tmarText(" keeps the drawing as a feature for later; Escape only puts the tool down, and a sketch you did not want is undone with Ctrl+Z from the feature list.")}</p>
           <p>
-            <b>Fit all chains</b> cuts every slice chain into lines and arcs, each keeping its
-            slice points: the solver holds every piece to its points while the relations and the
-            dimensions you type are met exactly. <b>Infer corners</b> joins ends within {len.fmt(CORNER_GAP_MM, 0)} and
-            adds a tangency where a line runs into an arc; <b>Close</b> bridges what is left open.
-          </p>
-          <p>
-            Every closed region is filled faintly; <b>Extrude</b> and <b>Revolve</b> appear as soon
-            as one closes and take it straight into a feature. <b>Finish sketch</b> keeps the
-            drawing as a feature for later; Escape only puts the tool down, and a sketch you did not
-            want is undone with Ctrl+Z from the feature list.
-          </p>
-          <p>
-            <b>Dimension</b> (D) and the relations work both ways round: on the pieces selected, or,
-            with nothing selected, on what is clicked next. The Line tool (L) draws a chain, each
-            line from the end of the last; press on that end and drag for a tangent arc.
-            A new dimension's number follows the cursor until a click puts it down, and opens there
-            to be typed; Escape takes it back. Later it is dragged to where it reads best, and
-            clicked to be typed over.
-          </p>
+            <b>{tmarText("Dimension")}</b>{tmarText(" (D) and the relations work both ways round: on the pieces selected, or, with nothing selected, on what is clicked next. The Line tool (L) draws a chain, each line from the end of the last; press on that end and drag for a tangent arc. A new dimension's number follows the cursor until a click puts it down, and opens there to be typed; Escape takes it back. Later it is dragged to where it reads best, and clicked to be typed over.")}</p>
         </InfoDot>
       </div>
 
@@ -595,38 +577,34 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
       )}
       <BuildSays featureId={draft.featureId} />
 
-      <p className="hint" data-test="sketch-plane">
-        On {describePlaneRef(draft.plane, { sections, elements }, len.units)}
-        {chainsStatus === 'ready' && ` · ${chainCount} slice chain${chainCount === 1 ? '' : 's'}`}
+      <p className="hint" data-test="sketch-plane">{tmarText("On ")}{draft.plane.kind === 'section' || draft.plane.kind === 'plane' ? describePlaneRef(draft.plane, { sections, elements }, len.units) : tmarText(describePlaneRef(draft.plane, { sections, elements }, len.units))}
+        {chainsStatus === 'ready' && (tmarText(" · {0} slice chain{1}", [chainCount, chainCount === 1 ? '' : tmarText("s")]))}
       </p>
       {planeTakesOffset(draft.plane) && (
-        <label className="field" data-test="sketch-offset" title={draft.plane.kind === 'world' ? 'Where the coordinate plane lies along its axis — a number, or an expression over the parameters the sketch then follows' : 'How far the sketch stands off its plane, along the plane’s normal — out of a face is positive. A number, or an expression over the parameters'}>
-          <span>{draft.plane.kind === 'world' ? `Plane at ${draft.plane.axis.toUpperCase()} =` : 'Offset'}</span>
+        <label className="field" data-test="sketch-offset" title={draft.plane.kind === 'world' ? tmarText("Where the coordinate plane lies along its axis — a number, or an expression over the parameters the sketch then follows") : tmarText("How far the sketch stands off its plane, along the plane’s normal — out of a face is positive. A number, or an expression over the parameters")}>
+          <span>{draft.plane.kind === 'world' ? tmarText("Plane at {0} =", [draft.plane.axis.toUpperCase()]) : tmarText("Offset")}</span>
           <ExprInput value={planeOffset(draft.plane)} expr={draft.exprs?.offset} kind="length" unit={len.word()} testId="sketch-offset-input" onCommit={(v, expr) => re.getState().setSketchOffset(v, expr)} />
         </label>
       )}
 
-      <label className="field" data-test="sketch-level" title="Cut the scan this far off the sketch’s plane, along its normal, and fit that level’s outline into this sketch — another height of a stacked part. Fit all chains then lands on the pieces already drawn: a wall they have is not fitted again, and the new walls end on theirs. 0 cuts at the plane (a face’s a hair inside it).">
-        <span>Level</span>
+      <label className="field" data-test="sketch-level" title={tmarText("Cut the scan this far off the sketch’s plane, along its normal, and fit that level’s outline into this sketch — another height of a stacked part. Fit all chains then lands on the pieces already drawn: a wall they have is not fitted again, and the new walls end on theirs. 0 cuts at the plane (a face’s a hair inside it).")}>
+        <span>{tmarText("Level")}</span>
         <ExprInput value={draft.level ?? 0} kind="length" unit={len.word()} testId="sketch-level-input" onCommit={(v) => re.getState().setSketchLevel(v)} />
       </label>
 
       <PictureRow draft={draft} />
 
       {unaligned && firstFeature && draft.featureId === undefined && (
-        <p className="hint" data-test="sketch-align-nudge">
-          Part not aligned yet.{' '}
+        <p className="hint" data-test="sketch-align-nudge">{tmarText("Part not aligned yet.")}{' '}
           <button
             className="chip nominal"
             data-test="sketch-align-go"
-            title="The part is still in the scanner's frame, and the body will be built in it — a STEP file that lies askew in CAD. Aligning the part onto its fitted planes first makes the model square. This opens the 3-2-1 alignment in the 3D Measure workspace; the sketch stays open and moves with the part."
+            title={tmarText("The part is still in the scanner's frame, and the body will be built in it — a STEP file that lies askew in CAD. Aligning the part onto its fitted planes first makes the model square. This opens the 3-2-1 alignment in the 3D Measure workspace; the sketch stays open and moves with the part.")}
             onClick={() => {
               useShell.getState().setWorkspace('elements')
               useStore.getState().startAlignment()
             }}
-          >
-            Align in 3D Measure…
-          </button>
+          >{tmarText("Align in 3D Measure…")}</button>
         </p>
       )}
 
@@ -635,60 +613,52 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
           className="withicon"
           data-test="sketch-fit-all"
           disabled={chainsStatus !== 'ready' || unfitted <= 0}
-          title="Cut every slice chain into lines and arcs, each with its slice points behind it"
+          title={tmarText("Cut every slice chain into lines and arcs, each with its slice points behind it")}
           onClick={() => {
             const chains = chainsOf()
             if (chains) re.getState().autoFit(chains.chains, 'all', useRePrefs.getState().fitOptions, SHARE_MM)
           }}
         >
-          <Icon name="fitAll" size={18} />
-          Fit all chains
-        </button>
+          <Icon name="fitAll" size={18} />{tmarText("Fit all chains")}</button>
         <button
           className="withicon"
           data-test="sketch-infer"
           disabled={fittedCount === 0}
-          title={`Join neighbouring ends within ${len.fmt(CORNER_GAP_MM, 0)}, with a tangency where a line meets an arc`}
+          title={tmarText("Join neighbouring ends within {0}, with a tangency where a line meets an arc", [len.fmt(CORNER_GAP_MM, 0)])}
           onClick={() => re.getState().inferAllCorners()}
         >
-          <Icon name="inferCorners" size={18} />
-          Infer corners
-        </button>
+          <Icon name="inferCorners" size={18} />{tmarText("Infer corners")}</button>
         <button
           className="withicon"
           data-test="sketch-close"
           disabled={fittedCount === 0}
-          title="Bridge every gap left open along the fitted chains"
+          title={tmarText("Bridge every gap left open along the fitted chains")}
           onClick={() => re.getState().closeAll()}
         >
-          <Icon name="closeChain" size={18} />
-          Close
-        </button>
+          <Icon name="closeChain" size={18} />{tmarText("Close")}</button>
       </div>
       <button
         className="chip nominal"
         data-test="sketch-fit-options"
         aria-haspopup="dialog"
         aria-expanded={fitOptionsOpen}
-        title="How fine the slice is cut, the fit tolerance, corners joined, lines laid along the axes — in a window of its own; a change there refits the chains"
+        title={tmarText("How fine the slice is cut, the fit tolerance, corners joined, lines laid along the axes — in a window of its own; a change there refits the chains")}
         onClick={() => setFitOptionsOpen((on) => !on)}
-      >
-        Fit options…
-      </button>
+      >{tmarText("Fit options…")}</button>
       <FitOptionsModal open={fitOptionsOpen} onClose={() => setFitOptionsOpen(false)} chainsOf={chainsOf} />
 
       <div className="iconrow" data-test="sketch-tools">
         {TOOLS.map((t) =>
           isShapeTool(t.id) ? (
-            <ShapeToolKey key={t.id} shape={t.id} label={t.label} title={t.title} inHand={draft.tool === t.id} onPress={() => re.getState().setSketchTool(t.id)} />
+            <ShapeToolKey key={t.id} shape={t.id} label={tmarText(t.label)} title={tmarText(t.title)} inHand={draft.tool === t.id} onPress={() => re.getState().setSketchTool(t.id)} />
           ) : (
           <button
             key={t.id}
             data-test={`sketch-tool-${t.id}`}
             className={draft.tool === t.id ? 'on' : undefined}
             aria-pressed={draft.tool === t.id}
-            title={`${t.label} — ${t.title}`}
-            aria-label={t.label}
+            title={tmarText("{0} — {1}", [tmarText(t.label), tmarText(t.title)])}
+            aria-label={tmarText(t.label)}
             onClick={() => {
               // A corner tool on two lines already selected works on those;
               // pressed again while in hand it is put down.
@@ -705,8 +675,8 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
           data-test="sketch-grid-snap"
           className={gridSnap ? 'on' : undefined}
           aria-pressed={gridSnap}
-          aria-label="Snap to grid"
-          title="Snap to grid — drawn and dragged points snap to the grid as well as to ends, the slice and pieces — off, the grid is only there to read against"
+          aria-label={tmarText("Snap to grid")}
+          title={tmarText("Snap to grid — drawn and dragged points snap to the grid as well as to ends, the slice and pieces — off, the grid is only there to read against")}
           onClick={() => useRePrefs.getState().setGridSnap(!gridSnap)}
         >
           <Icon name="gridSnap" size={22} />
@@ -715,16 +685,16 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
           data-test="sketch-show-relations"
           className={showRelations ? 'on' : undefined}
           aria-pressed={showRelations}
-          aria-label="Show relations"
-          title="Show relations — draw every relation beside its piece as a glyph. Off, only the one selected in the list below is drawn; the dimensions are always shown"
+          aria-label={tmarText("Show relations")}
+          title={tmarText("Show relations — draw every relation beside its piece as a glyph. Off, only the one selected in the list below is drawn; the dimensions are always shown")}
           onClick={() => useRePrefs.getState().setSketchRelations(!showRelations)}
         >
           <Icon name={showRelations ? 'eye' : 'eyeOff'} size={22} />
         </button>
       </div>
       {draft.tool === 'polygon' && (
-        <label className="kv" data-test="sketch-polygon-sides" title="How many sides the polygon has — three and up">
-          <span className="name">Sides</span>
+        <label className="kv" data-test="sketch-polygon-sides" title={tmarText("How many sides the polygon has — three and up")}>
+          <span className="name">{tmarText("Sides")}</span>
           <NumberInput
             min={3}
             max={POLYGON_MAX_SIDES}
@@ -742,32 +712,30 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
           className="chip nominal"
           data-test="sketch-spline-fit"
           disabled={chainsStatus !== 'ready'}
-          title="Fit the selected spline to the slice it was drawn over: the slice points along it — within a twentieth of its length — become its soft data, and the solver pulls the curve onto them, its fit points moving as far as its relations let them. Add fit points where the outline bends more than the curve can follow"
+          title={tmarText("Fit the selected spline to the slice it was drawn over: the slice points along it — within a twentieth of its length — become its soft data, and the solver pulls the curve onto them, its fit points moving as far as its relations let them. Add fit points where the outline bends more than the curve can follow")}
           onClick={() => {
             const chains = chainsOf()
             if (chains) re.getState().fitSplinesToSlice(chains.chains)
           }}
-        >
-          Fit spline to slice
-        </button>
+        >{tmarText("Fit spline to slice")}</button>
       )}
       {hint && (
         <p className="hint" data-test="sketch-hint">
-          {hint}
+          {tmarText(hint)}
         </p>
       )}
 
       <div className="g-label">
-        <span>Dimension · Relations</span>
-        <b>{draft.selection.length} selected</b>
+        <span>{tmarText("Dimension · Relations")}</span>
+        <b>{draft.selection.length}{tmarText(" selected")}</b>
       </div>
       <div className="iconrow ten" data-test="sketch-relations">
         <button
           data-test="sketch-dimension"
           className={draft.tool === 'dimension' ? 'on' : undefined}
           aria-pressed={draft.tool === 'dimension'}
-          title={DIMENSION_TITLE}
-          aria-label="Dimension"
+          title={tmarText(DIMENSION_TITLE)}
+          aria-label={tmarText("Dimension")}
           onClick={() => (hasSelection ? re.getState().dimensionSelection() : re.getState().setSketchTool(draft.tool === 'dimension' ? 'select' : 'dimension'))}
         >
           <Icon name="dimDistance" size={20} />
@@ -780,8 +748,8 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
               data-test={`sketch-rel-${r.kind}`}
               className={armed ? 'on' : undefined}
               aria-pressed={armed}
-              title={r.label}
-              aria-label={r.label}
+              title={tmarText(r.label)}
+              aria-label={tmarText(r.label)}
               onClick={() => (hasSelection && !armed ? re.getState().addRelation(r.kind) : armed ? re.getState().setSketchTool('select') : re.getState().armRelation(r.kind))}
             >
               <KeyIcon name={r.icon} size={20} />
@@ -790,22 +758,22 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
         })}
       </div>
       <div className="iconrow" data-test="sketch-edit">
-        <button data-test="sketch-delete" disabled={!hasSelection} aria-label="Delete" title="Delete the selected pieces" onClick={() => re.getState().deleteSelected()}>
+        <button data-test="sketch-delete" disabled={!hasSelection} aria-label={tmarText("Delete")} title={tmarText("Delete the selected pieces")} onClick={() => re.getState().deleteSelected()}>
           <Icon name="del" size={22} />
         </button>
-        <button data-test="sketch-sharpen" disabled={!hasSelection} aria-label="Sharp corner" title="Sharp corner — Remove the selected fillet arc or chamfer line and carry its two lines to the corner" onClick={() => re.getState().sharpenSelected()}>
+        <button data-test="sketch-sharpen" disabled={!hasSelection} aria-label={tmarText("Sharp corner")} title={tmarText("Sharp corner — Remove the selected fillet arc or chamfer line and carry its two lines to the corner")} onClick={() => re.getState().sharpenSelected()}>
           <Icon name="sharpCorner" size={22} />
         </button>
-        <button data-test="sketch-fix" disabled={!hasSelection} aria-label="Fix" title="Fix — Lock the selected pieces where they are" onClick={() => re.getState().toggleFixedSelected()}>
+        <button data-test="sketch-fix" disabled={!hasSelection} aria-label={tmarText("Fix")} title={tmarText("Fix — Lock the selected pieces where they are")} onClick={() => re.getState().toggleFixedSelected()}>
           <Icon name="fix" size={22} />
         </button>
-        <button data-test="sketch-construction" disabled={!hasSelection} aria-label="Construction" title="Construction — Construction geometry takes no part in the regions — an axis to revolve about, a mirror line" onClick={() => re.getState().toggleConstructionSelected()}>
+        <button data-test="sketch-construction" disabled={!hasSelection} aria-label={tmarText("Construction")} title={tmarText("Construction — Construction geometry takes no part in the regions — an axis to revolve about, a mirror line")} onClick={() => re.getState().toggleConstructionSelected()}>
           <Icon name="construction" size={22} />
         </button>
-        <button data-test="sketch-pattern" disabled={!hasSelection} className={draft.pattern ? 'on' : undefined} aria-pressed={Boolean(draft.pattern)} aria-label="Pattern" title="Pattern — Repeat the selected pieces in a row, a grid or round a centre. Each copy is a piece of its own and keeps the relations and dimensions the pieces have among themselves" onClick={() => (draft.pattern ? re.getState().cancelSketchPattern() : re.getState().openSketchPattern())}>
+        <button data-test="sketch-pattern" disabled={!hasSelection} className={draft.pattern ? 'on' : undefined} aria-pressed={Boolean(draft.pattern)} aria-label={tmarText("Pattern")} title={tmarText("Pattern — Repeat the selected pieces in a row, a grid or round a centre. Each copy is a piece of its own and keeps the relations and dimensions the pieces have among themselves")} onClick={() => (draft.pattern ? re.getState().cancelSketchPattern() : re.getState().openSketchPattern())}>
           <KeyIcon name="sketchPattern" size={22} />
         </button>
-        <button data-test="sketch-align" disabled={!oneLine} aria-label="Align" title="Align — Turn the sheet so the selected line lies along its X axis — a crooked edge of the scan becomes the horizontal the rest is drawn against. Nothing moves on the part." onClick={() => re.getState().alignToSelected()}>
+        <button data-test="sketch-align" disabled={!oneLine} aria-label={tmarText("Align")} title={tmarText("Align — Turn the sheet so the selected line lies along its X axis — a crooked edge of the scan becomes the horizontal the rest is drawn against. Nothing moves on the part.")} onClick={() => re.getState().alignToSelected()}>
           <Icon name="alignSheet" size={22} />
         </button>
       </div>
@@ -815,11 +783,9 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
       {inferred.length > 0 && (
         <div className="chiprow" data-test="sketch-inferred">
           {inferred.map((c) => (
-            <span key={c.id} className={'relchip' + (draft.selectedConstraint === c.id ? ' sel' : '') + (unmet.some((u) => u.id === c.id) ? ' warn' : '')} data-test="sketch-inferred-chip" title="Inferred while drawing — the piece was drawn nearly so. Click to select it, × to take it off." onClick={() => re.getState().selectConstraint(c.id)}>
-              {constraintLabel(c, sketch)}
-              <button className="x" tabIndex={-1} title="Take the inferred relation off" onClick={(e) => { e.stopPropagation(); re.getState().selectConstraint(c.id); re.getState().removeSelectedConstraint() }}>
-                ×
-              </button>
+            <span key={c.id} className={'relchip' + (draft.selectedConstraint === c.id ? ' sel' : '') + (unmet.some((u) => u.id === c.id) ? ' warn' : '')} data-test="sketch-inferred-chip" title={tmarText("Inferred while drawing — the piece was drawn nearly so. Click to select it, × to take it off.")} onClick={() => re.getState().selectConstraint(c.id)}>
+              {tmarText(constraintLabel(c, sketch))}
+              <button className="x" tabIndex={-1} title={tmarText("Take the inferred relation off")} onClick={(e) => { e.stopPropagation(); re.getState().selectConstraint(c.id); re.getState().removeSelectedConstraint() }}>{tmarText("×")}</button>
             </span>
           ))}
         </div>
@@ -830,17 +796,17 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
           {dimensions.map((c) => (
             <div key={c.id} className={'kv' + (draft.selectedConstraint === c.id ? ' sel' : '')} data-test="sketch-dimension-row">
               <span className="name" onClick={() => re.getState().selectConstraint(c.id)}>
-                {constraintLabel(c, sketch)}
+                {tmarText(constraintLabel(c, sketch))}
               </span>
               {(c.kind === 'radius' || c.kind === 'diameter') && (
                 <button
                   className="chip"
                   data-test="sketch-dimension-form"
                   tabIndex={-1}
-                  title={c.kind === 'radius' ? 'Give it by its diameter instead' : 'Give it by its radius instead'}
+                  title={c.kind === 'radius' ? tmarText("Give it by its diameter instead") : tmarText("Give it by its radius instead")}
                   onClick={() => re.getState().setDimensionForm(c.id, c.kind === 'radius' ? 'diameter' : 'radius')}
                 >
-                  {c.kind === 'radius' ? '→ Ø' : '→ R'}
+                  {c.kind === 'radius' ? tmarText("→ Ø") : tmarText("→ R")}
                 </button>
               )}
               {c.kind === 'distance' && 'entity' in c.q && (
@@ -848,10 +814,10 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
                   className="chip"
                   data-test="sketch-distance-axis"
                   tabIndex={-1}
-                  title={`Measured ${c.axis === 'x' ? 'along X (ΔX)' : c.axis === 'y' ? 'along Y (ΔY)' : 'straight across'} — click to measure it ${c.axis === 'x' ? 'along Y' : c.axis === 'y' ? 'straight across' : 'along X'} instead. Placing a new one does the same: pull its number above or below the two points for ΔX, beside them for ΔY`}
+                  title={tmarText("Measured {0} — click to measure it {1} instead. Placing a new one does the same: pull its number above or below the two points for ΔX, beside them for ΔY", [c.axis === 'x' ? tmarText("along X (ΔX)") : c.axis === 'y' ? tmarText("along Y (ΔY)") : tmarText("straight across"), c.axis === 'x' ? tmarText("along Y") : c.axis === 'y' ? tmarText("straight across") : tmarText("along X")])}
                   onClick={() => re.getState().setDistanceAxis(c.id, c.axis === 'x' ? 'y' : c.axis === 'y' ? null : 'x')}
                 >
-                  {c.axis === 'x' ? '↔ ΔX' : c.axis === 'y' ? '↕ ΔY' : '⤢ d'}
+                  {c.axis === 'x' ? tmarText("↔ ΔX") : c.axis === 'y' ? tmarText("↕ ΔY") : tmarText("⤢ d")}
                 </button>
               )}
               {!c.expr && <NominalChip value={c.value} kind={nominalKindOf(c.kind)} testId="sketch-nominal" onTake={(v) => re.getState().setDimensionValue(c.id, v)} />}
@@ -871,30 +837,23 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
                 onEnter={() => re.getState().finishDimension(c.id)}
               />
               {unmet.some((u) => u.id === c.id) && <b className="warn">⚠</b>}
-              <button className="x" tabIndex={-1} title="Remove the dimension" onClick={() => { re.getState().selectConstraint(c.id); re.getState().removeSelectedConstraint() }}>
-                ×
-              </button>
+              <button className="x" tabIndex={-1} title={tmarText("Remove the dimension")} onClick={() => { re.getState().selectConstraint(c.id); re.getState().removeSelectedConstraint() }}>{tmarText("×")}</button>
             </div>
           ))}
           {relations.map((c) => (
             <div key={c.id} className={'kv' + (draft.selectedConstraint === c.id ? ' sel' : '')} data-test="sketch-relation-row">
               <span className="name" onClick={() => re.getState().selectConstraint(c.id)}>
-                {constraintLabel(c, sketch)}
+                {tmarText(constraintLabel(c, sketch))}
               </span>
               {unmet.some((u) => u.id === c.id) && <b className="warn">⚠</b>}
-              <button className="x" tabIndex={-1} title="Remove the relation" onClick={() => { re.getState().selectConstraint(c.id); re.getState().removeSelectedConstraint() }}>
-                ×
-              </button>
+              <button className="x" tabIndex={-1} title={tmarText("Remove the relation")} onClick={() => { re.getState().selectConstraint(c.id); re.getState().removeSelectedConstraint() }}>{tmarText("×")}</button>
             </div>
           ))}
           {fixes.map((e) => (
             <div key={fixId(e.id)} className={'kv' + (draft.selectedConstraint === fixId(e.id) ? ' sel' : '')} data-test="sketch-fix-row">
-              <span className="name" onClick={() => re.getState().selectConstraint(fixId(e.id))}>
-                Fix {e.kind} {e.id}
+              <span className="name" onClick={() => re.getState().selectConstraint(fixId(e.id))}>{tmarText("Fix ")}{tmarText(e.kind)} {e.id}
               </span>
-              <button className="x" tabIndex={-1} title="Take the Fix off — the piece is free to move again" onClick={() => { re.getState().selectConstraint(fixId(e.id)); re.getState().removeSelectedConstraint() }}>
-                ×
-              </button>
+              <button className="x" tabIndex={-1} title={tmarText("Take the Fix off — the piece is free to move again")} onClick={() => { re.getState().selectConstraint(fixId(e.id)); re.getState().removeSelectedConstraint() }}>{tmarText("×")}</button>
             </div>
           ))}
         </div>
@@ -902,36 +861,30 @@ export function SketchEditor({ chainsOf }: { chainsOf: () => SketchChains | null
 
       <div className="dro">
         <div className="dro-label">
-          <span>Sketch</span>
+          <span>{tmarText("Sketch")}</span>
           <span data-test="sketch-counts">
-            {sketch.entities.length} piece{sketch.entities.length === 1 ? '' : 's'} · {found} region{found === 1 ? '' : 's'}
+            {sketch.entities.length}{tmarText(" piece")}{sketch.entities.length === 1 ? '' : tmarText("s")} · {found}{tmarText(" region")}{found === 1 ? '' : tmarText("s")}
             {report && report.underConstrained.length > 0 && (
-              <span data-test="sketch-loose" title="Pieces a relation or dimension does not pin down yet — drawn in the loose colour on the sheet; the rest in the constrained colour">
-                {' '}· {report.underConstrained.length} loose
-              </span>
+              <span data-test="sketch-loose" title={tmarText("Pieces a relation or dimension does not pin down yet — drawn in the loose colour on the sheet; the rest in the constrained colour")}>
+                {' '}· {report.underConstrained.length}{tmarText(" loose")}</span>
             )}
           </span>
         </div>
-        <div className={'dro-window ' + status + (status === 'failed' ? ' alarm' : '')} data-test="sketch-status" title={status === 'failed' ? unmetTitle : solvedTitle}>
-          {status === 'empty' && <b style={{ fontSize: 12, fontWeight: 400, color: 'var(--dim)' }}>Needs input</b>}
+        <div className={'dro-window ' + status + (status === 'failed' ? ' alarm' : '')} data-test="sketch-status" title={status === 'failed' ? tmarText(unmetTitle) : tmarText(solvedTitle)}>
+          {status === 'empty' && <b style={{ fontSize: 12, fontWeight: 400, color: 'var(--dim)' }}>{tmarText("Needs input")}</b>}
           {status === 'failed' && (
             <b>
-              ⚠ {unmet.length} relation{unmet.length === 1 ? '' : 's'} not met
-            </b>
+              ⚠ {unmet.length}{tmarText(" relation")}{unmet.length === 1 ? '' : tmarText("s")}{tmarText(" not met")}</b>
           )}
-          {status === 'ready' && <b style={{ fontSize: 13 }}>Solved{found > 0 ? ` · ${found} closed region${found === 1 ? '' : 's'}` : ' · no closed region yet'}</b>}
+          {status === 'ready' && <b style={{ fontSize: 13 }}>{tmarText("Solved")}{found > 0 ? tmarText(" · {0} closed region{1}", [found, found === 1 ? '' : tmarText("s")]) : tmarText(" · no closed region yet")}</b>}
         </div>
       </div>
       {found > 0 && (
         <div className="toolrow" data-test="sketch-feature-keys">
-          <button className="primary withicon" data-test="sketch-extrude" title="Finish the sketch and extrude every region of it — the body shows as a ghost with arrows to drag; a click on a region lets it go" onClick={() => re.getState().finishAndExtrude()}>
-            <Icon name="extrude" size={18} />
-            Extrude
-          </button>
-          <button className="primary withicon" data-test="sketch-revolve" title="Finish the sketch and revolve every region of it about an axis picked next" onClick={() => re.getState().finishAndRevolve()}>
-            <Icon name="revolve" size={18} />
-            Revolve
-          </button>
+          <button className="primary withicon" data-test="sketch-extrude" title={tmarText("Finish the sketch and extrude every region of it — the body shows as a ghost with arrows to drag; a click on a region lets it go")} onClick={() => re.getState().finishAndExtrude()}>
+            <Icon name="extrude" size={18} />{tmarText("Extrude")}</button>
+          <button className="primary withicon" data-test="sketch-revolve" title={tmarText("Finish the sketch and revolve every region of it about an axis picked next")} onClick={() => re.getState().finishAndRevolve()}>
+            <Icon name="revolve" size={18} />{tmarText("Revolve")}</button>
         </div>
       )}
 

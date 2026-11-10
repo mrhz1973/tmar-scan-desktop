@@ -26,6 +26,8 @@ import { lengthInputText } from '../../src/core/units'
 import { formatSurfaceResidual } from './surfaceDisplay'
 import { useSurfaceLengthInput } from './useSurfaceLengthInput'
 import './surface.css'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 const NO_HIDDEN_POLES: number[] = []
 
 interface StripState {step:string;addedArea:number;preview:Preview;paths:Point[][];moves:StripMove[]}
@@ -72,6 +74,8 @@ interface SurfaceOptions { applyWithNotes?: (edit: SurfaceNoteCommit) => Promise
 export const useSurfaceDialogs = create(() => ({ count: 0 }))
 
 export function EditSurface({ applyWithNotes }: SurfaceOptions = {}) {
+  useTmarLanguage()
+
   const [session, setSession] = useState<SurfaceSession | null>(null)
   const sessionRef = useRef<SurfaceSession | null>(null)
   const [startupError, setStartupError] = useState('')
@@ -84,11 +88,13 @@ export function EditSurface({ applyWithNotes }: SurfaceOptions = {}) {
     catch (error) { setStartupError(error instanceof Error ? error.message : String(error)) }
   }
   const close = () => { const active = sessionRef.current; sessionRef.current = null; if (active) disposeSurfaceSession(active); setSession(null) }
-  return <div className="group" data-test="edit-surface-entry"><button className="block" disabled={busy || running || re.building || re.editing || re.playback} onClick={open}>Edit Surface · punti CAD…</button>
+  return <div className="group" data-test="edit-surface-entry"><button className="block" disabled={busy || running || re.building || re.editing || re.playback} onClick={open}>{tmarText("Edit Surface · punti CAD…")}</button>
     {startupError && <p role="alert">{startupError}</p>}
     {session && <SurfaceDialog session={session} applyWithNotes={applyWithNotes} close={close} />}</div>
 }
 function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { close: () => void; session: SurfaceSession }) {
+  useTmarLanguage()
+
   const len = useLength()
   const { runtime, draft } = session
   const draftState = useSyncExternalStore(draft.subscribe, draft.getSnapshot, draft.getSnapshot)
@@ -125,7 +131,7 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
   const editorSessionId = session.editorSessionId
   const [noteError,setNoteError] = useState('')
   const cancel = () => {
-    if (!notes.length || window.confirm('Chiudere e scartare le note della bozza?')) close()
+    if (!notes.length || window.confirm(tmarText('Chiudere e scartare le note della bozza?'))) close()
   }
   const [stripPaths,setStripPaths]=useState<Point[][]|null>(null)
   const stripPathsRef=useRef<Point[][]|null>(null); stripPathsRef.current=stripPaths
@@ -280,7 +286,7 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
     const geometryChanged = currentDraft.canUndo || !!(currentDraft.net && currentDraft.net !== currentDraft.committedNet) ||
       !!(currentDraft.net && currentDraft.originalNet && JSON.stringify(currentDraft.net.poles) !== JSON.stringify(currentDraft.originalNet.poles))
     if (face !== index && (notes.length || geometryChanged) &&
-        !window.confirm('Cambiare faccia e scartare le modifiche e le note non applicate?')) return
+        !window.confirm(tmarText('Cambiare faccia e scartare le modifiche e le note non applicate?'))) return
     const generation = ++session.generation
     const chosenContinuity = draft.getSnapshot().continuity
     setBusy(true); setError('')
@@ -448,118 +454,115 @@ function SurfaceDialog({ close, applyWithNotes, session }: SurfaceOptions & { cl
       } else { saveFile(name, new Blob([result.step], { type: 'model/step' })) }
     } catch (e) { if (mounted.current && runtime.active) setError((e as Error).message) } finally { if (mounted.current && runtime.active) setBusy(false) }
   }
-  return <div className="modalback es-back"><div role="dialog" aria-modal="true" aria-label="Edit Surface" className="es-dialog" data-test="edit-surface-dialog" onKeyDown={e => {
+  return <div className="modalback es-back"><div role="dialog" aria-modal="true" aria-label={tmarText("Edit Surface")} className="es-dialog" data-test="edit-surface-dialog" onKeyDown={e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); e.stopPropagation(); if (!busy) undo(e.shiftKey ? 1 : -1) }
     if (e.key === 'Escape') { e.stopPropagation(); if (!busy) cancel() }
   }}>
-    <header><strong>Edit Surface · prototipo CAD</strong><button disabled={busy} onClick={cancel} aria-label="Chiudi Edit Surface">×</button></header>
+    <header><strong>{tmarText("Edit Surface · prototipo CAD")}</strong><button disabled={busy} onClick={cancel} aria-label={tmarText("Chiudi Edit Surface")}>{tmarText("×")}</button></header>
     <div className="es-content"><aside>
-      {!net && <><label>Corpo CAD<select data-test="surface-body" value={bodyId} disabled={busy} onChange={e => setBodyId(Number(e.target.value))}>{re.bodies.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
-        <button data-test="surface-load-body" disabled={busy || !re.bodies.some(b => b.id === bodyId)} onClick={() => void loadBody()}>Carica corpo</button>
-        <label>Oppure apri STEP<input type="file" accept=".step,.stp" disabled={busy} data-test="surface-step-file" onChange={e => { const f = e.target.files?.[0]; if (f) void f.text().then(text => { if (mounted.current && runtime.active) return load(text, f.name) }).catch(err => { if (mounted.current && runtime.active) setError((err as Error).message) }) }} /></label>
-        <p>Seleziona una faccia nel modello o nell’elenco.</p>
-        <select aria-label="Faccia CAD" data-test="surface-face" value={face} disabled={busy || calculating || !faces.length} onChange={e => void chooseFace(Number(e.target.value))}><option value={-1}>Scegli faccia…</option>{faces.map(f => <option key={f.index} value={f.index} disabled={!!f.reason}>Faccia {f.index + 1} · {f.kind}{f.reason ? ' · non supportata' : ''}</option>)}</select>
-        {faces.some(f => f.reason) && <details><summary>Facce non supportate</summary>{faces.filter(f => f.reason).map(f => <p key={f.index}>#{f.index + 1}: {f.reason}</p>)}</details>}
+      {!net && <><label>{tmarText("Corpo CAD")}<select data-test="surface-body" value={bodyId} disabled={busy} onChange={e => setBodyId(Number(e.target.value))}>{re.bodies.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+        <button data-test="surface-load-body" disabled={busy || !re.bodies.some(b => b.id === bodyId)} onClick={() => void loadBody()}>{tmarText("Carica corpo")}</button>
+        <label>{tmarText("Oppure apri STEP")}<input type="file" accept=".step,.stp" disabled={busy} data-test="surface-step-file" onChange={e => { const f = e.target.files?.[0]; if (f) void f.text().then(text => { if (mounted.current && runtime.active) return load(text, f.name) }).catch(err => { if (mounted.current && runtime.active) setError((err as Error).message) }) }} /></label>
+        <p>{tmarText("Seleziona una faccia nel modello o nell’elenco.")}</p>
+        <select aria-label={tmarText("Faccia CAD")} data-test="surface-face" value={face} disabled={busy || calculating || !faces.length} onChange={e => void chooseFace(Number(e.target.value))}><option value={-1}>{tmarText("Scegli faccia…")}</option>{faces.map(f => <option key={f.index} value={f.index} disabled={!!f.reason}>{tmarText("Faccia ")}{f.index + 1} · {tmarText(f.kind)}{f.reason ? tmarText(" · non supportata") : ''}</option>)}</select>
+        {faces.some(f => f.reason) && <details><summary>{tmarText("Facce non supportate")}</summary>{faces.filter(f => f.reason).map(f => <p key={f.index}>#{f.index + 1}: {tmarText(f.reason)}</p>)}</details>}
       </>}
-      {!net && notes.length > 0 && <fieldset><legend>Note conservate</legend>
-        <p role="alert">{noteError}</p>
-        {notes.map(n => <label key={n.id}>Nota {n.id}<textarea readOnly value={n.text} /></label>)}
+      {!net && notes.length > 0 && <fieldset><legend>{tmarText("Note conservate")}</legend>
+        <p role="alert">{tmarText(noteError)}</p>
+        {notes.map(n => <label key={n.id}>{tmarText("Nota ")}{n.id}<textarea readOnly value={n.text} /></label>)}
       </fieldset>}
-      {stripPaths && <><h3>Duplica bordo libero</h3><p>Scegli la direzione e trascina un bordo evidenziato. Dopo la cucitura puoi trascinare un altro bordo libero.</p>
-        <div className="es-row">{['X','Y','Z'].map((label,i)=><button key={label} disabled={busy} data-test={'strip-axis-'+i} aria-pressed={axis===i} onClick={()=>setAxis(i)}>{label}</button>)}</div>
-        <p data-test="strip-result">{stripEdge>=0?'Anteprima striscia':stripResult?'Striscia valida · '+len.area(stripResult.addedArea,3): 'Trascina il bordo esterno'}</p>
-        <div className="es-row"><button data-test="strip-undo" disabled={busy || stripAt.current===0} onClick={()=>stripUndo(-1)}>Annulla striscia</button>
-          <button data-test="strip-redo" disabled={busy || stripAt.current+1>=stripHistory.current.length} onClick={()=>stripUndo(1)}>Ripeti striscia</button></div>
-        <button data-test="strip-export" disabled={busy || stripEdge>=0 || !stripResult} onClick={()=>{if(stripResult)saveFile(stripName,new Blob([stripResult.step],{type:'model/step'}))}}>Esporta superficie con striscia</button>
-        <button disabled={busy} onClick={()=>{setStripPaths(null);setStripResult(null);setError('')}}>Torna alla faccia iniziale</button></>}
+      {stripPaths && <><h3>{tmarText("Duplica bordo libero")}</h3><p>{tmarText("Scegli la direzione e trascina un bordo evidenziato. Dopo la cucitura puoi trascinare un altro bordo libero.")}</p>
+        <div className="es-row">{['X','Y','Z'].map((label,i)=><button key={label} disabled={busy} data-test={'strip-axis-'+i} aria-pressed={axis===i} onClick={()=>setAxis(i)}>{tmarText(label)}</button>)}</div>
+        <p data-test="strip-result">{stripEdge>=0 ? tmarText("Anteprima striscia") : stripResult ? tmarText("Striscia valida · ") + len.area(stripResult.addedArea,3) : tmarText("Trascina il bordo esterno")}</p>
+        <div className="es-row"><button data-test="strip-undo" disabled={busy || stripAt.current===0} onClick={()=>stripUndo(-1)}>{tmarText("Annulla striscia")}</button>
+          <button data-test="strip-redo" disabled={busy || stripAt.current+1>=stripHistory.current.length} onClick={()=>stripUndo(1)}>{tmarText("Ripeti striscia")}</button></div>
+        <button data-test="strip-export" disabled={busy || stripEdge>=0 || !stripResult} onClick={()=>{if(stripResult)saveFile(stripName,new Blob([stripResult.step],{type:'model/step'}))}}>{tmarText("Esporta superficie con striscia")}</button>
+        <button disabled={busy} onClick={()=>{setStripPaths(null);setStripResult(null);setError('')}}>{tmarText("Torna alla faccia iniziale")}</button></>}
       {net && !stripPaths && <>
-        <p><strong>Faccia {face + 1} · {net.nu} × {net.nv} punti</strong><br/>{faces[face]?.converted ? 'Piano convertito esattamente in NURBS, senza fitting.' : 'Modifica diretta dei poli NURBS esistenti.'}</p>
-        {!!faces[face]?.trimLocks.length && <p className="es-hint">I punti che influenzano i contorni ritagliati sono protetti. {faces[face]?.hiddenPoles.length ? 'I punti protetti esterni alla faccia sono nascosti. ' : ''}Trascina un punto libero per deformare la faccia.</p>}
-        {faces[face]?.enriched && <p className="es-hint">Reticolo arricchito da 4×4 a 5×5 senza modificare la forma. Il punto centrale resta libero anche con protezione G1.</p>}
-        <button disabled={busy || calculating} onClick={() => { if (loaded.current && window.confirm('Scartare questa bozza e scegliere un’altra faccia?')) void load(loaded.current.step, loaded.current.name, undefined, loaded.current.bodyId) }}>Cambia faccia / corpo</button>
-        {faces[face]?.openSheet && <button data-test="strip-open" disabled={busy || calculating || validNet!==net || !!notes.length} onClick={()=>void beginStrip()}>Duplica bordo libero…</button>}
-        {directEdges && <p className="es-hint">{freeBoundary ? 'Per duplicare un bordo usa il pulsante dedicato. La maniglia D è nascosta mentre modifichi i bordi.' : "Per duplicare un bordo libero, cliccalo e trascina la maniglia D lungo l'asse scelto."}</p>}
+        <p><strong>{tmarText("Faccia ")}{face + 1} · {net.nu}{tmarText(" × ")}{net.nv}{tmarText(" punti")}</strong><br/>{faces[face]?.converted ? tmarText("Piano convertito esattamente in NURBS, senza fitting.") : tmarText("Modifica diretta dei poli NURBS esistenti.")}</p>
+        {!!faces[face]?.trimLocks.length && <p className="es-hint">{tmarText("I punti che influenzano i contorni ritagliati sono protetti. ")}{faces[face]?.hiddenPoles.length ? tmarText("I punti protetti esterni alla faccia sono nascosti. ") : ''}{tmarText("Trascina un punto libero per deformare la faccia.")}</p>}
+        {faces[face]?.enriched && <p className="es-hint">{tmarText("Reticolo arricchito da 4×4 a 5×5 senza modificare la forma. Il punto centrale resta libero anche con protezione G1.")}</p>}
+        <button disabled={busy || calculating} onClick={() => { if (loaded.current && window.confirm(tmarText('Scartare questa bozza e scegliere un’altra faccia?'))) void load(loaded.current.step, loaded.current.name, undefined, loaded.current.bodyId) }}>{tmarText("Cambia faccia / corpo")}</button>
+        {faces[face]?.openSheet && <button data-test="strip-open" disabled={busy || calculating || validNet!==net || !!notes.length} onClick={()=>void beginStrip()}>{tmarText("Duplica bordo libero…")}</button>}
+        {directEdges && <p className="es-hint">{freeBoundary ? tmarText("Per duplicare un bordo usa il pulsante dedicato. La maniglia D è nascosta mentre modifichi i bordi.") : tmarText("Per duplicare un bordo libero, cliccalo e trascina la maniglia D lungo l'asse scelto.")}</p>}
         {faces[face]?.freeBoundary && <label><input data-test="surface-free-boundary" type="checkbox" checked={freeBoundary} disabled={busy || calculating} onChange={e => {
           try { draft.setFreeBoundary(e.target.checked); setError('') }
           catch { setError('Annulla prima gli spostamenti dei bordi per proteggerli di nuovo.') }
-        }}/> Consenti lo spostamento dei bordi liberi</label>}
-        <label>Protezione bordi<select data-test="surface-continuity" value={continuity} disabled={busy || freeBoundary} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { draft.setContinuity(c); setError('') } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">G0 · mantieni posizione dei bordi</option><option value="G1">G1 · mantieni anche tangenti esistenti</option></select></label>
-        <p className="es-hint">{freeBoundary ? 'Puoi spostare i punti del bordo della superficie aperta. I punti bloccati manualmente restano fermi.' : 'I bordi restano bloccati. G1 conserva le tangenti originali; non corregge discontinuità preesistenti.'}</p>
+        }}/>{tmarText(" Consenti lo spostamento dei bordi liberi")}</label>}
+        <label>{tmarText("Protezione bordi")}<select data-test="surface-continuity" value={continuity} disabled={busy || freeBoundary} onChange={e => { const c = e.target.value as 'G0' | 'G1'; try { draft.setContinuity(c); setError('') } catch { setError('Ripristina prima i punti vicini ai bordi per attivare G1.') } }}><option value="G0">{tmarText("G0 · mantieni posizione dei bordi")}</option><option value="G1">{tmarText("G1 · mantieni anche tangenti esistenti")}</option></select></label>
+        <p className="es-hint">{freeBoundary ? tmarText("Puoi spostare i punti del bordo della superficie aperta. I punti bloccati manualmente restano fermi.") : tmarText("I bordi restano bloccati. G1 conserva le tangenti originali; non corregge discontinuità preesistenti.")}</p>
         <div className="es-row">{axisNames.map((a, i) => <button key={a} data-test={`surface-axis-${i}`} aria-pressed={axis === i} onClick={() => setAxis(i)}>{a}</button>)}</div>
-        <label>Trascinamento punti<select data-test="surface-drag-mode" value={dragMode} onChange={e => setDragMode(e.target.value as DragMode)}><option value="axis">Mondo · asse X/Y/Z</option><option value="screen">Piano dello schermo</option><option value="local">Locale · U/V/normale</option></select></label>
-        <fieldset><legend>Magnete · Snap mode</legend>
-          <label className="es-inline-check"><input data-test="surface-snap" type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Aggancia i punti ai riferimenti vicini</label>
-          {snap && <><label>Portata · {len.word()}<input data-test="surface-snap-distance" type="number" min={len.toDisplay(.001)} max={len.toDisplay(1000)} step={len.step(.1)} value={Number.isFinite(snapDistance) ? len.toDisplay(snapDistance) : ''} onChange={e=>setSnapDistance(len.fromDisplay(e.target.valueAsNumber))} /></label>
-            {(!Number.isFinite(snapDistance) || snapDistance<=0 || snapDistance>1000) && <p role="alert">Inserisci una portata tra {len.fmt(.001,len.units==='in'?6:3)} e {len.fmt(1000)} per attivare l'aggancio.</p>}
-            <p className="es-hint" data-test="surface-snap-info">{referenceBody === null ? 'STEP aperto fuori dal progetto: per usare scansione e altri corpi, importa il CAD nel progetto e caricalo da qui. ' : `${referenceCount} riferimenti visibili tra scansione e altri corpi CAD. `}I riferimenti nascosti nel progetto sono esclusi. Sono utilizzabili anche le altre facce dello stesso corpo. Tieni premuto Alt per sospendere il magnete. L'aggancio usa la rappresentazione visualizzata; i poli non sono necessariamente punti della superficie.</p></>}
+        <label>{tmarText("Trascinamento punti")}<select data-test="surface-drag-mode" value={dragMode} onChange={e => setDragMode(e.target.value as DragMode)}><option value="axis">{tmarText("Mondo · asse X/Y/Z")}</option><option value="screen">{tmarText("Piano dello schermo")}</option><option value="local">{tmarText("Locale · U/V/normale")}</option></select></label>
+        <fieldset><legend>{tmarText("Magnete · Snap mode")}</legend>
+          <label className="es-inline-check"><input data-test="surface-snap" type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>{tmarText(" Aggancia i punti ai riferimenti vicini")}</label>
+          {snap && <><label>{tmarText("Portata · ")}{len.word()}<input data-test="surface-snap-distance" type="number" min={len.toDisplay(.001)} max={len.toDisplay(1000)} step={len.step(.1)} value={Number.isFinite(snapDistance) ? len.toDisplay(snapDistance) : ''} onChange={e=>setSnapDistance(len.fromDisplay(e.target.valueAsNumber))} /></label>
+            {(!Number.isFinite(snapDistance) || snapDistance<=0 || snapDistance>1000) && <p role="alert">{tmarText("Inserisci una portata tra ")}{len.fmt(.001,len.units==='in'?6:3)}{tmarText(" e ")}{len.fmt(1000)}{tmarText(" per attivare l'aggancio.")}</p>}
+            <p className="es-hint" data-test="surface-snap-info">{referenceBody === null ? tmarText("STEP aperto fuori dal progetto: per usare scansione e altri corpi, importa il CAD nel progetto e caricalo da qui. ") : tmarText("{0} riferimenti visibili tra scansione e altri corpi CAD. ", [referenceCount])}{tmarText("I riferimenti nascosti nel progetto sono esclusi. Sono utilizzabili anche le altre facce dello stesso corpo. Tieni premuto Alt per sospendere il magnete. L'aggancio usa la rappresentazione visualizzata; i poli non sono necessariamente punti della superficie.")}</p></>}
         </fieldset>
-        <details><summary>Filtri di selezione del reticolo</summary><label>Selezione<select data-test="surface-selection-mode" value={selectionMode} onChange={e => setSelectionMode(e.target.value as NetSelectionMode)}><option value="auto">Diretta · punti, segmenti e celle</option><option value="points">Solo punti</option><option value="edges">Solo segmenti</option><option value="cells">Solo celle</option><option value="mixed">Punti e segmenti</option></select></label></details>
-        <p className="es-hint">Passa sul reticolo: l'elemento evidenziato si seleziona con un clic. Punti, segmenti e celle selezionano rispettivamente uno, due o quattro poli. Ctrl+clic aggiunge o toglie dalla selezione. I poli bloccati restano fermi. Se il reticolo è nascosto, solo i punti sono selezionabili.</p>
-        <p>{dragMode === 'screen' ? 'Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.' : dragMode === 'local' ? 'U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. Trascina il punto o la freccia gialla, oppure imposta una quota.' : 'Trascina il punto o la freccia gialla lungo l’asse scelto.'} {dragMode !== 'screen' && 'Se la direzione punta verso la vista, trascina in verticale per muovere il punto in profondità.'} Pulsante centrale: ruota; destro: sposta la vista; rotella: zoom. Lo stiramento usa sempre X/Y/Z.</p>
-        {dragMode === 'local' && editable.length > 0 && !moveDirection && <p role="alert">Riferimento locale non definito in questo punto. Scegli un altro punto o il riferimento mondo.</p>}
-        <label>Intensità trascinamento · {Math.round(dragStrength * 100)}%<input data-test="surface-drag-strength" type="range" min="0.05" max="1" step="0.05" value={dragStrength} onChange={e => setDragStrength(Number(e.target.value))} /></label>
-        <p className="es-hint">Riduce lo spostamento durante il trascinamento per modifiche fini. Le quote numeriche restano esatte.</p>
-        <fieldset><legend>Simmetria dei poli</legend>
-          <label><input data-test="surface-symmetry" type="checkbox" checked={symmetry} onChange={e=>setSymmetry(e.target.checked)}/> Modifica anche il polo speculare</label>
-          {symmetry && <><label>Piano<select data-test="surface-mirror-plane" value={mirrorAxis} onChange={e=>setMirrorAxis(Number(e.target.value))}><option value={0}>YZ</option><option value={1}>XZ</option><option value={2}>XY</option></select></label>
-            <label>Posizione lungo {['X','Y','Z'][mirrorAxis]} ({len.word()})<input key={`${mirrorAxis}:${mirrorOffset}:${len.units}`} data-test="surface-mirror-offset" type="number" step="any" defaultValue={lengthInputText(mirrorOffset,len.units)} onBlur={e=>{
+        <details><summary>{tmarText("Filtri di selezione del reticolo")}</summary><label>{tmarText("Selezione")}<select data-test="surface-selection-mode" value={selectionMode} onChange={e => setSelectionMode(e.target.value as NetSelectionMode)}><option value="auto">{tmarText("Diretta · punti, segmenti e celle")}</option><option value="points">{tmarText("Solo punti")}</option><option value="edges">{tmarText("Solo segmenti")}</option><option value="cells">{tmarText("Solo celle")}</option><option value="mixed">{tmarText("Punti e segmenti")}</option></select></label></details>
+        <p className="es-hint">{tmarText("Passa sul reticolo: l'elemento evidenziato si seleziona con un clic. Punti, segmenti e celle selezionano rispettivamente uno, due o quattro poli. Ctrl+clic aggiunge o toglie dalla selezione. I poli bloccati restano fermi. Se il reticolo è nascosto, solo i punti sono selezionabili.")}</p>
+        <p>{dragMode === 'screen' ? tmarText("Trascina liberamente sul piano dello schermo, mantenendo la profondità. La quota numerica usa X/Y/Z.") : dragMode === 'local' ? tmarText("U segue la tangente della superficie; V è la tangente ortogonale, N la normale parametrica. Trascina il punto o la freccia gialla, oppure imposta una quota.") : tmarText("Trascina il punto o la freccia gialla lungo l’asse scelto.")} {dragMode !== 'screen' && (tmarText("Se la direzione punta verso la vista, trascina in verticale per muovere il punto in profondità."))}{tmarText(" Pulsante centrale: ruota; destro: sposta la vista; rotella: zoom. Lo stiramento usa sempre X/Y/Z.")}</p>
+        {dragMode === 'local' && editable.length > 0 && !moveDirection && <p role="alert">{tmarText("Riferimento locale non definito in questo punto. Scegli un altro punto o il riferimento mondo.")}</p>}
+        <label>{tmarText("Intensità trascinamento · ")}{Math.round(dragStrength * 100)}%<input data-test="surface-drag-strength" type="range" min="0.05" max="1" step="0.05" value={dragStrength} onChange={e => setDragStrength(Number(e.target.value))} /></label>
+        <p className="es-hint">{tmarText("Riduce lo spostamento durante il trascinamento per modifiche fini. Le quote numeriche restano esatte.")}</p>
+        <fieldset><legend>{tmarText("Simmetria dei poli")}</legend>
+          <label><input data-test="surface-symmetry" type="checkbox" checked={symmetry} onChange={e=>setSymmetry(e.target.checked)}/>{tmarText(" Modifica anche il polo speculare")}</label>
+          {symmetry && <><label>{tmarText("Piano")}<select data-test="surface-mirror-plane" value={mirrorAxis} onChange={e=>setMirrorAxis(Number(e.target.value))}><option value={0}>{tmarText("YZ")}</option><option value={1}>{tmarText("XZ")}</option><option value={2}>{tmarText("XY")}</option></select></label>
+            <label>{tmarText("Posizione lungo ")}{['X','Y','Z'][mirrorAxis]} ({len.word()})<input key={`${mirrorAxis}:${mirrorOffset}:${len.units}`} data-test="surface-mirror-offset" type="number" step="any" defaultValue={lengthInputText(mirrorOffset,len.units)} onBlur={e=>{
               const shown=lengthInputText(mirrorOffset,len.units)
               if(e.currentTarget.value===shown)return
               const value=len.fromDisplay(e.currentTarget.valueAsNumber)
               if(Number.isFinite(value))setMirrorOffset(value)
               else e.currentTarget.value=shown
             }}/></label>
-            <p data-test="surface-mirror-feedback" role="status">Viola: piano e poli speculari. Giallo: selezione.
-              {editable.length > 0 && partners && (editable.some(i => partners[i] < 0 || locked.includes(partners[i]))
-                ? ' La selezione contiene un polo senza corrispondente libero.'
-                : ' Tutti i poli selezionati liberi hanno un corrispondente.')}</p>
-            <p>I poli sul piano scorrono lungo il piano. La coppia deve appartenere alla faccia attiva ed essere libera.</p>
+            <p data-test="surface-mirror-feedback" role="status">{tmarText("Viola: piano e poli speculari. Giallo: selezione.")}{editable.length > 0 && partners && ((editable.some(i => partners[i] < 0 || locked.includes(partners[i])) ? tmarText(" La selezione contiene un polo senza corrispondente libero.") : tmarText(" Tutti i poli selezionati liberi hanno un corrispondente.")))}</p>
+            <p>{tmarText("I poli sul piano scorrono lungo il piano. La coppia deve appartenere alla faccia attiva ed essere libera.")}</p>
             <button data-test="surface-project-poles" disabled={busy || !editable.length} onClick={()=>{
               const placed=structuredClone(net)
               editable.forEach(i=>{placed.poles[i][mirrorAxis]=mirrorOffset})
               commit(placed)
-            }}>Porta i poli selezionati sul piano</button></>}
+            }}>{tmarText("Porta i poli selezionati sul piano")}</button></>}
         </fieldset>
-        <button data-test="surface-control-net" aria-pressed={showNet} onClick={() => setShowNet(v => !v)}>{showNet ? 'Nascondi reticolo' : 'Mostra reticolo'}</button>
+        <button data-test="surface-control-net" aria-pressed={showNet} onClick={() => setShowNet(v => !v)}>{showNet ? tmarText("Nascondi reticolo") : tmarText("Mostra reticolo")}</button>
         {hasSurfaceZebra && <>
-          <button data-test="surface-zebra" aria-pressed={zebra} onClick={() => setZebra(v=>!v)}>Zebra</button>
-          {zebra && <details><summary>Opzioni Zebra</summary>
-            <label>Larghezza strisce · {stripes.width}<input type="range" min="1" max="7" step="1" value={stripes.width} onChange={e=>setStripes({...stripes,width:Number(e.target.value)})}/></label>
-            <label>Orientamento<select data-test="surface-zebra-direction" value={stripes.orientation} onChange={e=>setStripes({...stripes,orientation:e.target.value as StripeSettings['orientation']})}><option value="horizontal">Orizzontale</option><option value="vertical">Verticale</option></select></label>
-            <label>Colore strisce<input type="color" value={stripes.color} onChange={e=>setStripes({...stripes,color:e.target.value})}/></label>
+          <button data-test="surface-zebra" aria-pressed={zebra} onClick={() => setZebra(v=>!v)}>{tmarText("Zebra")}</button>
+          {zebra && <details><summary>{tmarText("Opzioni Zebra")}</summary>
+            <label>{tmarText("Larghezza strisce · ")}{stripes.width}<input type="range" min="1" max="7" step="1" value={stripes.width} onChange={e=>setStripes({...stripes,width:Number(e.target.value)})}/></label>
+            <label>{tmarText("Orientamento")}<select data-test="surface-zebra-direction" value={stripes.orientation} onChange={e=>setStripes({...stripes,orientation:e.target.value as StripeSettings['orientation']})}><option value="horizontal">{tmarText("Orizzontale")}</option><option value="vertical">{tmarText("Verticale")}</option></select></label>
+            <label>{tmarText("Colore strisce")}<input type="color" value={stripes.color} onChange={e=>setStripes({...stripes,color:e.target.value})}/></label>
           </details>}
         </>}
-        {(zebra || notes.length>0 || placingNote) && <fieldset><legend>Note sulla superficie</legend>
+        {(zebra || notes.length>0 || placingNote) && <fieldset><legend>{tmarText("Note sulla superficie")}</legend>
           <button data-test="surface-note-add" disabled={busy || calculating || validNet!==net} aria-pressed={placingNote}
-            onClick={()=>{setNoteError('');setPlacingNote(!placingNote)}}>{placingNote?'Annulla scelta punto':'Aggiungi nota sulla faccia'}</button>
-          {placingNote && <p>Clicca sulla faccia in modifica per posizionare la nota.</p>}
-          {notes.map(n=><div key={n.id}><label>Nota {n.id}<input data-test="surface-note-text" disabled={busy} value={n.text} maxLength={2000}
+            onClick={()=>{setNoteError('');setPlacingNote(!placingNote)}}>{placingNote ? tmarText("Annulla scelta punto") : tmarText("Aggiungi nota sulla faccia")}</button>
+          {placingNote && <p>{tmarText("Clicca sulla faccia in modifica per posizionare la nota.")}</p>}
+          {notes.map(n=><div key={n.id}><label>{tmarText("Nota ")}{n.id}<input data-test="surface-note-text" disabled={busy} value={n.text} maxLength={2000}
             onChange={e=>setNotes(prev=>prev.map(item=>item.id===n.id?{...item,text:e.target.value}:item))}/></label>
-            <small data-test="surface-note-position">{n.revision===preview?.previewRevision ? n.at.map((v,i)=>['X','Y','Z'][i]+' '+len.fmt(v,3)).join(' · ') : 'Aggiornamento posizione…'}</small>
-            <button disabled={busy} onClick={()=>setNotes(prev=>prev.filter(item=>item.id!==n.id))}>Rimuovi nota {n.id}</button></div>)}
-          {notes.length>0 && !applyWithNotes && <p>Note in bozza. Questa versione non salva ancora le note nel progetto. Rimuovile per applicare il corpo senza note.</p>}
-          {noteError && <p role="alert">{noteError}</p>}
+            <small data-test="surface-note-position">{n.revision===preview?.previewRevision ? n.at.map((v,i)=>['X','Y','Z'][i]+' '+len.fmt(v,3)).join(' · ') : tmarText("Aggiornamento posizione…")}</small>
+            <button disabled={busy} onClick={()=>setNotes(prev=>prev.filter(item=>item.id!==n.id))}>{tmarText("Rimuovi nota ")}{n.id}</button></div>)}
+          {notes.length>0 && !applyWithNotes && <p>{tmarText("Note in bozza. Questa versione non salva ancora le note nel progetto. Rimuovile per applicare il corpo senza note.")}</p>}
+          {noteError && <p role="alert">{tmarText(noteError)}</p>}
         </fieldset>}
-        <label>Trasparenza superficie · {Math.round(transparency * 100)}%<input data-test="surface-transparency" type="range" min="0" max="0.9" step="0.05" value={transparency} onChange={e => setTransparency(Number(e.target.value))} /></label>
-        <div className="es-row"><button onClick={() => draft.setSelection(net.poles.flatMap((_, i) => locked.includes(i) ? [] : [i]))}>Seleziona liberi</button><button onClick={() => draft.setSelection([])}>Nessuno</button></div>
-        <p data-test="surface-selection">{selected.length} selezionati · {editable.length} modificabili</p>
-        <div className="es-row"><button disabled={busy || !selected.length} onClick={() => draft.setLocks([...locks, ...selected])}>Blocca punti</button><button disabled={busy || !selected.length} onClick={() => draft.setLocks(locks.filter(i => !selected.includes(i)))}>Sblocca punti</button></div>
-        <label>Spostamento · {len.word()}<input type="text" inputMode="decimal" value={distanceText} data-test="surface-distance" onChange={e => {
+        <label>{tmarText("Trasparenza superficie · ")}{Math.round(transparency * 100)}%<input data-test="surface-transparency" type="range" min="0" max="0.9" step="0.05" value={transparency} onChange={e => setTransparency(Number(e.target.value))} /></label>
+        <div className="es-row"><button onClick={() => draft.setSelection(net.poles.flatMap((_, i) => locked.includes(i) ? [] : [i]))}>{tmarText("Seleziona liberi")}</button><button onClick={() => draft.setSelection([])}>{tmarText("Nessuno")}</button></div>
+        <p data-test="surface-selection">{selected.length}{tmarText(" selezionati · ")}{editable.length}{tmarText(" modificabili")}</p>
+        <div className="es-row"><button disabled={busy || !selected.length} onClick={() => draft.setLocks([...locks, ...selected])}>{tmarText("Blocca punti")}</button><button disabled={busy || !selected.length} onClick={() => draft.setLocks(locks.filter(i => !selected.includes(i)))}>{tmarText("Sblocca punti")}</button></div>
+        <label>{tmarText("Spostamento · ")}{len.word()}<input type="text" inputMode="decimal" value={distanceText} data-test="surface-distance" onChange={e => {
           setDistanceText(e.target.value)
         }} onBlur={() => { if (distanceText.trim() === '-') setDistanceText('') }} /></label>
-        <button data-test="surface-move" disabled={busy || !moveDirection || distanceValue === null} onClick={() => { if (moveDirection && distanceValue !== null) transform(p => p.map((x, i) => x + moveDirection[i] * distanceValue) as Point) }}>Sposta lungo {axisNames[axis]}</button>
-        <button disabled={busy || !editable.length} onClick={flatten}>Spiana sul piano dei tre angoli iniziali</button>
-        <label>Intensità levigatura · {Math.round(smoothStrength * 100)}%<input data-test="surface-smooth-strength" type="range" min="0.05" max="1" step="0.05" value={smoothStrength} onChange={e => setSmoothStrength(Number(e.target.value))} /></label>
-        <button data-test="surface-smooth" disabled={busy || !editable.length} onClick={() => transform((p, i, n) => { const row = Math.floor(i / n.nv), col = i % n.nv, neighbors = [row > 0 ? i - n.nv : -1, row + 1 < n.nu ? i + n.nv : -1, col > 0 ? i - 1 : -1, col + 1 < n.nv ? i + 1 : -1].filter(j => j >= 0); return p.map((x, d) => x * (1 - smoothStrength) + neighbors.reduce((s, j) => s + n.poles[j][d], 0) / neighbors.length * smoothStrength) as Point })}>Levigatura locale · {Math.round(smoothStrength * 100)}%</button>
-        <label>Fattore stiramento<input type="text" inputMode="decimal" value={factorText} onChange={e => {
+        <button data-test="surface-move" disabled={busy || !moveDirection || distanceValue === null} onClick={() => { if (moveDirection && distanceValue !== null) transform(p => p.map((x, i) => x + moveDirection[i] * distanceValue) as Point) }}>{tmarText("Sposta lungo ")}{axisNames[axis]}</button>
+        <button disabled={busy || !editable.length} onClick={flatten}>{tmarText("Spiana sul piano dei tre angoli iniziali")}</button>
+        <label>{tmarText("Intensità levigatura · ")}{Math.round(smoothStrength * 100)}%<input data-test="surface-smooth-strength" type="range" min="0.05" max="1" step="0.05" value={smoothStrength} onChange={e => setSmoothStrength(Number(e.target.value))} /></label>
+        <button data-test="surface-smooth" disabled={busy || !editable.length} onClick={() => transform((p, i, n) => { const row = Math.floor(i / n.nv), col = i % n.nv, neighbors = [row > 0 ? i - n.nv : -1, row + 1 < n.nu ? i + n.nv : -1, col > 0 ? i - 1 : -1, col + 1 < n.nv ? i + 1 : -1].filter(j => j >= 0); return p.map((x, d) => x * (1 - smoothStrength) + neighbors.reduce((s, j) => s + n.poles[j][d], 0) / neighbors.length * smoothStrength) as Point })}>{tmarText("Levigatura locale · ")}{Math.round(smoothStrength * 100)}%</button>
+        <label>{tmarText("Fattore stiramento")}<input type="text" inputMode="decimal" value={factorText} onChange={e => {
           setFactorText(e.target.value)
         }} onBlur={() => { if (factorText.trim() === '-') setFactorText('') }} /></label>
-        <button disabled={busy || !editable.length || factorValue === null || factorValue <= 0 || factorValue > 3} onClick={() => { if (factorValue === null || factorValue <= 0 || factorValue > 3) return; const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factorValue : x) as Point) }}>Stira lungo {['X', 'Y', 'Z'][axis]}</button>
-        <div className="es-row"><button data-test="surface-undo" disabled={busy || !draftState.canUndo} onClick={() => undo(-1)}>Annulla</button><button data-test="surface-redo" disabled={busy || !draftState.canRedo} onClick={() => undo(1)}>Ripeti</button><button disabled={busy} onClick={() => draft.restoreOriginal()}>Ripristina</button></div>
+        <button disabled={busy || !editable.length || factorValue === null || factorValue <= 0 || factorValue > 3} onClick={() => { if (factorValue === null || factorValue <= 0 || factorValue > 3) return; const center = net.poles.reduce((s, p) => s + p[axis], 0) / net.poles.length; transform(p => p.map((x, i) => i === axis ? center + (x - center) * factorValue : x) as Point) }}>{tmarText("Stira lungo ")}{['X', 'Y', 'Z'][axis]}</button>
+        <div className="es-row"><button data-test="surface-undo" disabled={busy || !draftState.canUndo} onClick={() => undo(-1)}>{tmarText("Annulla")}</button><button data-test="surface-redo" disabled={busy || !draftState.canRedo} onClick={() => undo(1)}>{tmarText("Ripeti")}</button><button disabled={busy} onClick={() => draft.restoreOriginal()}>{tmarText("Ripristina")}</button></div>
       </>}
     </aside><main><SurfaceViewport mirrorAxis={mirrorAxis} mirrorOffset={mirrorOffset} mirrorPartners={partners} strip={stripPaths?{paths:stripResult?.paths??stripPaths,axis,edge:stripEdge,delta:stripDelta,change:changeStrip}:null} stripBlocked={()=>stripPending.current} directStrip={directEdges && directEdges.revision===preview?.previewRevision && net===validNet && !busy && !calculating && !freeBoundary && !placingNote && !notes.length && !stripPaths ? {paths:directEdges.paths,axis,revision:directEdges.revision,begin:beginDirectStrip,abort:abortDirectStrip,unavailable:()=>setError('Direzione allineata alla vista: ruota il modello o scegli un altro asse.'),change:changeStrip}:null} notePins={notes.filter(n=>n.revision===preview?.previewRevision).map(n=>n.at)} placingNote={placingNote} onNote={p=>void pickNote(p)} stripes={zebra ? stripes : null} key={loadId} preview={stripPaths && stripResult ? stripResult.preview : preview} net={stripPaths?null:net} selected={selected} locked={locked} hiddenPoles={faces[face]?.hiddenPoles ?? NO_HIDDEN_POLES} face={face} axis={axis} busy={busy} dragStrength={dragStrength} dragMode={dragMode} selectionMode={selectionMode} showNet={showNet} transparency={transparency} snap={snap} snapDistance={snapDistance} referenceBody={referenceBody} onReferenceCount={setReferenceCount} registerCancel={fn=>{cancelGesture.current=fn}} onFace={i => {if(!stripPaths)void chooseFace(i)}} onPoints={(ids, multi) => draft.setSelection(selectNetPoints([...draft.getSnapshot().selected], ids, multi))} onDrag={changePoles} />
-      <div className="es-status" role="status" data-test="surface-status" data-preview-revision={preview?.previewRevision} data-preview-volume={preview?.volume}>{stripPaths ? (busy?'Verifica cucitura…':error || (stripResult?('Superficie CAD valida · '+stripResult.preview.faceMeshes.length+' facce cucite'):'Trascina un bordo per creare la striscia.')) : busy ? 'Elaborazione CAD…' : calculating ? 'Aggiornamento e verifica CAD…' : error ? `${error}${preview ? ' Vista: ultimo risultato valido.' : ''}` : validNet && preview ? `CAD valido · ${faces[face]?.openSheet ? 'superficie aperta' : `volume ${len.vol(preview.volume,3)}`} · ${freeBoundary ? 'spostamento bordo' : 'scarto bordo'} ${formatSurfaceResidual(preview.maxBoundaryError,len.units)}` : 'Apri un corpo STEP e scegli una faccia.'}</div>
+      <div className="es-status" role="status" data-test="surface-status" data-preview-revision={preview?.previewRevision} data-preview-volume={preview?.volume}>{stripPaths ? (busy ? tmarText("Verifica cucitura…") : tmarText(error) || ((stripResult ? (tmarText("Superficie CAD valida · ") + stripResult.preview.faceMeshes.length + tmarText(" facce cucite")) : tmarText("Trascina un bordo per creare la striscia.")))) : busy ? tmarText("Elaborazione CAD…") : calculating ? tmarText("Aggiornamento e verifica CAD…") : error ? tmarText("{0}{1}", [tmarText(error), preview ? tmarText(" Vista: ultimo risultato valido.") : '']) : validNet && preview ? tmarText("CAD valido · {0} · {1} {2}", [faces[face]?.openSheet ? tmarText("superficie aperta") : tmarText("volume {0}", [len.vol(preview.volume,3)]), freeBoundary ? tmarText("spostamento bordo") : tmarText("scarto bordo"), formatSurfaceResidual(preview.maxBoundaryError,len.units)]) : tmarText("Apri un corpo STEP e scegli una faccia.")}</div>
     </main></div>
-    <footer><span>{stripPaths?'Applica aggiunge la superficie cucita al progetto come nuovo corpo.':'Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.'}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>Esporta STEP…</button><button data-test="surface-apply" disabled={(!!stripPaths && (!stripResult || stripEdge>=0)) || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => stripPaths ? void applyStrip() : void finish(true)}>{stripPaths ? 'Applica superficie cucita' : 'Applica come nuovo corpo'}</button><button disabled={busy} onClick={cancel}>Annulla</button></footer>
+    <footer><span>{stripPaths ? tmarText("Applica aggiunge la superficie cucita al progetto come nuovo corpo.") : tmarText("Applica crea una copia CAD modificata. Originale conservato. La copia entra nella cronologia del progetto.")}</span><button disabled={!!stripPaths || busy || calculating || !net || validNet !== net} onClick={() => void finish(false)}>{tmarText("Esporta STEP…")}</button><button data-test="surface-apply" disabled={(!!stripPaths && (!stripResult || stripEdge>=0)) || (notes.length>0 && (!applyWithNotes || notes.some(n=>!n.text.trim()))) || busy || calculating || !net || validNet !== net} onClick={() => stripPaths ? void applyStrip() : void finish(true)}>{stripPaths ? tmarText("Applica superficie cucita") : tmarText("Applica come nuovo corpo")}</button><button disabled={busy} onClick={cancel}>{tmarText("Annulla")}</button></footer>
   </div></div>
 }
