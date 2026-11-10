@@ -12,6 +12,7 @@ import { useShell } from '../../../src/state/shellStore'
 import { useReverse, reEditorOpen } from '../state/reStore'
 import { reverseSession } from './reSession'
 import { reSceneOf } from '../viewer/reScene'
+import { prepareWorkspaceSurfaceHistory, recoverWorkspaceSurfaceHistory } from './surfaceHistoryWorkspace'
 
 let sourceEpoch = 0, nextKernel = 0
 const kernels = new WeakMap<object, number>()
@@ -58,12 +59,15 @@ export function createReverseEditorHost(): WorkspaceEditorHost {
       assertCurrent()
       const binding = Object.freeze({ documentEpoch: before.documentEpoch, sourceEpoch: ++sourceEpoch, bodyId, bodyKey: source.bodyKey,
         buildVersion: before.buildVersion, kernelGeneration: kernelGeneration(client), frameRevision: before.buildVersion,
+        // units-ok: this is a serialized CAD coordinate-frame identifier, always in millimetres.
         stepSha256: digest, units: 'mm' as const, coordinateFrame: 'part' as const })
       return { binding, step, assertCurrent, subscribe: listener => {
         const stops = [useReverse.subscribe(listener), useStore.subscribe(listener), useShell.subscribe(listener)]
         return () => stops.forEach(stop => stop())
       } }
     },
+    prepareHistory: prepareWorkspaceSurfaceHistory,
+    recoverHistory: recoverWorkspaceSurfaceHistory,
     viewport(source) {
       source.assertCurrent()
       const scene = sceneOf()
@@ -101,7 +105,7 @@ export function createReverseEditorHost(): WorkspaceEditorHost {
       const session = reverseSession()
       if (!session) throw new Error('Sessione CAD non disponibile.')
       return session.stageEditorCopy(new TextDecoder('utf-8', { fatal: true }).decode(plan.prepared.step), plan.prepared.name, source.assertCurrent, signal,
-        display?.hideSourceAfterApply ? { hideSourceBodyId: source.binding.bodyId } : undefined, plan)
+        display?.hideSourceAfterApply ? { hideSourceBodyId: source.displayBodyId ?? source.binding.bodyId } : undefined, plan)
     },
     async stage(source: BoundEditorSource, prepared, signal, display) {
       source.assertCurrent(); abortIfNeeded(signal)
@@ -109,7 +113,7 @@ export function createReverseEditorHost(): WorkspaceEditorHost {
       if (!session) throw new Error('Sessione CAD non disponibile.')
       const text = new TextDecoder('utf-8', { fatal: true }).decode(prepared.step)
       return session.stageEditorCopy(text, prepared.name, source.assertCurrent, signal,
-        display?.hideSourceAfterApply ? { hideSourceBodyId: source.binding.bodyId } : undefined)
+        display?.hideSourceAfterApply ? { hideSourceBodyId: source.displayBodyId ?? source.binding.bodyId } : undefined)
     },
   }
 }

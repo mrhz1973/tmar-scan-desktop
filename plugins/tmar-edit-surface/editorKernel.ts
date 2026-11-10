@@ -1063,6 +1063,7 @@ export class SurfaceEditorKernel {
       schema: 'tmar.surface-edit', ...(this.refinements.length
         ? { version: 4, boundaryMode: freeBoundary ? 'free-natural' : 'locked', refinements: structuredClone(this.refinements) }
         : freeBoundary ? { version: 3, boundaryMode: 'free-natural' } : { version: 2 }), engine: 'occt-wasm-5.7.1/brep-v3',
+      // units-ok: The serialized surface-edit recipe stores intrinsic CAD millimetres, never display units.
       units: 'mm', coordinateFrame: 'imported-step',
       source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids },
       faceIndex: this.chosen, preparation: this.preparation(), baseNetSha256: '', continuity,
@@ -1106,6 +1107,7 @@ export class SurfaceEditorKernel {
       point.some((x, d) => !Object.is(x, sourceNet.poles[index][d])) ? [{ index, point: encodeRecipePoint(point) }] : [])
     const choice = registered.request.choice
     const recipe: SurfaceEditRecipeV5 = {
+      // units-ok: V5 recipe pole edits and tangency data retain the fixed CAD millimetre serialization contract.
       schema: 'tmar.surface-edit', version: 5, engine: 'occt-wasm-5.7.1/brep-v3', units: 'mm', coordinateFrame: 'imported-step',
       source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids }, faceIndex: this.chosen,
       preparation: this.preparation(), baseNetSha256: '', continuity, boundaryMode: 'locked', refinements: structuredClone(this.refinements),
@@ -1141,6 +1143,7 @@ export class SurfaceEditorKernel {
       point.some((x, d) => !Object.is(x, sourceNet.poles[index][d])) ? [{ index, point: encodeRecipePoint(point) }] : [])
     const choice = registered.request.choice
     const recipe: SurfaceEditRecipeV6 = {
+      // units-ok: V6 recipe pole edits and curved supports retain the fixed CAD millimetre serialization contract.
       schema: 'tmar.surface-edit', version: 6, engine: 'occt-wasm-5.7.1/brep-v3', units: 'mm', coordinateFrame: 'imported-step',
       source: { bodyId, brepSha256: '', faceCount: this.faces.length, solidCount: this.solids }, faceIndex: this.chosen,
       preparation: 'native-nurbs', baseNetSha256: '', continuity, boundaryMode: 'locked', refinements: [], edits: sparse(next), lockedPoles: locks,

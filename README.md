@@ -3,6 +3,22 @@
 
 **An open-source ScanRuler fork with modular Zebra analysis, local notes and navigation, category-scoped feature multi-selection, workspace labels and unified CAD-body export. A Windows/macOS desktop application is planned separately.**
 
+## Integrated preview — 10 November 2026
+
+**Versione 3 · Anteprima** consolidates the workspace editor host, current Edit
+Surface plugin, navigation and gizmo changes, CAD face duplication, thin-face
+annotation matching and saved parametric edits. Supported edits expose
+**Mantieni la modifica riapribile** when applying and **Riprendi modifica** after
+opening the saved `.scanruler` project. Length inputs and feedback follow the
+selected mm/in unit.
+
+[Integration, source composition and verification](docs/tmar-host-integration-20261110.md)
+· [Saved-edit workflow](plugins/tmar-surface-history/README.md).
+The validation record distinguishes native checks, browser checks and the
+installed Windows build. This remains a web preview on the existing kernel;
+upstream 0.11.1 migration, T2/Tubo qualification and a desktop installer are
+separate work. Existing user sessions do not update automatically.
+
 [![Zebra inspection on the imported Tubo Finale mesh — user review ongoing](docs/images/zebra-tubo-finale-review-20261102.png)](docs/images/zebra-tubo-finale-review-20261102.png)
 
 *Martino's original Zebra screenshot, published unchanged. The file is an imported STL shown as Scan, not a CAD continuity certificate. **Work in progress — user review ongoing; not final acceptance.***

@@ -24,7 +24,7 @@ export function targetSurfacePointsExperimental(source:Net,request:SimultaneousS
   const owned=structuredClone(request),{points,...options}=owned
   if(!Array.isArray(points)||points.length<2||points.length>8||!Number.isFinite(options.maxPoleDisplacement)||
     options.maxPoleDisplacement<=0||options.maxPoleDisplacement>1000)
-    throw Error('Sono richiesti da due a otto vincoli e un budget finito entro 1000 mm.')
+    throw Error('Sono richiesti da due a otto vincoli e un budget positivo entro il limite supportato.')
   if(points.some((p,i)=>!p||points.slice(0,i).some(q=>p.u===q.u&&p.v===q.v)))
     throw Error('Punti superficie duplicati o vincoli ambigui.')
   // Each call also independently validates the clamped basis, rational weights,

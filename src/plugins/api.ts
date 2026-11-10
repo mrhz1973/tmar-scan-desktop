@@ -62,6 +62,11 @@ export { CommandError } from '../commands/types'
 export type { Command, CommandContext, CommandErrorCode, FileOut } from '../commands/types'
 export type { JsonSchema } from '../commands/schema'
 
+// Optional workspace-editor composition, registered by the owning plugin.
+// Core keeps these contracts generic and does not import geometry plugins.
+export { registerWorkspaceEditorHistory } from './workspaceEditors'
+export type { EditorHistoryProvider, EditorHistoryReplay, PreparedEditorHistory, RecoveredEditorSession } from './workspaceEditors'
+
 /** A workspace's tab in the top bar. */
 export interface WorkspaceTab {
   /** The workspace's id — the shell store's `workspace` while it is open,

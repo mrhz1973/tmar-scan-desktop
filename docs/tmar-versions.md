@@ -26,6 +26,12 @@ Do not relabel or rewrite old frozen previews. They retain their historical tech
 | Version | Date | Channel | Change |
 | --- | --- | --- | --- |
 | 1 | 2026-11-03 | Preview | First human-numbered TMAR preview; prominent Versione 1 label, explicit Anteprima, technical provenance moved behind expandable Settings details. |
+| 2 | 2026-11-05 | Preview | Pinned web beta on `release/beta-version2-20261105`; manifest verified at `e8182ae74ea45ed5ea2f93788790660bc30f1410`. |
+| 3 | 2026-11-10 | Preview | Consolidated host and ordinary Edit Surface plugin; visible saved-edit recovery, annotation/duplicate integration and display-unit corrections. Scope and gates: [integration record](tmar-host-integration-20261110.md). |
+
+Versione 3 continues the existing sequence after the verified Versione 2
+manifest. It does not renumber either previous snapshot or imply a stable
+release, installer, deployment or an automatic update of an open session.
 
 Versione 1 is based on the current review branch with Edit Surface direct selection. Numbering changes no geometry or input behavior. The previously reported one-pixel drag threshold and Escape-during-drag limitations, unfinished annotated transactions/parametric history and recovery remain open. No general QS parity or stable desktop release is declared.
 

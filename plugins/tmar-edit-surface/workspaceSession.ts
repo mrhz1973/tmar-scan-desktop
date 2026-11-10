@@ -26,6 +26,9 @@ import { WHOLE_FACE_PICK_SEED_TOLERANCE_MM, type WholeFaceRayPick, type WholeFac
 import type {BoundaryCadCandidate,VerifiedBoundaryPick,BoundaryVisibilityCadResult} from './boundaryVisibilityCad'
 import {SurfacePointTargetsCandidateRefusal} from './surfacePointTargetsExperimental'
 import {planTangentSpan,type TangentSpanReview} from './tangentSpan'
+import { usePrefs } from '../../src/state/prefsStore'
+import { fmtLen } from '../../src/core/units'
+import { formatSurfaceResidual } from './surfaceDisplay'
 export type { WholeBoundarySide } from './wholeBoundary'
 
 export interface WorkspaceSurfaceNote {
@@ -62,6 +65,8 @@ export interface HistoryFreeze {
 interface Note extends WorkspaceSurfaceNote { readonly anchor: DraftAnchor }
 export type WorkspaceG1Candidate = (G1SupportCandidate & { readonly kind?: never }) | CompatibleCurvedSupportCandidate
 export interface WorkspaceSurfacePanelState {
+  /** Host history supports the stable recipe formats; experimental adaptive v8 is excluded. */
+  readonly historyRecipeSupported: boolean
   readonly faces: readonly FaceInfo[]
   readonly face: number
   readonly net: Net | null
@@ -647,7 +652,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     if (poles.length !== base.poles.length || poles.some(p => !finitePoint(p)))
       throw Error('Coordinate dei poli non valide.')
     const delta=poles[ids[0]].map((x,d)=>x-base.poles[ids[0]][d])
-    if(Math.hypot(...delta)>1000)throw Error(scope === 'faccia' ? 'Spostamento della faccia oltre 1000 mm.' : 'Spostamento del bordo oltre 1000 mm.')
+    if(Math.hypot(...delta)>1000)throw Error(`Spostamento ${scope === 'faccia' ? 'della faccia' : 'del bordo'} oltre ${fmtLen(1000,usePrefs.getState().units)}.`)
     if (gesture.direction) {
       const [x,y,z] = gesture.direction, [a,b,c] = delta
       if (Math.hypot(y*c-z*b, z*a-x*c, x*b-y*a) > 1e-8)
@@ -1052,7 +1057,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     this.change(() => {
       if (!this.panel.canMoveWholeBoundary) throw new Error('Attiva i bordi liberi su una singola faccia naturale CAD valida, senza note, simmetria o vincoli.')
       if (!['U0','U1','V0','V1'].includes(side) || !finitePoint(delta) || Math.hypot(...delta)<=1e-7 || Math.hypot(...delta)>1000)
-        throw new Error('Bordo o spostamento non valido (limite 1000 mm).')
+        throw new Error(`Bordo o spostamento non valido (limite ${fmtLen(1000,usePrefs.getState().units)}).`)
       const d=this.draft.getSnapshot(),net=this.requireNet()
       const ids=wholeBoundaryIndices(net,side)
       const locked=new Set([...d.locks,...d.trimLocks,...d.hiddenPoles])
@@ -1297,7 +1302,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const result=await this.draft.targetPointsExperimental(operation.snapshot,points.map(p=>({anchor:p.anchor,target:p.reference.point})),
         {maxPoleDisplacement:operation.budget,minInfluence:.01,residualTolerance:1e-7},current)
       this.draftEpoch++;this.historyRevision++
-      this.message=`${points.length} agganci simultanei: residuo numerico massimo ${Math.max(...result.residuals).toExponential(2)} mm. Attendi la verifica CAD.`
+      this.message=`${points.length} agganci simultanei: residuo numerico massimo ${formatSurfaceResidual(Math.max(...result.residuals),usePrefs.getState().units)}. Attendi la verifica CAD.`
     }catch(error){
       if(error instanceof SurfacePointTargetsCandidateRefusal){
         try{retainBatch=current()&&this.draft.getSnapshot()===operation.snapshot}catch{/* Changed source or revoked reference: discard. */}
@@ -1331,7 +1336,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const result=await this.draft.targetPoint(before,pin.anchor,{target:pointCopy(target.point),maxPoleDisplacement:operation.budget,
         minInfluence:.01,residualTolerance:1e-7},current)
       this.draftEpoch++;this.historyRevision++
-      this.message=`Punto verso ${target.label}: residuo numerico ${result.residual.toExponential(2)} mm. Attendi la verifica CAD.`
+      this.message=`Punto verso ${target.label}: residuo numerico ${formatSurfaceResidual(result.residual,usePrefs.getState().units)}. Attendi la verifica CAD.`
     } finally {
       this.surfaceTarget=null;this.busy=false
       if(!this.disposed) {this.refresh();this.resolveNotes()}
@@ -1368,7 +1373,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       }
       const result=await this.draft.targetPointsExperimental(before,points,{maxPoleDisplacement:budget,minInfluence:.01,residualTolerance:1e-7},current)
       this.draftEpoch++;this.historyRevision++
-      this.message=`${points.length} punti simultanei: residuo numerico massimo ${Math.max(...result.residuals).toExponential(2)} mm. Attendi la verifica CAD.`
+      this.message=`${points.length} punti simultanei: residuo numerico massimo ${formatSurfaceResidual(Math.max(...result.residuals),usePrefs.getState().units)}. Attendi la verifica CAD.`
     }finally{
       this.surfaceTarget=null;this.busy=false
       if(!this.disposed){this.refresh();this.resolveNotes()}
@@ -1847,6 +1852,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       const step = new TextEncoder().encode(result.step)
       this.assertFrozen(ticket, frozen, signal)
       return { kind: 'cad-copy', operationId: frozen.operationId, source: frozen.source, stamp: frozen.stamp,
+        // units-ok: Serialized CAD-copy coordinates use intrinsic millimetres, independently of display preferences.
         units: 'mm', coordinateFrame: 'part', name: frozen.faceCopy ? 'faccia-duplicata.step' : 'superficie-modificata.step', step, draftNoteCount: 0 }
     } finally { frozen.preparing = false }
   }
@@ -1907,6 +1913,7 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       this.assertFrozenAnnotated(ticket, frozen, signal)
       if (!/^[a-f0-9]{64}$/i.test(stepHash) || !/^[a-f0-9]{64}$/i.test(brepHash)) throw new Error('Hash della copia annotata non valido.')
       return { annotationVersion:1, kind:'annotated-cad-copy', operationId:frozen.operationId,
+        // units-ok: Persisted annotation witnesses and STEP coordinates share the fixed CAD millimetre contract.
         source:frozen.source, stamp:frozen.stamp, notesRevision:frozen.notesRevision!, units:'mm', coordinateFrame:'part',
         name:'superficie-modificata.step', step, witnesses:[{ key, kind:'occt-face-brep', brep:witness.faceBrep,
           brepSha256:brepHash.toLowerCase(), finalStepSha256:stepHash.toLowerCase(), stamp:frozen.stamp, diagnosticFaceIndex:witness.face }],
@@ -2303,7 +2310,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
       !this.disposed && chosenG1?.kind === 'compatible-bspline' && validation.kind === 'valid' && preview === d.preview &&
       !this.busy && !this.frozen && this.gesture === 'idle' && !strip && !d.calculating && !d.previewStale
         ? chosenG1 : undefined, preview, d)
-    this.panel = Object.freeze({ faces: this.faces, face: this.face, net: d.net, selected: d.selected,
+    this.panel = Object.freeze({ historyRecipeSupported: !adaptive && !!d.net && !this.faceCopy && !strip && !this.stripPending && d.cylinderSession === null,
+      faces: this.faces, face: this.face, net: d.net, selected: d.selected,
       locked, manualLocks: d.locks, continuity: d.continuity, freeBoundary: d.freeBoundary,
       g1Candidates: this.g1Candidates, g1Choice: this.g1Choice, g1SearchNotice: this.g1SearchNotice, canLoadG1,
       canApplyG1: canLoadG1 && !!this.g1Choice && this.g1Candidates.some(candidate => candidate.id === this.g1Choice),

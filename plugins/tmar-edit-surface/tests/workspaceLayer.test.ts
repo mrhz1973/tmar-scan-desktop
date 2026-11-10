@@ -803,8 +803,7 @@ it.each(['scan','cad'] as const)('resolves a surface target from external %s ref
   expect(f.owner.pickSurfaceTarget).toHaveBeenCalled()
   const hit=found as import('../workspaceBridge').WorkspacePointTarget|null
   expect(hit?.point[0]).toBeCloseTo(0,10);expect(hit?.current()).toBe(true)
-  const ref=f.view.references()[0]
-  ref.partFromGeometry[12]=2
+  f.reference.partFromGeometry[12]=2
   expect(hit?.current()).toBe(false)
   expect(layer.cancelGesture()).toBe(true)
   expect(f.owner.cancelSurfaceTarget).toHaveBeenCalled()

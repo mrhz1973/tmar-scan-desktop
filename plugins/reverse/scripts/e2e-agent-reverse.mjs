@@ -112,10 +112,26 @@ try {
   const thread = await ok('reverse_feature_add', { feature: { kind: 'thread', body: body?.name, face: round?.index ?? 0, size: 'M3' }, detail: 'full' })
   check(thread.json?.result?.status === 'ok' && thread.json.feature.pitch === 0.5, `reverse_feature_add thread: M3×${thread.json?.feature?.pitch}, ${thread.json?.result?.status}`)
 
-  // What the person sees.
-  await page.waitForFunction(() => document.querySelectorAll('[data-test="feature-row"]').length === 3, { timeout: 30_000 }).catch(() => {})
-  const rows = await page.$$eval('[data-test="feature-row"]', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()))
+  // The category extension keeps the chronological rows mounted as well.
+  // Inspect that history once, preserving its exact feature count and order.
+  const historySelector = '[data-test="feature-build-history"]'
+  const hasHistory = await page.$(historySelector)
+  if (hasHistory) {
+    if (!(await page.$eval(historySelector, (e) => e.open)))
+      await page.click(historySelector + ' > summary')
+    await page.waitForSelector(historySelector + '[open]', { visible: true, timeout: 30_000 })
+  }
+  const featureRows = hasHistory ? historySelector + ' [data-test="feature-row"]' : '[data-test="feature-row"]'
+  await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 3, { timeout: 30_000 }, featureRows)
+  const rows = await page.$$eval(featureRows, (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()))
   check(rows.length === 3 && rows[0].includes('Pin profile') && rows[1].includes('Revolve 1') && rows[2].includes('Thread 1'), `the feature tree in the panel: ${JSON.stringify(rows)}`)
+  const categoryRows = '[data-test="feature-category"] [data-test="feature-row"]'
+  if (await page.$('[data-test="feature-category"]')) {
+    await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 3, { timeout: 30_000 }, categoryRows)
+    const grouped = await page.$$eval(categoryRows, (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()))
+    check(grouped.length === 3 && ['Pin profile', 'Revolve 1', 'Thread 1'].every((name, i) => grouped[i].includes(name)),
+      `the category view contains the same three features: ${JSON.stringify(grouped)}`)
+  }
   // The Parameters section opens folded; unfolded as a person would.
   if ((await page.$eval('[data-test="parameters-fold"]', (e) => e.getAttribute('aria-expanded'))) !== 'true') await page.click('[data-test="parameters-fold"]')
   await page.waitForSelector('[data-test="parameter-row"]', { timeout: 10_000 }).catch(() => {})

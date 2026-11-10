@@ -5,11 +5,31 @@ import { useShell } from '../../../src/state/shellStore'
 import { useStore } from '../../../src/state/store'
 import { useReverse } from '../state/reStore'
 import { useNotes } from '../state/noteStore'
+import { editorSha256 } from '../../../src/plugins/editorLifetime'
 import {
   readStoredSurfaceHistory, reopenAndRestoreSurfaceHistory,
+  canonicalReplayStep, canonicalHistoryJson,
   type StoredSurfaceEditHistoryV1, type SurfaceHistoryReplay,
-  type SurfaceHistoryRestoreController,
+  type SurfaceHistoryRestoreController, type SurfaceHistorySource,
 } from './surfaceEditHistory'
+
+/** Host capability created only after archive replay and live-result agreement. */
+export interface ArchivedSurfaceHistorySource {
+  readonly record: StoredSurfaceEditHistoryV1
+  readonly resultBodyId: number
+  assertCurrent(): void
+}
+const archiveSources = new WeakMap<object, Readonly<{ source: string; resultBodyId: number; replayStepSha256: string }>>()
+export function assertArchivedSurfaceHistorySource(source: ArchivedSurfaceHistorySource,
+  next: StoredSurfaceEditHistoryV1): Readonly<{ resultBodyId: number; replayStepSha256: string }> {
+  const expected = archiveSources.get(source)
+  if (!expected || canonicalHistoryJson(source.record.source) !== expected.source ||
+      canonicalHistoryJson(next.source) !== expected.source || source.resultBodyId !== expected.resultBodyId ||
+      source.record.replayStepSha256 !== expected.replayStepSha256)
+    throw new Error('Provenienza archiviata non verificata per questa sorgente.')
+  source.assertCurrent()
+  return expected
+}
 
 export interface HostHistoryRecoveryRequest<T extends SurfaceHistoryRestoreController> {
   /** ID of an active archived ImportFeature, not a body-list index. */
@@ -21,6 +41,8 @@ export interface HostHistoryRecoveryRequest<T extends SurfaceHistoryRestoreContr
   readonly signal: AbortSignal
   /** Optional caller-owned lease; never replaces host source/document fencing. */
   readonly assertCurrent?: () => void
+  /** Native current result, independently read under the host body lease. */
+  readonly currentResult?: SurfaceHistorySource
 }
 
 export type HostHistoryRecovery<T extends SurfaceHistoryRestoreController> =
@@ -30,10 +52,13 @@ export type HostHistoryRecovery<T extends SurfaceHistoryRestoreController> =
       readonly status: 'ready'
       readonly session: T
       readonly record: StoredSurfaceEditHistoryV1
+      readonly archiveSource?: ArchivedSurfaceHistorySource
       /** Recheck immediately before a future host-owned viewport handoff. */
       readonly assertCurrent: () => void
       /** Always dispose if no owner adopts the session. Idempotent. */
       readonly release: () => Promise<void>
+      /** Transfer disposal to the workspace session, exactly once. */
+      readonly adopt: () => void
     }
 
 const copyOnly = (reason: string): HostHistoryRecovery<never> => ({ status: 'copy-only', reason })
@@ -91,25 +116,51 @@ export async function prepareHostSurfaceHistoryRecovery<T extends SurfaceHistory
       request.assertCurrent?.()
     }
     assertCurrent()
+    const checkResult = async () => {
+      const current = request.currentResult
+      if (!current) return
+      current.assertCurrent(); assertCurrent()
+      if (Math.floor(current.binding.bodyId) !== feature.id || !before.bodies.some(body => body.id === current.binding.bodyId))
+        throw new Error('La lease non appartiene al risultato parametrico selezionato.')
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(current.step)
+      const digest = await editorSha256(new TextEncoder().encode(canonicalReplayStep(text)))
+      current.assertCurrent(); assertCurrent()
+      if (digest !== history.replayStepSha256)
+        throw new Error('Il corpo visibile è diverso dal risultato archiviato: ripresa rifiutata.')
+    }
+    await checkResult()
     const result = await reopenAndRestoreSurfaceHistory(
       feature, before.stepFiles, notes, request.replay, request.makeFreshSession,
       request.awaitValidated, assertCurrent, request.signal,
     )
     if (result.status === 'copy-only') return result
-    try { assertCurrent() }
+    try { await checkResult(); assertCurrent() }
     catch (error) {
       try { await result.session.dispose('host-error') } catch { /* Preserve source error. */ }
       return copyOnly(message(error))
     }
-    let released = false
+    let released = false, adopted = false
+    const assertRecoveredCurrent = () => {
+      if (released) throw new Error('La sessione recuperata è già stata rilasciata.')
+      assertCurrent(); request.currentResult?.assertCurrent()
+    }
+    const archiveSource = request.currentResult ? Object.freeze({ record: result.record,
+      resultBodyId: request.currentResult.binding.bodyId, assertCurrent: assertRecoveredCurrent }) : undefined
+    if (archiveSource) archiveSources.set(archiveSource, Object.freeze({
+      source: canonicalHistoryJson(result.record.source), resultBodyId: archiveSource.resultBodyId,
+      replayStepSha256: result.record.replayStepSha256,
+    }))
     return {
       status: 'ready', record: result.record, session: result.session,
-      assertCurrent: () => {
-        if (released) throw new Error('La sessione recuperata è già stata rilasciata.')
-        assertCurrent()
+      ...(archiveSource ? { archiveSource } : {}),
+      assertCurrent: assertRecoveredCurrent,
+      adopt: () => {
+        assertRecoveredCurrent()
+        if (adopted) throw new Error('La sessione recuperata è già stata adottata.')
+        adopted = true
       },
       release: async () => {
-        if (released) return
+        if (released || adopted) return
         released = true
         await result.session.dispose('cancelled')
       },

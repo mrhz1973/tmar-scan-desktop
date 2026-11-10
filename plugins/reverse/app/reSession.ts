@@ -13,6 +13,7 @@
 
 import { annotationNoteDelta } from './annotatedNoteDelta'
 import { claimQualifiedSurfaceHistory, assertFrozenHistoryCurrent, readStoredSurfaceHistory, canonicalReplayStep, verifyAnnotatedHistoryPlan, type QualifiedSurfaceHistory } from './surfaceEditHistory'
+import { assertArchivedSurfaceHistorySource, type ArchivedSurfaceHistorySource } from './surfaceHistoryRecovery'
 import type { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
 import { historyAtomic } from '../../../src/state/historyStore'
 import { abortIfNeeded, editorSha256 } from '../../../src/plugins/editorLifetime'
@@ -751,7 +752,7 @@ export function createReverseSession({
   /** Build an immutable copy candidate in a DIFFERENT kernel. Nothing enters the
    * project before all CAD validation finishes. The tested kernel is adopted,
    * avoiding a second fallible rebuild after publication. */
-  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal, display?: Readonly<{ hideSourceBodyId: number }>, annotation?: Awaited<ReturnType<typeof validateAnnotatedCopy>>, history?: QualifiedSurfaceHistory) => {
+  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal, display?: Readonly<{ hideSourceBodyId: number }>, annotation?: Awaited<ReturnType<typeof validateAnnotatedCopy>>, history?: QualifiedSurfaceHistory, archivedSource?: ArchivedSurfaceHistorySource) => {
     assertCurrent(); abortIfNeeded(signal)
     const before = useReverse.getState(), originalClient = requireClient()
     // Host-derived identity, not an arbitrary ID from the plugin payload.
@@ -772,6 +773,7 @@ export function createReverseSession({
     // A one-use host-qualified token already passed the explicit v8 opt-in and independent replay.
     // Re-read the exact record without enabling any UI or unqualified publication path.
     const record = qualified ? readStoredSurfaceHistory(qualified.record,{experimentalAdaptiveV8:true}) : null
+    if (archivedSource && !record) throw new Error('Sorgente archiviata senza cronologia qualificata.')
     if (record && (record.notePolicy==='annotated-v1') !== !!annotation)
       throw new Error('La ricetta e il tipo di copia CAD non coincidono.')
     if (record?.notePolicy==='annotated-v1' && annotation) {
@@ -783,7 +785,7 @@ export function createReverseSession({
     }
     if (record) {
       const originalText = qualified!.sourceStep
-      if (!before.bodies.some(b => b.id === record.source.bodyId) ||
+      if ((!archivedSource && !before.bodies.some(b => b.id === record.source.bodyId)) ||
           stepFileKey(originalText) !== record.source.file.key ||
           originalText.length !== record.source.file.size)
         throw new Error('Sorgente della ricetta assente o differente.')
@@ -791,11 +793,21 @@ export function createReverseSession({
           await editorSha256(new TextEncoder().encode(text)) !== record.resultStepSha256)
         throw new Error('L\u2019impronta STEP della ricetta non coincide.')
       assertCurrent(); abortIfNeeded(signal)
-      const actual = await originalClient.bodyEditSource(record.source.bodyId, record.source.bodyKey)
-      assertCurrent(); abortIfNeeded(signal)
-      if (actual.bodyKey !== record.source.bodyKey ||
-          await editorSha256(new TextEncoder().encode(canonicalReplayStep(actual.text))) !== record.source.sourceReplaySha256)
-        throw new Error('Corpo CAD sorgente diverso da quello qualificato per il replay.')
+      if (archivedSource) {
+        const verified = assertArchivedSurfaceHistorySource(archivedSource, record)
+        // A structural caller lease cannot substitute for the current native
+        // result. Recheck the body before accepting archived upstream geometry.
+        const actual = await originalClient.bodyEditSource(verified.resultBodyId)
+        assertCurrent(); abortIfNeeded(signal); assertArchivedSurfaceHistorySource(archivedSource, record)
+        if (await editorSha256(new TextEncoder().encode(canonicalReplayStep(actual.text))) !== verified.replayStepSha256)
+          throw new Error('Il risultato CAD da riprendere non coincide più con quello archiviato.')
+      } else {
+        const actual = await originalClient.bodyEditSource(record.source.bodyId, record.source.bodyKey)
+        assertCurrent(); abortIfNeeded(signal)
+        if (actual.bodyKey !== record.source.bodyKey ||
+            await editorSha256(new TextEncoder().encode(canonicalReplayStep(actual.text))) !== record.source.sourceReplaySha256)
+          throw new Error('Corpo CAD sorgente diverso da quello qualificato per il replay.')
+      }
     }
     const feature: ImportFeature = { ...(record ? {surfaceEditHistory:record} : {}), ...(annotation?{annotationSource:{version:1 as const,featureUuid:record?.annotation?.featureUuid ?? crypto.randomUUID(),stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256,faceBrep:annotation.prepared.witnesses[0].brep}}:{}), id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
       file: { key: stepFileKey(text), name, size: text.length } }
@@ -815,7 +827,7 @@ export function createReverseSession({
     let adopted = false, disposed = false, receipt: CommitReceipt | null = null
     const dispose = () => { if (!adopted && !disposed) { disposed = true; candidate.dispose() } }
     const deadline = setTimeout(dispose, 120_000)
-    const alive = () => { assertCurrent(); if (qualified) assertFrozenHistoryCurrent(qualified); abortIfNeeded(signal); if (disposed) throw new Error('Staged CAD was disposed.') }
+    const alive = () => { assertCurrent(); if (qualified) assertFrozenHistoryCurrent(qualified); if (archivedSource && record) assertArchivedSurfaceHistorySource(archivedSource, record); abortIfNeeded(signal); if (disposed) throw new Error('Staged CAD was disposed.') }
     signal.addEventListener('abort', dispose, { once: true })
     try {
       await candidate.init(); alive()
@@ -875,6 +887,7 @@ export function createReverseSession({
             historyAtomic('Edit Surface: copia CAD', () => {
               assertCurrent()
               if (qualified) assertFrozenHistoryCurrent(qualified)
+              if (archivedSource && record) assertArchivedSurfaceHistorySource(archivedSource, record)
               client = candidate; landed = nextVersion
               meshes.clear(); topologies.clear()
               for (const body of answer.bodies) { meshes.set(body.id, body.mesh); topologies.set(body.id, body.topology) }

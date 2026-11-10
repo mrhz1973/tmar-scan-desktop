@@ -7,6 +7,22 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Versione 3 — integrated Edit Surface host — 2026-11-10
+
+- Consolidate the workspace host changes and the current ordinary Edit Surface
+  plugin in one reviewable source tree.
+- Connect Apply to independently replayed parametric history, `.scanruler`
+  persistence and the visible **Riprendi modifica** action. Preserve original
+  source identity, result viewport leases, atomic publication and Undo/Redo.
+- Expose supported history capability explicitly; adaptive v8 and CAD face
+  duplication do not claim a supported parametric history.
+- Make editor length inputs, budgets, areas, volumes and residuals respect
+  display units while preserving internal CAD values and conservative bounds.
+- Exercise native thin-face annotations and provide integrated browser checks
+  for navigation, gizmo, duplication and saved history in the repository CI.
+- Preserve the existing kernel, project format and upstream package version.
+  See `docs/tmar-host-integration-20261110.md` for measured scope and open gates.
+
 ### TMAR Patch Network 3D point checkpoint ? 2026-11-04
 
 - Preserve recovered work and connect explicit node, shared-curve grip and derived-centre offsets to coupled fitting, preview and native project persistence.

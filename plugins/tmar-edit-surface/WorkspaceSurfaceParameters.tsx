@@ -4,17 +4,21 @@ import type { WorkspaceSurfaceSession, WholeBoundarySide } from './workspaceSess
 import type { DragMode } from './localFrame'
 import type { NetSelectionMode } from './netSelection'
 import { hasSurfaceZebra } from './SurfaceViewport'
-import { formatTangentSpanDisplacement } from './tangentSpan'
+import { useLength } from '../../src/app/useUnits'
+import { lengthInputText } from '../../src/core/units'
+import { formatSurfaceDisplacementUpper } from './surfaceDisplay'
+import { useSurfaceLengthInput } from './useSurfaceLengthInput'
 import { wholeBoundaryIndices } from './wholeBoundary'
 import { parseNumericInput } from './numericInput'
 import './workspaceSurface.css'
 
 /** The host owns Apply and Cancel; this panel edits only the session draft. */
 export function WorkspaceSurfaceParameters({ controller }: { controller: WorkspaceSurfaceSession }) {
+  const len = useLength()
   const state = useSyncExternalStore(controller.subscribe, controller.getPanelState, controller.getPanelState)
   const [error, setError] = useState('')
   const [smooth, setSmooth] = useState(0.5)
-  const [pointBudgetText, setPointBudgetText] = useState('1')
+  const [pointBudgetText, setPointBudgetText, pointBudget] = useSurfaceLengthInput(1)
   const [multipleTargets,setMultipleTargets]=useState(false)
   const panelRef=useRef<HTMLDivElement>(null),removedPair=useRef<number|null>(null)
   const previousTarget=useRef<typeof state.surfaceTarget>(null)
@@ -38,15 +42,11 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   },[state.surfaceTargetBatch,state.surfaceTarget])
   const [wholeBoundary,setWholeBoundary] = useState<WholeBoundarySide>('U0')
   const [boundaryAxis,setBoundaryAxis] = useState<0|1|2>(2)
-  const [boundaryDistanceText,setBoundaryDistanceText] = useState('0.1')
-  const [distanceText,setDistanceText] = useState('0.1')
+  const [boundaryDistanceText,setBoundaryDistanceText,boundaryDistance] = useSurfaceLengthInput(0.1)
+  const [distanceText,setDistanceText,distanceValue] = useSurfaceLengthInput(0.1)
   const [factorText,setFactorText] = useState('1.1')
-  const distanceValue=parseNumericInput(distanceText)
   const factorValue=parseNumericInput(factorText)
-  const [stripDistanceText, setStripDistanceText] = useState('0.1')
-  const stripDistance=parseNumericInput(stripDistanceText)
-  const pointBudget=parseNumericInput(pointBudgetText)
-  const boundaryDistance=parseNumericInput(boundaryDistanceText)
+  const [stripDistanceText, setStripDistanceText, stripDistance] = useSurfaceLengthInput(0.1)
   const [g1Pending, setG1Pending] = useState<'load' | 'apply' | null>(null)
   const [g1Error, setG1Error] = useState('')
   const disabled = state.busy || state.gesture !== 'idle'
@@ -142,7 +142,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         onChange={e => attempt(() => controller.setNavigationOnly(e.target.checked))} />
         Naviga nella vista (sospendi modifica del reticolo)</label>
       {strip ? <fieldset data-test="surface-strip-panel"><legend>Duplica bordo libero</legend>
-        <p>Scegli un bordo e trascina D lungo l’asse scelto, oppure indica lo spostamento in millimetri.</p>
+        <p>Scegli un bordo e trascina D lungo l’asse scelto, oppure indica lo spostamento nell’unità indicata.</p>
         <label>Bordo libero<select data-test="surface-strip-edge" value={strip.selectedEdge < 0 ? '' : String(strip.selectedEdge)}
           disabled={disabled || strip.pending} onChange={e => {
             if (e.target.value !== '') attempt(() => controller.selectStripEdge(Number(e.target.value)))
@@ -154,7 +154,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           onChange={e => attempt(() => controller.setStripAxis(Number(e.target.value) as 0 | 1 | 2))}>
           <option value={0}>X</option><option value={1}>Y</option><option value={2}>Z</option>
         </select></label>
-        <label>Spostamento · mm<input data-test="surface-strip-distance" type="text" inputMode="decimal"
+        <label>Spostamento · {len.word()}<input data-test="surface-strip-distance" type="text" inputMode="decimal"
           value={stripDistanceText} disabled={disabled || strip.pending}
           onChange={e => setStripDistanceText(e.target.value)} /></label>
         <button type="button" data-test="surface-strip-extend"
@@ -165,7 +165,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           ? 'Superficie estesa pronta: puoi continuare oppure usare Applica per creare la copia CAD.'
           : 'Scegli un bordo libero per iniziare.'}</p>
         {strip.hasResult && strip.addedArea !== null && strip.totalArea !== null && <p data-test="surface-strip-area">
-          Area aggiunta: {strip.addedArea.toLocaleString('it-IT', { maximumFractionDigits: 3 })} mm² · Area totale: {strip.totalArea.toLocaleString('it-IT', { maximumFractionDigits: 3 })} mm²
+          Area aggiunta: {len.area(strip.addedArea, 3)} · Area totale: {len.area(strip.totalArea, 3)}
         </p>}
         <div className="row"><button type="button" data-test="surface-strip-undo" disabled={disabled || strip.pending || !strip.canUndo}
           onClick={() => attempt(() => controller.undo())}>Annulla bordo</button>
@@ -177,9 +177,10 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         onClick={() => attempt(() => controller.beginStrip())}>Duplica bordo libero</button>}
       {!strip && <>
       <fieldset data-test="surface-point-target"><legend>Porta un punto della superficie sul riferimento</legend>
-        <p>Seleziona i poli liberi, scegli il riferimento e clicca un punto della faccia. Cerco il riferimento esterno più vicino lungo la normale CAD, nei due versi, entro {state.snapDistance} mm. Il punto della superficie si muove; i poli possono muoversi di più.</p>
-        <label>Limite spostamento di ciascun polo · mm<input data-test="surface-point-budget" type="text" inputMode="decimal" value={pointBudgetText}
+        <p>Seleziona i poli liberi, scegli il riferimento e clicca un punto della faccia. Cerco il riferimento esterno più vicino lungo la normale CAD, nei due versi, entro {len.fmt(state.snapDistance)}. Il punto della superficie si muove; i poli possono muoversi di più.</p>
+        <label>Limite spostamento di ciascun polo · {len.word()}<input data-test="surface-point-budget" type="text" inputMode="decimal" value={pointBudgetText}
           disabled={disabled || !!state.surfaceTarget} onChange={e=>setPointBudgetText(e.target.value)} /></label>
+        <p>Il limite deve essere positivo e non superiore a {len.fmt(1000)}.</p>
         <label><input data-test="surface-point-multiple" type="checkbox" checked={multipleTargets} disabled={disabled||!!state.surfaceTarget}
           onChange={e=>setMultipleTargets(e.target.checked)}/>Raccogli più punti prima di applicare</label>
         <div className="row"><button type="button" data-test="surface-point-scan" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint || pointBudget===null || pointBudget<=0 || pointBudget>1000}
@@ -190,9 +191,9 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           `Punti raccolti: ${state.surfaceTargetBatch.length} di 8. ${state.surfaceTargetBatch.length>=2?'Puoi applicare gli agganci con una sola Undo.':'Servono almeno due punti per applicare.'} Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`:
           `Clicca un punto sulla faccia selezionata. Destinazione: ${state.surfaceTarget==='scan'?'scansione':'CAD esterno'}.`}</p>
           {state.surfaceTargetBatch && <>
-            <p>Da 2 a 8 agganci simultanei. Nessuna geometria cambia durante la raccolta. Blu: punto CAD; arancio: destinazione. Le coordinate sono nel corpo, in mm.</p>
+            <p>Da 2 a 8 agganci simultanei. Nessuna geometria cambia durante la raccolta. Blu: punto CAD; arancio: destinazione. Le coordinate sono nel corpo, in {len.word()}.</p>
             <ol data-test="surface-point-pairs">{state.surfaceTargetBatch.map((pair,index)=><li key={index}>
-              {pair.label}: ({pair.at.map(x=>x.toFixed(3)).join(', ')}) → ({pair.target.map(x=>x.toFixed(3)).join(', ')}) · {Math.hypot(...pair.at.map((x,d)=>x-pair.target[d])).toFixed(4)} mm
+              {pair.label}: ({pair.at.map(x=>len.fmt(x,3,{bare:true})).join(', ')}) → ({pair.target.map(x=>len.fmt(x,3,{bare:true})).join(', ')}) · {len.fmt(Math.hypot(...pair.at.map((x,d)=>x-pair.target[d])),4)}
               <button type="button" data-test="surface-point-remove" disabled={disabled} onClick={()=>attempt(()=>{removedPair.current=index;controller.removeSurfaceTarget(index)})}>Rimuovi punto {index+1}</button>
             </li>)}</ol>
             <button type="button" data-test="surface-point-apply" disabled={disabled||state.surfaceTargetBatch.length<2}
@@ -235,7 +236,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
             }}>
             <option value="">Scegli bordo e faccia…</option>
             {g1Candidates.map(candidate => <option key={candidate.id} value={candidate.id}>
-              Bordo {candidate.edgeIndex + 1} · faccia {candidate.kind === 'compatible-bspline' ? 'B-spline compatibile' : 'piana'} {candidate.supportFaceIndex + 1} · {candidate.lengthMm.toLocaleString('it-IT', { maximumFractionDigits: 3 })} mm
+              Bordo {candidate.edgeIndex + 1} · faccia {candidate.kind === 'compatible-bspline' ? 'B-spline compatibile' : 'piana'} {candidate.supportFaceIndex + 1} · {len.fmt(candidate.lengthMm,3)}
             </option>)}
           </select>
         </label>
@@ -276,7 +277,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           onChange={e=>setBoundaryAxis(Number(e.target.value) as 0|1|2)}>
           <option value={0}>X</option><option value={1}>Y</option><option value={2}>Z</option>
         </select></label>
-        <label>Spostamento · mm<input data-test="surface-whole-boundary-distance" type="text" inputMode="decimal" value={boundaryDistanceText}
+        <label>Spostamento · {len.word()}<input data-test="surface-whole-boundary-distance" type="text" inputMode="decimal" value={boundaryDistanceText}
           disabled={disabled} onChange={e=>setBoundaryDistanceText(e.target.value)} /></label>
         <button type="button" data-test="surface-whole-boundary-move" disabled={disabled || !state.canMoveWholeBoundary ||
           boundaryPoles.some(id => state.locked.includes(id) || hiddenPoles.includes(id)) ||
@@ -334,14 +335,16 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <fieldset><legend>Magnete</legend>
         <label className="inline"><input data-test="surface-snap" type="checkbox" checked={state.snap} disabled={disabled}
           onChange={e => attempt(() => controller.setSnap(e.target.checked))} /> Aggancia a scansione e CAD vicini</label>
-        {state.snap && <><label>Portata · mm<input key={state.snapDistance} data-test="surface-snap-distance" type="number" min="0.001" max="1000" step="any"
-          defaultValue={state.snapDistance} disabled={disabled} onBlur={e => {
-            const value = e.currentTarget.valueAsNumber
+        {state.snap && <><label>Portata · {len.word()}<input key={`${state.snapDistance}:${len.units}`} data-test="surface-snap-distance" type="number" min={len.toDisplay(.001)} max={len.toDisplay(1000)} step="any"
+          defaultValue={lengthInputText(state.snapDistance,len.units)} disabled={disabled} onBlur={e => {
+            const shown = lengthInputText(state.snapDistance,len.units)
+            if (e.currentTarget.value === shown) return
+            const value = len.fromDisplay(e.currentTarget.valueAsNumber)
             if (Number.isFinite(value) && value >= .001 && value <= 1000) attempt(() => controller.setSnapDistance(value))
-            else { e.currentTarget.value = String(state.snapDistance); setError('Portata magnete: inserisci un valore tra 0,001 e 1000 mm.') }
+            else { e.currentTarget.value = shown; setError(`Portata magnete: inserisci un valore tra ${len.fmt(.001,len.units==='in'?6:3)} e ${len.fmt(1000)}.`) }
           }} onKeyDown={e => {
             if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() }
-            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); e.currentTarget.value = String(state.snapDistance); e.currentTarget.blur() }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); e.currentTarget.value = lengthInputText(state.snapDistance,len.units); e.currentTarget.blur() }
           }} /></label>
           <p>Alt sospende il magnete durante il trascinamento. L’aggancio usa la geometria visualizzata.</p></>}
       </fieldset>
@@ -355,10 +358,13 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
             onChange={e => attempt(() => controller.setMirrorAxis(Number(e.target.value)))}>
             <option value={0}>YZ</option><option value={1}>XZ</option><option value={2}>XY</option>
           </select></label>
-          <label>Posizione del piano · mm<input key={`${state.mirrorAxis}:${state.mirrorOffset}`} data-test="surface-mirror-offset"
-            type="number" step="any" defaultValue={state.mirrorOffset} disabled={disabled} onBlur={e => {
-              if (Number.isFinite(e.target.valueAsNumber)) attempt(() => controller.setMirrorOffset(e.target.valueAsNumber))
-              else e.target.value = String(state.mirrorOffset)
+          <label>Posizione del piano · {len.word()}<input key={`${state.mirrorAxis}:${state.mirrorOffset}:${len.units}`} data-test="surface-mirror-offset"
+            type="number" step="any" defaultValue={lengthInputText(state.mirrorOffset,len.units)} disabled={disabled} onBlur={e => {
+              const shown = lengthInputText(state.mirrorOffset,len.units)
+              if (e.currentTarget.value === shown) return
+              const value = len.fromDisplay(e.currentTarget.valueAsNumber)
+              if (Number.isFinite(value)) attempt(() => controller.setMirrorOffset(value))
+              else e.currentTarget.value = shown
             }} /></label>
           <p role="status">{state.symmetryBlocked ? 'La selezione contiene un polo speculare mancante, ambiguo o bloccato.' :
             'I poli speculari sono mostrati in viola; quelli sul piano restano sul piano.'}</p>
@@ -400,7 +406,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <button type="button" disabled={disabled} onClick={() => attempt(() => controller.clearSelection())}>Nessuno</button></div>
       <div className="row"><button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(true))}>Blocca punti</button>
         <button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(false))}>Sblocca punti</button></div>
-      <label>Spostamento · mm<input data-test="surface-distance" type="text" inputMode="decimal" value={distanceText}
+      <label>Spostamento · {len.word()}<input data-test="surface-distance" type="text" inputMode="decimal" value={distanceText}
         onChange={e => setDistanceText(e.target.value)}
         onBlur={() => { if(distanceText.trim()==='-')setDistanceText('') }} disabled={disabled} /></label>
       <button type="button" data-test="surface-move" disabled={disabled || state.symmetryBlocked || !editable.length || distanceValue===null}
@@ -415,7 +421,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         {state.tangentSpanReview && <p role="status" data-test="surface-tangent-span-review">
           U da {state.tangentSpanReview.u[0].toPrecision(7)} a {state.tangentSpanReview.u[1].toPrecision(7)}, V da {state.tangentSpanReview.v[0].toPrecision(7)} a {state.tangentSpanReview.v[1].toPrecision(7)}.
           Verranno mossi {state.tangentSpanReview.movedCount} dei {state.tangentSpanReview.supportCount} poli di supporto. Gli altri sono già sul piano entro la tolleranza.
-          {' '}Il limite superiore stimato per lo spostamento della superficie è {formatTangentSpanDisplacement(state.tangentSpanReview.maxSurfaceDisplacementMm)} mm, calcolato dai poli. Lo spostamento effettivo può essere inferiore e variare tra punti.
+          {' '}Il limite superiore stimato per lo spostamento della superficie è {formatSurfaceDisplacementUpper(state.tangentSpanReview.maxSurfaceDisplacementMm,len.units)}, calcolato dai poli. Lo spostamento effettivo può essere inferiore e variare tra punti.
         </p>}
         <button type="button" data-test="surface-tangent-span-apply" disabled={disabled || !state.tangentSpanReview}
           onClick={() => attempt(() => controller.applyTangentSpan())}>Applica alla zona UV</button>

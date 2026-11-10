@@ -32,6 +32,12 @@ export function WorkspaceEditorDock() {
           disabled={state.phase !== 'editing'} onChange={e => { workspaceEditors.setHideSourceAfterApply(e.target.checked) }} />
         <span>Nascondi l’originale dopo Applica</span>
       </label>
+      {state.canPreserveHistory && <label className="workspace-editor-copy-visibility"
+        title="Conserva nel progetto la modifica e le note per riprenderle anche dopo salvataggio e riapertura.">
+        <input type="checkbox" data-test="workspace-editor-preserve-history" checked={state.preserveHistory}
+          disabled={state.phase !== 'editing'} onChange={event => { workspaceEditors.setPreserveHistory(event.target.checked) }} />
+        <span>Mantieni la modifica riapribile</span>
+      </label>}
       <div className="keys">
         <button type="button" data-test="workspace-editor-frame-reticle" disabled={!state.canFrameReticle}
           title="Inquadra il reticolo corrente senza cambiare l'orientamento della vista; non si attiva automaticamente"
