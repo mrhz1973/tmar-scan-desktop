@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { createCentreOffset, type CentreOffset } from '../core/networkNormalMotion'
 // The Reverse engineer workspace's plumbing: the kernel brought up when the
 // workspace is first entered, the slice chains a sketch is drawn over, the
 // bodies the rebuild after every change to the feature list makes pushed
@@ -28,7 +29,7 @@ import { edgeGrip, extrudeGrips, extrudeGripsAt, faceGrip, moveGrip, moveGrips, 
 import { matrix4Of, mergeMeshes, movedFaceMesh, moveMatrix } from '../core/move'
 import { bodiesOfPick } from '../core/bodyFolders'
 import { projectEdge, projectSketchEntity, type Projectable } from '../core/project'
-import { matchEdge, matchFace, matchTolerance, splitEdges, tangentChain, transformEdgeFingerprint, transformFingerprint } from '../core/topo'
+import { matchEdge, matchFace, matchTolerance, movedFingerprints, splitEdges, tangentChain } from '../core/topo'
 import { PreviewFailure } from '../core/reClient'
 import { symmetryPlaneRef } from '../core/symmetryPlane'
 import type { SymmetryPlane } from '../../../src/core/symmetry'
@@ -54,6 +55,9 @@ import type { SketchOverlayItem } from '../viewer/sketchOverlay'
 import type { VaryingEdgeEnds } from '../viewer/varyingEnds'
 import { sketchPalette } from '../viewer/sketchPalette'
 import { saveFile } from '../../../src/app/exports'
+import type { MeshFormat } from '../../../src/core/exportMesh'
+import { meshResolution, tinyPartNote } from '../core/meshResolution'
+import { drivenBy } from '../core/parameters'
 import { onScan } from '../../../src/app/scanEvents'
 import { createReverseSession, installReverseSession, meshDiagonal, stepFilesFor } from './reSession'
 import { offerSolids } from '../../../src/app/solids'
@@ -200,52 +204,50 @@ export function useReverseWorkspace({
     const re = useReverse.getState()
     if (re.features.length + re.rolledBack.length === 0 && !re.sketchDraft && re.featureDraft?.kind !== 'network') return
     // A plane fitted on a face belongs to no element and moves with the
-    // part here, as the sketch's own frame does; a body's face moves with
-    // the bodies, which are rebuilt from the moved sketches, so its
-    // fingerprint is carried too or the face would not be found again.
+    // part here, as the sketch's own frame does; so does a body's face's
+    // frame. The faces and edges the features name by fingerprint — a
+    // body's face, a projected piece's edge, a fillet's edges and the rest —
+    // move with the bodies, which are rebuilt from the moved sketches, or
+    // they would not be found again: movedFingerprints carries every one.
     const movePlane = (p: PlaneRef): PlaneRef =>
-      p.kind === 'fitted'
-        ? { ...p, frame: transformFrame(p.frame, delta) }
-        : p.kind === 'bodyFace'
-          ? { ...p, frame: transformFrame(p.frame, delta), face: transformFingerprint(p.face, delta) }
-          : p
-    // A projected piece's edge moves with the bodies too; its place on the
-    // sheet does not — the sheet moves with the part.
-    const moveSources = (sketch: Sketch): Sketch =>
-      sketch.entities.some((e) => e.source && 'edge' in e.source)
-        ? { ...sketch, entities: sketch.entities.map((e) => (e.source && 'edge' in e.source ? { ...e, source: { body: e.source.body, edge: transformEdgeFingerprint(e.source.edge, delta) } } : e)) }
-        : sketch
+      p.kind === 'fitted' || p.kind === 'bodyFace' ? { ...p, frame: transformFrame(p.frame, delta) } : p
     const moveAt = (p: Vec3): Vec3 => {
       const out = new Float64Array(3)
       rigidApply(delta, p[0], p[1], p[2], out)
       return [out[0], out[1], out[2]]
     }
     // A network's points are on the scan, in its frame: they go with it.
+    const moveOffset = (offset: CentreOffset): CentreOffset => {
+      const origin = moveAt([0, 0, 0]), end = moveAt([...offset.direction] as Vec3)
+      const direction = end.map((v, i) => v - origin[i]) as Vec3
+      const scale = Math.hypot(...direction)
+      return createCentreOffset(moveAt([...offset.anchor] as Vec3), direction, offset.distance * scale)
+    }
     const movedNetwork = <T extends NetworkData>(n: T): T => ({
       ...n,
-      nodes: n.nodes.map((x) => ({ ...x, at: moveAt(x.at) })),
-      curves: n.curves.map((c) => ({ ...c, via: c.via.map(moveAt) })),
-      cells: n.cells.map((c) => ({ ...c, seed: moveAt(c.seed), ...(c.centre ? { centre: moveAt(c.centre) } : {}) })),
+      nodes: n.nodes.map(x => ({ ...x, at: moveAt(x.at), ...(x.offset ? { offset: moveOffset(x.offset) } : {}) })),
+      curves: n.curves.map(c => ({ ...c, via: c.via.map(moveAt), ...(c.viaOffsets ? { viaOffsets: c.viaOffsets.map(o => o ? moveOffset(o) : null) } : {}) })),
+      cells: n.cells.map(c => ({ ...c, seed: moveAt(c.seed), ...(c.centre ? { centre: moveAt(c.centre) } : {}),
+        ...(c.centreOffset ? { centreOffset: moveOffset(c.centreOffset) } : {}) })),
     })
-    const moved = (f: Feature): Feature =>
+    const framed = (f: Feature): Feature =>
       f.kind === 'network'
         ? movedNetwork(f)
         : f.kind === 'sketch'
-        ? { ...f, frame: transformFrame(f.frame, delta), plane: movePlane(f.plane), sketch: moveSources(f.sketch) }
+        ? { ...f, frame: transformFrame(f.frame, delta), plane: movePlane(f.plane) }
         : f.kind === 'cutPlane'
           ? { ...f, plane: movePlane(f.plane) }
           : f.kind === 'mirror' && f.plane.kind !== 'face'
             ? { ...f, plane: movePlane(f.plane) }
-            : f.kind === 'extrude' && f.face
-              ? { ...f, face: { ...f.face, face: transformFingerprint(f.face.face, delta) } }
-              : f.kind === 'sweep' && f.route
-                ? { ...f, route: { ...f.route, points: f.route.points.map(moveAt) } }
-                : f
+            : f.kind === 'sweep' && f.route
+              ? { ...f, route: { ...f.route, points: f.route.points.map(moveAt) } }
+              : f
+    const moved = (f: Feature): Feature => movedFingerprints(framed(f), delta)
     useReverse.setState((s) => ({
       features: s.features.map(moved),
       // Those below the rollback bar are of the same part.
       rolledBack: s.rolledBack.map(moved),
-      sketchDraft: s.sketchDraft ? { ...s.sketchDraft, frame: transformFrame(s.sketchDraft.frame, delta), plane: movePlane(s.sketchDraft.plane), sketch: moveSources(s.sketchDraft.sketch) } : null,
+      sketchDraft: s.sketchDraft ? movedFingerprints({ ...s.sketchDraft, frame: transformFrame(s.sketchDraft.frame, delta), plane: movePlane(s.sketchDraft.plane) }, delta) : null,
       ...(s.featureDraft?.kind === 'network' ? { featureDraft: { ...movedNetwork(s.featureDraft), placing: null, history: [], future: [], suggested: null } } : {}),
       buildVersion: s.buildVersion + 1,
     }))
@@ -330,6 +332,7 @@ export function useReverseWorkspace({
   const draftPickKey = draftPick ? `${draftPick.mode}:${draftPick.bodies?.join(',') ?? '*'}` : null
   const toFaceExtent = useReverse((s) => (s.extrudeDraft?.extent.kind === 'toFace' ? s.extrudeDraft.extent : null))
   const pulledFace = useReverse((s) => s.extrudeDraft?.face ?? null)
+  const parameterLit = useReverse((s) => s.parameterLit)
   const toFaceOpen = toFaceExtent !== null
   // An extrude by numbers takes a click on the part for one of them: the
   // end in play is put through the point clicked (reStore.extrudeToPoint).
@@ -749,9 +752,18 @@ export function useReverseWorkspace({
         }
       }
     }
+    // The faces the parameter pointed at in the list shapes (issue 21): those
+    // the features it drives made — while no box is open, whose picks are
+    // lit the same way.
+    if (onReverse && !editorOpen && parameterLit !== null) {
+      const r = useReverse.getState()
+      const name = r.parameters.find((x) => x.id === parameterLit)?.name
+      const made = new Set(name ? drivenBy(name, r.parameters, r.features) : [])
+      for (const [bodyId, topology] of topologies) for (const f of topology.faces) if (made.has(f.fingerprint.origin)) faces.push({ bodyId, hash: f.hash })
+    }
     reSceneOf(scene).setBodyPicks(faces, edges, chain, corners)
     reSceneOf(scene).setVaryingEnds(varying, unitsShown)
-  }, [onReverse, editorOpen, selection, featureDraft, toFaceExtent, pulledFace, bodiesVersion, sceneRef, unitsShown])
+  }, [onReverse, editorOpen, selection, featureDraft, toFaceExtent, pulledFace, bodiesVersion, sceneRef, unitsShown, parameterLit])
 
   /** The feature the open editor would make, as a feature, or null while
    *  it is not complete enough to build — nothing picked, no axis yet. A
@@ -1377,6 +1389,44 @@ export function useReverseWorkspace({
     }
   }
 
+  /** The visible solid bodies as an STL or a 3MF, meshed as the panel's
+   *  resolution says (core/meshResolution) — for a printer, which meshes a
+   *  STEP to its own tolerance (issue 89). */
+  const exportMesh = async (format: MeshFormat) => {
+    const re = useReverse.getState()
+    const picked = re.bodies.filter((b) => b.visible && !b.surface)
+    if (picked.length === 0 || !session.client()) {
+      useStore.getState().setError('No visible solid body to export — build one first.')
+      return
+    }
+    const res = meshResolution(useRePrefs.getState().meshResolution)
+    const units = usePrefs.getState().units
+    try {
+      useStore.getState().setStatus(`Meshing the bodies, ${res.label.toLowerCase()} — ${fmtLen(res.chord, units)} and ${Math.round(res.angleDeg * 10) / 10}° at most…`)
+      const f = await session.meshFile(picked, res.chord, format, res.angleDeg)
+      if (!f) {
+        useStore.getState().setError('The bodies meshed to no triangle.')
+        return
+      }
+      saveFile(f.name, new Blob([f.bytes as BlobPart], { type: f.mimeType }))
+      const lo = [Infinity, Infinity, Infinity]
+      const hi = [-Infinity, -Infinity, -Infinity]
+      for (const b of picked) {
+        if (!b.box) continue
+        for (let k = 0; k < 3; k++) {
+          lo[k] = Math.min(lo[k], b.box.min[k])
+          hi[k] = Math.max(hi[k], b.box.max[k])
+        }
+      }
+      const tiny = tinyPartNote(Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]), (mm) => fmtLen(mm, units, 4))
+      const said = `${picked.length} bod${picked.length === 1 ? 'y' : 'ies'} exported to ${f.name}, ${f.triangles.toLocaleString('en-US')} triangles (${res.label}).`
+      if (tiny) useStore.getState().setError(`${said} ${tiny}`)
+      else useStore.getState().setStatus(said)
+    } catch (e) {
+      useStore.getState().setError(`Mesh export failed: ${message(e)}`)
+    }
+  }
+
   /** The visible solid bodies as a reference part for the Deviation
    *  workspace — or the bodies named, a sheet among them meshed too (it is
    *  read on its front under the map's facing limit) — see core/re/compare. Null, with the reason on the status
@@ -1502,6 +1552,7 @@ export function useReverseWorkspace({
     projectablesOf,
     regionPainted,
     exportStep,
+    exportMesh,
     compareReference,
   }
 }

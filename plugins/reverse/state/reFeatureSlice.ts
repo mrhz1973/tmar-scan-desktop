@@ -4,15 +4,18 @@
 // committed to the list; the bodies a Move carries.
 
 import type { StoreApi } from 'zustand'
-import { movableFace, partialRound, type SketchFeature, type TrimTool, withKeptQueries } from '../core/features'
+import { len, sub } from '../../../src/core/vec'
+import type { Vec3 } from '../../../src/core/types'
+import { movableFace, partialRound, type SketchFeature, toolsOf, type TrimTool, withKeptQueries } from '../core/features'
 import { findRegions } from '../core/regions'
 import { DEFAULT_SURFACE_FIT } from '../core/surfaceFit'
 import { emptyNetworkDraft, networkDraftOf } from './reNetworkDraft'
+import { networkHasOffsets } from '../core/networkPointMotion'
 import { DEFAULT_DRAFT_DEG, DEFAULT_FILLET_MM, DEFAULT_SPLIT_OVERLAP, DEFAULT_SPLIT_TOLERANCE_MM, DEFAULT_WALL_MM, featureDraftReady, featureOfDraft, historyEditOf, movePivot, roundFaceLength, trimToleranceFor, withMoveBodies } from './reDrafts'
-import { CLOSE_OTHERS, hideElement, hideSection, hideSketches, KIND_LABELS, lastSolid, leanAfterSnap, nameFor, remember, sketchesUsedBy, withExprs } from './reFeatureHelpers'
+import { CLOSE_OTHERS, hideElement, hideSection, hideSketches, KIND_LABELS, lastSolid, leanAfterSnap, nameFor, remember, sketchesTakenOn, sketchesUsedBy, withExprs } from './reFeatureHelpers'
 import { unplacedEdge } from './reSketchDraft'
 import type { ReState } from './reStore'
-import { DEFAULT_FLOOD_DEG, type FeatureDraft } from './reTypes'
+import { DEFAULT_FLOOD_DEG, type DraftEdge, type FeatureDraft } from './reTypes'
 
 /** A surface's box let go, with the expressions on its numbers: the region
  *  painted by hand is not the box's any more. */
@@ -25,11 +28,28 @@ function unboxed(d: Extract<FeatureDraft, { kind: 'surface' }>): Extract<Feature
   return { ...rest, ...(Object.keys(kept).length > 0 ? { exprs: kept } : {}) }
 }
 
-/** The radii an edge newly picked at a varying radius starts at: the last
- *  such edge's, or the fillet's one radius at both ends, to type over. */
-function varyingRadii(d: Extract<FeatureDraft, { kind: 'fillet' }>, varying: readonly { radius: [number, number] }[]): [number, number] {
+/** The radii an edge newly picked at a varying radius starts at, to type
+ *  over: where it meets an edge listed already, that edge's radius there
+ *  at both its ends — a chain's radius cannot jump where two edges meet;
+ *  otherwise the last edge's, or the fillet's one radius at both ends. */
+function varyingRadii(d: Extract<FeatureDraft, { kind: 'fillet' }>, varying: readonly { edge: DraftEdge; radius: [number, number] }[], edge: DraftEdge): [number, number] {
+  const at = (p: Vec3): number | null => {
+    for (const v of varying) for (const k of [0, 1] as const) if (len(sub(v.edge.ends[k], p)) < 1e-3) return v.radius[k]
+    return null
+  }
+  const start = at(edge.ends[0])
+  const end = at(edge.ends[1])
+  if (start !== null || end !== null) return [start ?? end!, end ?? start!]
   const last = varying[varying.length - 1]
   return last ? [last.radius[0], last.radius[1]] : [d.radius, d.radius]
+}
+
+/** `added` put at the end of a fillet's varying edges, each at the radii
+ *  varyingRadii gives it with the ones before it listed. */
+function withVarying(d: Extract<FeatureDraft, { kind: 'fillet' }>, varying: readonly { edge: DraftEdge; radius: [number, number] }[], added: readonly DraftEdge[]): { edge: DraftEdge; radius: [number, number] }[] {
+  const out = [...varying]
+  for (const edge of added) out.push({ edge, radius: varyingRadii(d, out, edge) })
+  return out
 }
 
 type StoreSet = StoreApi<ReState>['setState']
@@ -186,7 +206,7 @@ export const featureSlice = (set: StoreSet, get: StoreGet): Pick<ReState, 'featu
           draft = { kind: 'mirror', ...head, body: f.body, plane: f.plane, join: f.join, symmetry: { status: 'idle' } }
           break
         case 'boolean':
-          draft = { kind: 'boolean', ...head, op: f.op, body: f.body, tool: f.tool, keep: f.keep ?? false }
+          draft = { kind: 'boolean', ...head, op: f.op, body: f.body, tool: toolsOf(f)[0], ...(toolsOf(f).length > 1 ? { moreTools: toolsOf(f).slice(1) } : {}), keep: f.keep ?? false }
           break
         case 'sheet':
           draft = { kind: 'sheet', ...head, sketchId: f.sketchId, from: f.from, to: f.to }
@@ -242,7 +262,7 @@ export const featureSlice = (set: StoreSet, get: StoreGet): Pick<ReState, 'featu
   commitFeature: () => {
     const s = get()
     const d = s.featureDraft
-    if (!d || !featureDraftReady(d)) return null
+    if (!d || !featureDraftReady(d) || (d.kind === 'network' && (d.motionActive || (networkHasOffsets(d) && s.preview.status !== 'ok')))) return null
     // A moved face goes into what made it where the box was ticked to:
     // the extrude's distance, the sketch's line or circle. No feature is
     // added — the list is edited, as the operator would have edited it by
@@ -260,7 +280,10 @@ export const featureSlice = (set: StoreSet, get: StoreGet): Pick<ReState, 'featu
       if (!next || !old) return null
       set({
         ...remember(s),
-        features: s.features.map((f) => (f.id === id ? { ...withKeptQueries(old, next), visible: old.visible, ...(old.suppressed ? { suppressed: true } : {}) } : f)),
+        features: hideSketches(
+          s.features.map((f) => (f.id === id ? { ...withKeptQueries(old, next), visible: old.visible, ...(old.suppressed ? { suppressed: true } : {}) } : f)),
+          sketchesTakenOn(old, next),
+        ),
         featureDraft: null,
         preview: { status: 'idle' },
         gripField: null,
@@ -376,7 +399,7 @@ export const featureSlice = (set: StoreSet, get: StoreGet): Pick<ReState, 'featu
       const varying = d.kind === 'fillet' && d.body === bodyId ? (d.variable ?? []) : []
       const fresh = added.filter((e) => !edges.some((x) => x.hash === e.hash) && !varying.some((v) => v.edge.hash === e.hash))
       if (fresh.length === 0) return {}
-      if (d.kind === 'fillet' && d.mode === 'variable') return { featureDraft: { ...d, body: bodyId, edges, variable: [...varying, ...fresh.map((edge) => ({ edge, radius: varyingRadii(d, varying) }))] } }
+      if (d.kind === 'fillet' && d.mode === 'variable') return { featureDraft: { ...d, body: bodyId, edges, variable: withVarying(d, varying, fresh) } }
       const next = [...edges, ...fresh]
       if (d.kind === 'fillet') return { featureDraft: { ...d, body: bodyId, edges: next, variable: varying.length > 0 ? varying : undefined, estimate: d.edges.length === 0 ? { status: 'idle' } : d.estimate } }
       return { featureDraft: { ...d, body: bodyId, edges: next } }
@@ -404,7 +427,7 @@ export const featureSlice = (set: StoreSet, get: StoreGet): Pick<ReState, 'featu
         const varies = varying.some((v) => v.edge.hash === edge.hash)
         const rest = varying.filter((v) => v.edge.hash !== edge.hash)
         if (has || varies) return { featureDraft: { ...d, body: bodyId, edges: edges.filter((e) => e.hash !== edge.hash), variable: rest.length > 0 ? rest : undefined } }
-        if (d.mode === 'variable') return { featureDraft: { ...d, body: bodyId, edges, variable: [...varying, { edge, radius: varyingRadii(d, varying) }] } }
+        if (d.mode === 'variable') return { featureDraft: { ...d, body: bodyId, edges, variable: withVarying(d, varying, [edge]) } }
         return { featureDraft: { ...d, body: bodyId, edges: [...edges, edge], variable: varying.length > 0 ? varying : undefined, estimate: { status: 'idle' } } }
       }
       const next = has ? edges.filter((e) => e.hash !== edge.hash) : [...edges, edge]
@@ -423,7 +446,16 @@ export const featureSlice = (set: StoreSet, get: StoreGet): Pick<ReState, 'featu
       return {}
     }),
   editNetwork: (change) =>
-    set((s) => (s.featureDraft?.kind === 'network' ? { featureDraft: change(s.featureDraft) } : {})),
+    set((s) => {
+      const previous = s.featureDraft
+      if (previous?.kind !== 'network') return {}
+      const next = change(previous)
+      const geometryChanged = previous.nodes !== next.nodes || previous.curves !== next.curves ||
+        previous.cells !== next.cells || previous.spans !== next.spans || previous.fit !== next.fit
+      // Do not leave the preceding valid preview eligible for Create between
+      // the synchronous point edit and the next asynchronous kernel request.
+      return { featureDraft: next, ...(geometryChanged ? { preview: { status: 'idle' as const } } : {}) }
+    }),
   setMoveBodies: (bodies) =>
     set((s) => {
       const d = s.featureDraft

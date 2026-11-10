@@ -1,0 +1,13 @@
+{
+  "scope": "Experimental controller/draft batch integration; no UI mounted",
+  "draftRoute": "Every supplied CAD anchor is resolved against one current validated preview before one geometry commit",
+  "controllerRoute": "Part-coordinate seeds -> CAD notePick -> existing external scan/CAD resolver -> all reference lifetime checks -> draft batch",
+  "permissions": "Selected poles minus snapshot manual/trim/hidden locks and G0/G1-protected rings; unsupported tangency/adaptive/cylinder preparations refused",
+  "focusedChecks": {"draftAndControllerGuardsPassed": 14, "nativeDraftPassed": 1,
+    "includes": ["G0/G1 permissions", "late reference/selection/face/lock/dispose invalidation", "trim refusal and inconsistent final CAD anchor", "controller source/cancel/reference invalidation", "one history increment and Undo", "CAD refusal remains invalid until one Undo"]},
+  "nativeEvidence": {"kernelAndDispatcher": "REAL", "transport": "IN_PROCESS SIMULATED", "anchors": "REAL notePick and noteResolve", "passes": 3,
+    "maxTargetResidualMm": 3.9144895776417064e-13, "maxBoundaryErrorMm": 1.98959896019249e-13,
+    "minimumBoundaryNormalDot": 1, "firstContactUndoResidualMm": 5.5074224284821204e-14,
+    "stepValid": true, "faces": 6, "solids": 1, "manualLockPreserved": true, "sourceUnchanged": true},
+  "limitations": ["Controller reference tests use controlled resolver/lifetime callbacks; no new real scan batch collection is qualified", "No batch UI, host change, browser or project persistence", "Finite constraints only; no global fitting claim", "Slow correlated systems can refuse at the fixed 64-pass limit"]
+}

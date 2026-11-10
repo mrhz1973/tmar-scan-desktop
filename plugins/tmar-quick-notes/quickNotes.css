@@ -4,7 +4,7 @@
 .noterow .notebody { cursor: pointer; user-select: none; }
 .noterow .notekeys { flex-wrap: wrap; max-width: 64px; justify-content: flex-end; }
 .noterow:focus-visible { outline: 2px solid var(--accent-d); }
-.nolabels .note-label.focused:not(:empty) { display: block !important; }
+.nolabels .re-note-label.focused:not(:empty) { display: block !important; }
 .notes [hidden] { display: none !important; }
 .notes .toolrow { flex-wrap: wrap; }
 

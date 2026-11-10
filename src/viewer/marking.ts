@@ -13,6 +13,8 @@ import * as THREE from 'three'
 import { INTERSECTED, NOT_INTERSECTED } from 'three-mesh-bvh'
 import type { RegionColors } from './regionColors'
 import { DEFAULT_THEME, type ViewTheme } from './viewThemes'
+import { frontSurface } from './frontSurface'
+import { modHeld } from '../ui/platform'
 
 /** How a marking gesture takes surface: dragged over it with a round brush,
  *  swept with a rectangular window, or ringed with a freehand lasso. The last
@@ -39,18 +41,24 @@ export interface PaintBrush {
    *  between markings; a tool that quietly held the mouse buttons hostage for
    *  as long as its panel was open would be a trap. */
   gesture?: MarkGesture | null
-  /** Take triangles facing away from the camera as well. Off by default,
-   *  because a window dragged over a closed part would otherwise mark the far
-   *  wall along with the near one — and on a scan the far wall is usually the
-   *  one that cannot be seen to judge. */
+  /** Go through the part: take triangles facing away from the camera, and a
+   *  window or lasso takes surface hidden behind nearer surface as well. Off
+   *  by default, because a window dragged over a part would otherwise mark the
+   *  far wall and whatever a rib hides along with what is in front — and on a
+   *  scan that is surface that cannot be seen to judge. */
   backfaces?: boolean
+  /** The brush draws a straight line from press to release instead of following
+   *  the cursor. The platform's modifier held at the press inverts this for that
+   *  one drag, the way Alt does the erase switch. */
+  straight?: boolean
 }
 
-/** A window or lasso being dragged: where it started, the outline so far, and
- *  which way it will go — decided when the button went down, so that letting
- *  go of Alt half way through does not turn a rub-out into a marking. */
+/** A window, lasso or straight brush line being dragged: where it started, the
+ *  outline so far, and which way it will go — decided when the button went down,
+ *  so that letting go of Alt half way through does not turn a rub-out into a
+ *  marking. */
 interface Marquee {
-  gesture: 'window' | 'lasso'
+  gesture: 'window' | 'lasso' | 'line'
   erase: boolean
   /** Container-local pixels, the same frame the outline is drawn in. */
   points: { x: number; y: number }[]
@@ -76,6 +84,32 @@ function rectanglePoints(
     { x: b.x, y: b.y },
     { x: a.x, y: b.y },
   ]
+}
+
+/** The outline of a straight brush line: the swath a round brush of this radius
+ *  covers between two points, so the rubber band shows what the line will take. */
+export function capsulePoints(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  radius: number,
+): { x: number; y: number }[] {
+  const heading = Math.atan2(b.y - a.y, b.x - a.x)
+  const out: { x: number; y: number }[] = []
+  for (const [end, from] of [[b, heading - Math.PI / 2], [a, heading + Math.PI / 2]] as const) {
+    for (let i = 0; i <= 12; i++) {
+      const angle = from + (i / 12) * Math.PI
+      out.push({ x: end.x + radius * Math.cos(angle), y: end.y + radius * Math.sin(angle) })
+    }
+  }
+  return out
+}
+
+/** How many steps a straight brush line of this length takes, for a brush this
+ *  wide, both in pixels. An eighth of the brush apart: a line lands in one go and
+ *  has no later pass to fill a gap, and a surface turned away from the camera
+ *  stretches the same step on the screen to several times that on the part. */
+export function lineSteps(lengthPx: number, brushPx: number): number {
+  return Math.ceil(lengthPx / Math.max(brushPx / 8, 1))
 }
 
 /** Point-in-polygon by crossing number, with the outline's bounding box in
@@ -135,10 +169,40 @@ function facesCamera(
   return rawFaceNormal(pos, a, b, c, facingScratch).dot(view) < 0
 }
 
+/**
+ * How many millimetres a pixel spans where the outline marks. A parallel
+ * camera spans the same everywhere. In perspective it grows with depth, so it
+ * is taken at the mean depth of what is drawn inside the outline's box.
+ */
+function pixelSpan(
+  camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
+  h: number,
+  sx: Float32Array,
+  sy: Float32Array,
+  sz: Float32Array,
+  clipped: Uint8Array,
+  box: { minX: number; minY: number; maxX: number; maxY: number },
+): number {
+  if (!(camera instanceof THREE.PerspectiveCamera)) return (camera.top - camera.bottom) / camera.zoom / h
+  let sum = 0
+  let n = 0
+  for (let v = 0; v < sz.length; v++) {
+    if (clipped[v] || sx[v] < box.minX || sx[v] > box.maxX || sy[v] < box.minY || sy[v] > box.maxY) continue
+    sum += sz[v]
+    n++
+  }
+  const depth = n > 0 ? sum / n : camera.position.length()
+  return (2 * depth * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / camera.zoom / h
+}
+
 /** Everything the marking is allowed to touch outside itself. */
 export interface MarkingContext {
   container: HTMLDivElement
-  camera: THREE.OrthographicCamera
+  /** The camera the view is drawn through, parallel or in perspective. */
+  camera(): THREE.OrthographicCamera | THREE.PerspectiveCamera
+  /** How many millimetres a pixel spans: everywhere for a parallel camera,
+   *  at the orbit target's depth in perspective (OrthoViewport.worldPerPixel). */
+  worldPerPixel(): number
   partGroup: THREE.Group
   raycaster: THREE.Raycaster
   regions: RegionColors
@@ -155,14 +219,25 @@ export interface MarkingContext {
    *  costs nothing per vertex. */
   setPaintColor(rgb: [number, number, number]): void
   invalidate(): void
+  /** Run the viewport's frames again, if they had stopped: a stroke's
+   *  positions are queued for the next frame to land, and a stroke carried
+   *  off the canvas wakes nothing there. */
+  wake(): void
   /** Take the plain drags off the camera while a gesture is live. */
   claimDrag(on: boolean): void
+  /** Whether a press is a camera gesture under the scheme in force: a modifier
+   *  chord the scheme uses stays the camera's. */
+  navigates(e: PointerEvent): boolean
   /** Ask for a hover pass on the next frame (the footprint follows settings
    *  even if the cursor never moves again). */
   requestHover(): void
   /** How many vertices the marking covers, reported when a gesture ends. */
   onPaintChange(count: number): void
 }
+
+/** How many dabs a stroke may hold for a tree still being built — see
+ *  SurfaceMarking.dab. A couple of seconds of a fast stroke. */
+const HELD_DABS_MAX = 4096
 
 export class SurfaceMarking {
   private paint: PaintBrush | null = null
@@ -180,6 +255,10 @@ export class SurfaceMarking {
    *  reports up to a thousand moves a second, each dab is a raycast plus a BVH
    *  sweep, and nothing between two frames is ever seen anyway. */
   private strokeQueue: { x: number; y: number; erase: boolean }[] = []
+  /** Dabs laid while the scan's tree was still on its way from off the
+   *  thread, as the rays they were cast along — laid when it lands; see
+   *  dab and treeLanded. */
+  private heldDabs: { ray: THREE.Ray; erase: boolean }[] = []
   private paintSphere = new THREE.Sphere()
   /** Scratch for the per-triangle brush test, which runs thousands of times
    *  per stroke and must not allocate. */
@@ -272,16 +351,26 @@ export class SurfaceMarking {
    * A pointerdown while a gesture is live. With the brush armed, a plain drag
    * is a stroke: left lays the marking down, right takes it away — the
    * navigator has stepped both of those bindings aside for exactly this.
-   * Anything with a modifier still belongs to the camera. Returns whether the
-   * event was taken.
+   * Shift still belongs to the camera, being the way to orbit under a live
+   * gesture. The platform's modifier turns a brush stroke straight, unless the
+   * scheme drives the camera with that chord; with the other gestures it is the
+   * camera's too. Returns whether the event was taken.
    */
   handlePointerDown(e: PointerEvent): boolean {
     const gesture = this.pointerGesture()
     if (!gesture) return false
-    if ((e.button !== 0 && e.button !== 2) || e.shiftKey || e.ctrlKey || e.metaKey) return false
+    if ((e.button !== 0 && e.button !== 2) || e.shiftKey) return false
+    const mod = modHeld(e)
+    if (mod && (gesture !== 'brush' || this.ctx.navigates(e))) return false
     const erase = this.eraseFor(e.button === 2, e.altKey)
     this.painting = true
     if (gesture === 'brush') {
+      if ((this.paint?.straight ?? false) !== mod) {
+        this.paintErasing = erase
+        this.updateRingColor()
+        this.beginMarquee('line', erase, e.clientX, e.clientY)
+        return true
+      }
       this.paintLast = null
       // A finger that has just landed cannot yet say whether it is a stroke or
       // the first half of a pinch, so its opening dab waits: it lands on the
@@ -322,6 +411,7 @@ export class SurfaceMarking {
       this.paintLast = null
       this.pendingDab = null
       this.strokeQueue.length = 0
+      this.heldDabs.length = 0
       this.paintErasing = false
       this.brushRing.visible = false
       this.endMarquee()
@@ -330,7 +420,12 @@ export class SurfaceMarking {
     }
     // Switching gesture mid-session leaves the marking alone but takes the
     // footprint of the old one off the part, and abandons anything in flight.
-    if (gesture !== 'brush') this.brushRing.visible = false
+    if (gesture !== 'brush') {
+      this.brushRing.visible = false
+      // Dabs held for a tree still on its way were laid by the brush: another
+      // gesture, or none, does not lay them later at whatever size is set then.
+      this.heldDabs.length = 0
+    }
     if (gesture === null) {
       this.painting = false
       this.paintLast = null
@@ -363,6 +458,7 @@ export class SurfaceMarking {
    */
   setPaintedVertices(vertices: Uint32Array, colorHex: string): void {
     if (!this.ctx.mesh()) return
+    this.heldDabs.length = 0
     this.ctx.setPaintColor(colorToRgb(colorHex))
     if (!this.ctx.regions.setPaintedVertices(vertices)) return
     const attr = this.ctx.paintAttr()
@@ -373,6 +469,7 @@ export class SurfaceMarking {
 
   /** Rub out the whole marking. */
   clearPaint(): void {
+    this.heldDabs.length = 0
     if (!this.ctx.regions.clearPaint()) return
     const attr = this.ctx.paintAttr()
     if (attr) attr.needsUpdate = true
@@ -429,17 +526,69 @@ export class SurfaceMarking {
    */
   private dab(clientX: number, clientY: number, erase: boolean): void {
     const mesh = this.ctx.mesh()
-    const brush = this.paint
-    if (!mesh || !brush || !this.ctx.paintAttr()) return
-
+    if (!mesh || !this.paint || !this.ctx.paintAttr()) return
+    const geometry = mesh.geometry as THREE.BufferGeometry
     this.ctx.setPickRay(clientX, clientY)
-    const hit = this.ctx.raycaster.intersectObject(mesh, false)[0]
-    if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) return
+    if (!geometry.getIndex()) return
+    // The sweep needs the tree; without it — still being built off the
+    // thread — the ray would go through every triangle for nothing. The dab
+    // is held instead, as the ray it is cast along, and laid when the tree
+    // lands (treeLanded): a view turned meanwhile does not move it.
+    if (!geometry.boundsTree) {
+      if (this.heldDabs.length < HELD_DABS_MAX) this.heldDabs.push({ ray: this.ctx.raycaster.ray.clone(), erase })
+      return
+    }
+    // A tree that came by another way than landing — the scan laid out
+    // again over a tree of its own — lays what was held first.
+    if (this.heldDabs.length > 0) this.layHeldDabs()
+    this.dabAlongRay(erase)
+  }
 
+  /** The scan's tree has landed from off the thread: lay the dabs held for
+   *  it, and report them as a gesture's end would if the gesture is over. */
+  treeLanded(): void {
+    if (this.heldDabs.length === 0) return
+    const geometry = this.ctx.mesh()?.geometry as THREE.BufferGeometry | undefined
+    // Another part's tree, the scan's still out.
+    if (!geometry?.boundsTree) return
+    this.layHeldDabs()
+    const attr = this.ctx.paintAttr()
+    if (attr) attr.needsUpdate = true
+    this.ctx.invalidate()
+    if (!this.painting) this.ctx.onPaintChange(this.ctx.regions.paintCount)
+  }
+
+  private layHeldDabs(): void {
+    const held = this.heldDabs
+    this.heldDabs = []
+    const ray = this.ctx.raycaster.ray
+    const was = ray.clone()
+    for (const d of held) {
+      ray.copy(d.ray)
+      this.dabAlongRay(d.erase)
+    }
+    ray.copy(was)
+  }
+
+  /** The dab along the pick ray as it is set — see dab. */
+  private dabAlongRay(erase: boolean): void {
+    const mesh = this.ctx.mesh()
+    const brush = this.paint
+    if (!mesh || !brush) return
     const geometry = mesh.geometry as THREE.BufferGeometry
     const bvh = geometry.boundsTree
     const index = geometry.getIndex()
     if (!bvh || !index) return
+
+    // What the section view cuts away is not there to mark, as window and
+    // lasso already knew: the ray takes the first surface on the kept side,
+    // and the dab only triangles whose middle is on it (issue 34). The
+    // planes are the scan material's, in the world's frame.
+    const material = mesh.material as THREE.Material
+    const planes = material?.clippingPlanes?.length ? material.clippingPlanes : []
+    const kept = (world: THREE.Vector3) => planes.every((pl) => pl.distanceToPoint(world) >= -3e-6)
+    const hit = this.ctx.raycaster.intersectObject(mesh, false).find((h) => kept(h.point))
+    if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) return
     const idx = index.array as ArrayLike<number>
     const pos = (geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array
 
@@ -447,6 +596,9 @@ export class SurfaceMarking {
     // scan has been aligned; everything below is in the scan's own. scratchD
     // holds the centre across the sweep — the trio below is the sweep's.
     this.ctx.partGroup.updateWorldMatrix(true, false)
+    const toLocal = new THREE.Matrix4().copy(this.ctx.partGroup.matrixWorld).invert()
+    const localPlanes = planes.map((pl) => pl.clone().applyMatrix4(toLocal))
+    const middle = new THREE.Vector3()
     const centre = this.ctx.partGroup.worldToLocal(this.scratchD.copy(hit.point))
     const f = hit.faceIndex * 3
     const face = this.faceNormal(pos, idx[f], idx[f + 1], idx[f + 2])
@@ -473,6 +625,10 @@ export class SurfaceMarking {
         // itself before taking it.
         tri.closestPointToPoint(centre, near)
         if (near.distanceToSquared(centre) > radius * radius) return false
+        if (localPlanes.length > 0) {
+          middle.copy(tri.a).add(tri.b).add(tri.c).multiplyScalar(1 / 3)
+          if (!localPlanes.every((pl) => pl.distanceToPoint(middle) >= -3e-6)) return false
+        }
         // Same winding convention as the face under the cursor, so the two
         // normals can be compared at all.
         if (!anyFacing) {
@@ -506,7 +662,7 @@ export class SurfaceMarking {
   // ---- window and lasso ----------------------------------------------------
 
   private beginMarquee(
-    gesture: 'window' | 'lasso',
+    gesture: Marquee['gesture'],
     erase: boolean,
     clientX: number,
     clientY: number,
@@ -528,9 +684,9 @@ export class SurfaceMarking {
     const m = this.marquee
     if (!m) return
     const p = { x: clientX - m.origin.left, y: clientY - m.origin.top }
-    if (m.gesture === 'window') {
-      // A window is its two corners and nothing else, however the cursor got
-      // from one to the other.
+    if (m.gesture !== 'lasso') {
+      // A window is its two corners and a line its two ends, and nothing else,
+      // however the cursor got from one to the other.
       m.points[1] = p
     } else {
       // Thinning the trail keeps the point-in-polygon test — which runs once
@@ -546,9 +702,36 @@ export class SurfaceMarking {
   private drawMarquee(): void {
     const m = this.marquee
     if (!m) return
+    const end = m.points[1] ?? m.points[0]
     const outline =
-      m.gesture === 'window' ? rectanglePoints(m.points[0], m.points[1] ?? m.points[0]) : m.points
+      m.gesture === 'window'
+        ? rectanglePoints(m.points[0], end)
+        : m.gesture === 'line'
+          ? capsulePoints(m.points[0], end, Math.max(this.brushPixels() / 2, 1.5))
+          : m.points
     this.marqueeShape.setAttribute('points', outline.map((p) => `${p.x},${p.y}`).join(' '))
+  }
+
+  /** The brush's width on the screen. A parallel camera keeps it the same
+   *  anywhere on the part; in perspective it holds at the orbit target. */
+  private brushPixels(): number {
+    return (this.paint?.diameter ?? 0) / this.ctx.worldPerPixel()
+  }
+
+  /** Lay a straight line down in one go, as a tap if the cursor never left.
+   *  Dabbed along the screen, so it is straight as seen and lies on whatever
+   *  surface is under it. */
+  private markLine(m: Marquee): void {
+    const a = m.points[0]
+    const b = m.points[1] ?? a
+    const steps = lineSteps(Math.hypot(b.x - a.x, b.y - a.y), this.brushPixels())
+    for (let i = 0; i <= steps; i++) {
+      const t = steps === 0 ? 0 : i / steps
+      this.dab(m.origin.left + a.x + (b.x - a.x) * t, m.origin.top + a.y + (b.y - a.y) * t, m.erase)
+    }
+    const attr = this.ctx.paintAttr()
+    if (attr) attr.needsUpdate = true
+    this.ctx.invalidate()
   }
 
   private endMarquee(): void {
@@ -557,19 +740,24 @@ export class SurfaceMarking {
   }
 
   /**
-   * Take every triangle the outline encloses.
+   * Take every triangle the outline encloses that can be seen.
    *
    * A triangle counts when its centre falls inside — the resolution of a scan
    * is far finer than anything drawn by hand, so where exactly the boundary
    * cuts a single triangle is below the noise of the gesture itself.
    *
-   * There is no depth buffer in this: what stops a window from marking the
-   * whole part front to back is the facing test, which is how every CAD
-   * selection does it and is why "include back faces" is a switch the user
-   * holds. On an open scan seen through a hole, surface behind the cursor
-   * *facing this way* is marked too — which is the honest answer, since from
-   * this side of the part there is nothing to tell it apart from the near
-   * wall.
+   * Seen means two things. The triangle faces the camera, so a window over a
+   * closed part does not take its far wall; and it is the surface in front,
+   * not one hidden behind a nearer wall that faces the same way — both sides
+   * of a fold, a rib and the face behind it (see frontSurface). Facing is
+   * kept as well as depth because it is what keeps the inside of a part cut
+   * open by a section off the marking: that surface faces away, and nothing
+   * in front of it is drawn where the cap closes the cut.
+   *
+   * With "through" on, neither holds and the gesture takes everything it
+   * encloses — the switch is there for a whole rib or a run of spray in one
+   * sweep, and for a scan whose normals came out inverted. What a section has
+   * cut away is never taken: it is not there to be seen through either.
    */
   private markMarquee(outline: { x: number; y: number }[], erase: boolean): void {
     const mesh = this.ctx.mesh()
@@ -582,38 +770,75 @@ export class SurfaceMarking {
     const idx = index.array as ArrayLike<number>
     const vertexCount = pos.length / 3
 
-    const w = this.ctx.container.clientWidth || 1
-    const h = this.ctx.container.clientHeight || 1
-    this.ctx.partGroup.updateWorldMatrix(true, false)
-    this.ctx.camera.updateMatrixWorld()
-    const toClip = new THREE.Matrix4()
-      .multiplyMatrices(this.ctx.camera.projectionMatrix, this.ctx.camera.matrixWorldInverse)
-      .multiply(this.ctx.partGroup.matrixWorld)
+    const { container, partGroup } = this.ctx
+    const camera = this.ctx.camera()
+    const w = container.clientWidth || 1
+    const h = container.clientHeight || 1
+    partGroup.updateWorldMatrix(true, false)
+    camera.updateMatrixWorld()
+    const toView = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, partGroup.matrixWorld)
+    const toClip = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, toView)
+    // A section's planes, in world space like the material holds them.
+    const material = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.Material | undefined
+    const planes = material?.clippingPlanes?.length ? material.clippingPlanes : []
 
     // Every vertex projected once, rather than three times per triangle: at a
     // million triangles that is the difference between a gesture that lands
-    // and one that stalls the frame. The projection is affine (parallel
-    // camera), so a triangle's centre on screen is the mean of its corners'.
+    // and one that stalls the frame. A parallel projection is affine, so a
+    // triangle's centre on screen is the mean of its corners'; in perspective
+    // that is near enough for triangles a few pixels across.
     const sx = new Float32Array(vertexCount)
     const sy = new Float32Array(vertexCount)
+    const sz = new Float32Array(vertexCount)
     const clipped = new Uint8Array(vertexCount)
+    const planeDistance = planes.map(() => new Float32Array(vertexCount))
     const p = new THREE.Vector3()
+    const inView = new THREE.Vector3()
     for (let v = 0; v < vertexCount; v++) {
-      p.set(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]).applyMatrix4(toClip)
+      p.set(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2])
+      if (planes.length > 0) {
+        const world = this.scratchA.copy(p).applyMatrix4(partGroup.matrixWorld)
+        for (let k = 0; k < planes.length; k++) planeDistance[k][v] = planes[k].distanceToPoint(world)
+      }
+      // Depth away from the camera in world units, taken before the
+      // projection: clip-space depth is linear only for a parallel camera.
+      sz[v] = -inView.copy(p).applyMatrix4(toView).z
+      p.applyMatrix4(toClip)
       sx[v] = ((p.x + 1) / 2) * w
       sy[v] = ((1 - p.y) / 2) * h
       // Outside the depth range is behind a clipping plane, so it is not on
       // screen and must not be marked from here.
       clipped[v] = p.z < -1 || p.z > 1 ? 1 : 0
     }
+    // A triangle a section cuts through is drawn in part; it counts as there
+    // when its centre is on the kept side, which is where the shader keeps it.
+    const dropped = (t: number): boolean => {
+      const a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2]
+      if (clipped[a] || clipped[b] || clipped[c]) return true
+      for (const d of planeDistance) if (d[a] + d[b] + d[c] < -3e-6) return true
+      return false
+    }
 
     // The view direction in the part's own coordinates, so the facing test is
     // a dot product against the triangle's own normal with no per-triangle
     // matrix work.
     const viewLocal = new THREE.Vector3(0, 0, -1)
-      .applyQuaternion(this.ctx.camera.quaternion)
-      .applyMatrix3(new THREE.Matrix3().setFromMatrix4(this.ctx.partGroup.matrixWorld).invert())
+      .applyQuaternion(camera.quaternion)
+      .applyMatrix3(new THREE.Matrix3().setFromMatrix4(partGroup.matrixWorld).invert())
     const anyFacing = marker.backfaces === true
+
+    let minX = w, minY = h, maxX = 0, maxY = 0
+    for (const q of outline) {
+      minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x)
+      minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y)
+    }
+    // Only what lies on the screen inside the outline can be marked, so that
+    // is all the depth buffer has to cover.
+    const box = { minX: Math.max(0, minX), minY: Math.max(0, minY), maxX: Math.min(w, maxX), maxY: Math.min(h, maxY) }
+    if (box.minX > box.maxX || box.minY > box.maxY) return
+    const inFront = anyFacing
+      ? null
+      : frontSurface({ index: idx, sx, sy, sz, dropped }, box, pixelSpan(camera, h, sx, sy, sz, clipped, box))
 
     const test = polygonTester(outline)
     const regions = this.ctx.regions
@@ -621,9 +846,10 @@ export class SurfaceMarking {
     const before = regions.paintCount
     for (let f = 0; f < idx.length; f += 3) {
       const a = idx[f], b = idx[f + 1], c = idx[f + 2]
-      if (clipped[a] || clipped[b] || clipped[c]) continue
       if (!test((sx[a] + sx[b] + sx[c]) / 3, (sy[a] + sy[b] + sy[c]) / 3)) continue
+      if (dropped(f / 3)) continue
       if (!anyFacing && !facesCamera(pos, a, b, c, viewLocal)) continue
+      if (inFront && !inFront(f / 3)) continue
       regions.markVertex(own(a), erase)
       regions.markVertex(own(b), erase)
       regions.markVertex(own(c), erase)
@@ -679,6 +905,12 @@ export class SurfaceMarking {
     // gets.
     this.flushPendingDab()
     this.strokeQueue.push({ x: e.clientX, y: e.clientY, erase: erasing })
+    this.ctx.wake()
+  }
+
+  /** Whether a stroke has positions buffered for the next frame to land. */
+  strokePending(): boolean {
+    return this.strokeQueue.length > 0
   }
 
   /** Land the dabs for every position a stroke buffered since the last frame.
@@ -733,7 +965,10 @@ export class SurfaceMarking {
     this.painting = false
     this.paintLast = null
     const m = this.marquee
-    if (m) {
+    if (m?.gesture === 'line') {
+      this.endMarquee()
+      this.markLine(m)
+    } else if (m) {
       // A window needs its second corner and a lasso needs enough of a loop to
       // enclose anything; either way an accidental click marks nothing rather
       // than sweeping the whole part.
@@ -825,6 +1060,7 @@ export class SurfaceMarking {
     this.painting = false
     this.paintLast = null
     this.strokeQueue.length = 0
+    this.heldDabs.length = 0
     this.endMarquee()
   }
 

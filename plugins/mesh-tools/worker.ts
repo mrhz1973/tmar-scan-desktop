@@ -17,8 +17,10 @@ import { maskedTriangles, surveyPieces, withoutTriangles } from './core/pieces'
 import { markedTriangles, type EditedMesh } from './core/edit'
 import { flipTriangles } from './core/flip'
 import { cutMesh, cutPreview } from './core/cut'
+import { mirrorMesh } from './core/mirror'
 import { fillHoles, surveyHoles } from './core/fillHoles'
 import { smoothMesh } from './core/smooth'
+import { densifyMesh } from './core/densify'
 import { booleanMesh, closedness } from './core/boolean'
 import { offsetMesh, thickenMesh } from './core/offset'
 import { hollowMesh } from './core/hollow'
@@ -69,8 +71,8 @@ const ops: { [K in keyof MeshToolsOps]: (payload: Payload<K>, ctx: WorkerContext
     const adjacency = buildAdjacency(result.indices, vertexCount)
     const slots = wireSlots(adjacency.offsets, adjacency.list, vertexCount)
     return {
-      result: { positions: result.positions, indices: result.indices, wireSlots: slots, deviation: result.deviation, report: result.report },
-      transfer: [result.positions.buffer, result.indices.buffer, slots.buffer, result.deviation.buffer],
+      result: { positions: result.positions, indices: result.indices, wireSlots: slots, vertexMap: result.vertexMap, deviation: result.deviation, report: result.report },
+      transfer: [result.positions.buffer, result.indices.buffer, slots.buffer, result.vertexMap.buffer, result.deviation.buffer],
     }
   },
 
@@ -166,6 +168,11 @@ const ops: { [K in keyof MeshToolsOps]: (payload: Payload<K>, ctx: WorkerContext
       const cut = cutMesh(g.positions, g.indices, g.vertexCount, edit.origin, edit.normal, edit.cap)
       result = cut
       report = { kind: 'cut', report: cut.report }
+    } else if (edit.type === 'mirror') {
+      ctx.progress('Mirroring the scan…')
+      const mirrored = mirrorMesh(g.positions, g.indices, g.vertexCount, edit.origin, edit.normal, edit.mode)
+      result = mirrored
+      report = { kind: 'mirror', report: mirrored.report }
     } else if (edit.type === 'fill-holes') {
       ctx.progress('Filling holes…')
       const filled = fillHoles(g.positions, g.indices, g.vertexCount, edit.maxSize, edit.mode, ctx.progress, edit.at)
@@ -176,6 +183,11 @@ const ops: { [K in keyof MeshToolsOps]: (payload: Payload<K>, ctx: WorkerContext
       const smoothed = smoothMesh(g.positions, g.indices, g.vertexCount, edit.settings, ctx.progress)
       result = smoothed
       report = { kind: 'smooth', report: smoothed.report }
+    } else if (edit.type === 'densify') {
+      ctx.progress('Densifying…')
+      const dense = densifyMesh(g.positions, g.indices, g.vertexCount, edit.maxEdge, ctx.progress)
+      result = dense
+      report = { kind: 'densify', report: dense.report }
     } else if (edit.type === 'offset') {
       const surface = () => ctx.surfaceOf(g, 'Preparing the surface to keep the move clear of it…')
       const moved = offsetMesh(g.positions, g.indices, g.vertexCount, edit.settings, ctx.progress, surface)
@@ -226,6 +238,13 @@ const ops: { [K in keyof MeshToolsOps]: (payload: Payload<K>, ctx: WorkerContext
         volume: shut.open === 0 && shut.bad === 0 ? six / 6 : null,
       },
     }
+  },
+
+  triangles(_payload, ctx) {
+    const g = subjectOf(ctx)
+    const positions = g.positions.slice(0, g.vertexCount * 3)
+    const indices = g.indices.slice()
+    return { result: { positions, indices }, transfer: [positions.buffer, indices.buffer] }
   },
 
   select({ region }, ctx) {

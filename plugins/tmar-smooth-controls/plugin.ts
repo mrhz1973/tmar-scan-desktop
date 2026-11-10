@@ -5,6 +5,7 @@ import { registerPanelExtension } from '../../src/plugins/panelExtensions'
 import { SmoothIntensity } from './SmoothIntensity'
 const plugin: ScanRulerPlugin = {
   id: 'tmar-smooth-controls', name: 'TMAR Smooth intensity',
+  requires: ['mesh-tools'],
   install() {
     if (!plugins().some(p => p.id === 'mesh-tools')) return
     registerPanelExtension({ id: 'tmar-smooth-controls.intensity', slot: 'mesh.smooth.controls', component: SmoothIntensity })

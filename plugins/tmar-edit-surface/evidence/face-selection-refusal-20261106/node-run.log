@@ -1,0 +1,36 @@
+
+ RUN  v3.2.7 C:/Users/mrhz/.codex/.chatgpt-projects/g-p-6ad36fa11fa0819192bdd25602d307e2/tmar-scan-desktop-zebra
+
+stdout | plugins/tmar-edit-surface/evidence/face-selection-refusal-20261106/native.test.ts > preserves a draft after real OCCT select refusal and permits a subsequent CAD edit
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+
+******        Transferring Shape, ShapeType = 0                      ******
+
+
+stdout | plugins/tmar-edit-surface/evidence/face-selection-refusal-20261106/native.test.ts > preserves a draft after real OCCT select refusal and permits a subsequent CAD edit
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+
+******        Transferring Shape, ShapeType = 2                      ******
+
+
+stdout | plugins/tmar-edit-surface/evidence/face-selection-refusal-20261106/native.test.ts > preserves a draft after real OCCT select refusal and permits a subsequent CAD edit
+{"out":"C:\\Users\\mrhz\\.codex\\.chatgpt-projects\\g-p-6ad36fa11fa0819192bdd25602d307e2\\tmar-scan-desktop-zebra\\plugins\\tmar-edit-surface\\evidence\\face-selection-refusal-20261106\\native-cdZdNO","scope":"real OCCT WASM in Node; in-process transport bridge, no browser Worker, dialog, host UI or user project","verdict":"PASS","bottomFace":4,"refusedFace":6,"refusalReason":"Prototipo: solo piani e B-spline non periodiche.","retainedExactSnapshot":true,"retainedHistory":true,"retainedNotes":true,"retainedWorkerWitness":true,"firstPoleZ":-0.2,"secondPoleZ":-0.30000000000000004,"firstPreviewRevision":2,"secondPreviewRevision":3,"exportValid":true,"solidCount":1,"faceCount":8,"volumeChangeMm3":11.250292499163152}
+
+ ✓ plugins/tmar-edit-surface/evidence/face-selection-refusal-20261106/native.test.ts (1 test) 1207ms
+   ✓ preserves a draft after real OCCT select refusal and permits a subsequent CAD edit  1206ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  15:05:03
+   Duration  2.92s (transform 350ms, setup 0ms, collect 545ms, tests 1.21s, environment 0ms, prepare 224ms)
+

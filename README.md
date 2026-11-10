@@ -3,6 +3,26 @@
 
 **An open-source ScanRuler fork with modular Zebra analysis, local notes and navigation, category-scoped feature multi-selection, workspace labels and unified CAD-body export. A Windows/macOS desktop application is planned separately.**
 
+## ScanRuler 0.11.1 + TMAR integration — 10 November 2026
+
+**Versione 4 · Anteprima** combines the complete official **ScanRuler 0.11.1**
+base, including its mesh-worker CSP and fitting-project recovery fixes, with
+our extensions. The integration carries forward the workspace editor host, current Edit
+Surface plugin, navigation and gizmo changes, CAD face duplication, thin-face
+annotation matching and saved parametric edits. Supported edits expose
+**Mantieni la modifica riapribile** when applying and **Riprendi modifica** after
+opening the saved `.scanruler` project. Length inputs and feedback follow the
+selected mm/in unit.
+
+[Integration, source composition and verification](docs/tmar-host-integration-20261110.md)
+· [Saved-edit workflow](plugins/tmar-surface-history/README.md).
+The validation record distinguishes native checks, browser checks and the
+installed Windows build. This migration uses the upstream-pinned
+**occt-wasm 5.15.0**. Its new verification record is
+[Upstream 0.11.1 integration](docs/tmar-upstream-0.11.1-integration-20261110.md);
+prior Versione 3 results remain historical. T2/Tubo qualification and a desktop
+installer remain separate work. Existing user sessions do not update automatically.
+
 [![Zebra inspection on the imported Tubo Finale mesh — user review ongoing](docs/images/zebra-tubo-finale-review-20261102.png)](docs/images/zebra-tubo-finale-review-20261102.png)
 
 *Martino's original Zebra screenshot, published unchanged. The file is an imported STL shown as Scan, not a CAD continuity certificate. **Work in progress — user review ongoing; not final acceptance.***
@@ -83,10 +103,12 @@ the edited copy is explicitly taken into use.
 
 **STEP opened as Scan now keeps its CAD face boundaries with Zebra.** The
 reported import route is supported without reimporting the file as a CAD body.
-The separate **TMAR web + source revision** badge is visible beside ScanRuler;
-click it for full build details in Settings. It identifies the loaded bundle,
-not the latest repository version. Original ScanRuler version and attribution
-are preserved. [Follow-up validation](docs/tmar-step-scan-validation.md).
+The separate **TMAR Versione 1** badge starts a chronological delivery sequence:
+**1, 2, 3…**. A clearly marked **Anteprima** is still a preview, not a stable release.
+Click the badge for Settings; the source commit remains under **Dettagli tecnici**,
+not in the main label. Numbers identify delivered versions, never page loads or
+Git commit counts. Original ScanRuler version and attribution are preserved.
+[Numbering policy and versions](docs/tmar-versions.md). [Follow-up validation](docs/tmar-step-scan-validation.md).
 
 ## CAD face edges with Zebra
 

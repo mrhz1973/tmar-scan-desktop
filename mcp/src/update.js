@@ -31,7 +31,7 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { configDir } from './config.js'
@@ -46,6 +46,10 @@ export const CHECK_EVERY_MS = 24 * 60 * 60 * 1000
 export const CHECK_WITHIN_MS = 2000
 /** A handed-to copy that fails sooner than this is taken as not starting. */
 export const START_GRACE_MS = 3000
+/** The exit code of a server that stopped on its arguments or settings — a
+ *  bad --port, say — rather than failing to start: a copy handed to that
+ *  ends with it is not marked failed. */
+export const USAGE_EXIT = 2
 const FETCH_WITHIN_MS = 5 * 60 * 1000
 const STATE_FILE = 'update.json'
 /** Options that answer and exit: never handed off. */
@@ -193,7 +197,11 @@ export function runHandOff({ plan, argv, version, env = process.env, spawnFn = s
     }
     child.once('error', (e) => done({ fallback: `could not start it: ${e?.message ?? e}` }))
     child.once('exit', (code, signal) => {
-      if (code !== 0 && signal === null && now() - started < START_GRACE_MS) {
+      // A copy that refused its arguments started well: this copy would
+      // refuse them too, and by now the child may have read the client's
+      // first message, so its code is passed on and the version kept.
+      if (code === USAGE_EXIT) done({ code })
+      else if (code !== 0 && signal === null && now() - started < START_GRACE_MS) {
         markFailed(plan.version)
         done({ fallback: `it stopped with code ${code} as it started` })
       } else done({ code: code ?? 1 })
@@ -281,15 +289,30 @@ export function npmCommand(env = process.env, execPath = process.execPath, exist
   return cli ? { file: execPath, args: [cli], shell: false } : { file: 'npm', args: [], shell: process.platform === 'win32' }
 }
 
+/** The folder npm runs in: an empty one of this user's, in the config
+ *  folder, that only they can write to. `npm exec` takes a package from the
+ *  folder's own node_modules before the registry, so a shared one — the
+ *  temp folder on Linux — would run a scanruler-mcp anyone planted there,
+ *  as this user. The home folder when that one cannot be made. */
+export function npmFolder(env = process.env, make = mkdirSync) {
+  const dir = join(configDir(env), 'npm-run')
+  try {
+    make(dir, { recursive: true, mode: 0o700 })
+    return dir
+  } catch {
+    return homedir()
+  }
+}
+
 /** Run npm with `args` (fixed words and a checked version only — they may
- *  pass a shell), quietly, from the temp folder: `{ code, stdout }`. */
-export function runNpm(args, { env = process.env, within = FETCH_WITHIN_MS, spawnFn = spawn } = {}) {
+ *  pass a shell), quietly, from npmFolder: `{ code, stdout }`. */
+export function runNpm(args, { env = process.env, within = FETCH_WITHIN_MS, spawnFn = spawn, cwd = npmFolder(env) } = {}) {
   return new Promise((resolve) => {
     const npm = npmCommand(env)
     let child
     try {
       child = spawnFn(npm.file, [...npm.args, ...args], {
-        cwd: tmpdir(),
+        cwd,
         env: { ...env, [NO_UPDATE_ENV]: '1', [HANDED_OFF_ENV]: '' },
         stdio: ['ignore', 'pipe', 'ignore'],
         shell: npm.shell,

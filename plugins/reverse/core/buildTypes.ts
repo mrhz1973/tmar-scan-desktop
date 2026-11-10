@@ -11,6 +11,7 @@ import type { StepReads } from './buildReads'
 import type { BuildStep, TrimPrimitive } from './features'
 import type { KernelMesh, ReadBackEdge, ReKernel, Shape, StepCheck, StepMend } from './kernel'
 import type { MeshFault } from './kernelMesh'
+import type { SmallConic } from './kernelStep'
 import type { NetworkReport } from './networkBody'
 import type { OddEdge, OddKind, ShortEdge } from './kernelEdges'
 import type { CopyMark } from './patternCopies'
@@ -98,13 +99,18 @@ export interface FeatureResult {
   /** A solid feature's bodies: the ones it joined, cut or made, as they
    *  came out of it — for its row to say which. */
   bodies?: number[]
-  /** A combine's tool as the bodies it took: the one named and every
+  /** A combine's tools as the bodies it took: each one named and every
    *  piece of it (familyOf) — a pattern's original and its copies. */
   took?: number
   /** A join's: the steps it left between the faces it brought and those
    *  it found — two walls a hair apart, a round drawn twice — the
-   *  thinnest first (stepsBetween.ts). The page words them on the row. */
+   *  thinnest first (stepsBetween.ts). The page words them into `warning`
+   *  for the agent, and lists them shorter in the feature's box. */
   stepsBetween?: StepBetween[]
+  /** The page's: what the build itself warned of, before the steps were
+   *  worded into `warning` (stepWords.ts withStepsSaid) — for the box,
+   *  which lists the steps its own way. */
+  ownWarning?: string
 }
 
 /** Where a feature failed, read by trying its picks one at a time: a
@@ -184,6 +190,11 @@ export interface BodyCheck {
    *  from one face (kernelEdges.ts shortEdges) — the first ODD_EDGES_KEPT,
    *  and how many. */
   short: { edges: ShortEdge[]; count: number }
+  /** Edges on a conic too small for a part — a plane a hair off a cone's
+   *  apex, a wedge's side meant to pass through a revolve's axis — as the
+   *  STEP writer writes them; `straight` ones the export writes as lines
+   *  (kernelStep.ts smallConics). */
+  conics: SmallConic[]
   /** Without roundTrip, on a solid of up to READ_BACK_FACES faces: the
    *  body written as STEP and read back, and the edges of the part read
    *  back that do not join two faces as a closed solid's do — the hole a
@@ -314,6 +325,17 @@ export interface EdgeInfo {
   polyline: Float32Array
 }
 
+/** Current built CAD for an explicit editor read, not deliverable export.
+ * bodyKey is session-local; it is not a persistent body or face identity. */
+export interface BodyEditSource {
+  bodyId: number
+  bodyKey: string
+  text: string
+  surface: boolean
+  faces: number
+  closed: boolean
+}
+
 export interface BuiltBody {
   /** The id of the feature that made the body. */
   id: number
@@ -343,12 +365,17 @@ export interface BuiltBody {
   box: { min: Vec3; max: Vec3 } | null
 }
 
+/** A body handed over to be drawn as soon as it can be: its topology there
+ *  where its faces had been read in the build, and otherwise read after it
+ *  (Builder.topologiesOf) — a freeform body's faces can take seconds. */
+export type DrawnBody = Omit<BuiltBody, 'topology'> & { topology?: BuiltBody['topology'] }
+
 /** A body of a build without its mesh and topology: what a build tells of
  *  every body standing, the ones the page already holds included. */
 export type BodyBrief = Omit<BuiltBody, 'mesh' | 'topology'>
 
 /** A built body in brief. */
-export function bodyBrief(b: BuiltBody): BodyBrief {
+export function bodyBrief(b: DrawnBody): BodyBrief {
   const { mesh: _mesh, topology: _topology, ...brief } = b
   return brief
 }
@@ -534,6 +561,9 @@ export interface BuildResult {
   steps: BuildSteps
 }
 
+/** A build as the page takes it (Builder.buildDrawn): bodies to draw. */
+export type DrawnBuild = Omit<BuildResult, 'bodies'> & { bodies: DrawnBody[] }
+
 /** The box round a mesh, or null for one with no points. */
 export function meshBox(mesh: { positions: Float32Array }): { min: Vec3; max: Vec3 } | null {
   const min: Vec3 = [Infinity, Infinity, Infinity]
@@ -551,7 +581,7 @@ export function meshBox(mesh: { positions: Float32Array }): { min: Vec3; max: Ve
 /** The length of a shape's bounding box's diagonal: its size, which the
  *  tolerances it is matched, meshed and measured under follow. */
 export function diagonalOf(kernel: ReKernel, shape: Shape): number {
-  const bounds = kernel.bounds(shape)
+  const bounds = kernel.extent(shape)
   return Math.hypot(bounds.max[0] - bounds.min[0], bounds.max[1] - bounds.min[1], bounds.max[2] - bounds.min[2])
 }
 

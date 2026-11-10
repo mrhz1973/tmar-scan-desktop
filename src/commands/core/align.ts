@@ -7,8 +7,10 @@
 import { ALIGN_PICK_COUNT, axisIndex, fitFromAlignPicks, parallelFaceNear, type AxisDir } from '../../core/alignment'
 import type { AutoAlignLevel, AutoAlignTilts } from '../../core/autoAlign'
 import { rigidApply, type Rigid } from '../../core/deviation/rigid'
+import { orthoBasis } from '../../core/fit/linalg'
 import { roundTo } from '../../core/round'
 import type { Vec3 } from '../../core/types'
+import { normalize } from '../../core/vec'
 import { alignCenterOf, alignmentPreview, useStore, type AlignSlot } from '../../state/store'
 import { commandHost } from '../host'
 import { elementRefSchema, measuredElement, requireScan, type ElementRef } from '../refs'
@@ -23,6 +25,7 @@ type Slot =
   | { element: ElementRef }
   | { points: Vec3[] }
   | { point: Vec3 }
+  | { plane: { origin: Vec3; normal: Vec3 } }
 
 const slotSchema = (what: string, count: number, points: string): JsonSchema =>
   oneOf(
@@ -35,6 +38,20 @@ const slotSchema = (what: string, count: number, points: string): JsonSchema =>
     `${what[0].toUpperCase()}${what.slice(1)}: an element, or ${count === 1 ? 'a point' : `${count} points`} on the scan.`,
   )
 
+/** The primary's slot: as any other, or a plane given by a point and its
+ *  outward normal — a level's plane from scan.heightmap { levels }. */
+const primarySchema: JsonSchema = oneOf(
+  [
+    obj({ element: elementRefSchema('An element for levelling.') }, ['element']),
+    obj({ points: arr(vec3('A point, mm.'), '3 points, mm — they span the face.', { minItems: 3, maxItems: 3 }) }, ['points']),
+    obj(
+      { plane: obj({ origin: vec3('A point on the plane, mm; it lands on 0 along primaryAxis.'), normal: vec3('Its outward normal: out of the face, away from the material.') }, ['origin', 'normal'], 'A plane as given — a level’s plane from scan.heightmap { levels: true }.') },
+      ['plane'],
+    ),
+  ],
+  'Levelling: an element, 3 points on the scan, or a plane { origin, normal }.',
+)
+
 /** The outward normal at a point on the scan, from the vertex nearest it. */
 async function normalAt(p: Vec3): Promise<Vec3> {
   const spot = await commandHost().session.clientRef.current!.nearest({ point: p })
@@ -45,6 +62,23 @@ async function normalAt(p: Vec3): Promise<Vec3> {
 async function fillSlot(slot: AlignSlot, value: Slot) {
   if ('element' in value) {
     useStore.getState().setAlignmentRef(slot, measuredElement(value.element).id)
+    return
+  }
+  if ('plane' in value) {
+    // Three points round the origin on the plane, each with the normal
+    // given — the plane they span is the one given, its centre the origin,
+    // facing the way it was told to.
+    const n = normalize(value.plane.normal)
+    if (!n) throw new CommandError('invalid_input', 'plane.normal: give a direction, not a zero vector.')
+    const [u, v] = orthoBasis(n)
+    const r = Math.max(1, useStore.getState().modelSize / 4)
+    const o = value.plane.origin
+    useStore.getState().beginAlignmentPick(slot)
+    for (let i = 0; i < 3; i++) {
+      const a = (2 * Math.PI * i) / 3
+      const p = [0, 1, 2].map((j) => o[j] + r * (Math.cos(a) * u[j] + Math.sin(a) * v[j])) as Vec3
+      useStore.getState().addAlignmentPick(p, n)
+    }
     return
   }
   const points = 'points' in value ? value.points : [value.point]
@@ -119,6 +153,7 @@ function originCoords(input: { primary?: Slot; primaryAxis?: AxisDir; secondary?
 function originPoint(origin: Slot): Vec3 | null {
   if ('point' in origin) return origin.point
   if ('points' in origin) return origin.points[0] ?? null
+  if ('plane' in origin) return origin.plane.origin
   const fit = measuredElement(origin.element).fit as { center?: Vec3 } | null
   return fit?.center ?? null
 }
@@ -183,7 +218,7 @@ async function parallelFace(): Promise<Record<string, unknown>> {
     parallelFace: {
       offset,
       times,
-      note: `A face parallel to the levelling plane, ${Math.abs(offset)} mm ${offset < 0 ? 'behind it' : 'out from it'} along its outward normal, has about ${times}× its area on the scan. If the part stands on that face, level on it instead — scan.query { normal } finds its points.`,
+      note: `A face parallel to the levelling plane, ${Math.abs(offset)} mm ${offset < 0 ? 'behind it' : 'out from it'} along its outward normal, has about ${times}× its area on the scan. If the part stands on that face — or the plane sits on bead crowns or a warp's high spots — level on it instead: scan.heightmap { levels: true } gives each level's plane for primary: { plane }.`,
     },
   }
 }
@@ -200,9 +235,9 @@ const datum: Command<{
   name: 'datum',
   title: 'Align the part to datums',
   description:
-    'A 3-2-1 alignment, as the panel’s alignment box sets it up: primary levels the part — a plane (or 3 points) whose outward normal becomes primaryAxis (default z-); secondary turns it — a line or axis (or 2 points) laid along secondaryAxis (default x+), or a plane; origin is the zero point — a point, sphere or circle (or 1 point). Elements by id or name, or points in mm used as given, not snapped. Trap: a plane as secondary puts its outward NORMAL on secondaryAxis, not its face along it. Each datum zeroes the coordinates it owns, the origin only those left open; an origin alone moves without turning. On a first alignment the coordinates nothing sets are centred on the scan’s box (keepFree: true leaves them). Returns the transform applied, how many elements moved, centred, origin { set, at, note } and parallelFace when a face parallel to the levelling plane within 5 mm holds more of the scan. One undo step.',
+    'A 3-2-1 alignment, as the panel’s alignment box sets it up: primary levels the part — a plane (or 3 points, or plane { origin, normal }: a level’s plane from scan.heightmap { levels: true }) whose outward normal becomes primaryAxis (default z-); secondary turns it — a line or axis (or 2 points) laid along secondaryAxis (default x+), or a plane; origin is the zero point — a point, sphere or circle (or 1 point). Elements by id or name, or points in mm used as given, not snapped. Trap: a plane as secondary puts its outward NORMAL on secondaryAxis, not its face along it. Each datum zeroes the coordinates it owns, the origin only those left open; an origin alone moves without turning. On a first alignment the coordinates nothing sets are centred on the scan’s box (keepFree: true leaves them). Returns the transform applied, how many elements moved, centred, origin { set, at, note } and parallelFace when a face parallel to the levelling plane, 0.3 to 5 mm off it (further on a noisy scan), holds more of the scan. Trap: on an embossed or warped sheet a plane fitted to the outermost faces lies on the bead crowns or the high spots, not the sheet — level on the largest level’s plane instead. One undo step.',
   input: obj({
-    primary: slotSchema('levelling', 3, 'they span the face'),
+    primary: primarySchema,
     primaryAxis: enumOf(AXES, 'The axis the primary’s outward normal becomes; default z-.'),
     secondary: slotSchema('rotation', 2, 'they run along the edge'),
     secondaryAxis: enumOf(AXES, 'The axis the secondary runs along (a plane: its normal); default x+.'),
@@ -246,11 +281,34 @@ const squareOut = (t: AutoAlignTilts) => ({
   })),
 })
 
+/** Rays cast from the largest face out along its normal: a 3 × 3 patch
+ *  about its middle. Most of them meeting the scan within the part's size
+ *  is a face that looks into the part — a rib's or a pocket's wall, which a
+ *  housing's largest flat face often is (issue 77) — not one it stands or
+ *  mates on. */
+const INSIDE_RAYS = 3
+const INSIDE_HITS = 6
+
+async function facesIn(largest: NonNullable<AutoAlignTilts['largest']>): Promise<{ clear: number; hits: number } | null> {
+  const client = commandHost().session.clientRef.current
+  const size = useStore.getState().modelSize
+  const n = normalize(largest.normal)
+  if (!client || !n || !(size > 0)) return null
+  const [u, v] = orthoBasis(n)
+  const cell = Math.sqrt(largest.area) / (INSIDE_RAYS + 1)
+  const off = Math.max(0.3, 0.002 * size)
+  const half = (INSIDE_RAYS * cell) / 2
+  const origin: Vec3 = [0, 1, 2].map((k) => largest.at[k] + n[k] * off - (u[k] + v[k]) * half) as Vec3
+  const values = await client.heights({ origin, dir: n, u, v, cell, cols: INSIDE_RAYS, rows: INSIDE_RAYS, far: 2 * size })
+  const hit = Array.from(values).filter((x) => Number.isFinite(x)).sort((a, b) => a - b)
+  return hit.length >= INSIDE_HITS ? { clear: hit[Math.floor(hit.length / 2)] + off, hits: hit.length } : null
+}
+
 const auto: Command<{ level?: AutoAlignLevel; detail?: Detail }> = {
   name: 'auto',
   title: 'Auto-align the part',
   description:
-    'Read a coordinate system off the scan and apply it, as Auto-align then Confirm alignment do: the directions most faces are square to and the axis round walls run along, the part standing on its base, its long side along X. level: settled (the default) lays all the faces on the axes at once, by area; largest squares the largest flat face exactly and settles the rest about its normal. Returns what the pose was read from, the transform, how many elements moved, and square — how square it came out: largest (the largest flat face’s axis, area, tiltDeg) and per axis the faces square to it with their tilts. Trap: a drafted wall reads as its draft, not as an alignment error. One undo step.',
+    'Read a coordinate system off the scan and apply it, as Auto-align then Confirm alignment do: the directions most faces are square to and the axis round walls run along, the part standing on its base, its long side along X. level: settled (the default) lays all the faces on the axes at once, by area; largest squares the largest flat face exactly and settles the rest about its normal. Returns what the pose was read from, the transform, how many elements moved, and square — how square it came out: largest (the largest flat face’s axis, area, tiltDeg) and per axis the faces square to it with their tilts; largestInside when that face looks into the part (the scan stands in front of it: a rib’s wall, not a mating face — level on the mating face with align.datum). Trap: a drafted wall reads as its draft, not as an alignment error. One undo step.',
   input: obj({
     level: enumOf(['settled', 'largest'], 'settled (the default): all faces at once, by area. largest: the largest flat face exactly, the rest settled about its normal.'),
     detail: detailIn,
@@ -266,7 +324,18 @@ const auto: Command<{ level?: AutoAlignLevel; detail?: Detail }> = {
         throw new CommandError('failed', lastError('Auto-align found no pose.'))
       }
       const note = useStore.getState().alignDraft?.proposal
-      return applied(await applyOpenBox(), detail, { note, square: squareOut(tilts) })
+      // Looked at in the scan's frame as it stands, before the pose moves it.
+      const inside = tilts.largest ? await facesIn(tilts.largest) : null
+      const square = squareOut(tilts)
+      const warning = inside
+        ? {
+            largestInside: {
+              clearMm: roundTo(inside.clear, 1),
+              note: `The largest flat face (${Math.round(tilts.largest!.area)} mm², square to ${tilts.largest!.axis}) faces into the part: the scan stands about ${roundTo(inside.clear, 1)} mm in front of it along its outward normal — an inside wall, a rib's or a pocket's, not a face the part stands or mates on. Check the datums before modelling: align.datum on the face it mates on (a flange, a base).`,
+            },
+          }
+        : {}
+      return applied(await applyOpenBox(), detail, { note, square, ...warning })
     } finally {
       closeBox()
     }

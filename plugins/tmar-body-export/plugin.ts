@@ -6,6 +6,7 @@ import { BodyStlExport } from './BodyStlExport'
 
 const plugin: ScanRulerPlugin = {
   id: 'tmar-body-export',
+  requires: ['reverse'],
   name: 'TMAR CAD body STL export',
   install() {
     if (!plugins().some((p) => p.id === 'reverse')) return

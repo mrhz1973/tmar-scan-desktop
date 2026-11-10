@@ -70,25 +70,70 @@ export function pluginEnabled(plugin: ScanRulerPlugin): boolean {
 }
 
 let installed: readonly ScanRulerPlugin[] | null = null
+/** Only completed installations are visible while another plugin installs;
+ *  a dependency must never appear available before its install succeeds. */
+let installing: readonly ScanRulerPlugin[] | null = null
 
-/** Install every enabled plugin, once, in a fixed order — by id, so what a
- *  plugin registers never depends on the order the bundler found it in. */
+/** Install every enabled plugin, once, with dependencies first and otherwise
+ *  by id, so registration never depends on the bundler's discovery order. */
 export function installPlugins(): readonly ScanRulerPlugin[] {
   if (installed) return installed
-  const all = Object.values(found)
-    .map((m) => m.default)
-    .sort((a, b) => a.id.localeCompare(b.id))
-  const ids = new Set<string>()
-  for (const p of all) {
-    if (ids.has(p.id)) throw new Error(`Two plugins share the id "${p.id}".`)
-    ids.add(p.id)
-  }
-  installed = all.filter(pluginEnabled)
-  for (const p of installed) p.install?.()
+  if (installing) return installing
+  installed = installEnabled(Object.values(found).map((m) => m.default))
   return installed
 }
 
-/** The plugins in use — none until installPlugins() has run. */
+/** Install those of `all` that are enabled, dependencies first, and return
+ *  the ones that installed. Only enabled plugins share the id check, so
+ *  `?plugins=none` still opens an app whose build has a clash. A plugin
+ *  whose install() throws is left out of the list, so nothing — the
+ *  headless engine included — takes it for one in use. Its dependents are
+ *  left out too, as are those whose dependency is absent or switched off. */
+export function installEnabled(all: readonly ScanRulerPlugin[]): readonly ScanRulerPlugin[] {
+  const enabled = all.filter(pluginEnabled).sort((a, b) => a.id.localeCompare(b.id))
+  const ids = new Set<string>()
+  for (const p of enabled) {
+    if (ids.has(p.id)) throw new Error(`Two plugins share the id "${p.id}".`)
+    ids.add(p.id)
+  }
+  const done: ScanRulerPlugin[] = []
+  const byId = new Map(enabled.map((p) => [p.id, p]))
+  const succeeded = new Set<string>(), failed = new Set<string>(), visiting = new Set<string>()
+  const visit = (p: ScanRulerPlugin): boolean => {
+    if (succeeded.has(p.id)) return true
+    if (failed.has(p.id)) return false
+    if (visiting.has(p.id)) {
+      console.error(`The plugin "${p.id}" has a cyclic dependency.`)
+      failed.add(p.id)
+      return false
+    }
+    visiting.add(p.id)
+    try {
+      for (const id of p.requires ?? []) {
+        const dependency = byId.get(id)
+        if (!dependency || !visit(dependency)) { failed.add(p.id); return false }
+      }
+      p.install?.()
+      done.push(p)
+      succeeded.add(p.id)
+      return true
+    } catch (error) {
+      failed.add(p.id)
+      console.error(`The plugin "${p.id}" could not be installed.`, error)
+      return false
+    } finally { visiting.delete(p.id) }
+  }
+  const previous = installing
+  installing = done
+  try {
+    for (const p of enabled) visit(p)
+  } finally {
+    installing = previous
+  }
+  return done
+}
+
+/** The plugins in use; during installation, only those already successful. */
 export function plugins(): readonly ScanRulerPlugin[] {
-  return installed ?? []
+  return installing ?? installed ?? []
 }

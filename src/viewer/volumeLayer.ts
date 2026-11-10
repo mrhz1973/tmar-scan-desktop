@@ -20,9 +20,15 @@ const KINDS: VolumeKind[] = ['excess', 'missing', 'unsure']
 export class VolumeLayer {
   readonly group = new THREE.Group()
   private shells: { kind: VolumeKind; shell: VolumeShell; colors: THREE.BufferAttribute }[] = []
-  private materials: THREE.Material[] = []
+  /** The two materials every measurement is drawn with, kept for the layer's
+   *  life: a measurement replaced would otherwise let them go and, with them,
+   *  the shader programs they hold, to be compiled again for the next. */
+  private front: THREE.MeshStandardMaterial | null = null
+  private through: THREE.MeshBasicMaterial | null = null
   private geometries: THREE.BufferGeometry[] = []
   private hovered: number | null = null
+  /** The section view's cut, as the reference is cut — see setClipping. */
+  private clipping: THREE.Plane[] | null = null
 
   constructor() {
     this.group.visible = false
@@ -33,9 +39,10 @@ export class VolumeLayer {
   set(volume: VolumeDeviation | null): void {
     this.clear()
     if (!volume?.meshes) return
-    const front = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.85, side: THREE.DoubleSide, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1 })
-    const through = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
-    this.materials = [front, through]
+    const front = (this.front ??= new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.85, side: THREE.DoubleSide, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1 }))
+    const through = (this.through ??= new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthTest: false, depthWrite: false }))
+    front.clippingPlanes = this.clipping
+    through.clippingPlanes = this.clipping
     for (const kind of KINDS) {
       const shell = volume.meshes[kind]
       if (shell.indices.length === 0) continue
@@ -59,6 +66,25 @@ export class VolumeLayer {
 
   setVisible(visible: boolean): void {
     this.group.visible = visible && this.shells.length > 0
+  }
+
+  /** Cut as the section view cuts the reference, or whole (null): the
+   *  regions lie on and in the reference, and drawn whole over a cut one
+   *  they hid what the cut opened (issue 34). */
+  setClipping(planes: THREE.Plane[] | null): void {
+    if (planes === this.clipping) return
+    this.clipping = planes
+    for (const m of [this.front, this.through]) {
+      if (!m) continue
+      m.clippingPlanes = planes
+      m.needsUpdate = true
+    }
+  }
+
+  /** The meshes drawn, while shown — what an orbit may turn about. */
+  meshes(): THREE.Object3D[] {
+    // Solid and see-through alike are added in pairs; the solid of each.
+    return this.group.visible ? this.group.children.filter((_, i) => i % 2 === 0) : []
   }
 
   /** Light up one region, by its index in the measurement's list, or none. */
@@ -88,9 +114,7 @@ export class VolumeLayer {
   private clear(): void {
     this.group.clear()
     for (const g of this.geometries) g.dispose()
-    for (const m of this.materials) m.dispose()
     this.geometries = []
-    this.materials = []
     this.shells = []
     this.hovered = null
     this.group.visible = false
@@ -98,5 +122,8 @@ export class VolumeLayer {
 
   dispose(): void {
     this.clear()
+    this.front?.dispose()
+    this.through?.dispose()
+    this.front = this.through = null
   }
 }

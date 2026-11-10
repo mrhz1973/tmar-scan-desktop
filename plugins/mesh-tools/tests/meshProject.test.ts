@@ -2,10 +2,13 @@
 // The Mesh Tools workspace's part of a project file.
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { validateManifest } from '../../../src/core/project/manifest'
-import { collectProject, prepareProjectState, readAs } from '../../../src/app/project'
+import { collectProject, prepareProjectState, readAs, sessionHolds, sessionIsDirty } from '../../../src/app/project'
 import { useMeshTools } from '../state/meshStore'
 import { editedCopy } from '../state/editedCopy'
 import type { MeshPart } from '../app/projectSection'
+import { meshSection } from '../app/projectSection'
+import { buildBinaryPly } from '../core/plyWriter'
+import { useStore } from '../../../src/state/store'
 import meshPlugin from '../plugin'
 import { fresh, sources } from '../../../tests/projectKit'
 
@@ -52,12 +55,15 @@ describe('the Mesh Tools part of a project', () => {
       pieceSize: 3,
       pieceSizeAuto: false,
       cut: { ref: 'z', offset: 0.5, offsetAuto: false, keep: 'plus', cap: true },
+      mirror: { ref: 'x', offset: 0, offsetAuto: true, keep: 'plus', mode: 'whole' },
       fill: { size: 5, sizeAuto: true, mode: 'curved' },
       smooth: { size: 1, sizeAuto: true, limit: 0.2, limitAuto: true, keepEdges: true, scope: 'all' },
+      densify: { edge: 1, edgeAuto: true },
       boolean: { op: 'subtract' },
       offset: { distance: 0.1, direction: 'expand', scope: 'all' },
       shell: { thickness: 2, thicknessAuto: true, side: 'in' },
       trim: { offset: 0, depth: 0.3, flip: false },
+      wrap: { gap: 1, gapAuto: true, grow: 0, edges: 'sharp' },
     })
     const json = JSON.parse(JSON.stringify(manifest))
     useMeshTools.setState({ tolerance: 0.5, toleranceAuto: true, maxTriangles: 50_000, cutOffset: 9, cutOffsetAuto: true })
@@ -80,6 +86,11 @@ describe('the Mesh Tools part of a project', () => {
       cutOffsetAuto: false,
       cutKeep: 'minus',
       cutCap: false,
+      mirrorRef: 3,
+      mirrorOffset: 1.25,
+      mirrorOffsetAuto: false,
+      mirrorKeep: 'minus',
+      mirrorMode: 'symmetric',
       holeSize: 8,
       holeSizeAuto: false,
       fillMode: 'flat',
@@ -109,16 +120,19 @@ describe('the Mesh Tools part of a project', () => {
         { kind: 'shell', mode: 'thicken', thickness: 1.5, side: 'both', triangles: 4000 },
         { kind: 'boolean', op: 'subtract', solid: 'Solid 2', removed: 40, added: 260, volume: -42.4 },
         { kind: 'cut', plane: 'XY plane, Z 0.5 mm', removed: 3400, capped: 1, open: 0 },
+        { kind: 'mirror', mode: 'whole', plane: 'YZ plane, X 0 mm', triangles: 5000 },
+        { kind: 'mirror', mode: 'symmetric', plane: 'Plane 3', triangles: 2600 },
         { kind: 'fill', maxSize: 8, mode: 'flat', holes: 3, triangles: 96 },
         { kind: 'smooth', size: 0.5, limit: 0.02, maxMove: 0.018 },
         { kind: 'smooth', size: 2, limit: 0.5, maxMove: 0.1, region: 1200 },
+        { kind: 'reduce', tolerance: 0.05, held: true, p999: 0.04, triangles: 90_000 },
       ],
     })
     const saved = useMeshTools.getState()
     const { manifest } = collectProject(sources(), null, '0.1.0')
     const json = JSON.parse(JSON.stringify(manifest))
     useMeshTools.setState({
-      cutRef: 'z', cutKeep: 'plus', cutCap: true, holeSize: 5, fillMode: 'curved', smoothScope: 'all', smoothSize: 1, smoothEdges: true, boolOp: 'subtract',
+      cutRef: 'z', cutKeep: 'plus', cutCap: true, mirrorRef: 'x', mirrorOffset: 0, mirrorOffsetAuto: true, mirrorKeep: 'plus', mirrorMode: 'whole', holeSize: 5, fillMode: 'curved', smoothScope: 'all', smoothSize: 1, smoothEdges: true, boolOp: 'subtract',
       offsetDistance: 0.1, offsetDirection: 'expand', offsetScope: 'all', shellThickness: 2, shellThicknessAuto: true, shellSide: 'in', edits: [],
       trimOffset: 0, trimDepth: 0.3, trimFlip: false,
     })
@@ -128,6 +142,11 @@ describe('the Mesh Tools part of a project', () => {
       cutOffset: -2,
       cutKeep: 'minus',
       cutCap: false,
+      mirrorRef: 3,
+      mirrorOffset: 1.25,
+      mirrorOffsetAuto: false,
+      mirrorKeep: 'minus',
+      mirrorMode: 'symmetric',
       holeSize: 8,
       holeSizeAuto: false,
       fillMode: 'flat',
@@ -152,20 +171,28 @@ describe('the Mesh Tools part of a project', () => {
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, cut: { ...json.mesh.cut, ref: 'w' } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, cut: { ...json.mesh.cut, keep: 'up' } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, fill: { ...json.mesh.fill, mode: 'round' } } }))).toThrow(/Malformed/)
+    expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, mirror: { ...json.mesh.mirror, mode: 'half' } } }))).toThrow(/Malformed/)
+    expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, mirror: { ...json.mesh.mirror, ref: 'w' } } }))).toThrow(/Malformed/)
+    expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, edits: [{ kind: 'mirror', mode: 'whole', plane: 'XY', triangles: '3' }] } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, smooth: { ...json.mesh.smooth, size: 0 } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, smooth: { ...json.mesh.smooth, scope: 'some' } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, edits: [{ kind: 'cut', plane: 3, removed: 1, capped: 0, open: 0 }] } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, boolean: { op: 'xor' } } }))).toThrow(/Malformed/)
+    expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, densify: { edge: 0, edgeAuto: false } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, edits: [{ kind: 'boolean', op: 'subtract', solid: 2, removed: 1, added: 1, volume: 0 }] } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, offset: { ...json.mesh.offset, direction: 'up' } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, offset: { ...json.mesh.offset, distance: -1 } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, shell: { ...json.mesh.shell, side: 'left' } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, edits: [{ kind: 'shell', mode: 'fill', thickness: 1, triangles: 1 }] } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, edits: [{ kind: 'offset', distance: '1', maxMove: 1 }] } }))).toThrow(/Malformed/)
+    expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, edits: [{ kind: 'reduce', tolerance: 0.05, held: 'yes', p999: 0.04, triangles: 1 }] } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, edits: [{ kind: 'flip', triangles: 3, region: 'top' }] } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, trim: { ...json.mesh.trim, offset: -0.1 } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, trim: { ...json.mesh.trim, depth: 0 } } }))).toThrow(/Malformed/)
     expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, trim: { ...json.mesh.trim, flip: 'yes' } } }))).toThrow(/Malformed/)
+    expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, wrap: { ...json.mesh.wrap, gap: 0 } } }))).toThrow(/Malformed/)
+    expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, wrap: { ...json.mesh.wrap, edges: 'round' } } }))).toThrow(/Malformed/)
+    expect(() => prepareProjectState(validateManifest({ ...json, mesh: { ...json.mesh, edits: [{ kind: 'wrap', gap: 1, grow: 0, edges: 'sharp', shells: '1', triangles: 1, dropped: 0, bridged: 0 }] } }))).toThrow(/Malformed/)
 
     // A project from before these tools keeps whatever they were set to.
     const older = { ...json, mesh: { ...json.mesh } }
@@ -176,13 +203,14 @@ describe('the Mesh Tools part of a project', () => {
     delete older.mesh.offset
     delete older.mesh.shell
     delete older.mesh.trim
-    useMeshTools.setState({ holeSize: 11, smoothSize: 3, boolOp: 'add', offsetDistance: 0.4, shellSide: 'out', trimOffset: 0.05 })
+    delete older.mesh.wrap
+    useMeshTools.setState({ holeSize: 11, smoothSize: 3, boolOp: 'add', offsetDistance: 0.4, shellSide: 'out', trimOffset: 0.05, wrapGrow: 0.3 })
     prepareProjectState(validateManifest(older))()
-    expect(useMeshTools.getState()).toMatchObject({ holeSize: 11, smoothSize: 3, boolOp: 'add', offsetDistance: 0.4, shellSide: 'out', trimOffset: 0.05 })
+    expect(useMeshTools.getState()).toMatchObject({ holeSize: 11, smoothSize: 3, boolOp: 'add', offsetDistance: 0.4, shellSide: 'out', trimOffset: 0.05, wrapGrow: 0.3 })
     useMeshTools.setState({
       edits: [], cutRef: 'z', cutOffsetAuto: true, smoothScope: 'all', boolOp: 'subtract',
       offsetDistance: 0.1, offsetDirection: 'expand', offsetScope: 'all', shellThickness: 2, shellThicknessAuto: true, shellSide: 'in',
-      trimOffset: 0, trimDepth: 0.3, trimFlip: false,
+      trimOffset: 0, trimDepth: 0.3, trimFlip: false, wrapGrow: 0,
     })
   })
 
@@ -194,10 +222,10 @@ describe('the Mesh Tools part of a project', () => {
     editedCopy.current = copy
     const { manifest, members } = collectProject(sources(), null, '0.1.0')
     editedCopy.current = null
-    const files = new Map(members.map((m) => [m.name, m.bytes] as const))
+    const files = new Map(members.flatMap((m) => m.bytes instanceof Uint8Array ? [[m.name, m.bytes] as const] : []))
     expect((manifest.mesh as MeshPart | undefined)?.copy).toEqual({ member: 'edited.ply', mapMember: 'edited-map.bin', pending })
     expect(members.find((m) => m.name === 'edited.ply')?.bytes).toBe(copy.source.bytes)
-    const bytes = members.find((m) => m.name === 'edited-map.bin')!.bytes
+    const bytes = members.find((m) => m.name === 'edited-map.bin')!.bytes as Uint8Array
     expect(Array.from(new Int32Array(bytes.slice().buffer))).toEqual([0, -1, 1, 2])
     // Read back, the edits wait on the copy again.
     const json = JSON.parse(JSON.stringify(manifest))
@@ -212,14 +240,45 @@ describe('the Mesh Tools part of a project', () => {
     useMeshTools.setState({ pending: [] })
   })
 
+  it('refuses a copy map of torn int32s before the session is replaced, and numbers past the copy once the scan is in', async () => {
+    const pending = [{ kind: 'smooth' as const, size: 2, limit: 0.5, maxMove: 0.12 }]
+    useMeshTools.setState({ edits: [], pending })
+    editedCopy.current = { source: { name: 'bracket.ply', bytes: new Uint8Array([4]) }, map: Int32Array.from([0, 1]) }
+    const { manifest, members } = collectProject(sources(), null, '0.1.0')
+    editedCopy.current = null
+    const json = validateManifest(JSON.parse(JSON.stringify(manifest)))
+    const files = new Map(members.flatMap((m) => m.bytes instanceof Uint8Array ? [[m.name, m.bytes] as const] : []))
+    // Five bytes are no whole number of vertex numbers.
+    files.set('edited-map.bin', new Uint8Array(5))
+    expect(() => prepareProjectState(json, files)).toThrow(/Malformed/)
+    // A number below -1 is no vertex.
+    files.set('edited-map.bin', new Uint8Array(Int32Array.from([0, -2]).buffer))
+    expect(() => prepareProjectState(json, files)).toThrow(/Malformed/)
+    // A copy of three vertices has no vertex 3; the edits waiting on it go.
+    const ply = buildBinaryPly(new Float32Array(9), Uint32Array.from([0, 1, 2]))
+    files.set('edited.ply', ply)
+    files.set('edited-map.bin', new Uint8Array(Int32Array.from([0, 3]).buffer))
+    prepareProjectState(json, files)()
+    useStore.setState({ vertexCount: 2 })
+    const part = json.mesh as MeshPart
+    await expect(meshSection.restore!(part, { manifest: json, members: files })).rejects.toThrow(/Malformed/)
+    expect(useMeshTools.getState().pending).toEqual([])
+    // In range, it is read.
+    useMeshTools.setState({ pending })
+    files.set('edited-map.bin', new Uint8Array(Int32Array.from([0, 2]).buffer))
+    await meshSection.restore!(part, { manifest: json, members: files })
+    expect(useMeshTools.getState().pending).toEqual(pending)
+    useMeshTools.setState({ pending: [] })
+  })
+
   it('keeps an edited scan as the PLY it now is, under the name it was opened as, with its edits', () => {
     const edit = { kind: 'pieces' as const, minSize: 2, pieces: 37, triangles: 1204 }
     useMeshTools.setState({ edits: [edit] })
-    const edited = { ...sources(), scan: { name: 'bracket.ply', bytes: new Uint8Array([9, 9, 9]), units: 'mm' as const } }
+    const edited = { ...sources(), scan: { name: 'bracket.ply', file: new Blob([new Uint8Array([9, 9, 9])]), units: 'mm' as const } }
     const { manifest, members } = collectProject(edited, null, '0.1.0')
     expect(manifest.scan).toMatchObject({ fileName: 'bracket.stl', member: 'scan.ply' })
     expect(manifest.scan).not.toHaveProperty('units')
-    expect(members.find((m) => m.name === 'scan.ply')?.bytes).toBe(edited.scan.bytes)
+    expect(members.find((m) => m.name === 'scan.ply')?.bytes).toBe(edited.scan.file)
     expect((manifest.mesh as MeshPart | undefined)?.edits).toEqual([edit])
     // Read back as what the member is, shown as what it was opened as.
     expect(readAs(manifest.scan!.fileName, manifest.scan!.member)).toBe('bracket.ply')
@@ -251,4 +310,13 @@ describe('the Mesh Tools part of a project', () => {
     expect(useMeshTools.getState().maxTriangles).toBe(50_000)
   })
 
+  it('counts edits waiting on the copy as work a new session would lose', () => {
+    useMeshTools.setState({ edits: [], pending: [{ kind: 'smooth', size: 2, limit: 0.5, maxMove: 0.12 }] })
+    expect(meshSection.holdsWork!()).toBe(true)
+    expect(sessionIsDirty()).toBe(true)
+    expect(sessionHolds()).toMatchObject({ copyEdits: 1 })
+    expect(sessionHolds()).not.toHaveProperty('scanEdits')
+    useMeshTools.setState({ pending: [] })
+    expect(meshSection.holdsWork!()).toBe(false)
+  })
 })

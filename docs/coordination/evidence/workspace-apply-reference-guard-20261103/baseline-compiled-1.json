@@ -1,0 +1,337 @@
+{
+  "label": "baseline-compiled-1",
+  "url": "http://127.0.0.1:17662/",
+  "checks": [
+    "real author controller in existing workspace",
+    "validated numeric normal movement before Apply"
+  ],
+  "exceptions": [
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.a [as assertCurrent] (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4493:336584)\n    at S (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4492:56258)\n    at Object.references (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4492:57054)\n    at O (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:97580)\n    at H (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:101427)\n    at http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:110239\n    at http://127.0.0.1:17662/assets/index-CINHHQUo.js:50:39196\n    at Set.forEach (<anonymous>)\n    at n.s [as setState] (http://127.0.0.1:17662/assets/index-CINHHQUo.js:50:39185)\n    at http://127.0.0.1:17662/assets/index-CINHHQUo.js:4493:283353",
+      "frames": [
+        {
+          "name": "a",
+          "url": "",
+          "line": 4493,
+          "column": 336577
+        },
+        {
+          "name": "S",
+          "url": "",
+          "line": 4492,
+          "column": 56257
+        },
+        {
+          "name": "references",
+          "url": "",
+          "line": 4492,
+          "column": 57053
+        },
+        {
+          "name": "O",
+          "url": "",
+          "line": 4531,
+          "column": 97579
+        },
+        {
+          "name": "H",
+          "url": "",
+          "line": 4531,
+          "column": 101426
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4531,
+          "column": 110238
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 50,
+          "column": 39195
+        },
+        {
+          "name": "s",
+          "url": "",
+          "line": 50,
+          "column": 39184
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4493,
+          "column": 283352
+        },
+        {
+          "name": "kEe",
+          "url": "",
+          "line": 4025,
+          "column": 160903
+        },
+        {
+          "name": "publish",
+          "url": "",
+          "line": 4493,
+          "column": 282943
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4025,
+          "column": 156468
+        }
+      ]
+    },
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.a [as assertCurrent] (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4493:336584)\n    at Md (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4025:151614)\n    at Object.assertSourceCurrent (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4025:152952)\n    at Y6.assertLive (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:132178)\n    at Y6.assertMutable (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:132228)\n    at Y6.change (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:134147)\n    at Y6.reportViewError (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:130491)\n    at N (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:96857)\n    at O (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:97941)\n    at H (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:101427)",
+      "frames": [
+        {
+          "name": "a",
+          "url": "",
+          "line": 4493,
+          "column": 336577
+        },
+        {
+          "name": "Md",
+          "url": "",
+          "line": 4025,
+          "column": 151613
+        },
+        {
+          "name": "assertSourceCurrent",
+          "url": "",
+          "line": 4025,
+          "column": 152951
+        },
+        {
+          "name": "assertLive",
+          "url": "",
+          "line": 4531,
+          "column": 132177
+        },
+        {
+          "name": "assertMutable",
+          "url": "",
+          "line": 4531,
+          "column": 132227
+        },
+        {
+          "name": "change",
+          "url": "",
+          "line": 4531,
+          "column": 134146
+        },
+        {
+          "name": "reportViewError",
+          "url": "",
+          "line": 4531,
+          "column": 130490
+        },
+        {
+          "name": "N",
+          "url": "",
+          "line": 4531,
+          "column": 96856
+        },
+        {
+          "name": "O",
+          "url": "",
+          "line": 4531,
+          "column": 97940
+        },
+        {
+          "name": "H",
+          "url": "",
+          "line": 4531,
+          "column": 101426
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4531,
+          "column": 110238
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 50,
+          "column": 39195
+        },
+        {
+          "name": "s",
+          "url": "",
+          "line": 50,
+          "column": 39184
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4493,
+          "column": 283352
+        },
+        {
+          "name": "kEe",
+          "url": "",
+          "line": 4025,
+          "column": 160903
+        },
+        {
+          "name": "publish",
+          "url": "",
+          "line": 4493,
+          "column": 282943
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4025,
+          "column": 156468
+        }
+      ]
+    },
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.a [as assertCurrent] (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4493:336584)\n    at Md (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4025:151614)\n    at Object.assertSourceCurrent (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4025:152952)\n    at Y6.assertLive (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:132178)\n    at Y6.assertMutable (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:132228)\n    at Y6.change (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:134147)\n    at Y6.reportViewError (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:130491)\n    at N (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:96857)\n    at H (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:101598)\n    at http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:110239",
+      "frames": [
+        {
+          "name": "a",
+          "url": "",
+          "line": 4493,
+          "column": 336577
+        },
+        {
+          "name": "Md",
+          "url": "",
+          "line": 4025,
+          "column": 151613
+        },
+        {
+          "name": "assertSourceCurrent",
+          "url": "",
+          "line": 4025,
+          "column": 152951
+        },
+        {
+          "name": "assertLive",
+          "url": "",
+          "line": 4531,
+          "column": 132177
+        },
+        {
+          "name": "assertMutable",
+          "url": "",
+          "line": 4531,
+          "column": 132227
+        },
+        {
+          "name": "change",
+          "url": "",
+          "line": 4531,
+          "column": 134146
+        },
+        {
+          "name": "reportViewError",
+          "url": "",
+          "line": 4531,
+          "column": 130490
+        },
+        {
+          "name": "N",
+          "url": "",
+          "line": 4531,
+          "column": 96856
+        },
+        {
+          "name": "H",
+          "url": "",
+          "line": 4531,
+          "column": 101597
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4531,
+          "column": 110238
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 50,
+          "column": 39195
+        },
+        {
+          "name": "s",
+          "url": "",
+          "line": 50,
+          "column": 39184
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4493,
+          "column": 283352
+        },
+        {
+          "name": "kEe",
+          "url": "",
+          "line": 4025,
+          "column": 160903
+        },
+        {
+          "name": "publish",
+          "url": "",
+          "line": 4493,
+          "column": 282943
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4025,
+          "column": 156468
+        }
+      ]
+    },
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.a [as assertCurrent] (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4493:336584)\n    at Md (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4025:151614)\n    at Object.assertSourceCurrent (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4025:152952)\n    at Y6.assertLive (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:132178)\n    at Y6.assertMutable (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:132228)\n    at Y6.change (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:134147)\n    at Y6.reportViewError (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:130491)\n    at N (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:96857)\n    at H (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:101598)\n    at http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:110239",
+      "frames": [
+        {
+          "name": "kEe",
+          "url": "",
+          "line": 4025,
+          "column": 161142
+        },
+        {
+          "name": "publish",
+          "url": "",
+          "line": 4493,
+          "column": 282943
+        },
+        {
+          "name": "",
+          "url": "",
+          "line": 4025,
+          "column": 156468
+        }
+      ]
+    },
+    {
+      "description": "Error: La sorgente CAD o il documento è cambiato: riapri la modifica.\n    at Object.a [as assertCurrent] (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4493:336584)\n    at Md (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4025:151614)\n    at Object.assertSourceCurrent (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4025:152952)\n    at Y6.assertLive (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:132178)\n    at Y6.assertMutable (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:132228)\n    at Y6.change (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:134147)\n    at Y6.reportViewError (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:130491)\n    at N (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:96857)\n    at H (http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:101598)\n    at http://127.0.0.1:17662/assets/index-CINHHQUo.js:4531:110239",
+      "frames": [
+        {
+          "name": "",
+          "url": "",
+          "line": 4025,
+          "column": 156771
+        }
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "verdict": "FAIL",
+  "after": {
+    "open": true,
+    "status": "La sorgente CAD o il documento è cambiato: riapri la modifica.",
+    "bodies": 1
+  },
+  "error": "AssertionError [ERR_ASSERTION]: Apply creates one copy and closes editor without stale-source error\n    at check (file:///D:/TMAR-QA/workspace-apply-guard-qa-20261103/plugins/reverse/scripts/e2e-workspace-apply-guard.mjs:18:25)\n    at file:///D:/TMAR-QA/workspace-apply-guard-qa-20261103/plugins/reverse/scripts/e2e-workspace-apply-guard.mjs:65:3"
+}

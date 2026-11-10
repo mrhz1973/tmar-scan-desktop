@@ -1,0 +1,11 @@
+{
+  "scope": "OCCT reimport of snapped and unsnapped STEP exports from the compiled browser tests",
+  "cases": [
+    {"reference": "scan", "mode": "snapped", "valid": true, "solids": 1, "faces": 6, "volume_mm3": 6075.001949994354},
+    {"reference": "scan", "mode": "Alt", "valid": true, "solids": 1, "faces": 6, "volume_mm3": 6056.251465043694},
+    {"reference": "scan", "mode": "disabled", "valid": true, "solids": 1, "faces": 6, "volume_mm3": 6056.251465043694},
+    {"reference": "CAD body", "mode": "snapped", "valid": true, "solids": 1, "faces": 6, "volume_mm3": 6075.001949994354},
+    {"reference": "CAD body", "mode": "Alt", "valid": true, "solids": 1, "faces": 6, "volume_mm3": 6056.251465043694},
+    {"reference": "CAD body", "mode": "disabled", "valid": true, "solids": 1, "faces": 6, "volume_mm3": 6056.251465043694}
+  ]
+}

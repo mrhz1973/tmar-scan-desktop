@@ -1,0 +1,146 @@
+{
+  "verifiedAt": "2026-11-03T02:24:21.534Z",
+  "base": "935f07f23a2311e8d90684590b8aac3d78ca0b5a",
+  "testedRuntime": "e7b71efdf43e6bf7bbb7604c540420f297d074d5",
+  "authorCheckpoint": "3b36a3626c2cf22be8e640a97c882594dcad4ea2",
+  "pluginTree": "0e750d2fcd7b100ebffcb03e0b90aade0c879032",
+  "scope": "Isolated prototype runtime ACK only; no main merge or QS parity",
+  "unitTests": 45,
+  "browserRegressionChecks": 221,
+  "editSurfaceBrowserScenarios": 3,
+  "inheritedBoundaryFailure": "scripts/capture-tmar-gallery.mjs:11 -> ../plugins/tmar-mesh-review/scripts/fixture.mjs",
+  "initial": [
+    {
+      "name": "unit",
+      "code": 0,
+      "assertions": 0,
+      "failed": 0,
+      "seconds": 5.904
+    },
+    {
+      "name": "typecheck",
+      "code": 0,
+      "assertions": 0,
+      "failed": 0,
+      "seconds": 25.08
+    },
+    {
+      "name": "production-build",
+      "code": 0,
+      "assertions": 0,
+      "failed": 0,
+      "seconds": 19.205
+    },
+    {
+      "name": "plugin-boundary",
+      "code": 1,
+      "assertions": 0,
+      "failed": 0,
+      "seconds": 0.292
+    },
+    {
+      "name": "surface-original-flow",
+      "code": 0,
+      "assertions": 0,
+      "failed": 0,
+      "seconds": 15.618
+    },
+    {
+      "name": "surface-refined-roundtrip",
+      "code": 0,
+      "assertions": 0,
+      "failed": 0,
+      "seconds": 9.079
+    },
+    {
+      "name": "zebra-regression",
+      "code": 0,
+      "assertions": 32,
+      "failed": 0,
+      "seconds": 17.799
+    },
+    {
+      "name": "focus-production",
+      "code": 0,
+      "assertions": 31,
+      "failed": 0,
+      "seconds": 12.537
+    },
+    {
+      "name": "category-production",
+      "code": 1,
+      "assertions": 0,
+      "failed": 0,
+      "seconds": 0.404
+    },
+    {
+      "name": "cad-edges-production",
+      "code": 1,
+      "assertions": 1,
+      "failed": 1,
+      "seconds": 2.801
+    },
+    {
+      "name": "mesh-review-production",
+      "code": 0,
+      "assertions": 18,
+      "failed": 0,
+      "seconds": 11.692
+    }
+  ],
+  "followup": [
+    {
+      "name": "baseline-plugin-boundary",
+      "code": 1,
+      "assertions": 0,
+      "failed": 0,
+      "seconds": 0.31
+    },
+    {
+      "name": "category-fixture",
+      "code": 0,
+      "assertions": 35,
+      "failed": 0,
+      "seconds": 27.13
+    },
+    {
+      "name": "edge-fixture",
+      "code": 0,
+      "assertions": 25,
+      "failed": 0,
+      "seconds": 19.983
+    },
+    {
+      "name": "category-production-retry",
+      "code": 0,
+      "assertions": 22,
+      "failed": 0,
+      "seconds": 10.837
+    },
+    {
+      "name": "cad-edges-production-retry",
+      "code": 0,
+      "assertions": 9,
+      "failed": 0,
+      "seconds": 11.27
+    },
+    {
+      "name": "smooth-shift-production",
+      "code": 0,
+      "assertions": 49,
+      "failed": 0,
+      "seconds": 23.244
+    }
+  ],
+  "compiledRoundtrip": {
+    "pass": true,
+    "originalVolume": 6075.247994550057,
+    "editedVolume": 6192.107966783208,
+    "roundtripVolume": 6192.107966783208,
+    "maxError": 0,
+    "editedStatus": "CAD valido · volume 6192.108 mm³ · scarto bordo 2.0e-14 mm",
+    "project": "project.scanruler",
+    "consoleErrors": [],
+    "elapsedMs": 6580.192
+  }
+}

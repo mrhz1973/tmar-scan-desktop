@@ -17,6 +17,7 @@
 // order the cells and their sides come, so the same network gives the same
 // ids build after build — what a strip's span count is keyed by.
 
+import { sliceFitPoints } from './networkPointMotion'
 import type { ScanPaths } from '../../../src/core/geometry/scanPath'
 import type { Vec3 } from '../../../src/core/types'
 import type { TracedNetwork } from './network'
@@ -43,7 +44,7 @@ export interface PolygonSplit {
   corners: (ReadonlySet<number> | undefined)[]
   /** The spokes and centres made, by the feature's cell, for drawing. */
   spokes: { cell: number; curve: number; points: Float32Array }[]
-  centres: { cell: number; at: Vec3 }[]
+  centres: { cell: number; node: number; at: Vec3 }[]
   /** Cells that could not be split, and why. */
   refused: Map<number, string>
   /** A piece of a curve split at a side's middle: the curve it is of. */
@@ -147,8 +148,8 @@ export function splitPolygons(scan: ScanPaths, traced: TracedNetwork, cells: rea
       nodes.push({ id: node, at })
       const a = sliceTrace(t, 0, i)
       const b = sliceTrace(t, i, t.at.length - 1)
-      curves.set(c.id, { ...c, to: node, trace: a, fit: fitProvisional(a, scan.edge) })
-      curves.set(second, { id: second, from: node, to: c.to, trace: b, fit: fitProvisional(b, scan.edge) })
+      curves.set(c.id, { ...c, to: node, trace: a, fit: fitProvisional(a, scan.edge), ...(c.fitPoints ? { fitPoints: sliceFitPoints(c.fitPoints, 0, i) } : {}) })
+      curves.set(second, { id: second, from: node, to: c.to, trace: b, fit: fitProvisional(b, scan.edge), ...(c.fitPoints ? { fitPoints: sliceFitPoints(c.fitPoints, i, t.at.length - 1) } : {}) })
       for (const [original, list] of pieces) {
         const at2 = list.indexOf(c.id)
         if (at2 >= 0) {
@@ -195,7 +196,7 @@ export function splitPolygons(scan: ScanPaths, traced: TracedNetwork, cells: rea
     }
     const centre = next++
     nodes.push({ id: centre, at: onScan.point })
-    centres.push({ cell: index, at: onScan.point })
+    centres.push({ cell: index, node: centre, at: onScan.point })
     const mids = cell.sides.map(middleOf)
     for (let k = 0; k < n; k++) {
       const id = next++

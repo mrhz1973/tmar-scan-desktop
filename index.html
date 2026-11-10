@@ -31,16 +31,10 @@
       html { background: #1b1d20; }
       html[data-theme='light'] { background: #e7e6e1; }
     </style>
-    <script>
-      // Match prefsStore: Dark by default; System is an explicit choice only.
-      var t = 'dark'
-      try {
-        var saved = localStorage.getItem('scanruler.uitheme')
-        if (saved === 'light' || saved === 'dark' || saved === 'system') t = saved
-      } catch (e) {}
-      var dark = t === 'dark' || (t === 'system' && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches)
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light'
-    </script>
+    <!-- A file, not an inline script, so the Content-Security-Policy in
+         public/_headers needs no hash or 'unsafe-inline' for it. Classic and
+         blocking on purpose: it must run before the first paint. -->
+    <script src="/theme.js"></script>
   </head>
   <body>
     <div id="root"></div>

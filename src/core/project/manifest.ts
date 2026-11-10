@@ -9,6 +9,7 @@
 // the stores themselves — drafts, busy flags and readouts never enter it.
 
 import type { MeshUnits } from '../meshUnits'
+import type { ScanScale } from '../scanScale'
 import type { Element, Section, SelectMode } from '../../state/store'
 import type { Dimension } from '../dimensions'
 import type { AlignResult, PointPair } from '../deviation/align'
@@ -23,10 +24,21 @@ import type { FlatDimension } from '../flat/dimensions'
 import type { FlatDatum } from '../flat/datum'
 import type { PixelsPerMm } from '../flat/image'
 import type { Vec2 } from '../flat/types'
-import { validateProjectParts } from './validation'
+import { NEWER_PROJECT, validateProjectParts } from './validation'
 
 export const PROJECT_APP = 'ScanRuler'
-export const PROJECT_SCHEMA = 1
+/** The version a project is saved as. A build refuses a higher one, so it
+ *  goes up when a project starts to hold something an older build would
+ *  read wrongly without noticing: a field whose meaning changes, a new one
+ *  that changes what the rest means. A new element kind, way of making an
+ *  element or dimension type needs no raise: an older build refuses those
+ *  by name (validation.ts), and so still opens a project that does not use
+ *  them.
+ *
+ *  2 (after 0.10.2): the first builds to refuse names they do not know. Raised so
+ *  that 0.10.2 and older, which only read this number, turn away projects
+ *  from the constructions added since and do not open them half-built. */
+export const PROJECT_SCHEMA = 2
 export const PROJECT_EXTENSION = 'scanruler'
 
 /** Names the model files take inside the archive: a fixed stem, the original
@@ -35,6 +47,34 @@ export const SCAN_STEM = 'scan'
 export const REFERENCE_STEM = 'reference'
 export const IMAGE_STEM = 'image'
 export const MANIFEST_NAME = 'project.json'
+
+/** PROJECT_EXTENSION, then a count: see isProjectName. */
+const PROJECT_NAME = /\.scanruler(?:-\d+| ?\(\d+\))?$/i
+
+/** Whether a file's name is a project's: `.scanruler`, or that with the
+ *  count a browser adds after it when the name is taken in the folder —
+ *  `MyProject.scanruler-2` (Chrome on macOS, issue 83), or ` (2)`. */
+export function isProjectName(name: string): boolean {
+  return PROJECT_NAME.test(name.trim())
+}
+
+/** The extensions the Open dialog offers a project by: its own, and the
+ *  counted ones a browser leaves when it saves over a name (isProjectName)
+ *  — a Mac's dialog will not let any other be picked. */
+export const PROJECT_ACCEPT = [`.${PROJECT_EXTENSION}`, ...Array.from({ length: 9 }, (_, i) => `.${PROJECT_EXTENSION}-${i + 1}`)].join(',')
+
+/** Whether a file begins as a project does, whatever its name: a zip whose
+ *  first member is the manifest (packProject writes it first) — the local
+ *  header's signature, then the name at byte 30. `head` is the file's first
+ *  bytes, 30 and the name's length at least. */
+export function startsAsProject(head: Uint8Array): boolean {
+  if (head.length < 30 + MANIFEST_NAME.length) return false
+  if (head[0] !== 0x50 || head[1] !== 0x4b || head[2] !== 0x03 || head[3] !== 0x04) return false
+  const nameLength = head[26] | (head[27] << 8)
+  if (nameLength !== MANIFEST_NAME.length) return false
+  for (let i = 0; i < nameLength; i++) if (head[30 + i] !== MANIFEST_NAME.charCodeAt(i)) return false
+  return true
+}
 
 /** A rigid transform as JSON — row-major rotation, translation. */
 export interface RigidJson {
@@ -131,6 +171,15 @@ export interface ScanPart {
    *  was read in millimetres from it, and is again on load. Absent in
    *  projects saved before the STL import asked, and for a file in mm. */
   units?: MeshUnits
+  /** The factor the member's coordinates are scaled by on top of `units` —
+   *  the scan was scaled to its true size (core/scanScale) and is read at it
+   *  again. Absent means 1, and so for an edit of a scaled scan taken into
+   *  use: its file is written at the size it was edited at. */
+  scale?: number
+  /** How the scan got its true size, for the record: the factor all its
+   *  scales came to and the references of the last one. Absent when it was
+   *  never scaled. */
+  scaled?: ScanScale
   /** The datum alignment baked into the scan. Elements are saved in the
    *  aligned frame, so the same transform goes onto the raw scan first. */
   appliedAlignment: RigidJson | null
@@ -271,7 +320,7 @@ export function validateManifest(raw: unknown): ProjectManifest {
   }
   if (!Number.isInteger(m.schemaVersion) || m.schemaVersion < 1) throw new Error('Unsupported project schema version.')
   if (m.schemaVersion > PROJECT_SCHEMA) {
-    throw new Error('This project was saved by a newer version of ScanRuler — please reload the app to open it.')
+    throw new Error(NEWER_PROJECT)
   }
   if (m.scan !== null && (typeof m.scan !== 'object' || typeof m.scan.fileName !== 'string')) {
     throw new Error('Malformed project: scan entry.')
@@ -300,4 +349,15 @@ export function fileSafe(name: string): string {
 
 export function extensionOf(name: string): string {
   return name.split('.').pop()?.toLowerCase() ?? ''
+}
+
+/** The member a file is saved under: `stem`, then the file's extension
+ *  where it has one a member name can carry — letters and digits after a
+ *  dot. A name without one (`photo`), or with one past that (`scan.st~`,
+ *  `bild.jpé`), keeps the stem alone: the file is read by its own name
+ *  (readAs), which still carries whatever it was. */
+export function memberName(stem: string, fileName: string): string {
+  const dot = fileName.lastIndexOf('.')
+  const ext = dot > 0 ? fileName.slice(dot + 1).toLowerCase() : ''
+  return /^[a-z0-9]{1,16}$/.test(ext) ? `${stem}.${ext}` : stem
 }

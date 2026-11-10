@@ -19,6 +19,7 @@ import {
   elementToJson,
   extensionOf,
   IMAGE_STEM,
+  memberName,
   PROJECT_APP,
   PROJECT_SCHEMA,
   REFERENCE_STEM,
@@ -43,11 +44,15 @@ import { DEFAULT_MAP_FACING_DEG } from '../core/deviation/deviation'
  *  opened in, so the applied alignment goes on it the same way — see
  *  core/mesh/plyWriter. */
 export interface SourceFiles {
-  /** `units` is what the bytes' coordinates are in — the mesh was read in
-   *  millimetres from them, and is read the same way again from a project or
-   *  after a worker restart. Absent means millimetres. */
-  scan: { name: string; bytes: Uint8Array; units?: MeshUnits; companions?: ScanCompanion[] } | null
-  reference: { name: string; bytes: Uint8Array; units?: MeshUnits } | null
+  /** `file` is the file as it was opened — kept, not copied, and read again
+   *  only when its bytes are needed (see core/sourceFile). `units` is what
+   *  its coordinates are in — the mesh was read in millimetres from them,
+   *  and is read the same way again from a project or after a worker
+   *  restart. Absent means millimetres. `scale` is the factor the scan was
+   *  scaled by to its true size (core/scanScale), read into it on top of the
+   *  units the same way; absent means 1. */
+  scan: { name: string; file: Blob; units?: MeshUnits; scale?: number; companions?: ScanCompanion[] } | null
+  reference: { name: string; file: Blob; units?: MeshUnits } | null
   image: { name: string; bytes: Uint8Array } | null
 }
 
@@ -64,6 +69,8 @@ export const emptySources = (): SourceFiles => ({ scan: null, reference: null, i
  *  member's own extension — an edited scan is a PLY, kept under the name of
  *  the STL it was opened as. */
 export function readAs(fileName: string, member: string): string {
+  // A member saved under its stem alone kept no extension of its own.
+  if (!member.includes('.')) return fileName
   const ext = extensionOf(member)
   return extensionOf(fileName) === ext ? fileName : `${fileName.replace(/\.[^.]+$/, '')}.${ext}`
 }
@@ -167,12 +174,16 @@ export function collectProject(
   // a section in use writes its part over a kept one of the same key.
   const kept = keptParts()
   Object.assign(manifest, kept.parts)
-  members.push(...kept.members)
   const ctx = { sources, scanSaved: manifest.scan !== null, addMember: (name: string, bytes: Uint8Array) => members.push({ name, bytes }) }
   for (const section of projectSections()) {
     const part = section.collect(ctx)
     if (part !== undefined) manifest[section.key] = part
   }
+  // A kept file goes in only under a name nothing in this session writes:
+  // the project it came from may have used a name the scan, reference or
+  // image is saved under, and the archive keeps the last file of a name.
+  const taken = new Set(members.map((m) => m.name))
+  members.push(...kept.members.filter((m) => !taken.has(m.name)))
   return { manifest, members }
 }
 
@@ -205,12 +216,12 @@ function coreProject(
 
   let scan: ScanPart | null = null
   if (sources.scan && s.fileName) {
-    const member = `${SCAN_STEM}.${extensionOf(sources.scan.name)}`
-    members.push({ name: member, bytes: sources.scan.bytes })
+    const member = memberName(SCAN_STEM, sources.scan.name)
+    members.push({ name: member, bytes: sources.scan.file })
     // What came with it, each under a member of its own and the name it came
     // under — the name is how the OBJ and its library find it again.
     const companions = (sources.scan.companions ?? []).map((c, i) => {
-      const extra = `${SCAN_STEM}-${i + 1}.${extensionOf(c.name)}`
+      const extra = memberName(`${SCAN_STEM}-${i + 1}`, c.name)
       members.push({ name: extra, bytes: c.bytes })
       return { fileName: c.name, member: extra }
     })
@@ -219,6 +230,8 @@ function coreProject(
       member,
       ...(companions.length > 0 ? { companions } : {}),
       ...(sources.scan.units && sources.scan.units !== 'mm' ? { units: sources.scan.units } : {}),
+      ...(sources.scan.scale !== undefined && sources.scan.scale !== 1 ? { scale: sources.scan.scale } : {}),
+      ...(s.scanScale ? { scaled: s.scanScale } : {}),
       appliedAlignment: s.appliedAlignment ? rigidToJson(s.appliedAlignment) : null,
       elements: s.elements.map(elementToJson),
       dimensions: s.dimensions,
@@ -241,8 +254,8 @@ function coreProject(
 
   let reference: DeviationPart['reference'] = null
   if (sources.reference && dev.nominalName) {
-    const member = `${REFERENCE_STEM}.${extensionOf(sources.reference.name)}`
-    members.push({ name: member, bytes: sources.reference.bytes })
+    const member = memberName(REFERENCE_STEM, sources.reference.name)
+    members.push({ name: member, bytes: sources.reference.file })
     reference = {
       fileName: dev.nominalName,
       member,
@@ -298,7 +311,7 @@ function coreProject(
 
   let image: FlatPart['image'] = null
   if (sources.image && f.imageName) {
-    const member = `${IMAGE_STEM}.${extensionOf(sources.image.name)}`
+    const member = memberName(IMAGE_STEM, sources.image.name)
     members.push({ name: member, bytes: sources.image.bytes })
     image = { fileName: f.imageName, member }
   }
@@ -369,6 +382,8 @@ function scanPartState(p: ScanPart): Partial<ReturnType<typeof useStore.getState
     // see sectionCuts.
     sections: (p.sections ?? []).map(sectionFromJson),
     sectionDraft: null,
+    scaleDraft: null,
+    scanScale: p.scaled ?? null,
     nextSectionNumber: p.nextSectionNumber ?? 1,
   }
 }

@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "isolatedUrl": "http://127.0.0.1:17526/",
+  "faceIndex": 5,
+  "centerPole": [
+    10,
+    15,
+    10
+  ],
+  "snappedZ": 10.5,
+  "altZ": 10.37500001698575,
+  "disabledZ": 10.37500001698575,
+  "consoleErrors": []
+}

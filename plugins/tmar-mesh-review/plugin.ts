@@ -7,6 +7,7 @@ import { inspectionBlockNow, meshNoteBlockNow, meshFocusWarning, placeMeshNote }
 import { MeshNotesPanel, MeshZebraButton, MeshZebraPanel } from './MeshReview'
 const plugin: ScanRulerPlugin = {
   id: 'tmar-mesh-review', name: 'TMAR Mesh Tools notes and Zebra',
+  requires: ['mesh-tools', 'reverse', 'tmar-quick-notes', 'tmar-zebra'],
   install() {
     if (!['mesh-tools', 'reverse', 'tmar-quick-notes', 'tmar-zebra'].every(id => plugins().some(p => p.id === id))) return
     registerNoteWorkspace({ workspace: 'mesh', place: placeMeshNote, placementBlocked: meshNoteBlockNow,

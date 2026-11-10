@@ -2,6 +2,7 @@
 // The Reverse engineer workspace, as the app finds it: see
 // src/plugins/api.ts for what each part of this is to the app.
 
+import { installReverseEditorHost } from './app/workspaceEditorHost'
 import { registerBusy, registerCommands, registerMapReport, registerSectionLayers, registerSettle, registerSheetPlanes, registerStateSection, registerViewToggles, type ScanRulerPlugin } from '../../src/plugins/api'
 import { onScan } from '../../src/app/scanEvents'
 import { pick, registerHistory } from '../../src/state/historyStore'
@@ -66,6 +67,7 @@ const plugin: ScanRulerPlugin = {
   keyboard: reverseKeyboard,
   notices: ReverseNotices,
   install() {
+    installReverseEditorHost()
     registerProjectSection(reverseSection)
     // The notes pinned on the part for an agent: saved with the project,
     // let go with the scan, moved with the part.
@@ -195,7 +197,7 @@ const plugin: ScanRulerPlugin = {
       sections: [
         {
           key: 'reverse',
-          capture: () => pick(useReverse.getState(), ['features', 'rolledBack', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'elementsShown']),
+          capture: () => pick(useReverse.getState(), ['features', 'rolledBack', 'stepFiles', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'elementsShown']),
           // The feature list as it was, built again; whatever the sketch had
           // of its own history, and whatever was selected, goes. The
           // parameters come back with it, their table read again.
@@ -249,16 +251,17 @@ const plugin: ScanRulerPlugin = {
     // own: undo and redo walk it while the box is open, and Save takes the
     // network into the feature list as one step.
     registerHistory({
+      blocked: () => !!networkOpen()?.motionActive,
       local: {
         workspace: 'reverse',
         label: 'network edit',
         active: () => useReverse.getState().featureDraft?.kind === 'network',
-        canUndo: () => (networkOpen()?.history.length ?? 0) > 0,
-        canRedo: () => (networkOpen()?.future.length ?? 0) > 0,
+        canUndo: () => !networkOpen()?.motionActive && (networkOpen()?.history.length ?? 0) > 0,
+        canRedo: () => !networkOpen()?.motionActive && (networkOpen()?.future.length ?? 0) > 0,
         undo: () => useReverse.getState().editNetwork(undoNetwork),
         redo: () => useReverse.getState().editNetwork(redoNetwork),
       },
-      useWatch: () => useReverse((s) => (s.featureDraft?.kind === 'network' ? s.featureDraft.history.length * 1000 + s.featureDraft.future.length : -1)),
+      useWatch: () => useReverse((s) => (s.featureDraft?.kind === 'network' ? (s.featureDraft.history.length * 1000 + s.featureDraft.future.length) * 2 + Number(!!s.featureDraft.motionActive) : -1)),
     })
     // Another version of the scan under the session: a Fit Surface's region
     // is vertices of the scan, carried onto the new numbering; and every

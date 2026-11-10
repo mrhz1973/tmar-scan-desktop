@@ -2,8 +2,8 @@
 // The Mesh Tools faceplate: the scan, the tools, the tool in hand — or with
 // none, the parts in the viewport — and the edited copy. The tools are of the two kinds the workspace has — the edits,
 // which change a copy of the scan until it is taken into use for every
-// workspace (Remove islands, Delete marked, Flip normals, Cut, Fill holes,
-// Smooth, Shrink / expand, Boolean, Shell), and those that leave the instrument as
+// workspace (Remove islands, Delete marked, Flip normals, Cut, Mirror, Fill holes,
+// Smooth, Shrink / expand, Boolean, Shell, and Wrap once applied), and those that leave the instrument as
 // geometry for somebody else's: Reduce mesh, the scan reduced to a light mesh
 // to model over in CAD, held within a tolerance and measured to prove it, and
 // Trim to scan, a body cut to fit the scan's break, to print and glue in. Each tool is laid out like the
@@ -32,12 +32,15 @@ import { IslandsTool } from './tools/IslandsTool'
 import { DeleteTool } from './tools/DeleteTool'
 import { FlipTool, type FlipScope } from './tools/FlipTool'
 import { CutTool } from './tools/CutTool'
+import { MirrorTool } from './tools/MirrorTool'
 import { BooleanTool } from './tools/BooleanTool'
 import { TrimTool } from './tools/TrimTool'
 import { HolesTool } from './tools/HolesTool'
 import { SmoothTool } from './tools/SmoothTool'
+import { DensifyTool } from './tools/DensifyTool'
 import { OffsetTool } from './tools/OffsetTool'
 import { ShellTool } from './tools/ShellTool'
+import { WrapTool } from './tools/WrapTool'
 import type { MeshFormat } from '../../../src/core/exportMesh'
 
 const TOOLS: { id: MeshTool; icon: ReactNode; label: string; title: string }[] = [
@@ -45,7 +48,7 @@ const TOOLS: { id: MeshTool; icon: ReactNode; label: string; title: string }[] =
     id: 'reduce',
     icon: <Icon name="reduceMesh" />,
     label: 'Reduce mesh',
-    title: 'A light copy of the scan to model over in CAD, held within a tolerance you set — the scan itself stays as it is',
+    title: 'A light copy of the scan to model over in CAD, held within a tolerance you set — a preview, the scan staying as it is, until you apply it',
   },
   {
     id: 'islands',
@@ -72,6 +75,12 @@ const TOOLS: { id: MeshTool; icon: ReactNode; label: string; title: string }[] =
     title: 'Cut the scan with a plane and take one side off — the turntable it stood on, or half the part — closing it flat where the plane went through',
   },
   {
+    id: 'mirror',
+    icon: <Icon name="mirror" />,
+    label: 'Mirror',
+    title: 'Reflect the scan across a plane — the whole part, a left hand made of a right — or keep one side and mirror it onto the other to make the part symmetric',
+  },
+  {
     id: 'holes',
     icon: <Icon name="fillHoles" />,
     label: 'Fill holes',
@@ -82,6 +91,12 @@ const TOOLS: { id: MeshTool; icon: ReactNode; label: string; title: string }[] =
     icon: <Icon name="smoothMesh" />,
     label: 'Smooth',
     title: 'Take the scanner’s scatter out of the surface, never moving any point further than a limit you set, sharp edges held',
+  },
+  {
+    id: 'densify',
+    icon: <MeshIcon name="densify" />,
+    label: 'Densify',
+    title: 'Cut the triangles until none has an edge longer than a length you set, the surface where it was — for an STL exported from CAD, whose long triangles leave nothing inside its faces to fit on',
   },
   {
     id: 'offset',
@@ -107,21 +122,35 @@ const TOOLS: { id: MeshTool; icon: ReactNode; label: string; title: string }[] =
     label: 'Shell/hollow',
     title: 'Hollow a closed part, leaving a wall of a thickness you set round a sealed cavity — or thicken an open surface into a solid',
   },
+  {
+    id: 'wrap',
+    icon: <MeshIcon name="wrapSkin" />,
+    label: 'Wrap',
+    title: 'One closed skin round the part — everything inside dropped, every opening narrower than a gap you set bridged — for an assembly in one file, a part full of channels, a cracked scan',
+  },
 ]
 
 export function MeshPanel({
   onOpenScan,
   onReduce,
+  onApplyReduction,
+  onDiscardReduction,
   onExport,
   onRemoveIslands,
   onDeleteMarked,
   onFlip,
   onClearMarking,
   onCut,
+  onMirror,
   onFillHoles,
   onSmooth,
+  onDensify,
   onOffset,
   onShell,
+  onWrap,
+  onCancelWrap,
+  onApplyWrap,
+  onDiscardWrap,
   onBoolean,
   onTrim,
   onExportTrimmed,
@@ -131,6 +160,9 @@ export function MeshPanel({
 }: {
   onOpenScan: (file: File) => void
   onReduce: () => void
+  /** Make the reduced mesh the edited copy, or put it away. */
+  onApplyReduction: () => void
+  onDiscardReduction: () => void
   onExport: (format: MeshFormat) => void
   onRemoveIslands: () => void
   onDeleteMarked: () => void
@@ -138,10 +170,18 @@ export function MeshPanel({
   onFlip: (scope: FlipScope) => void
   onClearMarking: () => void
   onCut: () => void
+  onMirror: () => void
   onFillHoles: () => void
   onSmooth: () => void
+  onDensify: () => void
   onOffset: () => void
   onShell: (mode: 'hollow' | 'thicken') => void
+  /** Wrap the mesh, stop the wrap running, make it the edited copy, or put
+   *  it away. */
+  onWrap: () => void
+  onCancelWrap: () => void
+  onApplyWrap: () => void
+  onDiscardWrap: () => void
   onBoolean: () => void
   /** Cut the body in hand to the break marked on the part, and save the
    *  piece as an STL. */
@@ -158,7 +198,7 @@ export function MeshPanel({
   const scanBusy = useStore((s) => s.busy)
   const tool = useMeshTools((s) => s.tool)
   const setTool = useMeshTools((s) => s.setTool)
-  const running = useMeshTools((s) => s.status === 'running' || s.trimStatus === 'running' || s.editing)
+  const running = useMeshTools((s) => s.status === 'running' || s.trimStatus === 'running' || s.wrapStatus === 'running' || s.editing)
   const edits = useMeshTools((s) => s.edits)
   const units = useUnits()
 
@@ -176,11 +216,12 @@ export function MeshPanel({
               from the scan where it stands, and exported there.
             </p>
             <p>
-              <b>Remove islands</b>, <b>Delete marked</b>, <b>Flip normals</b>, <b>Cut</b>, <b>Fill holes</b>,{' '}
-              <b>Smooth</b>, <b>Shrink/expand</b>, <b>Boolean</b> and <b>Shell/hollow</b> edit a copy of the scan, shown
+              <b>Remove islands</b>, <b>Delete marked</b>, <b>Flip normals</b>, <b>Cut</b>, <b>Mirror</b>, <b>Fill holes</b>,{' '}
+              <b>Smooth</b>, <b>Densify</b>, <b>Shrink/expand</b>, <b>Boolean</b> and <b>Shell/hollow</b> edit a copy of the scan, shown
               here in its place; every other workspace
               goes on measuring the scan as it was until <b>Use for analysis</b> takes the copy into
               use. <b>Reduce mesh</b> makes a light mesh beside it — of the copy, when there is one —
+              which <b>Apply</b> makes the edited copy, <b>Wrap</b> a closed skin round it the same way,
               and <b>Trim to scan</b> a piece cut to fit its break.
             </p>
           </InfoDot>
@@ -236,7 +277,7 @@ export function MeshPanel({
       {tool === null ? (
         <PartsList busy={busy} onExportReduced={onExport} onExportTrimmed={onExportTrimmed} />
       ) : tool === 'reduce' ? (
-        <ReduceTool ready={Boolean(scanName)} busy={busy} onReduce={onReduce} onExport={onExport} />
+        <ReduceTool ready={Boolean(scanName)} busy={busy} onReduce={onReduce} onApply={onApplyReduction} onDiscard={onDiscardReduction} onExport={onExport} />
       ) : tool === 'islands' ? (
         <IslandsTool ready={Boolean(scanName)} busy={busy} onRemove={onRemoveIslands} />
       ) : tool === 'delete' ? (
@@ -245,16 +286,22 @@ export function MeshPanel({
         <FlipTool ready={Boolean(scanName)} busy={busy} onFlip={onFlip} onClear={onClearMarking} />
       ) : tool === 'cut' ? (
         <CutTool ready={Boolean(scanName)} busy={busy} onCut={onCut} />
+      ) : tool === 'mirror' ? (
+        <MirrorTool ready={Boolean(scanName)} busy={busy} onMirror={onMirror} />
       ) : tool === 'holes' ? (
         <HolesTool ready={Boolean(scanName)} busy={busy} onFill={onFillHoles} />
       ) : tool === 'boolean' ? (
         <BooleanTool ready={Boolean(scanName)} busy={busy} onBoolean={onBoolean} />
       ) : tool === 'trim' ? (
         <TrimTool ready={Boolean(scanName)} busy={busy} onTrim={onTrim} onExport={onExportTrimmed} onClear={onClearMarking} />
+      ) : tool === 'densify' ? (
+        <DensifyTool ready={Boolean(scanName)} busy={busy} onDensify={onDensify} />
       ) : tool === 'offset' ? (
         <OffsetTool ready={Boolean(scanName)} busy={busy} onOffset={onOffset} onClear={onClearMarking} />
       ) : tool === 'shell' ? (
         <ShellTool ready={Boolean(scanName)} busy={busy} onShell={onShell} />
+      ) : tool === 'wrap' ? (
+        <WrapTool ready={Boolean(scanName)} busy={busy} onWrap={onWrap} onCancel={onCancelWrap} onApply={onApplyWrap} onDiscard={onDiscardWrap} />
       ) : (
         <SmoothTool ready={Boolean(scanName)} busy={busy} onSmooth={onSmooth} onClear={onClearMarking} />
       )}

@@ -14,9 +14,10 @@ import { int, type JsonSchema, oneOf } from '../../../src/commands/schema'
 import { errorMessage } from '../../../src/commands/types'
 import { round3 } from '../../../src/core/round'
 import type { Vec2 } from '../../../src/core/flat/types'
-import { RADIAL_AXIS_KINDS, type WorldAxis, worldAxisDir } from '../../../src/core/section/frame'
+import { RADIAL_AXIS_KINDS, radialFrame, type SectionFrame, type WorldAxis, worldAxisDir } from '../../../src/core/section/frame'
+import { frameOfPlane, planeFromNormal, planeThroughAxis, planeThroughPoints } from '../core/planeDefs'
 import type { FitData, Vec3 } from '../../../src/core/types'
-import { cross } from '../../../src/core/vec'
+import { addScaled, cross } from '../../../src/core/vec'
 import { type Command, CommandError, runningChange } from '../../../src/plugins/api'
 import { useShell } from '../../../src/state/shellStore'
 import { useStore } from '../../../src/state/store'
@@ -25,10 +26,11 @@ import type { EdgeJoin } from '../core/edgeLines'
 import { edgeJoins } from '../core/faceGroup'
 import { type AxisRef, bodyFacePlane, bodyMaker, type Feature, type MirrorPlane, type PlaneRef, type RegionPick, type SketchFeature, withPlaneOffset } from '../core/features'
 import type { KernelMesh } from '../core/kernelTypes'
-import { regionAt } from '../core/regions'
+import { pointInPolygon, regionAt } from '../core/regions'
+import { signedArea2 } from '../../../src/core/flat/vec2'
 import { upU } from '../core/resolve'
 import { type EdgeFingerprint, type FaceFingerprint, matchEdge, matchFace, matchTolerance, splitEdges, tangentChain } from '../core/topo'
-import { isWhere, type StoredPick, storedWhere, unwrapped, type Where, type WhereAsk, whereIndices as coreWhereIndices } from '../core/where'
+import { isWhere, SHARP_DEG, type StoredPick, storedWhere, unwrapped, type Where, type WhereAsk, whereIndices as coreWhereIndices } from '../core/where'
 import { type BodyInfo, useReverse } from '../state/reStore'
 import { regionsOut } from './reReadout'
 import { meshDiagonal, type ReverseSession, reverseSession } from './reSession'
@@ -219,6 +221,20 @@ export function idInName(name: string): number | null {
   return /^-?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(t) ? Number(t) : null
 }
 
+/** The one of `items` whose id is `id` — or, where none is exactly and
+ *  `id` has a fraction, the one id that rounds to it at as many decimals
+ *  as it is written with: 61.001 for 61.0009765625, as answers show it.
+ *  Undefined where none is, or several round to it. */
+export function itemById<T extends { id?: number }>(items: readonly T[], id: number): T | undefined {
+  const exact = items.find((x) => x.id !== undefined && Math.abs(x.id - id) < 1e-9)
+  if (exact || Number.isInteger(id)) return exact
+  const decimals = /\.(\d+)$/.exec(String(id))?.[1].length ?? 0
+  if (decimals === 0) return undefined
+  const half = 0.5 * 10 ** -decimals + 1e-12
+  const near = items.filter((x) => x.id !== undefined && Math.abs(x.id - id) <= half)
+  return near.length === 1 ? near[0] : undefined
+}
+
 /** One of `items` by its name, whole and case aside — or, where no name
  *  is that and it is a number written out, by that id. */
 export function byName<T extends { name: string; id?: number }>(items: readonly T[], name: string, what: string): T {
@@ -227,7 +243,7 @@ export function byName<T extends { name: string; id?: number }>(items: readonly 
   if (hits.length > 1) invalid(`${hits.length} ${what}s are named “${name}” — name it by its id.`)
   if (hits.length === 0) {
     const id = idInName(name)
-    const byId = id === null ? undefined : items.find((x) => x.id !== undefined && Math.abs(x.id - id) < 1e-9)
+    const byId = id === null ? undefined : itemById(items, id)
     if (byId) return byId
     throw new CommandError('not_found', `There is no ${what} “${name}”${id !== null ? ` — by name or by id —` : ' —'} there are ${items.map((x) => (id !== null && x.id !== undefined ? `${x.id} (“${x.name}”)` : `“${x.name}”`)).join(', ') || 'none'}.`)
   }
@@ -281,6 +297,12 @@ function bodyByRef(ref: Ref, family: boolean): BodyInfo {
         // builder takes the original and every copy or piece by (build.ts
         // familyOf). The copies' own ids are the feature's, so going by
         // the maker alone took one copy.
+        // A mirror kept apart is the copy it made: the original goes by
+        // its own name.
+        if (f.kind === 'mirror' && !f.join) {
+          const copy = bodies.filter((x) => bodyMaker(x.id) === f.id)
+          if (copy.length === 1) return copy[0]
+        }
         if ('body' in f && typeof f.body === 'number') {
           const worked = f.body
           const pieces = bodies.filter((x) => Math.abs(x.id - worked) < 1e-9 || bodyMaker(x.id) === f.id)
@@ -299,7 +321,7 @@ function bodyByRef(ref: Ref, family: boolean): BodyInfo {
     }
     return byName(bodies, ref, 'body')
   }
-  const b = bodies.find((x) => Math.abs(x.id - ref) < 1e-9)
+  const b = itemById(bodies, ref)
   if (b) return b
   // By the id a feature added in a held batch will give its body.
   const maker = re().features.find((f) => f.id === bodyMaker(ref) && notBuiltYet(f))
@@ -319,7 +341,7 @@ export function solidsNamed(ref: Ref): { feature: Feature; solids: BodyInfo[] } 
   const named = typeof ref === 'string' ? re().features.filter((f) => f.name.toLowerCase() === ref.trim().toLowerCase()) : []
   const f = named.length === 1 ? named[0] : id !== null && Number.isInteger(id) ? re().features.find((x) => x.id === id) : undefined
   if (!f) return null
-  const worked = 'body' in f && typeof f.body === 'number' ? f.body : null
+  const worked = 'body' in f && typeof f.body === 'number' && !(f.kind === 'mirror' && !f.join) ? f.body : null
   const solids = bodies.filter((x) => bodyMaker(x.id) === f.id || (worked !== null && Math.abs(x.id - worked) < 1e-9))
   return solids.length > 1 ? { feature: f, solids } : null
 }
@@ -514,7 +536,7 @@ function chainsOut(w: Where, t: Topology, hits: readonly number[]): Json {
     for (const x of tangentChain(t.edges, [h], splits)) if (picked.has(x)) seen.add(x)
     seen.add(h)
   }
-  const joins = w.sharp ? null : joinsOf(t)
+  const joins = w.sharp || w.sharpDeg !== undefined ? null : joinsOf(t, SHARP_DEG)
   const smooth = joins ? hits.filter((i) => joins.get(t.edges[i].hash) !== 'sharp').length : 0
   if (chains >= hits.length && smooth === 0) return {}
   const words = [
@@ -543,18 +565,21 @@ export function meshOf(t: Topology): KernelMesh | null {
 }
 
 /** How the faces either side of each edge meet, by the edge's hash — read
- *  off the body's mesh as the viewport draws its edges; null where the
- *  mesh for this topology is not at hand. */
-const joinsRead = new WeakMap<Topology, Map<number, EdgeJoin>>()
-function joinsOf(t: Topology): Map<number, EdgeJoin> | null {
-  const known = joinsRead.get(t)
+ *  off the body's mesh as the viewport draws its edges, or with faces
+ *  within `tangentDeg` of each other tangent; null where the mesh for this
+ *  topology is not at hand. */
+const joinsRead = new WeakMap<Topology, Map<number | undefined, Map<number, EdgeJoin>>>()
+function joinsOf(t: Topology, tangentDeg?: number): Map<number, EdgeJoin> | null {
+  const known = joinsRead.get(t)?.get(tangentDeg)
   if (known) return known
   let mesh = meshOfTopology.get(t)
   const s = reverseSession()
   if (!mesh && s) for (const [id, x] of s.topologies) if (x === t) mesh = s.meshes.get(id)
   if (!mesh?.faceHash) return null
-  const joins = edgeJoins(mesh, t)
-  joinsRead.set(t, joins)
+  const joins = edgeJoins(mesh, t, tangentDeg)
+  const byDeg = joinsRead.get(t) ?? new Map<number | undefined, Map<number, EdgeJoin>>()
+  byDeg.set(tangentDeg, joins)
+  joinsRead.set(t, byDeg)
   return joins
 }
 
@@ -760,6 +785,29 @@ export function planeOf(s: ReverseSession, given: Json | string): PlaneRef {
       const basisU = upU(up, placed.frame.normal)!
       return { ...placed, frame: { ...placed.frame, basisU, basisV: cross(placed.frame.normal, basisU) } }
     }
+    case 'points':
+    case 'oriented': {
+      const plane = p.kind === 'points' ? planeThroughPoints(p.points as Vec3[], Boolean(p.flip)) : planeFromNormal(p.point as Vec3, p.normal as Vec3)
+      if (typeof plane === 'string') invalid(`${p.kind === 'points' ? 'points' : 'normal'}: ${plane}`)
+      const { normal } = plane as { origin: Vec3; normal: Vec3 }
+      upOn(normal)
+      const frame = frameOfPlane(plane as { origin: Vec3; normal: Vec3 }, (p.offset as number | undefined) ?? 0, up ? (upU(up, normal) ?? undefined) : undefined)!
+      const at = (v: Vec3) => `(${v.map((x) => round3(x)).join(', ')})`
+      const label = p.kind === 'points' ? `the plane through ${(p.points as Vec3[]).map(at).join(', ')}` : `the plane through ${at(p.point as Vec3)} square to ${at(normal)}`
+      return { kind: 'fitted', frame, label }
+    }
+    case 'faceAxis': {
+      const body = bodyNamed(p.body as Ref)
+      const face = facePicked(s, body, p.face as FacePickIn).fingerprint
+      if ((face.kind !== 'cylinder' && face.kind !== 'cone') || !face.center) invalid(`That face of ${body.name} is a ${face.kind}, with no axis — a cylinder or a cone face has one.`)
+      const axis = { origin: face.center!, dir: face.dir }
+      const made = planeThroughAxis(axis, (p.through as Vec3 | undefined) ?? null, (a) => radialFrame(a, 0))
+      if (typeof made === 'string') invalid(`through: ${made}`)
+      const frame = made as SectionFrame
+      const off = (p.offset as number | undefined) ?? 0
+      const r = face.radius !== undefined ? ` R${round3(face.radius)}` : ''
+      return { kind: 'fitted', frame: off ? { ...frame, origin: addScaled(frame.origin, frame.normal, off) } : frame, label: `the plane through the axis of ${body.name}’s ${face.kind}${r}` }
+    }
     default:
       return invalid(`A plane of kind “${String(p.kind)}” cannot be given.`)
   }
@@ -818,6 +866,34 @@ export function regionKeys(s: ReverseSession, sketch: SketchFeature, pick: unkno
   })
 }
 
+/** What an extrude or a revolve given regions "largest" is told when the
+ *  region that rule takes is the hole of another — a ring's inside, larger
+ *  by area than a thin ring round it, so a sleeve's profile makes a solid
+ *  block. The rule stands; the answer says so, with the ring's point and
+ *  key to give instead. Undefined for any other pick, or a region in no
+ *  other. Said by the command that took it, not by the rebuilds after. */
+export function largestInside(s: ReverseSession, sketch: SketchFeature, pick: unknown): string | undefined {
+  if (pick !== 'largest') return undefined
+  const regions = s.regionsOf(sketch)
+  if (regions.length < 2) return undefined
+  const taken = regions.reduce((a, b) => (b.area > a.area ? b : a))
+  // The ring it is the hole of: of those whose hole holds it, the one
+  // round it nearest — the smallest such hole.
+  let host: { r: (typeof regions)[number]; hole: number } | null = null
+  for (const r of regions) {
+    if (r === taken) continue
+    for (const h of r.holes) {
+      if (!pointInPolygon(taken.inside, h.polygon)) continue
+      const hole = Math.abs(signedArea2(h.polygon))
+      if (!host || hole < host.hole) host = { r, hole }
+    }
+  }
+  if (!host) return undefined
+  const at = (p: Vec2) => `[${p.map(round3).join(', ')}]`
+  // units-ok: the answer's warning, for the agent — in millimetres always.
+  return `"largest" took region ${taken.key} (${round3(taken.area)} mm²), the inside of region ${host.r.key} (${round3(host.r.area)} mm²): a ring's hole, larger by area than the ring round it, made solid. For the ring alone give regions: [{ at: ${at(host.r.inside)} }] or ["${host.r.key}"]; "all" fills the whole outline.`
+}
+
 /** A region pick as the feature keeps it, to be taken again as given when
  *  its sketch is edited (RegionPick, core/features.ts): "all", "largest",
  *  or a list with a point in it — a bare [u, v] as { at } — with the keys
@@ -860,8 +936,8 @@ export function whereIndices(given: Where, t: Topology, body: { name: string }, 
 function pageAsk(t: Topology): WhereAsk {
   return {
     featureId: (ref) => featureNamed(ref).id,
-    sharp: () => {
-      const joins = joinsOf(t)
+    sharp: (deg) => {
+      const joins = joinsOf(t, deg)
       return joins ? (i) => joins.get(t.edges[i].hash) === 'sharp' : null
     },
   }

@@ -61,6 +61,8 @@ export interface GraphCurve {
   trace: CurveTrace
   fit: CurveFit
   exact?: CurvePoints
+  /** Deliberately displaced targets; never used to cut or map scan cells. */
+  fitPoints?: CurvePoints
 }
 
 /** A curve run one way: forward from its `from` to its `to`. */

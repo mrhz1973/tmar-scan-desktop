@@ -33,7 +33,7 @@ export type KernelStatus = 'idle' | 'loading' | 'ready' | 'unavailable'
  *  on a body's edge or another sketch's piece brings it into this sketch —
  *  or put a dimension or a relation on the pieces clicked next, with
  *  nothing selected beforehand. */
-export type SketchTool = 'select' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'arc' | 'spline' | 'project' | 'dimension' | 'relation' | 'fillet' | 'chamfer'
+export type SketchTool = 'select' | 'line' | 'rectangle' | 'polygon' | 'circle' | 'arc' | 'spline' | 'point' | 'project' | 'trim' | 'dimension' | 'relation' | 'fillet' | 'chamfer'
 
 /** What the viewport knows about the feature being set up: whether its
  *  ghost is building, and what the kernel made of it. */
@@ -402,8 +402,10 @@ export type FeatureDraft = { exprs?: ExprMap } & (
   | { kind: 'extract'; featureId?: number; name?: string; element: number | null; section: number | null; thickness: number; op: BodyOp }
   | { kind: 'cutPlane'; featureId?: number; name?: string; body: number | null; plane: PlaneRef | null; keep: 1 | -1 }
   | { kind: 'mirror'; featureId?: number; name?: string; body: number | null; plane: MirrorPlane | null; join: boolean; symmetry: SymmetryFinding }
-  /** `keep`: the tool stays a body of its own (BooleanFeature). */
-  | { kind: 'boolean'; featureId?: number; name?: string; op: BooleanOp; body: number | null; tool: number | null; keep: boolean }
+  /** `keep`: the tools stay bodies of their own (BooleanFeature).
+   *  `moreTools`: the tools past the first, joined with it, or cut or
+   *  intersected by in turn. */
+  | { kind: 'boolean'; featureId?: number; name?: string; op: BooleanOp; body: number | null; tool: number | null; moreTools?: number[]; keep: boolean }
   | { kind: 'sheet'; featureId?: number; name?: string; sketchId: number | null; from: number; to: number }
   | { kind: 'split'; featureId?: number; name?: string; body: number | null; tools: number[]; keep: SplitKeep; tolerance: number; overlap: number; within?: number }
   | { kind: 'loft'; featureId?: number; name?: string; sketches: number[]; ruled: boolean; op: BodyOp }
@@ -468,6 +470,10 @@ export type NetworkStart = { node: number } | { at: Vec3 }
 export type PlacedCorner = { node: number } | { at: Vec3 } | { curve: number; at: Vec3 } | { curve: number; grip: number; at: Vec3 }
 
 export interface NetworkDraft extends NetworkData {
+  /** View-only interaction choice; offsets live in nodes, curves, cells and history. */
+  pointMotion?: import('../core/networkPointMotion').NetworkPointMode
+  pointPicked?: import('../core/networkPointMotion').NetworkPointRef
+  motionActive?: boolean
   /** The next id a node or a curve takes. */
   nextId: number
   /** The patch being placed: its corners clicked so far, in order. */

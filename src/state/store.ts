@@ -49,6 +49,7 @@ import {
   type AxisDir,
 } from '../core/alignment'
 import { rigidApply, rigidCompose, rigidRotate, type Rigid } from '../core/deviation/rigid'
+import type { FitGuide } from '../core/fit/guide'
 import {
   axisOfFrame,
   canCutAlong,
@@ -64,7 +65,10 @@ import {
   type SectionPlaneRef,
 } from '../core/section/frame'
 import { transformCut, type SectionCut } from '../core/section/slice'
+import { scaleExtension, scaleFit, scaleFrame, scaleRigid, scaleSource, type ScanScale } from '../core/scanScale'
+import { freshScaleDraft, type ScaleDraft } from './scaleModel'
 import { SCHEMES, schemeById } from '../viewer/navSchemes'
+import type { Projection } from '../viewer/orthoViewport'
 import { DEFAULT_THEME, themeById } from '../viewer/viewThemes'
 import type { StepStyle } from '../core/exportStep'
 import { creaseAngleOf, type CreaseMode } from '../core/geometry/crease'
@@ -78,7 +82,7 @@ import type {
   SigmaPreset,
   Vec3,
 } from '../core/types'
-import { blockedRefs, defaultMethod, dependentsOf, type DimensionDraft, type Draft, draftFromElement, type Element, elementColor, evalConstructDraft, freshCounters, freshDraft, keptOf, nextPointPick, reevaluateConstructions, type SelectMode, transformSource, withoutRegion } from './elementModel'
+import { blockedRefs, defaultMethod, dependentsOf, type DimensionDraft, type Draft, draftFromElement, type Element, elementColor, evalConstructDraft, freshCounters, freshDraft, keptOf, nextPointPick, reevaluateConstructions, type SelectMode, transformSource, unlinkedSource, withoutRegion } from './elementModel'
 import { type AlignDraft, type AlignmentProposal, alignSlotPicks, withSlotPicks, withSlotRef } from './alignModel'
 import { centreShadowDraft, dimensionRefsOf, type Section, sectionMeasureRefs, type SectionDraft, sectionDraftReady, sectionKeyOf, type SectionKind, specFields, settleSectionDraft } from './sectionModel'
 export { type Section, type SectionDraft, sectionDraftColorOf, sectionDraftReady } from './sectionModel'
@@ -135,6 +139,12 @@ interface AppState {
   /** Cumulative datum alignment already baked into the scan — inverted to
    *  put the part back where the scanner delivered it. */
   appliedAlignment: Rigid | null
+  /** How the scan got its true size, when it was scaled — see
+   *  core/scanScale. The factor is already in the scan as it is read (the
+   *  source's `scale`); this is the record of it. */
+  scanScale: ScanScale | null
+  /** The Scale part box, while it is open. */
+  scaleDraft: ScaleDraft | null
   nextId: number
   nextNumber: number
   /** Per-kind counters, so elements are named "Sphere 1", "Plane 1", … */
@@ -157,6 +167,10 @@ interface AppState {
   /** The name tags and readouts on the part in 3D Measure — in the menu of
    *  the view bar's Elements key. */
   showLabels: boolean
+  /** The element or section whose row in the list the pointer is over: it
+   *  is drawn, lit, while it is — hidden or not — to find it on the part
+   *  (issue 75). Changes nothing else: not saved, no step of the history. */
+  peek: { kind: 'element' | 'section'; id: number } | null
   /** The scan put away — the view bar's Scan key, where no workspace holds
    *  the key itself. Not saved, and a new scan comes in shown. */
   scanHidden: boolean
@@ -182,6 +196,9 @@ interface AppState {
    *  browser, because which buttons orbit is a habit from whichever CAD the
    *  user came from, not a property of the part on screen. */
   navScheme: string
+  /** How the 3D view is drawn: in parallel, as measuring wants it, or in
+   *  perspective. Remembered per browser, like the navigation. */
+  projection: Projection
   /** Id of the viewport colour scheme (see viewer/viewThemes). Remembered per
    *  browser for the same reason as the navigation: which stage a part is
    *  easiest to read on is the operator's preference, not the part's. */
@@ -221,6 +238,8 @@ interface AppState {
   resolveFit: (id: number, r: FitOutput) => void
   failFit: (id: number, message: string) => void
   removeElement: (id: number) => void
+  /** A constructed element frozen where it stands — see unlinkedSource. */
+  unlinkElement: (id: number) => void
   toggleElementVisible: (id: number) => void
   /** Show or hide every element at once. */
   setAllElementsVisible: (visible: boolean) => void
@@ -241,6 +260,9 @@ interface AppState {
   /** The hand-marked surface a draft's fit is running on, or null when the
    *  marking has been cleared. */
   setDraftSelection: (selection: Uint32Array | null) => void
+  /** What the fit from the picks is told about the surface it is after;
+   *  undefined takes it off. */
+  setDraftGuide: (guide: FitGuide | undefined) => void
   setDraftRef: (slot: number, id: number | null) => void
   /** "+ Pick point on scan…" on a construction's point slot: the next click
    *  on the scan fills it. Whatever was in the slot is let go. */
@@ -355,6 +377,16 @@ interface AppState {
    *  through an applied alignment. The mesh itself is the caller's business. */
   applyAlignment: (m: Rigid) => void
   clearAppliedAlignment: () => void
+  /** Open the Scale part box; it closes whatever else is in hand. */
+  startScale: () => void
+  cancelScale: () => void
+  setScaleDraft: (patch: Partial<ScaleDraft>) => void
+  /** A click on the scan while a row of the box collects two points. */
+  addScalePick: (point: Vec3) => void
+  /** Carry everything measured or placed on the part through a scale by
+   *  `s` about the frame's zero point, and keep `record` as how the scan got
+   *  its size. The mesh itself is the caller's business (app/partScale). */
+  applyScale: (s: number, record: ScanScale | null) => void
   startDimension: (type: string) => void
   /** Re-open an existing dimension — same slots, same preview, written back to
    *  the row it came from. */
@@ -389,6 +421,8 @@ interface AppState {
   setDraftKnownDiameter: (mm: number | undefined) => void
   setSelectMode: (mode: SelectMode) => void
   setShowLabels: (v: boolean) => void
+  /** The pointer over a row of the list, or off it (null). */
+  setPeek: (peek: { kind: 'element' | 'section'; id: number } | null) => void
   setScanHidden: (v: boolean) => void
   setElementsHidden: (v: boolean) => void
   setShowBackfaces: (v: boolean) => void
@@ -396,6 +430,7 @@ interface AppState {
   setWireframe: (v: boolean) => void
   setShowScanColors: (v: boolean) => void
   setNavScheme: (id: string) => void
+  setProjection: (projection: Projection) => void
   setViewTheme: (id: string) => void
   setStepStyle: (style: StepStyle) => void
   setCloudFormat: (format: CloudFormat) => void
@@ -406,6 +441,7 @@ interface AppState {
 
 const NAV_SCHEME_KEY = 'scanruler.navscheme'
 const VIEW_THEME_KEY = 'scanruler.viewtheme'
+const PROJECTION_KEY = 'scanruler.projection'
 const STEP_STYLE_KEY = 'scanruler.stepstyle'
 const CLOUD_FORMAT_KEY = 'scanruler.cloudformat'
 const CREASE_KEY = 'scanruler.crease'
@@ -418,6 +454,14 @@ const storedNavScheme = (): string => {
     return schemeById(localStorage.getItem(NAV_SCHEME_KEY)).id
   } catch {
     return SCHEMES[0].id
+  }
+}
+
+const storedProjection = (): Projection => {
+  try {
+    return localStorage.getItem(PROJECTION_KEY) === 'perspective' ? 'perspective' : 'orthographic'
+  } catch {
+    return 'orthographic'
   }
 }
 
@@ -474,11 +518,13 @@ function freshScanState() {
     dimensions: [],
     dimDraft: null,
     alignDraft: null,
+    scaleDraft: null,
     // Sections are cuts through this scan and go with it.
     sections: [],
     sectionDraft: null,
     nextSectionNumber: 1,
     appliedAlignment: null,
+    scanScale: null,
     nextNumber: 1,
     nextOfKind: freshCounters(),
     nextOfDimGroup: { distance: 1, angle: 1 },
@@ -577,12 +623,14 @@ export const useStore = create<AppState>()((set, get) => ({
   settings: { method: 'gaussian', sigma: 3 },
   selectMode: 'auto',
   showLabels: true,
+  peek: null,
   showBackfaces: true,
   translucent: false,
   wireframe: false,
   scanColors: false,
   showScanColors: true,
   navScheme: storedNavScheme(),
+  projection: storedProjection(),
   viewTheme: storedViewTheme(),
   stepStyle: storedStepStyle(),
   cloudFormat: storedCloudFormat(),
@@ -644,6 +692,20 @@ export const useStore = create<AppState>()((set, get) => ({
   // Deleting an element takes every construction built on it along, and every
   // dimension that references anything removed.
   removeElement: (id) => set((s) => withoutRefs(s, dependentsOf(id, s.elements))),
+  unlinkElement: (id) =>
+    set((s) => {
+      const el = s.elements.find((e) => e.id === id)
+      const source = el ? unlinkedSource(el) : null
+      if (!el || !source) return {}
+      return {
+        elements: rebuilt(
+          s.elements.map((e) => (e.id === id ? { ...e, source } : e)),
+          s,
+        ),
+        // Its box, open on the sources, closes: they are not its any more.
+        draft: s.draft?.editId === id ? null : s.draft,
+      }
+    }),
 
   toggleElementVisible: (id) =>
     set((s) => ({
@@ -658,6 +720,7 @@ export const useStore = create<AppState>()((set, get) => ({
       discarded: null,
       dimDraft: null,
       alignDraft: null,
+      scaleDraft: null,
       sectionDraft: null,
       errorText: null,
     })),
@@ -681,7 +744,11 @@ export const useStore = create<AppState>()((set, get) => ({
               : el.source.type === 'fitted' || takesSurface(creationMethod(el.kind, el.source.method))
                 ? 'auto'
                 : s.selectMode,
+        // An empty dimension box, left by Add dimension for the next, goes:
+        // one with work in it keeps the row keys from getting here at all.
+        dimDraft: null,
         alignDraft: null,
+        scaleDraft: null,
         sectionDraft: null,
         errorText: null,
       }
@@ -722,6 +789,13 @@ export const useStore = create<AppState>()((set, get) => ({
 
   setDraftPickPoints: (points) =>
     set((s) => (s.draft ? { draft: { ...s.draft, pickPoints: points } } : {})),
+
+  setDraftGuide: (guide) =>
+    set((s) => {
+      if (!s.draft) return {}
+      const { guide: _guide, ...rest } = s.draft
+      return { draft: guide ? { ...rest, guide } : rest }
+    }),
 
   setDraftSelection: (selection) =>
     set((s) => {
@@ -960,6 +1034,7 @@ export const useStore = create<AppState>()((set, get) => ({
         selectMode: 'paint',
         discarded: null,
         alignDraft: null,
+        scaleDraft: null,
         sectionDraft: null,
         errorText: null,
       }
@@ -996,7 +1071,7 @@ export const useStore = create<AppState>()((set, get) => ({
       m.mode === 'fit'
         ? d.selection
           ? { type: 'fitted', seeds: [], selection: d.selection, settings: d.settings }
-          : { type: 'fitted', seeds: d.picks.flat(), settings: d.settings }
+          : { type: 'fitted', seeds: d.picks.flat(), settings: d.settings, ...(d.guide ? { guide: d.guide } : {}) }
         : m.mode === 'pick'
           ? { type: 'picked' }
           : {
@@ -1103,6 +1178,7 @@ export const useStore = create<AppState>()((set, get) => ({
       discarded: keptOf(s.draft),
       dimDraft: null,
       sectionDraft: null,
+      scaleDraft: null,
       errorText: null,
     })),
 
@@ -1125,6 +1201,7 @@ export const useStore = create<AppState>()((set, get) => ({
       discarded: keptOf(s.draft),
       dimDraft: null,
       sectionDraft: null,
+      scaleDraft: null,
       errorText: null,
     })),
 
@@ -1137,6 +1214,7 @@ export const useStore = create<AppState>()((set, get) => ({
       discarded: keptOf(s.draft),
       dimDraft: null,
       alignDraft: null,
+      scaleDraft: null,
       errorText: null,
     })),
 
@@ -1169,6 +1247,7 @@ export const useStore = create<AppState>()((set, get) => ({
         discarded: keptOf(s.draft),
         dimDraft: null,
         alignDraft: null,
+        scaleDraft: null,
         errorText: null,
       }
     }),
@@ -1468,6 +1547,7 @@ export const useStore = create<AppState>()((set, get) => ({
       const sections = s.sections.map(moveSection)
       return {
         alignDraft: null,
+        scaleDraft: null,
         appliedAlignment: s.appliedAlignment ? rigidCompose(m, s.appliedAlignment) : m,
         modelCenter: [moved[0], moved[1], moved[2]] as Vec3,
         elements: rebuilt(
@@ -1495,6 +1575,67 @@ export const useStore = create<AppState>()((set, get) => ({
 
   clearAppliedAlignment: () => set({ appliedAlignment: null }),
 
+  startScale: () =>
+    set((s) => ({
+      scaleDraft: freshScaleDraft(),
+      draft: null,
+      discarded: keptOf(s.draft),
+      dimDraft: null,
+      alignDraft: null,
+      sectionDraft: null,
+      errorText: null,
+    })),
+
+  cancelScale: () => set({ scaleDraft: null }),
+
+  setScaleDraft: (patch) => set((s) => (s.scaleDraft ? { scaleDraft: { ...s.scaleDraft, ...patch } } : {})),
+
+  addScalePick: (point) =>
+    set((s) => {
+      const d = s.scaleDraft
+      if (!d || d.pickRow === null) return {}
+      const row = d.refs[d.pickRow]
+      if (!row || row.kind !== 'points') return {}
+      // A third click starts the pair again: the two ends are what count.
+      const points = row.points.length >= 2 ? [point] : [...row.points, point]
+      const refs = d.refs.map((r, i) => (i === d.pickRow ? { ...row, points } : r))
+      return { scaleDraft: { ...d, refs, pickRow: points.length === 2 ? null : d.pickRow } }
+    }),
+
+  applyScale: (k, record) =>
+    set((s) => {
+      // A section keeps its plane, `k` times as far out; its cut is taken
+      // again on the scan read at the new size (see sectionCuts).
+      const sections = s.sections.map((sec) => ({
+        ...sec,
+        frame: scaleFrame(sec.frame, k),
+        offset: sec.offset * k,
+        cut: undefined,
+        cutKey: undefined,
+      }))
+      return {
+        scaleDraft: null,
+        alignDraft: null,
+        sectionDraft: null,
+        draft: null,
+        discarded: null,
+        dimDraft: null,
+        appliedAlignment: s.appliedAlignment ? scaleRigid(s.appliedAlignment, k) : null,
+        scanScale: record,
+        elements: rebuilt(
+          s.elements.map((el) => ({
+            ...el,
+            source: scaleSource(el.source, k),
+            fit: el.fit ? scaleFit(el.fit, k) : el.fit,
+            measured: el.measured ? scaleFit(el.measured, k) : el.measured,
+            ...(el.extend ? { extend: scaleExtension(el.extend, k) } : {}),
+          })),
+          { ...s, sections },
+        ),
+        sections,
+      }
+    }),
+
   // One thing in hand at a time: a dimension closes the element draft, as
   // an alignment or a section does, so a click in the viewport has one
   // taker — the slot. A marked surface is kept (see `discarded`).
@@ -1509,6 +1650,7 @@ export const useStore = create<AppState>()((set, get) => ({
       draft: null,
       discarded: keptOf(s.draft),
       alignDraft: null,
+      scaleDraft: null,
       sectionDraft: null,
     })),
 
@@ -1530,6 +1672,7 @@ export const useStore = create<AppState>()((set, get) => ({
         draft: null,
         discarded: keptOf(s.draft),
         alignDraft: null,
+        scaleDraft: null,
         sectionDraft: null,
       }
     }),
@@ -1720,6 +1863,7 @@ export const useStore = create<AppState>()((set, get) => ({
     }),
   setSelectMode: (selectMode) => set({ selectMode }),
   setShowLabels: (showLabels) => set({ showLabels }),
+  setPeek: (peek) => set((s) => (s.peek?.kind === peek?.kind && s.peek?.id === peek?.id ? {} : { peek })),
   setScanHidden: (scanHidden) => set({ scanHidden }),
   setElementsHidden: (elementsHidden) => set({ elementsHidden }),
   setShowBackfaces: (showBackfaces) => set({ showBackfaces }),
@@ -1733,6 +1877,14 @@ export const useStore = create<AppState>()((set, get) => ({
       // Not being able to remember the choice is no reason to refuse it.
     }
     set({ navScheme })
+  },
+  setProjection: (projection) => {
+    try {
+      localStorage.setItem(PROJECTION_KEY, projection)
+    } catch {
+      // Not being able to remember the choice is no reason to refuse it.
+    }
+    set({ projection })
   },
   setViewTheme: (viewTheme) => {
     try {

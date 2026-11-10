@@ -228,6 +228,26 @@ test('scan_open and project_load with a folder, the folders kept for a copy star
   const bad = await second.call('demo_echo', { value: { $file: 'nope.json' } })
   assert.equal(bad.error, true)
   assert.match(bad.text, /^invalid_input: \$file: /)
+
+  // A call's answer written to a file by to, and a later call fed the part
+  // of it $at names — the reading never passes through the conversation.
+  const loops = { loops: [{ hole: true, points: [[0, 0], [4, 0], [4, 2]] }], note: 'n'.repeat(120) }
+  const out = await second.call('scanruler_batch', {
+    calls: [
+      { tool: 'demo_echo', arguments: loops, to: 'readings/outline.json' },
+      { tool: 'demo_echo', arguments: { points: { $file: 'readings/outline.json', $at: 'loops.0.points' } } },
+    ],
+  })
+  assert.equal(out.error, false, out.text)
+  const [kept, fed] = out.json.results
+  assert.deepEqual(kept.result.written, { path: join(folder, 'readings', 'outline.json'), bytes: Buffer.byteLength(JSON.stringify(loops)) })
+  assert.deepEqual(kept.result.keys, { loops: 1, note: '120 characters' })
+  assert.deepEqual(JSON.parse(await readFile(join(folder, 'readings', 'outline.json'), 'utf8')), loops)
+  assert.deepEqual(fed.result, { points: [[0, 0], [4, 0], [4, 2]] })
+  const missed = await second.call('demo_echo', { value: { $file: 'readings/outline.json', $at: 'loops.3' } })
+  assert.match(missed.text, /^invalid_input: \$at: .* has nothing at "loops\.3" — "loops" holds a list of 1\.$/)
+  const notJson = await second.call('scanruler_batch', { calls: [{ tool: 'demo_echo', arguments: {}, to: 'out.txt' }] })
+  assert.match(notJson.json.failed.error.message, /^calls\[0\]\.to: "out\.txt" is no \.json file/)
   await second.close()
 })
 
@@ -272,5 +292,21 @@ test('relative paths from one folder: the scan’s once one is opened, else wher
     assert.ok(field(tool, key).includes(dir), `${tool}.${key} names where the server started`)
   }
   assert.match(tools.find((t) => t.name === 'scanruler_batch').description, /\$file.*relative path is taken from the folder of the scan/)
+  await c.close()
+})
+
+test('a batch file of more calls than a spread can pass still answers', async () => {
+  const c = await copy()
+  await writeFile(join(dir, 'many.json'), JSON.stringify(Array.from({ length: 130_000 }, () => ({ tool: 'demo_echo' }))))
+  const r = await c.call('scanruler_batch', { file: join(dir, 'many.json'), wait: false })
+  // A wait answers "running" at the answer limit (45 s), which this batch
+  // can pass on a busy machine; an agent asks again, and so does this.
+  let done
+  for (let asked = 0; asked < 5; asked++) {
+    done = await c.call('scanruler_wait', { for: 'job', job: r.json.job, timeoutSeconds: 600 })
+    if (done.error || done.json.state !== 'running') break
+  }
+  assert.equal(done.error, false, done.text)
+  assert.equal(done.json.state, 'done', done.text)
   await c.close()
 })

@@ -25,7 +25,7 @@ import { arr, bool, enumOf, int, num, obj, oneOf, vec3, type JsonSchema } from '
 import { publicWorkspace } from '../state'
 import { CommandError, type Command } from '../types'
 import { applyShow, settleShown, viewToggles, whyNotShown, type ShowApplied, type ViewToggle } from '../viewToggles'
-import { nextFrame, waitFor } from './common'
+import { mapSettledOrMeasuring, nextFrame, waitFor } from './common'
 
 const VIEWS: readonly StandardView[] = ['iso', 'iso-front-left', 'iso-rear-left', 'iso-rear-right', 'top', 'bottom', 'front', 'rear', 'left', 'right']
 
@@ -52,7 +52,7 @@ const fitSchema = bool('Fit everything shown into the frame, keeping the directi
 /** The app's own toggles: what the scene draws of the session. The scan
  *  and the reference go through the Deviation workspace's own switches
  *  while it is on screen, so its effects do not put them straight back. */
-function baseToggles(scene: SceneManager): ViewToggle[] {
+export function baseToggles(scene: SceneManager): ViewToggle[] {
   const onDeviation = () => useShell.getState().workspace === 'deviation'
   return [
     {
@@ -70,15 +70,19 @@ function baseToggles(scene: SceneManager): ViewToggle[] {
     { key: 'sections', description: 'the sections cut through the scan', shown: () => scene.sectionsShown(), show: (on) => scene.setSectionsShown(on) },
     { key: 'elements', description: 'the measured elements and dimensions drawn on the part', shown: () => scene.elementsShown(), show: (on) => scene.setElementsShown(on) },
     { key: 'labels', description: 'the name tags and readouts over the part', shown: () => scene.labelsShown(), show: (on) => scene.setLabelsVisible(on) },
+    // The Deviation workspace's map, under the key Reverse engineer's map
+    // has, so the one call reads in both (issue 42): its Map switch — off,
+    // the bare surface, the map still measured.
+    { key: 'map', description: 'the deviation map painted on the part (the Deviation workspace’s Map switch)', applies: onDeviation, shown: () => useDeviation.getState().showMap, show: (on) => useDeviation.getState().setShowMap(on) },
   ]
 }
 
-const BASE_KEYS = ['scan', 'reference', 'sections', 'elements', 'labels']
+const BASE_KEYS = ['scan', 'reference', 'sections', 'elements', 'labels', 'map']
 
 const showSchema = (): JsonSchema => ({
   type: 'object',
   description:
-    'Keys to show (true) or put away (false): scan, reference, sections, elements (with dimensions), labels, and a workspace’s own (view.set lists every key standing now).',
+    'Keys to show (true) or put away (false): scan, reference, sections, elements (with dimensions), labels, map (the deviation map, in Deviation and in Reverse engineer), and a workspace’s own (view.set lists every key standing now).',
   properties: Object.fromEntries(BASE_KEYS.map((k) => [k, bool()])),
 })
 
@@ -86,11 +90,16 @@ const frameSchema = oneOf(
   [
     obj({ min: vec3('Lowest corner, mm.'), max: vec3('Highest corner, mm.') }, ['min', 'max'], 'A box in the current frame, framed whole.'),
     obj({ at: vec3('The centre, mm.'), size: num('The side of the square fitted in the picture’s shorter side, mm.', { exclusiveMinimum: 0 }) }, ['at', 'size'], 'A place, a square size mm on a side fitted round it.'),
+    obj({ world: obj({ min: vec3('Lowest corner, mm.'), max: vec3('Highest corner, mm.') }, ['min', 'max']) }, ['world'], 'The box as { min, max } gives it, written as section.render’s frame and the scan reads’ box take one.'),
   ],
   'Frame a box or a place instead of everything shown; the direction stays, fit is left alone.',
 )
 
 type Frame = { min: Vec3; max: Vec3 } | { at: Vec3; size: number }
+type FrameIn = Frame | { world: { min: Vec3; max: Vec3 } }
+
+/** A frame as asked, a box given either way as { min, max }. */
+const frameOf = (f: FrameIn | undefined): Frame | undefined => (f && 'world' in f ? { min: f.world.min, max: f.world.max } : f)
 
 // ---- the section view ---------------------------------------------------------------
 
@@ -253,7 +262,7 @@ const absentOf = (done: ShowApplied | null) => (done && done.absent.length > 0 ?
  *  read with `show` applied, before anything is put back. */
 const whyOf = (scene: SceneManager, show: Record<string, boolean> | undefined) => whyNotShown(toggles(scene), show)
 
-const set: Command<{ view?: StandardView; fit?: boolean; show?: Record<string, boolean>; frame?: Frame; section?: SectionAsk }> = {
+const set: Command<{ view?: StandardView; fit?: boolean; show?: Record<string, boolean>; frame?: FrameIn; section?: SectionAsk }> = {
   name: 'set',
   title: 'Turn the view',
   description:
@@ -261,7 +270,8 @@ const set: Command<{ view?: StandardView; fit?: boolean; show?: Record<string, b
   input: obj({ view: viewSchema, fit: fitSchema, show: showSchema(), frame: frameSchema, section: sectionSchema }),
   readOnly: true,
   scene: true,
-  run: async ({ view, fit, show, frame, section }) => {
+  run: async ({ view, fit, show, frame: asked, section }) => {
+    const frame = frameOf(asked)
     const scene = await settledScene('Turning the view')
     const done = await shown(scene, show)
     aim(scene, view, fit, frame)
@@ -272,11 +282,11 @@ const set: Command<{ view?: StandardView; fit?: boolean; show?: Record<string, b
   },
 }
 
-const render: Command<{ width?: number; height?: number; view?: StandardView; views?: StandardView[]; fit?: boolean; show?: Record<string, boolean>; frame?: Frame; section?: SectionAsk }> = {
+const render: Command<{ width?: number; height?: number; view?: StandardView; views?: StandardView[]; fit?: boolean; show?: Record<string, boolean>; frame?: FrameIn; section?: SectionAsk }> = {
   name: 'render',
   title: 'Picture the view',
   description:
-    `A picture of the 3D view as a PNG — what the viewport shows, without the HTML labels (dimension values, names). view and/or fit turn the view first, as view.set does; frame frames a box or a place (mmAcross says what the picture spans). Trap: only fit: true fits — a view alone keeps the zoom, and a frame stays for the pictures after it (fitted and framedEarlier say so). show puts keys on screen or away for the picture alone ({ scan: false } pictures what was built on the scan); a key that has to be read, a workspace’s map, is waited for up to ${SHOW_WAIT_MS / 1000} s, and the answer says how far it got if not; section cuts it open for the picture alone. 800 px on the long side by default, up to 2048; views: two to six standard views in one picture. In the Deviation workspace the answer says which map is painted (map) or why none (mapWhy; mapNote when the reference ghost dulls the colours). Waits for the session to settle. Needs the viewport.`,
+    `A picture of the 3D view as a PNG — what the viewport shows, without the HTML labels (dimension values, names). view and/or fit turn the view first, as view.set does; frame frames a box or a place (mmAcross says what the picture spans). Trap: only fit: true fits — a view alone keeps the zoom, and a frame stays for the pictures after it (fitted and framedEarlier say so). show puts keys on screen or away for the picture alone ({ scan: false } pictures what was built on the scan); a key that has to be read, a workspace’s map, is waited for up to ${SHOW_WAIT_MS / 1000} s, and the answer says how far it got if not; section cuts it open for the picture alone. 800 px on the long side by default, up to 2048; views: two to six standard views in one picture. In the Deviation workspace the answer says which map is painted (map) or why none (mapWhy; mapNote when the reference ghost dulls the colours); empty says why a picture has nothing in it. Waits for the session to settle. Needs the viewport.`,
   input: obj({
     width: int('Pixels across, 64 to 2048.', { minimum: 64, maximum: MAX_SIDE }),
     height: int('Pixels down, 64 to 2048.', { minimum: 64, maximum: MAX_SIDE }),
@@ -291,7 +301,8 @@ const render: Command<{ width?: number; height?: number; view?: StandardView; vi
   returnsFile: true,
   returnsImage: true,
   scene: true,
-  run: async ({ width, height, view, views, fit, show, frame, section }) => {
+  run: async ({ width, height, view, views, fit, show, frame: asked, section }) => {
+    const frame = frameOf(asked)
     if (views && (view || frame)) throw new CommandError('invalid_input', 'Give views, or view and frame — views fits each of its own.')
     // The 3D view is not drawn while the 2D sheet has the screen: a picture
     // of it would be an empty frame, which says nothing and looks like an
@@ -313,10 +324,18 @@ const render: Command<{ width?: number; height?: number; view?: StandardView; vi
         await nextFrame(scene)
       }
       await sectioned(scene, section)
+      // The map in the picture, and what is said of it, is the one measured
+      // for what the view was just told, not the one before it. Only the
+      // deviation workspace pictures it, and the wait shares the picture's
+      // budget: past it, the picture is taken with the map said to be still
+      // being measured (describeMapPainted) rather than not taken at all.
+      if (useShell.getState().workspace === 'deviation') {
+        await mapSettledOrMeasuring(scene, Math.max(0, SHOW_WAIT_MS - (Date.now() - started)))
+      }
       const pictured = views ? await sheetOfViews(scene, views, width, height, show) : await picture(scene, width, height, view, show)
       // A sheet of views fits each; otherwise only fit: true does.
       const framed = framing(scaleOf(scene), frame, Boolean(views) || (!frame && fit === true))
-      return { ...pictured, ...framed, ...whyOf(scene, show), ...absentOf(done), ...describeMapPainted(scene.mapPainted()) }
+      return { ...pictured, ...framed, ...whyOf(scene, show), ...absentOf(done), ...emptyOf(scene), ...describeMapPainted(scene.mapPainted()) }
     } finally {
       // What was put away or cut for the picture comes back; the frame stays.
       if (done?.changed) {
@@ -329,6 +348,15 @@ const render: Command<{ width?: number; height?: number; view?: StandardView; vi
       }
     }
   },
+}
+
+/** What a picture with no surface in it says: why, and what draws one —
+ *  the scan put away in a workspace that draws nothing else, the Reverse
+ *  engineer's bodies being drawn in its own workspace alone. */
+function emptyOf(scene: SceneManager): Record<string, unknown> {
+  if (scene.drawsSurface()) return {}
+  const workspace = publicWorkspace(useShell.getState().workspace)
+  return { empty: `Nothing is drawn in this picture: ${scene.scanShown() ? 'the view shows no surface' : 'the scan is put away'} and the ${workspace} workspace draws nothing else here — a workspace's own bodies are drawn in that workspace alone (workspace.set to it), or show: { scan: true }.` }
 }
 
 /** How many views a sheet of them puts in a row. */
@@ -418,6 +446,7 @@ export function describeMapPainted(painted: MapPainted): Record<string, unknown>
   const none = (mapWhy: string) => ({ map: null, mapWhy })
   if (!d.showMap) return none('the map switch is off — deviation.settings { show: true } puts it on.')
   if (d.source === 'element') {
+    if (d.elementStatus === 'running') return none('the map against the element is still being measured — ask again in a moment.')
     if (d.elementStatus !== 'ready') return none('no map against an element is measured — deviation.set_target measures one.')
   } else {
     if (!d.nominalName) return none('no reference part is open — deviation.open_reference, then deviation.align.')

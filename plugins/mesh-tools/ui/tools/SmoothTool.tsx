@@ -2,6 +2,7 @@
 // Smooth: the scan's noise taken out, over the whole part or a marked
 // region, its edges kept or let soften.
 
+import { useShallow } from 'zustand/react/shallow'
 import { useMark } from '../../../../src/state/markStore'
 import { PluginPanelExtensions } from '../../../../src/plugins/panelExtensions'
 import { InfoDot } from '../../../../src/ui/InfoDot'
@@ -20,7 +21,22 @@ export function SmoothTool({
   onSmooth: () => void
   onClear: () => void
 }) {
-  const m = useMeshTools()
+  // Only what the panel reads: the whole store would render it again on
+  // every write to it, the cut preview's while its offset is dragged.
+  const m = useMeshTools(
+    useShallow((s) => ({
+      editing: s.editing,
+      setSmoothEdges: s.setSmoothEdges,
+      setSmoothLimit: s.setSmoothLimit,
+      setSmoothScope: s.setSmoothScope,
+      setSmoothSize: s.setSmoothSize,
+      smoothEdges: s.smoothEdges,
+      smoothLimit: s.smoothLimit,
+      smoothScope: s.smoothScope,
+      smoothSize: s.smoothSize,
+      smoothStrength: s.smoothStrength,
+    })),
+  )
   const marked = useMark((s) => s.count)
   const regional = m.smoothScope === 'marked'
 

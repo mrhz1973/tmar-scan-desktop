@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto'
 import { createServer } from 'vite'
 import { cubeStep } from '../../../tests/stepFixtures.ts'
 const root = fileURLToPath(new URL('../../../', import.meta.url))
+const expectedUpstreamVersion = `v${JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version}`
 const server = process.env.APP_URL ? null : await createServer({ root, server: { host:'127.0.0.1',port:0,open:false,watch:{ignored:['**/e2e-out/**']} } })
 if(server){await server.listen();process.env.APP_URL=server.resolvedUrls.local[0]}
 const { launchApp,check,fail,finish,sleep,OUT_DIR,shotPath,pixelDiff } = await import('../../../scripts/e2e-lib.mjs')
@@ -71,7 +72,7 @@ try {
   await page.evaluate(()=>window.__re.store.getState().setScanHidden(false))
   const badge=await page.$eval('[data-test=tmar-build-version]',e=>({text:e.textContent,revision:e.dataset.revision,title:e.title}))
   check(badge.text.includes('TMAR web')&&/^[a-f0-9]{40}$/.test(badge.revision),'visible TMAR badge identifies the source revision independently of upstream version')
-  check(await page.$eval('[data-test=app-version]',e=>e.textContent==='v0.9.4'),'upstream ScanRuler version remains unchanged')
+  check(await page.$eval('[data-test=app-version]',(e,expected)=>e.textContent===expected,expectedUpstreamVersion),'upstream ScanRuler version remains unchanged')
   await click('[data-test=tmar-build-version]')
   check(await page.$eval('[data-test=tmar-build-details]',e=>e.textContent.includes('Built:')),'TMAR badge opens Settings with build provenance')
   check(await page.$eval('[data-test=toggle-agent-link]',e=>!e.checked),'STEP Scan review leaves the agent connection disabled')

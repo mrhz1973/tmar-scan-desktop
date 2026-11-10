@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { readCentreOffset } from '../core/networkNormalMotion'
+import { validatePointOffsets, type PointNetwork } from '../core/networkPointMotion'
 // The Reverse engineer workspace's part of a project file, under the key
 // `reverse`: the feature list by reference — the sketches with their pieces
 // and relations, every pick as a fingerprint, every plane and axis by the id
@@ -10,6 +12,8 @@
 // holds a handful of members, and a project of a dozen bought-in parts
 // would have used them up.
 
+import { validateAnnotationSource } from '../core/annotationSchema'
+import { readStoredSurfaceHistory } from './surfaceEditHistory'
 import { strFromU8, strToU8 } from 'fflate'
 import type { CollectContext, ProjectSection, RestoreContext } from '../../../src/app/projectSections'
 import { array, entries, fields, indices, invalid, object, vector } from '../../../src/core/project/validation'
@@ -123,6 +127,7 @@ export function validateFeatureJson(e: Record<string, unknown>): void {
     fields(route, 'bendRadius', 'number', 'sweep.route')
   }
   if (e.kind === 'import') {
+    if(e.annotationSource!==undefined)validateAnnotationSource(e.annotationSource)
     const file = object(e.file, 'import.file')
     fields(file, 'key name', 'string', 'import.file')
     fields(file, 'size', 'number', 'import.file')
@@ -139,17 +144,21 @@ export function validateFeatureJson(e: Record<string, unknown>): void {
     entries(e.nodes, 'network.nodes', (n) => {
       fields(n, 'id', 'number', 'network.node')
       vector(n.at, 3, 'network.node.at')
+      if (n.offset !== undefined) readCentreOffset(n.offset)
     })
     entries(e.curves, 'network.curves', (c) => {
       fields(c, 'id from to', 'number', 'network.curve')
       for (const p of array(c.via, 'network.curve.via')) vector(p, 3, 'network.curve.via')
+      if (c.viaOffsets !== undefined) for (const value of array(c.viaOffsets, 'network.curve.viaOffsets')) { if (value !== null) readCentreOffset(value) }
     })
     for (const item of array(e.cells, 'network.cells')) {
       const c = object(item, 'network.cell')
       vector(c.seed, 3, 'network.cell.seed')
       if (c.centre !== undefined) vector(c.centre, 3, 'network.cell.centre')
+      if (c.centreOffset !== undefined) readCentreOffset(c.centreOffset)
       if (c.corners !== undefined) indices(c.corners, 'network.cell.corners')
     }
+    validatePointOffsets(e as unknown as PointNetwork)
     object(e.spans, 'network.spans')
     const fit = object(e.fit, 'network.fit')
     fields(fit, 'smoothness', 'number', 'network.fit')
@@ -165,8 +174,10 @@ export function validateReversePart(raw: unknown): ReversePart {
   const r = object(raw, 'reverse')
   fields(r, 'nextFeatureId', 'number', 'reverse')
   if (r.version !== undefined && (typeof r.version !== 'number' || !Number.isFinite(r.version))) invalid('reverse.version')
-  object(r.nextOfKind, 'reverse.nextOfKind')
+  for (const n of Object.values(object(r.nextOfKind, 'reverse.nextOfKind'))) if (!Number.isSafeInteger(n)) invalid('reverse.nextOfKind')
   entries(r.features, 'reverse.features', validateFeatureJson)
+  const annotationIds=new Set<string>()
+  for(const f of r.features as Feature[]){if(f.kind==='import'&&f.annotationSource){if(annotationIds.has(f.annotationSource.featureUuid))invalid('duplicate annotated feature UUID');annotationIds.add(f.annotationSource.featureUuid)}}
   if (r.rolledTo !== undefined && (!Number.isSafeInteger(r.rolledTo) || (r.rolledTo as number) < 0 || (r.rolledTo as number) > (r.features as unknown[]).length)) invalid('reverse.rolledTo')
   if (r.parameters !== undefined) {
     // The shape only: a parameter whose expression no longer evaluates is
@@ -177,6 +188,7 @@ export function validateReversePart(raw: unknown): ReversePart {
       fields(p, 'name kind expression', 'string', 'parameter')
       if (!['length', 'angle', 'integer', 'number'].includes(p.kind as string)) invalid('parameter.kind')
       if (names.has(p.name as string)) invalid('parameter.name')
+      if (p.pinned !== undefined && typeof p.pinned !== 'boolean') invalid('parameter.pinned')
       names.add(p.name as string)
     })
     if (r.nextParameterId !== undefined) fields(r, 'nextParameterId', 'number', 'reverse')
@@ -206,8 +218,27 @@ export function validateReversePart(raw: unknown): ReversePart {
 
 /** The keys of the STEP files the features import. */
 function importedKeys(features: readonly Feature[]): string[] {
-  return [...new Set(features.flatMap((f) => (f.kind === 'import' ? [f.file.key] : [])))]
+  return [...new Set(features.flatMap(f => {
+    if (f.kind !== 'import') return []
+    // Preserve the exact upstream STEP with a qualified history snapshot.
+    // Bad/unknown metadata may still round-trip, but never suppresses the
+    // ordinary saved copy nor causes project-open failure.
+    let sourceKey: string | null = null
+    if (f.surfaceEditHistory !== undefined) {
+      try { // Archival retention only: save upstream STEP for a structurally valid v8
+      // sidecar even while editing/reopen is disabled by the default host gate.
+      sourceKey = readStoredSurfaceHistory(f.surfaceEditHistory,{experimentalAdaptiveV8:true}).source.file.key }
+      catch { /* Static CAD import remains usable. */ }
+    }
+    return sourceKey ? [f.file.key, sourceKey] : [f.file.key]
+  }))]
 }
+
+/** The STEP member's bytes as last encoded, by their text. The snapshot that
+ *  tells a saved project from a changed one keys members by the identity of
+ *  their bytes, so the same texts must come back the same bytes, or the
+ *  project never reads as saved and every checkpoint writes them again. */
+let stepBytes: { json: string; bytes: Uint8Array } | null = null
 
 /** The workspace as the file is to hold it, or undefined with no feature —
  *  with `ctx`, the STEP files its Imports name put into the archive
@@ -217,9 +248,13 @@ export function collectReversePart(ctx?: Pick<CollectContext, 'addMember'>): Rev
   const all = [...re.features, ...re.rolledBack]
   if (all.length === 0) return undefined
   const keys = importedKeys(all)
-  const texts = Object.fromEntries(keys.flatMap((k) => (re.stepFiles[k] !== undefined ? [[k, re.stepFiles[k]]] : [])))
+  const texts = Object.fromEntries(keys.flatMap((k) => (Object.hasOwn(re.stepFiles, k) ? [[k, re.stepFiles[k]]] : [])))
   const steps = ctx && Object.keys(texts).length > 0
-  if (steps) ctx.addMember(STEP_MEMBER, strToU8(JSON.stringify(texts)))
+  if (steps) {
+    const json = JSON.stringify(texts)
+    if (stepBytes?.json !== json) stepBytes = { json, bytes: strToU8(json) }
+    ctx.addMember(STEP_MEMBER, stepBytes.bytes)
+  }
   // A playback moves the bar for the camera: the file has it where it stood.
   const rolledTo = re.playback?.origin ?? re.features.length
   // The lasting set: bodies a failed build or a rollback lacks now too.
@@ -294,7 +329,7 @@ function renameBody<T>(value: T, from: number, to: number): T {
     Object.entries(value).map(([k, v]) => {
       if (k === 'sketch') return [k, v]
       if (BODY_KEYS.has(k) && v === from) return [k, to]
-      if (k === 'bodies' && Array.isArray(v)) return [k, v.map((b) => (b === from ? to : b))]
+      if ((k === 'bodies' || k === 'tool') && Array.isArray(v)) return [k, v.map((b) => (b === from ? to : b))]
       return [k, renameBody(v, from, to)]
     }),
   ) as T
@@ -316,6 +351,14 @@ export function migrateFeatures(features: readonly Feature[], version: number): 
   return out
 }
 
+/** The next id to give, from the one a file holds: past every id already
+ *  taken whatever the file says, so a hand-edited or hostile counter cannot
+ *  hand out an id twice and make one removal take two features. */
+function nextIdPast(given: number | undefined, taken: readonly number[]): number {
+  const past = taken.reduce((m, id) => (Number.isFinite(id) ? Math.max(m, Math.floor(id) + 1) : m), 1)
+  return given !== undefined && Number.isSafeInteger(given) && given > past ? given : past
+}
+
 /** The features as the store holds them, split at the rollback bar. */
 function reversePartState(p: ReversePart | undefined, ctx?: RestoreContext) {
   if (!p) return null
@@ -326,10 +369,10 @@ function reversePartState(p: ReversePart | undefined, ctx?: RestoreContext) {
   return {
     features: all.slice(0, at),
     rolledBack: all.slice(at),
-    nextFeatureId: p.nextFeatureId,
+    nextFeatureId: nextIdPast(p.nextFeatureId, all.map((f) => f.id)),
     nextOfKind: p.nextOfKind,
     parameters,
-    nextParameterId: p.nextParameterId ?? parameters.reduce((m, q) => Math.max(m, q.id + 1), 1),
+    nextParameterId: nextIdPast(p.nextParameterId, parameters.map((q) => q.id)),
     parameterTable: evaluateParameters(parameters),
     bodyStyles: Object.fromEntries(Object.entries(p.bodyStyles ?? {}).map(([id, st]) => [Number(id), st])) as BodyStyles,
     hiddenBodies: p.hiddenBodies ?? [],
@@ -350,7 +393,7 @@ export function applyReversePart(p: ReversePart | undefined, ctx?: RestoreContex
   if (prepared) useReverse.setState((s) => ({ ...prepared, buildVersion: s.buildVersion + 1 }))
 }
 
-const PERSISTED = ['features', 'rolledBack', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'overlapsShown', 'elementsShown', 'stepFiles'] as const
+const PERSISTED = ['features', 'rolledBack', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'overlapsShown', 'elementsShown', 'stepFiles', 'hiddenBodies'] as const
 const DRAFTS = ['sketchDraft', 'extrudeDraft', 'revolveDraft', 'featureDraft'] as const
 
 export const reverseSection: ProjectSection<ReversePart> = {
@@ -366,8 +409,17 @@ export const reverseSection: ProjectSection<ReversePart> = {
     }
   },
   hasContent: () => true,
-  holdsWork: () => useReverse.getState().features.length > 0,
-  holds: () => ({ features: useReverse.getState().features.length }),
+  // The features below the rollback bar are work as much as those above it:
+  // a model rolled back to the top counted as empty, and a project could be
+  // opened over it without a word (issue 34).
+  holdsWork: () => {
+    const r = useReverse.getState()
+    return r.features.length + r.rolledBack.length > 0
+  },
+  holds: () => {
+    const r = useReverse.getState()
+    return { features: r.features.length + r.rolledBack.length }
+  },
   hasDraft: () => {
     const r = useReverse.getState()
     return DRAFTS.some((k) => !!r[k])

@@ -9,6 +9,7 @@
 // selected means the whole scan, which is what nearly every part wants.
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import * as THREE from 'three'
 import { PickScene, type PickMarker } from '../viewer/PickScene'
 import { schemeById } from '../viewer/navSchemes'
@@ -24,6 +25,7 @@ import { MIN_LOCAL_POINTS } from '../core/deviation/align'
 import type { Vec3 } from '../core/types'
 import { FitButton } from './FitButton'
 import { BrushNumber, BrushSlider } from './MarkTools'
+import { modLabel } from './platform'
 import { useLength } from '../app/useUnits'
 
 /** Below this the picked points are effectively on one line. */
@@ -85,6 +87,7 @@ function Half({
   const markGesture = useMark((s) => s.gesture)
   const markErase = useMark((s) => s.erase)
   const markBackfaces = useMark((s) => s.backfaces)
+  const markStraight = useMark((s) => s.straight)
   const brushDiameter = useMark((s) => s.diameter)
   const marks = channel !== undefined
 
@@ -132,8 +135,9 @@ function Half({
       erase: markErase,
       gesture: markGesture,
       backfaces: markBackfaces,
+      straight: markStraight,
     })
-  }, [marks, brushDiameter, markErase, markGesture, markBackfaces])
+  }, [marks, brushDiameter, markErase, markGesture, markBackfaces, markStraight])
 
   // Inverting the selection is done through this half while the picker is
   // open — the main viewport stands aside, as it does for every gesture.
@@ -161,7 +165,23 @@ function Half({
 /** The scan half's second line: what the left button does on it, and what has
  *  been selected so far. */
 function PickTools({ onClear }: { onClear: () => void }) {
-  const m = useMark()
+  // The same slice MarkTools draws: `inverts` is nothing this strip shows.
+  const m = useMark(
+    useShallow((s) => ({
+      backfaces: s.backfaces,
+      count: s.count,
+      diameter: s.diameter,
+      erase: s.erase,
+      gesture: s.gesture,
+      invert: s.invert,
+      setBackfaces: s.setBackfaces,
+      setDiameter: s.setDiameter,
+      setErase: s.setErase,
+      setGesture: s.setGesture,
+      setStraight: s.setStraight,
+      straight: s.straight,
+    })),
+  )
   const modelSize = useStore((s) => s.modelSize)
   const brush = brushRange(modelSize)
   const short = m.count > 0 && m.count < MIN_LOCAL_POINTS
@@ -192,6 +212,17 @@ function PickTools({ onClear }: { onClear: () => void }) {
           <BrushSlider diameter={m.diameter} setDiameter={m.setDiameter} brush={brush} />
         </label>
       )}
+      {m.gesture === 'brush' && (
+        <button
+          className={m.straight ? 'on' : ''}
+          data-test="pick-straight"
+          aria-pressed={m.straight}
+          title={`Each drag is a straight line from press to release — ${modLabel}-drag inverts this for one drag`}
+          onClick={() => m.setStraight(!m.straight)}
+        >
+          Straight
+        </button>
+      )}
       {m.gesture !== null && (
         <>
           <button
@@ -208,7 +239,7 @@ function PickTools({ onClear }: { onClear: () => void }) {
             className={m.backfaces ? 'on' : ''}
             data-test="pick-backfaces"
             aria-pressed={m.backfaces}
-            title="Take surface facing away from you as well — off, a window cannot quietly select the far wall of a closed part"
+            title="Go through the part: take surface facing away from you and surface hidden behind nearer surface as well — off, a window or lasso takes only what you can see"
             onClick={() => m.setBackfaces(!m.backfaces)}
           >
             ⧉ Through
@@ -260,6 +291,8 @@ export function SplitPicker({
   onClearSelection: () => void
   onCancel: () => void
 }) {
+  // The picker's own slice: the store is also written on every map repaint,
+  // probe and band change, and none of those is drawn here.
   const {
     pairs,
     pendingScan,
@@ -269,7 +302,18 @@ export function SplitPicker({
     alignStatus,
     alignStopping,
     alignMessage,
-  } = useDeviation()
+  } = useDeviation(
+    useShallow((s) => ({
+      addPickPoint: s.addPickPoint,
+      alignMessage: s.alignMessage,
+      alignStatus: s.alignStatus,
+      alignStopping: s.alignStopping,
+      clearPairs: s.clearPairs,
+      pairs: s.pairs,
+      pendingScan: s.pendingScan,
+      undoPair: s.undoPair,
+    })),
+  )
   const markCount = useMark((s) => s.count)
   const markGesture = useMark((s) => s.gesture)
   const len = useLength()

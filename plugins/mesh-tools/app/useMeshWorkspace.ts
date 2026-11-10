@@ -8,7 +8,7 @@
 // the commands share; this hands the panel the session's, and a click on a
 // hole's ring the hole it rings.
 import { meshSceneOf } from '../viewer/meshScene'
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { meshToolsOf } from '../core/meshClient'
 import { summarizeCopyDeviation } from '../core/edit'
 import { reductionScale } from '../core/reduce'
@@ -26,6 +26,25 @@ import { booleanSolids, elementSolidsKey } from './booleanSolids'
 import type { EditRun, MeshToolsSession } from './meshToolsSession'
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+/**
+ * Make a survey for the tool in hand: `ask` the worker, and hand what it
+ * found to `done` while `current` still says it is wanted. A failure is
+ * said, and kept as the survey's state — with only a toast, the panel would
+ * go on showing it as still being made, with no way to ask again.
+ */
+export function runSurvey<T>(ask: () => Promise<T>, current: () => boolean, done: (found: T) => void | Promise<void>): Promise<void> {
+  useMeshTools.getState().setSurveyFailed(null)
+  return ask()
+    .then((found) => {
+      if (current()) return done(found)
+    })
+    .catch((e: unknown) => {
+      if (!current()) return
+      useMeshTools.getState().setSurveyFailed(message(e))
+      useStore.getState().setError(message(e))
+    })
+}
 
 export function useMeshWorkspace(session: MeshToolsSession) {
   const { clientRef, sceneRef, copyField, copyRgb, meshOfSolid, trimBodyOf } = session
@@ -70,6 +89,7 @@ export function useMeshWorkspace(session: MeshToolsSession) {
   const triangleCount = useStore((s) => s.triangleCount)
   const appliedAlignment = useStore((s) => s.appliedAlignment)
   const copyVersion = useMeshTools((s) => s.copyVersion)
+  const surveyAttempt = useMeshTools((s) => s.surveyAttempt)
   const surveying = workspace === 'mesh' && tool === 'islands' && fileName !== null && triangleCount > 0
   const islands = useRef<{ triangles: Float32Array; centres: Float32Array } | null>(null)
   useEffect(() => {
@@ -79,20 +99,18 @@ export function useMeshWorkspace(session: MeshToolsSession) {
     const editedVersion = client.editedVersion
     let stale = false
     useMeshTools.getState().setSurvey(null)
-    client
-      .surveyIslands(pieceSize)
-      .then(({ survey, triangles, centres }) => {
-        if (stale || scanVersion !== client.scanVersion || editedVersion !== client.editedVersion) return
+    void runSurvey(
+      () => client.surveyIslands(pieceSize),
+      () => !stale && scanVersion === client.scanVersion && editedVersion === client.editedVersion,
+      ({ survey, triangles, centres }) => {
         islands.current = { triangles, centres }
         useMeshTools.getState().setSurvey({ ...survey, minSize: pieceSize })
-      })
-      .catch((e: unknown) => {
-        if (!stale) useStore.getState().setError(e instanceof Error ? e.message : String(e))
-      })
+      },
+    )
     return () => {
       stale = true
     }
-  }, [surveying, pieceSize, triangleCount, edits, copyVersion, appliedAlignment, clientRef])
+  }, [surveying, pieceSize, triangleCount, edits, copyVersion, appliedAlignment, surveyAttempt, clientRef])
 
   const surveyVersion = useMeshTools((s) => s.surveyVersion)
   useEffect(() => {
@@ -297,20 +315,18 @@ export function useMeshWorkspace(session: MeshToolsSession) {
     const editedVersion = client.editedVersion
     let stale = false
     useMeshTools.getState().setHoleSurvey(null)
-    client
-      .surveyHoles(holeSize)
-      .then(({ survey, holes, centres, open }) => {
-        if (stale || scanVersion !== client.scanVersion || editedVersion !== client.editedVersion) return
+    void runSurvey(
+      () => client.surveyHoles(holeSize),
+      () => !stale && scanVersion === client.scanVersion && editedVersion === client.editedVersion,
+      ({ survey, holes, centres, open }) => {
         rims.current = { holes, centres, open }
         useMeshTools.getState().setHoleSurvey({ ...survey, maxSize: holeSize })
-      })
-      .catch((e: unknown) => {
-        if (!stale) useStore.getState().setError(e instanceof Error ? e.message : String(e))
-      })
+      },
+    )
     return () => {
       stale = true
     }
-  }, [sortingHoles, holeSize, triangleCount, edits, copyVersion, appliedAlignment, clientRef])
+  }, [sortingHoles, holeSize, triangleCount, edits, copyVersion, appliedAlignment, surveyAttempt, clientRef])
 
   // What Shell will do with the mesh, looked at while it is in hand and again
   // for each version of the mesh: hollow it, closed; thicken it, open; or,
@@ -324,24 +340,43 @@ export function useMeshWorkspace(session: MeshToolsSession) {
     let stale = false
     const current = () => !stale && scanVersion === client.scanVersion && editedVersion === client.editedVersion
     useMeshTools.getState().setShellSurvey(null)
+    void runSurvey(
+      async () => {
+        const c = await client.closedness()
+        if (c.open === 0 || !current()) return { ...c, rims: 0, holes: 0 }
+        const { survey } = await client.surveyHoles(holeSize)
+        return { ...c, rims: survey.rims, holes: survey.holes }
+      },
+      current,
+      (found) => useMeshTools.getState().setShellSurvey({ ...found, holeSize }),
+    )
+    return () => {
+      stale = true
+    }
+  }, [shelling, holeSize, triangleCount, edits, copyVersion, surveyAttempt, clientRef])
+
+  // How many open edges the mesh has, looked at while Wrap is in hand and
+  // again for each version of it: a sheet wraps to nothing unless grown.
+  const wrapping = workspace === 'mesh' && tool === 'wrap' && fileName !== null && triangleCount > 0
+  useEffect(() => {
+    if (!wrapping) return
+    const client = meshToolsOf(clientRef.current!)
+    const scanVersion = client.scanVersion
+    const editedVersion = client.editedVersion
+    let stale = false
+    useMeshTools.getState().setWrapOpen(null)
     client
       .closedness()
-      .then(async (c) => {
-        if (!current()) return
-        if (c.open === 0) {
-          useMeshTools.getState().setShellSurvey({ ...c, rims: 0, holes: 0, holeSize })
-          return
-        }
-        const { survey } = await client.surveyHoles(holeSize)
-        if (current()) useMeshTools.getState().setShellSurvey({ ...c, rims: survey.rims, holes: survey.holes, holeSize })
+      .then((c) => {
+        if (!stale && scanVersion === client.scanVersion && editedVersion === client.editedVersion) useMeshTools.getState().setWrapOpen(c.open)
       })
-      .catch((e: unknown) => {
-        if (!stale) useStore.getState().setError(e instanceof Error ? e.message : String(e))
+      .catch(() => {
+        // A hint only; the wrap says what went wrong itself.
       })
     return () => {
       stale = true
     }
-  }, [shelling, holeSize, triangleCount, edits, copyVersion, clientRef])
+  }, [wrapping, triangleCount, edits, copyVersion, clientRef])
 
   const holeSurveyVersion = useMeshTools((s) => s.holeSurveyVersion)
   useEffect(() => {
@@ -362,11 +397,12 @@ export function useMeshWorkspace(session: MeshToolsSession) {
   const cutCap = useMeshTools((s) => s.cutCap)
   const elements = useStore((s) => s.elements)
   const modelCenter = useStore((s) => s.modelCenter)
+  const modelSize = useStore((s) => s.modelSize)
   const cutting = workspace === 'mesh' && tool === 'cut' && fileName !== null
   useEffect(() => {
     const scene = sceneRef.current
     if (!scene || !cutting) return
-    const plane = cutPlaneOf(cutRef, cutOffset, cutOffsetAuto, cutKeep, elements, modelCenter)
+    const plane = cutPlaneOf(cutRef, cutOffset, cutOffsetAuto, cutKeep, elements, modelCenter, undefined, 2 * modelSize)
     if (!plane) return
     // The slice's own stencil cap closes whatever the eye looks through, which
     // on an open scan is not what the cut will close.
@@ -376,7 +412,7 @@ export function useMeshWorkspace(session: MeshToolsSession) {
       scene.setSlicePlane(null)
       scene.setSliceCapped(true)
     }
-  }, [cutting, cutRef, cutOffset, cutOffsetAuto, cutKeep, elements, modelCenter, fileName, sceneRef])
+  }, [cutting, cutRef, cutOffset, cutOffsetAuto, cutKeep, elements, modelCenter, modelSize, fileName, sceneRef])
 
   // The cap is asked for a moment after the plane settles — an offset stepped
   // with the arrows asks once, not at every step — and it and what the panel
@@ -384,7 +420,7 @@ export function useMeshWorkspace(session: MeshToolsSession) {
   useEffect(() => {
     const scene = sceneRef.current
     if (!scene || !cutting) return
-    const plane = cutPlaneOf(cutRef, cutOffset, cutOffsetAuto, cutKeep, elements, modelCenter)
+    const plane = cutPlaneOf(cutRef, cutOffset, cutOffsetAuto, cutKeep, elements, modelCenter, undefined, 2 * modelSize)
     if (!plane) {
       meshSceneOf(scene).setCutCap(null, null)
       return
@@ -410,7 +446,7 @@ export function useMeshWorkspace(session: MeshToolsSession) {
       stale = true
       clearTimeout(timer)
     }
-  }, [cutting, cutRef, cutOffset, cutOffsetAuto, cutKeep, cutCap, elements, modelCenter, triangleCount, edits, copyVersion, appliedAlignment, clientRef, sceneRef])
+  }, [cutting, cutRef, cutOffset, cutOffsetAuto, cutKeep, cutCap, elements, modelCenter, modelSize, triangleCount, edits, copyVersion, appliedAlignment, clientRef, sceneRef])
 
   useEffect(() => {
     const scene = sceneRef.current
@@ -422,13 +458,51 @@ export function useMeshWorkspace(session: MeshToolsSession) {
     }
   }, [cutting, sceneRef])
 
+  // While Mirror is in hand the part is shown as the mirror would leave it:
+  // its mirror image across the plane drawn over it — or, to make it
+  // symmetric, the side to be replaced cut away and the mirror image of the
+  // side kept drawn in its place — and the plane outlined. The scene draws it
+  // again for each version of the mesh on show, and after the part moves.
+  const mirrorRef = useMeshTools((s) => s.mirrorRef)
+  const mirrorOffset = useMeshTools((s) => s.mirrorOffset)
+  const mirrorOffsetAuto = useMeshTools((s) => s.mirrorOffsetAuto)
+  const mirrorKeep = useMeshTools((s) => s.mirrorKeep)
+  const mirrorMode = useMeshTools((s) => s.mirrorMode)
+  const mirroring = workspace === 'mesh' && tool === 'mirror' && fileName !== null
+  useEffect(() => {
+    const scene = sceneRef.current
+    if (!scene || !mirroring) return
+    const plane = cutPlaneOf(mirrorRef, mirrorOffset, mirrorOffsetAuto, mirrorKeep, elements, modelCenter, undefined, 2 * modelSize)
+    if (!plane) return
+    const symmetric = mirrorMode === 'symmetric'
+    if (symmetric) {
+      // Left open where it is cut: the mirror image closes it.
+      scene.setSliceCapped(false)
+      scene.setSlicePlane(plane.frame)
+    }
+    meshSceneOf(scene).setMirrorPreview(plane.frame, symmetric)
+    return () => {
+      meshSceneOf(scene).setMirrorPreview(null)
+      if (symmetric) {
+        scene.setSlicePlane(null)
+        scene.setSliceCapped(true)
+      }
+    }
+  }, [mirroring, mirrorRef, mirrorOffset, mirrorOffsetAuto, mirrorKeep, mirrorMode, elements, modelCenter, modelSize, sceneRef])
+
   // ---- The edited copy -------------------------------------------------------------
 
   // Mesh Tools shows the copy in the scan's place; every other workspace the
-  // scan it measures. Before anything is painted on either — the effects of
-  // the scene's own sync run after these.
+  // scan it measures. Before anything is painted on either: the scene's own
+  // sync (app/SceneSync.tsx) is a child of the Workbench this runs in, and a
+  // child's effects run ahead of its parent's, so as a plain effect this
+  // would swap after the paint — the map of the workspace coming laid on the
+  // copy going, and the scan coming back bare. A layout effect runs ahead of
+  // every plain effect in the commit, wherever it sits in the tree. It only
+  // trades a few objects (SceneManager.swapSlots) and reads nothing the
+  // browser lays out or paints.
   const copyTriangles = useMeshTools((s) => s.copyTriangles)
-  useEffect(() => {
+  useLayoutEffect(() => {
     sceneRef.current?.showEdited(workspace === 'mesh' && copyTriangles !== null)
   }, [workspace, copyTriangles, copyVersion, sceneRef])
 
@@ -454,10 +528,15 @@ export function useMeshWorkspace(session: MeshToolsSession) {
         useMeshTools.getState().setCopyDeviationStats(stats)
         const units = usePrefs.getState().units
         const added = stats.added > 0 ? `; ${((100 * stats.added) / values.length).toFixed(1)} % of it is surface an edit added` : ''
+        // Measured at the copy's own points, which a reduction leaves on the
+        // surface: the triangles between them can stray much further.
+        const reduced = useMeshTools.getState().pending.some((e) => e.kind === 'reduce')
+          ? ' Only at its own points: the triangles between them can stray further, which the reduction’s Accuracy view measures.'
+          : ''
         useStore
           .getState()
           .setStatus(
-            `The edited copy is within ${fmtLen(stats.maxAbs, units, 3)} of the scan in use, RMS ${fmtLen(stats.rms, units, 3)}${added}.`,
+            `The edited copy is within ${fmtLen(stats.maxAbs, units, 3)} of the scan in use, RMS ${fmtLen(stats.rms, units, 3)}${added}.${reduced}`,
           )
       })
       .catch((e: unknown) => {

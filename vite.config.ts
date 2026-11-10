@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 // @ts-expect-error Build-only ESM helper; it is tested independently.
 import { readBuildIdentity } from './scripts/buildIdentity.mjs'
+// @ts-expect-error Build-only ESM helper, validated by node tests.
+import { readTmarVersion } from './scripts/tmarVersion.mjs'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
@@ -17,10 +19,24 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(version),
+    __TMAR_VERSION__: JSON.stringify(readTmarVersion(fileURLToPath(new URL('.', import.meta.url)))),
     __BUILD_IDENTITY__: JSON.stringify(readBuildIdentity(fileURLToPath(new URL('.', import.meta.url)))),
   },
   build: {
     chunkSizeWarningLimit: 1500,
+    // The libraries change far less often than the app, so each gets a chunk
+    // of its own that a browser keeps cached across releases, and the app's
+    // own chunk is the only large one a new version makes it fetch again.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (/node_modules[\\/](three|three-mesh-bvh)[\\/]/.test(id)) return 'three'
+          if (/node_modules[\\/](react|react-dom|scheduler|zustand)[\\/]/.test(id)) return 'react'
+          return undefined
+        },
+      },
+    },
   },
   // The workers are module workers already (`type: 'module'` everywhere they
   // are made), and a worker may load a large package with a dynamic import

@@ -1,0 +1,560 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// One isolated GUI span attempt on the authorized, hash-pinned LEGO R01 STEP.
+// The original source stays read-only; only a disposable QA project is edited.
+import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+
+assert.equal(process.env.SCANRULER_ISOLATED, '1', 'Set SCANRULER_ISOLATED=1 for isolated QA.')
+const url = new URL(process.env.APP_URL ?? '')
+assert.equal(url.href, 'http://127.0.0.1:17527/', 'Only the designated isolated QA host is permitted.')
+const outputRoot = process.env.EDIT_SURFACE_QA_OUT
+assert(outputRoot && isAbsolute(outputRoot), 'Set EDIT_SURFACE_QA_OUT to an absolute folder outside the checkout.')
+const rel = relative(resolve(process.cwd()), resolve(outputRoot))
+assert(rel && (rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)), 'Evidence must stay outside the checkout.')
+const cadPath = process.env.SURFACE_QA_PAIRED_CAD
+assert(cadPath && isAbsolute(cadPath), 'Set SURFACE_QA_PAIRED_CAD to the authorized lego_CAD_R01.step.')
+const expected = {
+  cad: '9278dbf72e5b148d4f9027053867caae40e35a28836f8f629759aab899ff7b22',
+  report: 'bcfb71b025e0886f6a55d07208cb72af1355bacae147c1c673460de62a132ee0',
+  manifest: '5ea1d57337bcbe806ca41844fe73be954cf2c87c1b6379126b7b43f27f6678c5',
+}
+const sha = bytes => createHash('sha256').update(bytes).digest('hex')
+const cadBytes = readFileSync(cadPath), inputSha256 = sha(cadBytes)
+assert.equal(inputSha256, expected.cad, 'CAD SHA-256 does not match the authorized R01 file.')
+const pairDir = dirname(cadPath)
+const manifestBytes = readFileSync(join(pairDir, 'lego_R01_manifest.json'))
+const reportBytes = readFileSync(join(pairDir, 'lego_REPORT_R01.md'))
+assert.equal(sha(manifestBytes), expected.manifest, 'R01 manifest SHA-256 changed.')
+assert.equal(sha(reportBytes), expected.report, 'R01 report SHA-256 changed.')
+const manifest = JSON.parse(manifestBytes.toString('utf8'))
+assert.equal(manifest.files.find(file => file.name === 'lego_CAD_R01.step')?.sha256.toLowerCase(), expected.cad)
+assert(reportBytes.toString('utf8').includes('Trasformazione finale identita: nessun riallineamento best-fit.'),
+  'Hash-matched R01 report does not state identity alignment.')
+const evidencePath = new URL('../evidence/surface-point-target/lego-R01-real-scan-once/result.json', import.meta.url)
+const priorEvidence = JSON.parse(readFileSync(evidencePath, 'utf8'))
+assert.equal(priorEvidence.cadSha256, expected.cad)
+assert.equal(priorEvidence.faceIndex, 0)
+assert.deepEqual(priorEvidence.selectedPoles, [12])
+assert.equal(priorEvidence.reimport?.valid, true)
+mkdirSync(resolve(outputRoot), { recursive: true })
+const out = mkdtempSync(join(resolve(outputRoot), 'workspace-tangent-span-lego-r01-gui-'))
+process.env.SHOT_DIR = out
+writeFileSync(join(out, 'lego_CAD_R01.step'), cadBytes)
+assert.equal(sha(readFileSync(join(out, 'lego_CAD_R01.step'))), expected.cad, 'QA input copy must preserve the authorized source bytes exactly.')
+
+const { OcctKernel } = await import('occt-wasm')
+const { launchApp } = await import('../../../scripts/e2e-lib.mjs')
+const kernel = await OcctKernel.init()
+const step = cadBytes.toString('utf8')
+const sourceShape = kernel.importStep(step), sourceFaces = kernel.getSubShapes(sourceShape, 'face'), sourceSolids = kernel.getSubShapes(sourceShape, 'solid')
+try {
+  assert(kernel.isValid(sourceShape), 'Authorized source STEP must import as valid CAD.')
+  assert.equal(sourceSolids.length, 1, 'Authorized R01 CAD must contain one solid.')
+  assert.equal(sourceFaces.length, 51, 'Authorized R01 CAD must contain 51 faces.')
+  assert.equal(kernel.surfaceType(sourceFaces[0]), 'plane', 'Fixed face 0 must be planar.')
+  assert.equal(kernel.classifyPointOnFace(sourceFaces[0], 4.83, -6.0915), 'in', 'Recorded face-0 UV witness must be interior.')
+} finally { sourceFaces.forEach(face => kernel.release(face)); sourceSolids.forEach(solid => kernel.release(solid)); kernel.release(sourceShape) }
+const geometrySignature = text => {
+  const shape = kernel.importStep(text), faces = kernel.getSubShapes(shape, 'face'), solids = kernel.getSubShapes(shape, 'solid')
+  const round = value => Number(value.toFixed(8))
+  const bounds = box => [box.xmin, box.ymin, box.zmin, box.xmax, box.ymax, box.zmax].map(round)
+  try {
+    const faceMetrics = faces.map(face => ({ kind: kernel.surfaceType(face), area: round(kernel.getSurfaceArea(face)),
+      bounds: bounds(kernel.getBoundingBox(face)) })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+    return { valid: kernel.isValid(shape), solidCount: solids.length, faceCount: faces.length,
+      volume: round(kernel.getVolume(shape)), bounds: bounds(kernel.getBoundingBox(shape)), faceMetrics }
+  } finally {
+    faces.forEach(face => kernel.release(face)); solids.forEach(solid => kernel.release(solid)); kernel.release(shape)
+  }
+}
+const report = {
+  scope: 'one GUI reviewed UV-span tangent flattening attempt on authorized LEGO R01 face 0; disposable draft Apply/Undo only',
+  appUrl: url.href,
+  fixture: { kind: 'authorized LEGO R01 STEP copied into disposable QA import', cadPath,
+    inputSha256, manifestSha256: sha(manifestBytes), reportSha256: sha(reportBytes),
+    priorEvidence: 'plugins/tmar-edit-surface/evidence/surface-point-target/lego-R01-real-scan-once/result.json',
+    faceIndex: 0, semanticFace: 'minimum-Y outer planar wall', seedOffsetMm: 0.05,
+    alignment: 'identity per hash-matched report; millimetres assumed from source report, not independently verified' },
+  checks: [],
+  limitations: ['One real STEP face and at most one admissible UV knot span; not a scan-alignment or general LEGO qualification.',
+    'STEP import and seed deformation are harness-driven; span-zone viewport click, review, Apply, and Undo use UI actions.',
+    'The STEP source, scan, manifest, report, and prior evidence remain read-only; no user project or scan is loaded.'],
+  prerequisites: ['Isolated QA host at 127.0.0.1:17527 with the WIP tangent-span command loaded.',
+    'Run from the ScanRuler checkout with SCANRULER_ISOLATED=1 and EDIT_SURFACE_QA_OUT outside the checkout.'],
+  verdict: 'INCOMPLETE',
+}
+const check = (ok, label) => { assert(ok, label); report.checks.push(label); console.log('PASS', label) }
+let browser, page
+
+try {
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+  assert(response.ok, `Isolated host returned HTTP ${response.status}.`)
+  assert(/ScanRuler/i.test(await response.text()), 'Isolated host does not identify as ScanRuler.')
+  const app = await launchApp({ url: url.href, width: 1440, height: 1000, agentDataOk: false,
+    userDataDir: join(out, 'owned-browser-profile'), protocolTimeout: 120000 })
+  browser = app.browser; page = app.page; report.consoleErrors = app.consoleErrors
+  page.on('dialog', dialog => dialog.accept())
+
+  await page.evaluate(async stepText => {
+    const { runCommand } = await import('/src/commands/registry.ts')
+    const { useShell } = await import('/src/state/shellStore.ts')
+    const { useReverse } = await import('/plugins/reverse/state/reStore.ts')
+    const { reverseSession } = await import('/plugins/reverse/app/reSession.ts')
+    const { sceneOf } = await import('/src/commands/host.ts')
+    const { reSceneOf } = await import('/plugins/reverse/viewer/reScene.ts')
+    const { useWorkspaceEditor } = await import('/src/plugins/workspaceEditors.ts')
+    const { useStore } = await import('/src/state/store.ts')
+    useStore.getState().setNavScheme('fusion')
+    useShell.getState().setWorkspace('reverse')
+    for (let i = 0; !reverseSession() && i < 500; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    if (!reverseSession()) throw Error('Isolated CAD session unavailable')
+    await reverseSession().startKernel(); await reverseSession().settled()
+    await runCommand('reverse.import.step', { bytes: new TextEncoder().encode(stepText), name: 'lego_CAD_R01.step' })
+    await reverseSession().settled()
+    const scene = sceneOf(), reverse = useReverse.getState(), sourceId = reverse.bodies[0]?.id
+    if (!scene || !sourceId || reverse.bodies.length !== 1) throw Error('R01 STEP did not import as one isolated body')
+    const source = await runCommand('reverse.body.edit_source', { body: sourceId })
+    scene.fitToView(); scene.viewFrom('front')
+    window.tangentSpanQa = { runCommand, scene, reScene: reSceneOf(scene), useWorkspaceEditor,
+      useReverse, useStore, sourceId, sourceStep: new TextDecoder().decode(source.file.bytes) }
+  }, step)
+  await page.waitForFunction(() => {
+    const q = window.tangentSpanQa
+    return !!q.reScene.bodyMeshes.get(q.sourceId) && !q.useReverse.getState().building && !q.useStore.getState().busy
+  }, { timeout: 120000 })
+  const supportCardClose = await page.$('[data-test=support-card] .sc-x')
+  if (supportCardClose) await supportCardClose.click()
+  await page.waitForFunction(() => !document.querySelector('[data-test=support-card]'), { timeout: 10000 })
+  report.supportCard = { closedThroughUi: !!supportCardClose, absentBeforeSeedChoice: true }
+  await page.waitForSelector('[data-test=feature-edit-surface]:enabled', { timeout: 60000 })
+  await page.click('[data-test=feature-edit-surface]')
+  await page.waitForSelector('[data-test=workspace-surface-parameters]', { timeout: 120000 })
+  await page.waitForFunction(() => document.querySelectorAll('[data-test=surface-face] option').length > 1, { timeout: 60000 })
+  await page.select('[data-test=surface-face]', '0')
+  await page.waitForFunction(() => {
+    const s = window.tangentSpanQa.useWorkspaceEditor.getState(), p = s.controller?.getPanelState()
+    return s.snapshot?.validation?.kind === 'valid' && !!p?.net && !p.calculating
+  }, { timeout: 120000 })
+  const sourceFaceCheck = await page.evaluate(() => {
+    const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller, v = c.getViewState(), p = c.getPanelState()
+    const mesh = v.preview.faceMeshes[0], ys = [...mesh.positions].filter((_, i) => i % 3 === 1)
+    return { face: v.face, kind: p.faces[0]?.kind, reason: p.faces[0]?.reason,
+      yMin: Math.min(...ys), yMax: Math.max(...ys), trimLocks: p.faces[0]?.trimLocks,
+      hiddenPoles: p.faces[0]?.hiddenPoles, net: structuredClone(v.net), locked: [...v.locked] }
+  })
+  assert.equal(sourceFaceCheck.face, 0, 'The fixed R01 face 0 must remain selected.')
+  assert.equal(sourceFaceCheck.kind, 'plane', 'The fixed R01 face 0 must remain planar.')
+  assert.equal(sourceFaceCheck.reason, null, `Fixed face 0 is not eligible: ${sourceFaceCheck.reason}`)
+  assert(Math.abs(sourceFaceCheck.yMin - 0.05) < 1e-5 && Math.abs(sourceFaceCheck.yMax - 0.05) < 1e-5,
+    'Selected UI face is not the recorded minimum-Y R01 wall.')
+  assert.deepEqual(sourceFaceCheck.trimLocks, [])
+  assert.deepEqual(sourceFaceCheck.hiddenPoles, [])
+  await page.click('[data-test=surface-refine-both]')
+  await page.waitForFunction(() => {
+    const s = window.tangentSpanQa.useWorkspaceEditor.getState(), p = s.controller?.getPanelState()
+    return s.snapshot?.validation?.kind === 'valid' && !!p?.net && !p.calculating
+      && p.net.nu >= 3 && p.net.nv >= 3
+  }, { timeout: 120000 })
+  await page.click('[data-test=surface-refine-both]')
+  await page.waitForFunction(() => {
+    const s = window.tangentSpanQa.useWorkspaceEditor.getState(), p = s.controller?.getPanelState()
+    return s.snapshot?.validation?.kind === 'valid' && !!p?.net && !p.calculating
+      && p.net.nu >= 11 && p.net.nv >= 11
+  }, { timeout: 120000 })
+  report.refinement = await page.evaluate(() => {
+    const p = window.tangentSpanQa.useWorkspaceEditor.getState().controller.getPanelState()
+    return { nu: p.net.nu, nv: p.net.nv, degree: [p.net.du, p.net.dv] }
+  })
+  await page.select('[data-test=surface-selection-mode]', 'points')
+
+  const deformationPick = await page.evaluate(() => {
+    const q = window.tangentSpanQa, c = q.useWorkspaceEditor.getState().controller, view = c.getViewState(), net = view.net
+    const expand = (knots, multiplicities) => knots.flatMap((knot, i) => Array(multiplicities[i]).fill(knot))
+    const intervals = (knots, multiplicities, degree) => {
+      const full = expand(knots, multiplicities), found = []
+      for (let span = degree; span < full.length - degree - 1; span++)
+        if (full[span] < full[span + 1]) found.push({ first: span - degree, bounds: [full[span], full[span + 1]] })
+      return found
+    }
+    const uSpans = intervals(net.ku, net.mu, net.du), vSpans = intervals(net.kv, net.mv, net.dv)
+    const free = new Set(net.poles.flatMap((_, id) => !view.locked.includes(id) && !view.hiddenPoles.includes(id) ? [id] : []))
+    const eligible = new Set()
+    let admissibleSupportSpanCount = 0
+    for (const u of uSpans) for (const v of vSpans) {
+      const ids = []
+      for (let i = 0; i <= net.du; i++) for (let j = 0; j <= net.dv; j++) ids.push((u.first + i) * net.nv + v.first + j)
+      if (ids.length === 16 && ids.every(id => free.has(id))) {
+        admissibleSupportSpanCount++
+        ids.forEach(id => eligible.add(id))
+      }
+    }
+    const candidates = net.poles.flatMap((pole, id) => {
+      const u = Math.floor(id / net.nv), v = id % net.nv
+      return eligible.has(id) && u > 0 && u < net.nu - 1 && v > 0 && v < net.nv - 1 ? [{ id, pole, u, v }] : []
+    }).sort((a, b) => Math.hypot(a.pole[0] - 7.89, a.pole[2] - 4.765) - Math.hypot(b.pole[0] - 7.89, b.pole[2] - 4.765))
+    const chosen = candidates[0]
+    if (!chosen) return { id: null, admissibleSupportSpanCount, error: 'No support pole belongs to a 16-free-pole UV span.' }
+    const host = q.scene.layerHost(), canvas = host.canvas, rect = canvas.getBoundingClientRect(), camera = host.camera(), group = host.partGroup
+    group.updateWorldMatrix(true, true); camera.updateMatrixWorld(true)
+    const p = group.position.clone().set(...chosen.pole).applyMatrix4(group.matrixWorld).project(camera)
+    const x = rect.left + (p.x + 1) * rect.width / 2, y = rect.top + (1 - p.y) * rect.height / 2
+    const visible = Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z) && Math.abs(p.z) < 1
+      && x > rect.left + 12 && x < rect.right - 12 && y > rect.top + 12 && y < rect.bottom - 12
+      && document.elementFromPoint(x, y) === canvas
+    return { id: chosen.id, pole: chosen.pole, x, y, visible, net: structuredClone(net), locked: [...view.locked], admissibleSupportSpanCount }
+  })
+  if (deformationPick.id === null) {
+    report.stopReason = `STOP_NO_ADMISSIBLE_SPAN: ${deformationPick.error}`
+    throw new Error(report.stopReason)
+  }
+  assert(deformationPick.visible, `Seed pole is not directly clickable: ${JSON.stringify(deformationPick)}`)
+  report.seedCandidate = { poleId: deformationPick.id, eligibleSupportSpanCount: deformationPick.admissibleSupportSpanCount,
+    seedPole: deformationPick.pole }
+  await page.mouse.click(deformationPick.x, deformationPick.y)
+  await page.waitForFunction(id => {
+    const p = window.tangentSpanQa.useWorkspaceEditor.getState().controller?.getPanelState()
+    return p?.selected?.length === 1 && p.selected[0] === id
+  }, { timeout: 30000 }, deformationPick.id)
+  await page.select('[data-test=surface-drag-mode]', 'axis')
+  await page.click('[data-test=surface-axis-1]')
+  await page.$eval('[data-test=surface-distance]', element => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, '0.05')
+    element.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await page.click('[data-test=surface-move]')
+  await page.waitForFunction(() => {
+    const s = window.tangentSpanQa.useWorkspaceEditor.getState(), p = s.controller?.getPanelState()
+    return s.snapshot?.validation?.kind === 'valid' && !p?.busy && !p?.calculating
+  }, { timeout: 120000 })
+  const beforeReview = await page.evaluate(() => {
+    const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller, p = c.getPanelState()
+    return { net: structuredClone(p.net), selected: [...p.selected], historyRevision: c.getSnapshot().historyRevision,
+      previewRevision: c.getViewState().preview.previewRevision }
+  })
+  assert.deepEqual(beforeReview.selected, [deformationPick.id], 'Only the seed pole should be selected before support review.')
+  const seedOffsetMm = Math.hypot(...beforeReview.net.poles[deformationPick.id].map((value, axis) => value - deformationPick.pole[axis]))
+  assert(seedOffsetMm >= 0.04 && seedOffsetMm <= 0.06,
+    `R01 seed offset must remain near the disposable 0.05 mm probe: ${seedOffsetMm} mm.`)
+
+  const selectFree = await page.evaluateHandle(() => [...document.querySelectorAll('[data-test=workspace-surface-parameters] button')]
+    .find(button => button.textContent?.trim() === 'Seleziona liberi'))
+  assert(selectFree.asElement(), 'Visible “Seleziona liberi” control exists.')
+  await selectFree.asElement().click()
+  const selectedSupports = await page.evaluate(() => {
+    const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller, p = c.getPanelState(), v = c.getViewState()
+    return { selected: [...p.selected], locked: [...p.locked], hidden: [...v.hiddenPoles],
+      canTargetPoint: p.canTargetPoint, freeBoundary: p.freeBoundary }
+  })
+  assert(selectedSupports.selected.includes(deformationPick.id), 'The deformed pole must be included in the free support selection.')
+  assert(selectedSupports.canTargetPoint && !selectedSupports.freeBoundary, 'Span mode requires a valid face and protected boundary.')
+  report.supportSelection = { selectedCount: selectedSupports.selected.length, lockedCount: selectedSupports.locked.length,
+    hiddenCount: selectedSupports.hidden.length, canTargetPoint: selectedSupports.canTargetPoint,
+    freeBoundary: selectedSupports.freeBoundary }
+
+  await page.click('[data-test=surface-point-tangent-span]')
+  await page.waitForFunction(() => window.tangentSpanQa.useWorkspaceEditor.getState().controller?.getPanelState().surfaceTarget === 'tangent-span',
+    { timeout: 30000 })
+  const witness = await page.evaluate(async () => {
+    const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller
+    return c.runtime.worker.ask({ action: 'finalFaceWitness', previewRevision: c.getViewState().preview.previewRevision })
+  })
+  const net = beforeReview.net
+  const expanded = (knots, multiplicities) => knots.flatMap((knot, index) => Array(multiplicities[index]).fill(knot))
+  const spans = (knots, multiplicities, degree) => {
+    const full = expanded(knots, multiplicities), found = []
+    for (let span = degree; span < full.length - degree - 1; span++) {
+      if (full[span] < full[span + 1]) found.push({ first: span - degree, bounds: [full[span], full[span + 1]] })
+    }
+    return found
+  }
+  const uSpans = spans(net.ku, net.mu, net.du), vSpans = spans(net.kv, net.mv, net.dv)
+  const supportIds = (u, v) => {
+    const ids = []
+    for (let i = 0; i <= net.du; i++) for (let j = 0; j <= net.dv; j++)
+      ids.push((u.first + i) * net.nv + v.first + j)
+    return ids
+  }
+  const witnessFace = kernel.fromBREP(witness.faceBrep)
+  let uvChoice, clickPoint
+  try {
+    const choices = []
+    for (const uSpan of uSpans) for (const vSpan of vSpans) {
+      const ids = supportIds(uSpan, vSpan)
+      if (!ids.includes(deformationPick.id) || !ids.every(id => selectedSupports.selected.includes(id)
+          && !selectedSupports.locked.includes(id) && !selectedSupports.hidden.includes(id))) continue
+      const u = (uSpan.bounds[0] + uSpan.bounds[1]) / 2, v = (vSpan.bounds[0] + vSpan.bounds[1]) / 2
+      if (kernel.classifyPointOnFace(witnessFace, u, v) !== 'in') continue
+      const point = kernel.pointOnSurface(witnessFace, u, v)
+      const at = [point.x, point.y, point.z]
+      const score = Math.hypot(...at.map((value, axis) => value - beforeReview.net.poles[deformationPick.id][axis]))
+      choices.push({ u, v, uBounds: uSpan.bounds, vBounds: vSpan.bounds, ids, at, score })
+    }
+    choices.sort((a, b) => a.score - b.score)
+    uvChoice = choices[0]
+    if (!uvChoice) {
+      report.stopReason = 'STOP_NO_ADMISSIBLE_SPAN: no interior UV span has exactly 16 supports that are all free, visible, and selected.'
+      throw Error(report.stopReason)
+    }
+    if (uvChoice.ids.length !== 16) throw Error(`STOP_UNEXPECTED_SUPPORT_COUNT: expected 16, got ${uvChoice.ids.length}.`)
+    clickPoint = uvChoice.at
+  } finally { kernel.release(witnessFace) }
+  report.requestedZone = { u: uvChoice.u, v: uvChoice.v, uBounds: uvChoice.uBounds, vBounds: uvChoice.vBounds,
+    supportIds: uvChoice.ids, seedPole: deformationPick.id }
+  await page.evaluate(zone => { window.tangentSpanQa.requestedZone = zone }, report.requestedZone)
+
+  const projected = await page.evaluate(point => {
+    const q = window.tangentSpanQa, host = q.scene.layerHost(), canvas = host.canvas, rect = canvas.getBoundingClientRect()
+    const camera = host.camera(), group = host.partGroup
+    group.updateWorldMatrix(true, true); camera.updateMatrixWorld(true)
+    const p = group.position.clone().set(...point).applyMatrix4(group.matrixWorld).project(camera)
+    const x = rect.left + (p.x + 1) * rect.width / 2, y = rect.top + (1 - p.y) * rect.height / 2
+    const visible = Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z) && Math.abs(p.z) < 1
+      && x > rect.left + 12 && x < rect.right - 12 && y > rect.top + 12 && y < rect.bottom - 12
+      && document.elementFromPoint(x, y) === canvas
+    return { point, x, y, visible, canvasCount: document.querySelectorAll('.viewport canvas').length }
+  }, clickPoint)
+  report.viewportPick = projected
+  assert(projected.visible && projected.canvasCount === 1,
+    `Fixed interior span point is not visible/clickable; no alternative will be tried: ${JSON.stringify(projected)}`)
+  const prePickMessage = await page.evaluate(() =>
+    window.tangentSpanQa.useWorkspaceEditor.getState().controller.getPanelState().message)
+  await page.evaluate(() => {
+    const q = window.tangentSpanQa, c = q.useWorkspaceEditor.getState().controller
+    const original = c.pickTangentPlane.bind(c)
+    c.pickTangentPlane = async point => {
+      const revision = c.getViewState().preview.previewRevision
+      const pin = await c.runtime.worker.ask({ action: 'notePick', point, previewRevision: revision })
+      q.tangentPick = { point, pin }
+      return original(point)
+    }
+  })
+  await page.mouse.click(projected.x, projected.y)
+  try {
+    await page.waitForFunction(previousMessage => {
+      const p = window.tangentSpanQa.useWorkspaceEditor.getState().controller?.getPanelState()
+      return !!p?.tangentSpanReview || p?.message !== previousMessage || p?.surfaceTarget !== 'tangent-span'
+    }, { timeout: 30000 }, prePickMessage)
+  } catch (error) {
+    let diagnostic = null
+    try {
+      diagnostic = await page.evaluate(() => {
+        const q = window.tangentSpanQa, s = q.useWorkspaceEditor.getState(), c = s.controller, p = c?.getPanelState()
+        return { phase: s.phase, error: s.error ?? null, surfaceTarget: p?.surfaceTarget ?? null,
+          busy: p?.busy ?? null, calculating: p?.calculating ?? null, message: p?.message ?? null,
+          tangentSpanReview: p?.tangentSpanReview ?? null, selected: p?.selected ?? null,
+          locked: p?.locked ?? null, hidden: c?.getViewState().hiddenPoles ?? null,
+          supportPoles: (q.requestedZone?.supportIds ?? []).map(id => ({ id, pole: p?.net?.poles[id] ?? null,
+            selected: p?.selected?.includes(id) ?? false, locked: p?.locked?.includes(id) ?? false,
+            hidden: c?.getViewState().hiddenPoles?.includes(id) ?? false })),
+          validation: s.snapshot?.validation ?? null, pickedPoint: q.tangentPick ?? null,
+          viewFace: c?.getViewState().face ?? null, alert: document.querySelector('[role=alert]')?.textContent ?? null }
+      })
+    } catch (diagnosticError) { diagnostic = { diagnosticError: String(diagnosticError) } }
+    report.spanPickFailure = diagnostic
+    throw new Error(`Viewport click ended without a UV-span review: ${JSON.stringify(diagnostic)}; wait error: ${String(error)}`)
+  }
+  const review = await page.evaluate(() => {
+    const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller, p = c.getPanelState()
+    return { review: structuredClone(p.tangentSpanReview), surfaceTarget: p.surfaceTarget,
+      message: p.message, historyRevision: c.getSnapshot().historyRevision,
+      pin: window.tangentSpanQa.tangentPick, selected: [...p.selected], locked: [...p.locked],
+      hidden: [...c.getViewState().hiddenPoles], net: structuredClone(p.net) }
+  })
+  report.spanPickState = { surfaceTarget: review.surfaceTarget, message: review.message,
+    review: review.review, pickedPoint: review.pin ?? null }
+  if (!review.review || review.surfaceTarget !== 'tangent-span') {
+    const picked = review.pin?.pin, normal = picked?.normal, at = picked?.at
+    const length = normal ? Math.hypot(...normal) : 0
+    const unit = length > 0 ? normal.map(value => value / length) : null
+    report.spanPickFailure = { message: review.message, surfaceTarget: review.surfaceTarget,
+      pickedPoint: review.pin ?? null, supportPoles: uvChoice.ids.map(id => {
+        const pole = review.net.poles[id]
+        const signedDistance = unit && at ? pole.reduce((sum, value, axis) => sum + (value - at[axis]) * unit[axis], 0) : null
+        return { id, selected: review.selected.includes(id), locked: review.locked.includes(id),
+          hidden: review.hidden.includes(id), signedDistanceMm: signedDistance }
+      }) }
+    throw new Error(`Tangent-span pick refused before review: ${JSON.stringify(report.spanPickFailure)}`)
+  }
+  assert.equal(review.surfaceTarget, 'tangent-span', 'Review must remain open until the explicit Apply action.')
+  assert.deepEqual(review.selected, selectedSupports.selected, 'Review must not change the support selection.')
+  assert.equal(review.review.supportCount, uvChoice.ids.length, 'Review support count must match the selected UV span.')
+  assert(review.review.movedCount > 0 && review.review.movedCount <= review.review.supportCount,
+    'Review must report at least one moved pole within the chosen span.')
+  assert(review.review.u[0] < uvChoice.u && uvChoice.u < review.review.u[1]
+    && review.review.v[0] < uvChoice.v && uvChoice.v < review.review.v[1], 'Visible review zone does not contain the clicked UV point.')
+  assert(review.pin?.pin?.at && review.pin?.pin?.normal, 'Viewport click did not resolve to a real CAD point and normal.')
+  const reviewText = await page.$eval('[data-test=surface-tangent-span-review]', element => element.textContent)
+  assert.match(reviewText, /Verranno mossi/i, 'Review summary is not visible in the panel.')
+  const reviewedDisplacementLimit = review.review.maxSurfaceDisplacementMm
+  assert(Number.isFinite(reviewedDisplacementLimit) && reviewedDisplacementLimit >= 0,
+    `Review must expose a finite maximum surface displacement: ${reviewedDisplacementLimit}`)
+  const displayedLimit = reviewText.match(/(?:spostamento|massimo)[^\d]*([\d.,]+)\s*mm/i)
+  assert(displayedLimit, `Review text must show the maximum surface displacement limit: ${reviewText}`)
+  const displayedLimitMm = Number(displayedLimit[1].replace(',', '.'))
+  assert(Number.isFinite(displayedLimitMm) && displayedLimitMm >= reviewedDisplacementLimit,
+    `Displayed rounded limit ${displayedLimitMm} mm must cover review value ${reviewedDisplacementLimit} mm.`)
+  assert.equal(await page.$eval('[data-test=surface-tangent-span-apply]', element => element.disabled), false,
+    'The explicit zone Apply control must be enabled after review.')
+  report.review = { ...review.review, text: reviewText, clickedUv: [review.pin.pin.anchor.u, review.pin.pin.anchor.v],
+    point: review.pin.pin.at, normal: review.pin.pin.normal }
+  check(true, 'One actual viewport click produces a visible UV-zone review before applying')
+
+  const sampleUVs = [0.1, 0.5, 0.9].flatMap(u => [0.1, 0.5, 0.9].map(v => [
+    review.review.u[0] + u * (review.review.u[1] - review.review.u[0]),
+    review.review.v[0] + v * (review.review.v[1] - review.review.v[0]),
+  ]))
+  const spanIndex = (items, bounds) => items.findIndex(item =>
+    Math.abs(item.bounds[0] - bounds[0]) <= 1e-10 && Math.abs(item.bounds[1] - bounds[1]) <= 1e-10)
+  const chosenU = spanIndex(uSpans, uvChoice.uBounds), chosenV = spanIndex(vSpans, uvChoice.vBounds)
+  assert(chosenU >= 0 && chosenV >= 0, 'Reviewed UV bounds must match spans in the same source net.')
+  const adjacentSpans = [
+    ...(chosenU > 0 ? [{ side: 'u-low', uBounds: uSpans[chosenU - 1].bounds, vBounds: uvChoice.vBounds }] : []),
+    ...(chosenU + 1 < uSpans.length ? [{ side: 'u-high', uBounds: uSpans[chosenU + 1].bounds, vBounds: uvChoice.vBounds }] : []),
+    ...(chosenV > 0 ? [{ side: 'v-low', uBounds: uvChoice.uBounds, vBounds: vSpans[chosenV - 1].bounds }] : []),
+    ...(chosenV + 1 < vSpans.length ? [{ side: 'v-high', uBounds: uvChoice.uBounds, vBounds: vSpans[chosenV + 1].bounds }] : []),
+  ].map(span => ({ ...span, sampleUVs: [0.1, 0.5, 0.9].flatMap(u => [0.1, 0.5, 0.9].map(v => [
+    span.uBounds[0] + u * (span.uBounds[1] - span.uBounds[0]),
+    span.vBounds[0] + v * (span.vBounds[1] - span.vBounds[0]),
+  ])) }))
+  const adjacentUVs = adjacentSpans.flatMap(span => span.sampleUVs)
+  const preApplyWitness = await page.evaluate(async () => {
+    const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller
+    return c.runtime.worker.ask({ action: 'finalFaceWitness', previewRevision: c.getViewState().preview.previewRevision })
+  })
+  const preApplyFace = kernel.fromBREP(preApplyWitness.faceBrep)
+  let samplesBefore, adjacentSamplesBefore
+  try {
+    samplesBefore = sampleUVs.map(([u, v]) => {
+      const p = kernel.pointOnSurface(preApplyFace, u, v)
+      return [p.x, p.y, p.z]
+    })
+    adjacentSamplesBefore = adjacentUVs.map(([u, v]) => {
+      const p = kernel.pointOnSurface(preApplyFace, u, v)
+      return [p.x, p.y, p.z]
+    })
+  } finally { kernel.release(preApplyFace) }
+  const tangentNormal = review.pin.pin.normal, tangentAt = review.pin.pin.at
+  const tangentUnit = tangentNormal.map(value => value / Math.hypot(...tangentNormal))
+  const signedPlaneDistance = point => point.reduce((sum, value, axis) => sum + (value - tangentAt[axis]) * tangentUnit[axis], 0)
+  const beforeSampleResiduals = samplesBefore.map(point => Math.abs(signedPlaneDistance(point)))
+  assert(Math.max(...beforeSampleResiduals) > 1e-6, 'Pre-Apply span samples do not show a measurable departure from the picked tangent plane.')
+  await page.click('[data-test=surface-tangent-span-apply]')
+  await page.waitForFunction(previous => {
+    const s = window.tangentSpanQa.useWorkspaceEditor.getState(), p = s.controller?.getPanelState()
+    return s.snapshot?.validation?.kind === 'valid' && !p?.busy && !p?.calculating
+      && p?.surfaceTarget === null && s.snapshot.historyRevision === previous + 1
+  }, { timeout: 120000 }, review.historyRevision)
+  const afterApply = await page.evaluate(() => {
+    const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller, p = c.getPanelState()
+    return { net: structuredClone(p.net), message: p.message, historyRevision: c.getSnapshot().historyRevision,
+      canUndo: p.canUndo }
+  })
+  const changedIds = afterApply.net.poles.flatMap((pole, id) =>
+    pole.some((value, axis) => value !== review.net.poles[id][axis]) ? [id] : [])
+  assert.equal(changedIds.length, review.review.movedCount, 'Changed pole count must equal the reviewed movement count.')
+  assert(changedIds.every(id => uvChoice.ids.includes(id) && selectedSupports.selected.includes(id)),
+    'Only selected free support poles may change.')
+  for (const id of uvChoice.ids) {
+    const pole = afterApply.net.poles[id], residual = Math.abs(signedPlaneDistance(pole))
+    assert(residual <= 1e-8, `Applied span support pole ${id} lies outside the tangent plane by ${residual} mm.`)
+  }
+  assert.match(afterApply.message ?? '', /Zona UV proiettata/i, `Span Apply did not complete: ${afterApply.message}`)
+
+  const afterWitness = await page.evaluate(async () => {
+    const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller
+    return c.runtime.worker.ask({ action: 'finalFaceWitness', previewRevision: c.getViewState().preview.previewRevision })
+  })
+  const afterFace = kernel.fromBREP(afterWitness.faceBrep)
+  let samplesAfter, adjacentSamplesAfter
+  try {
+    samplesAfter = sampleUVs.map(([u, v]) => {
+      const p = kernel.pointOnSurface(afterFace, u, v)
+      return [p.x, p.y, p.z]
+    })
+    adjacentSamplesAfter = adjacentUVs.map(([u, v]) => {
+      const p = kernel.pointOnSurface(afterFace, u, v)
+      return [p.x, p.y, p.z]
+    })
+  } finally { kernel.release(afterFace) }
+  const afterSampleResiduals = samplesAfter.map(point => Math.abs(signedPlaneDistance(point)))
+  assert(Math.max(...afterSampleResiduals) < 1e-6, `Applied span samples are not on the reviewed plane: ${JSON.stringify(afterSampleResiduals)}.`)
+  const sampleDisplacements = samplesAfter.map((point, index) => Math.hypot(...point.map((value, axis) => value - samplesBefore[index][axis])))
+  assert(Math.max(...sampleDisplacements) > 1e-4, 'CAD samples did not move measurably inside the reviewed span.')
+  const adjacentSpanEffects = adjacentSpans.map((span, spanIndex) => {
+    const offset = spanIndex * 9
+    const samples = span.sampleUVs.map((uv, sampleIndex) => {
+      const before = adjacentSamplesBefore[offset + sampleIndex], after = adjacentSamplesAfter[offset + sampleIndex]
+      return { uv, before, after, displacementMm: Math.hypot(...after.map((value, axis) => value - before[axis])) }
+    })
+    return { side: span.side, uBounds: span.uBounds, vBounds: span.vBounds, samples,
+      maxDisplacementMm: Math.max(...samples.map(sample => sample.displacementMm)) }
+  })
+  const measuredSurfaceDisplacementMm = Math.max(
+    ...sampleDisplacements,
+    ...adjacentSpanEffects.flatMap(span => span.samples.map(sample => sample.displacementMm)),
+  )
+  assert(reviewedDisplacementLimit + 1e-9 >= measuredSurfaceDisplacementMm,
+    `Review limit ${reviewedDisplacementLimit} mm must cover measured span and adjacent sample displacement ${measuredSurfaceDisplacementMm} mm.`)
+  const protectedBoundaryIds = review.locked
+  const protectedBoundaryMaxDeltaMm = protectedBoundaryIds.reduce((maxDelta, id) => {
+    const before = review.net.poles[id], after = afterApply.net.poles[id]
+    return Math.max(maxDelta, Math.hypot(...after.map((value, axis) => value - before[axis])))
+  }, 0)
+  assert.equal(protectedBoundaryMaxDeltaMm, 0, 'Protected boundary poles must remain exactly unchanged through Apply.')
+  const exported = await page.evaluate(async () => {
+    const c = window.tangentSpanQa.useWorkspaceEditor.getState().controller
+    return (await c.exportStep()).step
+  })
+  const editedGeometry = geometrySignature(exported), sourceGeometry = geometrySignature(step)
+  assert(editedGeometry.valid && editedGeometry.solidCount === 1 && editedGeometry.faceCount === sourceGeometry.faceCount,
+    'Edited R01 STEP must remain a valid one-solid CAD model with its 51-face topology.')
+  report.appliedCad = { geometry: editedGeometry, sourceGeometry,
+    samples: sampleUVs.map((uv, i) => ({ uv, before: samplesBefore[i], after: samplesAfter[i], displacementMm: sampleDisplacements[i],
+      beforePlaneResidualMm: beforeSampleResiduals[i], afterPlaneResidualMm: afterSampleResiduals[i] })),
+    adjacentSpanEffects,
+    surfaceDisplacementLimit: { reviewedMm: reviewedDisplacementLimit, displayedMm: displayedLimitMm,
+      measuredMaxSampleMm: measuredSurfaceDisplacementMm,
+      coversMeasuredSamples: reviewedDisplacementLimit + 1e-9 >= measuredSurfaceDisplacementMm },
+    protectedBoundary: { poleCount: protectedBoundaryIds.length, maxDisplacementMm: protectedBoundaryMaxDeltaMm },
+    changedPoleIds: changedIds }
+  check(true, 'Apply moves only the reviewed free span supports; UV samples become planar and R01 STEP remains valid')
+
+  await page.click('[data-test=surface-undo]')
+  await page.waitForFunction(original => {
+    const s = window.tangentSpanQa.useWorkspaceEditor.getState(), p = s.controller?.getPanelState()
+    return s.snapshot?.validation?.kind === 'valid' && !p?.calculating && p?.canRedo
+      && JSON.stringify(p.net.poles) === JSON.stringify(original.poles)
+  }, { timeout: 120000 }, review.net)
+  const undo = await page.evaluate(async () => {
+    const q = window.tangentSpanQa, c = q.useWorkspaceEditor.getState().controller
+    const answer = await q.runCommand('reverse.body.edit_source', { body: q.sourceId })
+    return { bodyCount: q.useReverse.getState().bodies.length, net: c.getPanelState().net,
+      sourceStep: new TextDecoder().decode(answer.file.bytes) }
+  })
+  assert.equal(undo.bodyCount, 1, 'Draft Undo must leave the original R01 body as the only project body.')
+  assert.deepEqual(geometrySignature(undo.sourceStep), sourceGeometry, 'Undo must leave the original R01 CAD geometry unchanged.')
+  assert.deepEqual(app.consoleErrors, [], 'No application console errors')
+  report.undo = { exactPreApplyNet: true, sourceGeometryUnchanged: true }
+  check(true, 'One Undo restores the exact seeded pre-Apply net and keeps original R01 CAD geometry unchanged')
+  report.verdict = 'PASS_BOUNDED_GUI_TANGENT_SPAN_LEGO_R01'
+} catch (error) {
+  report.error = String(error?.stack ?? error)
+  process.exitCode = 1
+} finally {
+  if (browser) await browser.close()
+  try {
+    report.cadSha256After = sha(readFileSync(cadPath))
+    report.sourceHashUnchanged = report.cadSha256After === expected.cad
+    if (!report.sourceHashUnchanged) { report.verdict = 'FAIL_SOURCE_HASH_CHANGED'; process.exitCode = 1 }
+  } catch (error) {
+    report.sourceHashUnchanged = false
+    report.sourceHashError = String(error)
+    report.verdict = 'FAIL_SOURCE_HASH_UNREADABLE'
+    process.exitCode = 1
+  }
+  kernel[Symbol.dispose]()
+  writeFileSync(join(out, 'result.json'), JSON.stringify(report, null, 2) + '\n')
+  console.log(JSON.stringify({ out, ...report }))
+}

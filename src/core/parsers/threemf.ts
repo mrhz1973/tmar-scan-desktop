@@ -26,6 +26,7 @@
 
 import { unzipSync, strFromU8 } from 'fflate'
 import { checkTextSize } from './text'
+import { ArchiveLimitError, limitedArchiveFilter, THREE_MF_LIMITS, type ArchiveLimits } from './archiveLimits'
 import type { ParsedMesh } from '../types'
 import { baseName, sampleTexture, type ObjCompanions, type TextureImage } from './objTexture'
 
@@ -107,13 +108,18 @@ interface ModelFile {
  *  lower case (package part names are not case-sensitive). */
 const partName = (path: string) => path.replace(/^\/+/, '').toLowerCase()
 
-/** The XML's five named entities and numeric ones. */
+/** The XML's five named entities and numeric ones. A number past Unicode
+ *  reads as the replacement character, as String.fromCodePoint would
+ *  otherwise throw a RangeError that names nothing about the file. */
 const unescapeXml = (s: string) =>
   s.indexOf('&') < 0
     ? s
     : s.replace(/&(#x[0-9a-f]+|#\d+|lt|gt|amp|quot|apos);/gi, (_, e: string) => {
         const k = e.toLowerCase()
-        if (k[0] === '#') return String.fromCodePoint(k[1] === 'x' ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10))
+        if (k[0] === '#') {
+          const code = k[1] === 'x' ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10)
+          return code <= 0x10ffff ? String.fromCodePoint(code) : '�'
+        }
         return ({ lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" } as Record<string, string>)[k]
       })
 
@@ -397,15 +403,18 @@ const MAX_PLACED = { objects: 1_000_000, vertices: 30_000_000 }
  *  at, about 7.5 million triangles at the 71 bytes a triangle ScanRuler writes. */
 const THREEMF_INSTEAD = 'Export it as binary STL or binary PLY, which have no such limit.'
 
-export function parse3MF(buffer: ArrayBuffer, onProgress?: (text: string) => void, companions?: ObjCompanions): ParsedMesh {
+export function parse3MF(buffer: ArrayBuffer, onProgress?: (text: string) => void, companions?: ObjCompanions, limits: ArchiveLimits = THREE_MF_LIMITS): ParsedMesh {
   onProgress?.('Reading 3MF…')
   let zipped: Record<string, Uint8Array>
   try {
-    zipped = unzipSync(new Uint8Array(buffer), { filter: (f) => /\.(model|rels|config)$/i.test(f.name) })
-  } catch {
+    zipped = unzipSync(new Uint8Array(buffer), { filter: limitedArchiveFilter((f) => /\.(model|rels|config)$/i.test(f.name), limits) })
+  } catch (error) {
+    if (error instanceof ArchiveLimitError) throw error
     throw new Error('This 3MF could not be unzipped — the file is damaged or not a 3MF.')
   }
-  const files: Record<string, Uint8Array> = {}
+  // Without a prototype, a name the file gives such as "constructor" or
+  // "toString" finds nothing rather than an Object member.
+  const files: Record<string, Uint8Array> = Object.create(null)
   for (const [name, bytes] of Object.entries(zipped)) files[partName(name)] = bytes
 
   const rootPath = rootModelPath(files)
@@ -475,10 +484,14 @@ export function parse3MF(buffer: ArrayBuffer, onProgress?: (text: string) => voi
     }
     // A mirroring transform turns the triangles inside out; turned back.
     const flip = determinant(m) < 0
-    const skip = slicer.triangles.get(id) ?? []
+    // The modifier runs are marked out once rather than each looked through
+    // for every triangle: a slicer project can hold tens of thousands.
     const t = mesh.triangles
-    for (let k = 0; k < t.length / 3; k++) {
-      if (skip.some(([a, b]) => k >= a && k <= b)) continue
+    const triCount = t.length / 3
+    const skipped = new Uint8Array(triCount)
+    for (const [first, last] of slicer.triangles.get(id) ?? []) skipped.fill(1, first, Math.min(last, triCount - 1) + 1)
+    for (let k = 0; k < triCount; k++) {
+      if (skipped[k]) continue
       const a = base + t[k * 3]
       const b = base + t[k * 3 + (flip ? 2 : 1)]
       const c = base + t[k * 3 + (flip ? 1 : 2)]

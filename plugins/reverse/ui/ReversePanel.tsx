@@ -25,7 +25,7 @@ import { InfoDot } from '../../../src/ui/InfoDot'
 import { ModelSlot } from '../../../src/ui/ModelSlot'
 import { SketchEditor } from './SketchEditor'
 import { ParameterList } from './ParameterList'
-import { featureExpressionErrors } from '../core/parameters'
+import { drivenBy, featureExpressionErrors } from '../core/parameters'
 import { ContextChips, SKETCH_STARTED } from './ContextChips'
 import { BodyList } from './BodyList'
 import { bodiesOfPick } from '../core/bodyFolders'
@@ -36,6 +36,10 @@ import { KeyIcon } from './reIcons'
 import { StepFileKey } from './featureFields'
 import { PlaneSelect } from './PlaneSelect'
 import { ExtrudeEditor } from './ExtrudeEditor'
+import { ExportMeshButton } from '../../../src/ui/ExportMeshButton'
+import type { MeshFormat } from '../../../src/core/exportMesh'
+import { MESH_RESOLUTIONS } from '../core/meshResolution'
+import { useRePrefs } from '../state/rePrefs'
 import { RevolveEditor } from './RevolveEditor'
 import { FeatureEditor } from './FeatureEditor'
 import { NoteList } from './NoteList'
@@ -54,7 +58,35 @@ function exprNote(f: Feature): string {
   return exprs.length > 0 ? ` · ${exprs.map(([slot, e]) => `${slot} = ${e}`).join(', ')}` : ''
 }
 
-export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: { onOpenScan: (file: File) => void; onExportStep: () => void; onCompare: () => void; chainsOf: () => SketchChains | null }) {
+/** Export mesh, and how finely: the visible solid bodies as an STL or a
+ *  3MF for a printer — which meshes a STEP to its own tolerance — at one of
+ *  the named resolutions (core/meshResolution), the one chosen kept. */
+function MeshExportRow({ disabled, onExport }: { disabled: boolean; onExport: (format: MeshFormat) => void }) {
+  const chosen = useRePrefs((s) => s.meshResolution)
+  const len = useLength()
+  return (
+    <div data-test="export-body-mesh-row">
+      <ExportMeshButton testId="export-body-mesh" block disabled={disabled} title="Write the visible solid bodies as an STL or a 3MF, meshed as finely as the resolution below says — what a slicer prints as it is" onExport={onExport} />
+      <div className="moderow" role="radiogroup" aria-label="Mesh resolution" data-test="export-mesh-resolution" title="How finely Export mesh meshes the bodies">
+        {MESH_RESOLUTIONS.map((r) => (
+          <button
+            key={r.id}
+            role="radio"
+            aria-checked={chosen === r.id}
+            className={chosen === r.id ? 'on' : undefined}
+            data-test={`export-mesh-${r.id}`}
+            title={`${r.label}: no triangle further than ${len.fmt(r.chord, 3)} off a curved face, none turning more than ${Math.round(r.angleDeg * 10) / 10}° round it — finer is larger`}
+            onClick={() => useRePrefs.getState().setMeshResolution(r.id)}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare, chainsOf }: { onOpenScan: (file: File) => void; onExportStep: () => void; onExportMesh: (format: MeshFormat) => void; onCompare: () => void; chainsOf: () => SketchChains | null }) {
   const fileName = useStore((s) => s.fileName)
   const triangleCount = useStore((s) => s.triangleCount)
   const busy = useStore((s) => s.busy)
@@ -142,6 +174,11 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
   // the row it has come to is lit and kept in sight.
   const barLocked = editorOpen || playback !== null
   const playedId = playback && playback.at > 0 ? (features[playback.at - 1]?.id ?? null) : null
+  // The features the parameter pointed at drives, lit as its row is.
+  const parameterLit = useReverse((s) => s.parameterLit)
+  const parameterList = useReverse((s) => s.parameters)
+  const litName = parameterList.find((p) => p.id === parameterLit)?.name
+  const drivenLit = new Set(litName ? drivenBy(litName, parameterList, features) : [])
   useEffect(() => {
     if (playedId === null) return
     const rows = featureListRef.current?.querySelectorAll<HTMLElement>('[data-test="feature-row"]')
@@ -370,6 +407,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
               <Icon name="surface" />
               <span>Patch network</span>
             </button>
+            <PluginPanelExtensions slot="reverse.create.after-network" />
             <button data-test="feature-trim" disabled={!fileName || !ready || (!bodies.some((b) => b.surface) && !hasSolidElement)} title="Close a set of fitted surfaces, sheets and measured planes, cylinders, cones and spheres into a solid: the faces they cut space into are kept where they lie on the scan and sewn" onClick={() => re.getState().startFeature('trim')}>
               <Icon name="trim" />
               <span>Trim</span>
@@ -401,7 +439,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
                 <p>
                   The part is built from the top down. The <b>rollback bar</b> under the list is dragged up to go back in its history: the features below it are set aside, the part stands as it stood there, and whatever is made next goes in at the bar — a fillet before the shell, a cut before the pattern. Drag it back down, or press <b>To end</b>, and the rest is built again on top of what was added.
                 </p>
-                <p>A feature below the bar that loses what it stood on says so by name in its row, as any feature does.</p>
+                <p>A feature below the bar that loses what it stood on is marked in its row, as any feature that fails or builds with a warning is: the name red or amber, a ⚠. Open it to read what went wrong.</p>
                 <p>
                   <b>Play</b> builds the part up again step by step for the camera: the bar goes to the top and moves down one feature at a time, each held a moment once it is built, and returns where it was at the end. <b>Space</b> holds it or carries it on, the <b>arrow keys</b> step it, <b>Escape</b> ends it. The caption in the viewport names each step.
                 </p>
@@ -431,7 +469,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
             // The row is an icon and a name, as a CAD tree's rows are; what
             // the feature stands on and reads — the plane, the body
             // operation, the distance, the counts — is the tooltip's, and
-            // a failure shows as a mark with its sentence underneath.
+            // a failure or a warning shows as a mark, its words in the box.
             const about =
               f.kind === 'sketch'
                 ? `${describeSketch(f.sketch)} on ${describePlaneRef(f.plane, { sections, elements }, len.units)}`
@@ -444,14 +482,21 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
                     })()
             // A number an agent had fitted to the scan: said so, with how well.
             const fitted = fittedOf(f.id, f)
+            // What went wrong is only marked here — the row tinted, a ⚠ —
+            // and said in full in the feature's box (BuildSays).
+            const warned = r?.status === 'ok' && Boolean(r.warning)
             const reading =
               r?.status === 'failed' ? (
-                <b className="warn" data-test="feature-failed" title={r.message}>
+                <b className="error" data-test="feature-failed" title="Failed to build — open it (✎) to see why">
                   ⚠
                 </b>
               ) : r?.trim && !r.trim.closed ? (
                 <b className="warn" title={about}>
                   ⚠ open
+                </b>
+              ) : warned ? (
+                <b className="warn" data-test="feature-warned" title={`Built, with ${r.stepsBetween?.length ? `${r.stepsBetween.length} step${r.stepsBetween.length === 1 ? '' : 's'} between features` : 'a warning'} — open it (✎) to see ${r.stepsBetween?.length === 1 || !r.stepsBetween?.length ? 'it' : 'them'}`}>
+                  ⚠
                 </b>
               ) : fitted ? (
                 <b
@@ -489,7 +534,8 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
                 visible={f.kind !== 'sketch' || f.visible}
                 eyeKey={f.kind === 'sketch' ? undefined : <SuppressKey feature={f} locked={editorOpen || playback !== null} />}
                 reading={reading}
-                selected={editingId === f.id || playedId === f.id}
+                tone={r?.status === 'failed' ? 'error' : warned ? 'warn' : undefined}
+                selected={editingId === f.id || playedId === f.id || drivenLit.has(f.id)}
                 muted={editingAt >= 0 && features.indexOf(f) > editingAt}
                 editorOpen={editorOpen || playback !== null}
                 onEdit={() => openFeatureEditor(f.id)}
@@ -499,19 +545,9 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
                   else re.getState().removeFeature(f.id)
                 }}
               /></FeatureRowExtension>
-              {r?.status === 'failed' && (
-                <p className="hint warn rowerror" data-test="feature-error">
-                  {r.message}
-                </p>
-              )}
               {r?.status === 'ok' && r.note && (
                 <p className="hint rowerror" data-test="feature-note">
                   {r.note}
-                </p>
-              )}
-              {r?.status === 'ok' && r.warning && (
-                <p className="hint warn rowerror" data-test="feature-warning">
-                  {r.warning}
                 </p>
               )}
               {(() => {
@@ -585,6 +621,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onCompare, chainsOf }: 
               Compare in Deviation
             </button>
           </div>
+          <MeshExportRow disabled={!canExport} onExport={onExportMesh} />
         </>
       )}
     </aside>

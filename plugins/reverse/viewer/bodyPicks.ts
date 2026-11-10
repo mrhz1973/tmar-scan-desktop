@@ -215,6 +215,13 @@ export class BodyPicks {
   private chainEdges = new Set<string>()
   /** Bodies a preview stands in for: their edges at rest are put away. */
   private replaced: ReadonlySet<number> = new Set()
+  private editorMasked: ReadonlySet<number> = new Set()
+  setEditorMasked(ids: readonly number[]): void {
+    this.editorMasked = new Set(ids)
+    this.rebuild()
+    this.silhouetteDirty = true
+    this.ctx.invalidate()
+  }
   /** The edges of the preview that stands in for them, what they are drawn
    *  from, and the map that carries them with the ghost. */
   private previewLines: { line: LineSegments2; geo: LineSegmentsGeometry }[] = []
@@ -832,7 +839,7 @@ export class BodyPicks {
     // Each body's own, made for the camera as it stands when it is shown;
     // a body hidden keeps its own, hidden with it.
     for (const e of this.entries.values()) {
-      const shown = e.mesh.visible && !this.replaced.has(e.id) && e.round.length > 0
+      const shown = e.mesh.visible && !this.replaced.has(e.id) && !this.editorMasked.has(e.id) && e.round.length > 0
       let s = this.silhouettes.get(e.id)
       if (shown && s?.stamp !== this.silhouetteStamp) {
         drop(e.id)
@@ -906,7 +913,7 @@ export class BodyPicks {
     // Each body's block kept while its lines and their material stay.
     const wanted = new Set<string>()
     for (const e of this.entries.values()) {
-      const shown = e.mesh.visible && !this.replaced.has(e.id)
+      const shown = e.mesh.visible && !this.replaced.has(e.id) && !this.editorMasked.has(e.id)
       for (const [kind, segments, m] of [['sharp', e.lines.rest.sharp, this.edgeMaterial], ['tangent', e.lines.rest.tangent, tangentMaterial]] as const) {
         if (!m || segments.length < 6) continue
         const key = `${e.id}:${kind}`

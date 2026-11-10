@@ -10,6 +10,7 @@
 // it.
 
 import { create } from 'zustand'
+import { withAtomicNotifications } from '../../../src/state/atomicNotifications'
 import type { Vec2 } from '../../../src/core/flat/types'
 import type { Vec3 } from '../../../src/core/types'
 import type { EdgeInfo, FaceInfo, FeatureResult } from '../core/build'
@@ -25,6 +26,7 @@ import type { Pull } from '../core/solver'
 import {
   arcThrough,
   type ConstraintKind,
+  type DistanceAxis,
   type EntityInput,
   type Sketch,
   type SketchPatternSpec,
@@ -69,6 +71,8 @@ export interface ReState {
    *  (StepFileRef) — only ever added to, so an Import taken back and
    *  brought again by the undo history finds its file; saved for the
    *  Imports the project holds (projectSection.ts). */
+  /** Session-only document identity; never restored by project Undo. */
+  documentEpoch: string
   stepFiles: Record<string, string>
   /** A STEP file's text kept — once, however often it is imported — and
    *  the reference an Import holds it by. */
@@ -107,7 +111,8 @@ export interface ReState {
   building: boolean
   /** Bumped whenever the features change in a way that needs a rebuild. */
   buildVersion: number
-  /** Bumped when a build has landed, so the scene redraws the bodies. */
+  /** Bumped when a build has landed, so the scene redraws the bodies — and
+   *  when the faces and edges of bodies it drew before reading them do. */
   bodiesVersion: number
   /** The message of the last build that failed outright. */
   buildError: string | null
@@ -173,7 +178,12 @@ export interface ReState {
    *  whole — nothing then changes; otherwise every expression that reads
    *  it is evaluated again, the features and the open editors follow, and
    *  the part rebuilds. A rename is written through every expression. */
-  setParameter: (id: number, patch: Partial<Pick<Parameter, 'name' | 'kind' | 'expression' | 'comment'>>) => string | null
+  setParameter: (id: number, patch: Partial<Pick<Parameter, 'name' | 'kind' | 'expression' | 'comment' | 'pinned'>>) => string | null
+  /** The parameter whose row is pointed at or being edited: the features
+   *  it drives lit in the list and their faces on the part, while it is.
+   *  Not saved, no step of the history. */
+  parameterLit: number | null
+  setParameterLit: (id: number | null) => void
   /** Refused, naming its readers, while anything reads it. */
   removeParameter: (id: number) => string | null
   /** The expression behind one number of the open editor's box, by slot
@@ -400,6 +410,10 @@ export interface ReState {
    *  number doubled or halved, an expression carried over with it; with
    *  one — Ø12 typed over an R — it takes that, in one step. */
   setDimensionForm: (id: number, form: 'radius' | 'diameter', value?: number, expr?: string | null) => void
+  /** A distance between two points measured another way: along the
+   *  sheet's u (its ΔX), along its v (ΔY), or straight across (null) — at
+   *  what the points measure that way now, the expression behind it kept. */
+  setDistanceAxis: (id: number, axis: DistanceAxis | null) => void
   /** The number of the dimension the Dimension tool has in hand confirmed —
    *  typed, or taken as it stands with Enter: the dimension is done, and
    *  the next click starts the next one rather than pairing with it. */
@@ -550,7 +564,7 @@ export interface ReState {
   addDraftFaces: (bodyId: number, faces: FaceInfo[]) => void
 }
 
-export const useReverse = create<ReState>()((set, get) => ({
+export const useReverse = create<ReState>()(withAtomicNotifications((set, get) => ({
   kernelStatus: 'idle',
   kernelMessage: null,
   kernelVersion: null,
@@ -564,10 +578,11 @@ export const useReverse = create<ReState>()((set, get) => ({
   bodies: [],
   hiddenBodies: [],
   bodyStyles: {},
+  documentEpoch: crypto.randomUUID(),
   stepFiles: {},
   addStepFile: (name, text) => {
     const file: StepFileRef = { key: stepFileKey(text), name, size: text.length }
-    if (get().stepFiles[file.key] === undefined) set((s) => ({ stepFiles: { ...s.stepFiles, [file.key]: text } }))
+    if (!Object.hasOwn(get().stepFiles, file.key)) set((s) => ({ stepFiles: { ...s.stepFiles, [file.key]: text } }))
     return file
   },
   setBodyStyle: (id, patch) =>
@@ -771,6 +786,8 @@ export const useReverse = create<ReState>()((set, get) => ({
   parameters: [],
   nextParameterId: 1,
   parameterTable: evaluateParameters([]),
+  parameterLit: null,
+  setParameterLit: (parameterLit) => set((s) => (s.parameterLit === parameterLit ? {} : { parameterLit })),
   addParameter: (kind = 'length') => {
     const s = get()
     const id = s.nextParameterId
@@ -796,7 +813,13 @@ export const useReverse = create<ReState>()((set, get) => ({
     if (patch.kind !== undefined) rest.kind = patch.kind
     if (patch.expression !== undefined) rest.expression = patch.expression
     if (patch.comment !== undefined) rest.comment = patch.comment
-    parameters = parameters.map((x) => (x.id === id ? { ...x, ...rest } : x))
+    parameters = parameters.map((x) => {
+      if (x.id !== id) return x
+      const next = { ...x, ...rest }
+      if (patch.pinned === true) next.pinned = true
+      else if (patch.pinned === false) delete next.pinned
+      return next
+    })
     if (parameters.every((x, i) => x === s.parameters[i])) return null
     const table = evaluateParameters(parameters)
     const mine = table.readings.find((r) => r.id === id)
@@ -931,6 +954,7 @@ export const useReverse = create<ReState>()((set, get) => ({
       closedFolders: [],
       listSelection: NO_PICK,
       bodyHover: null,
+      documentEpoch: crypto.randomUUID(),
       stepFiles: {},
       buildVersion: s.buildVersion + 1,
       sketchDraft: null,
@@ -984,7 +1008,7 @@ export const useReverse = create<ReState>()((set, get) => ({
       return { selection: selectionOf(next, at) }
     }),
   ...featureSlice(set, get),
-}))
+})))
 
 export { arcThrough }
 

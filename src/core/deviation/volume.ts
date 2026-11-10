@@ -19,12 +19,14 @@
 // apart, never called an error. A cell within the tolerance of the scan's
 // surface is the scan's noise, not an error, whatever the answers.
 
+import * as THREE from 'three'
+import { MeshBVH } from 'three-mesh-bvh'
 import type { Vec3 } from '../types'
 import { rigidApply, rigidInvert, type Rigid } from './rigid'
 import { emptyHit, NominalSurface } from './surface'
 import { WindingTree } from './winding'
 import { subdivideForMap, type ReferenceSamples } from './onReference'
-import { rimLoops, type RimLoop } from '../geometry/openEdges'
+import { edgeKey, rimLoops, type RimLoop } from '../geometry/openEdges'
 
 export interface VolumeMesh {
   positions: Float32Array
@@ -229,7 +231,12 @@ export function volumeDeviation(o: VolumeDeviationOptions): VolumeDeviation {
   t = performance.now()
   progress('Preparing the surfaces…', 0.01)
   const scanSurface = o.scanSurface ?? new NominalSurface(o.scan.positions, o.scan.indices)
-  const refSurface = new NominalSurface(o.reference.positions, o.reference.indices)
+  // The reference is only asked which of its triangles is nearest a
+  // region's deepest point. A tree of its own order (indirect) answers in
+  // the reference's own triangle numbers, with no normals or edge tables
+  // beside it: on a reference of millions of triangles a full
+  // NominalSurface, and a table mapping its order back, cost as much again.
+  const refTree = referenceTree(o.reference.positions, o.reference.indices)
   timings.surface = performance.now() - t
 
   // The grid.
@@ -288,12 +295,10 @@ export function volumeDeviation(o: VolumeDeviationOptions): VolumeDeviation {
       const far = Math.max(FAR_CELLS * h, FAR_MM)
       const off = Math.max(T, h / 2)
       const rimEdges = new Set<number>()
+      const rimKey = edgeKey(o.scan.positions.length / 3)
       for (const loop of loops) {
         const V = loop.vertices
-        for (let e = 0; e < loop.triangles.length; e++) {
-          const a = V[e], b = V[(e + 1) % V.length]
-          rimEdges.add(a < b ? a * 4_294_967_296 + b : b * 4_294_967_296 + a)
-        }
+        for (let e = 0; e < loop.triangles.length; e++) rimEdges.add(rimKey(V[e], V[(e + 1) % V.length]))
       }
       const S = o.scan.positions, SI = scanSurface.index
       const q = new Float64Array(3)
@@ -309,7 +314,7 @@ export function volumeDeviation(o: VolumeDeviationOptions): VolumeDeviation {
         const f = near.faceIndex * 3
         for (let k = 0; k < 3; k++) {
           const a = SI[f + k], b = SI[f + ((k + 1) % 3)]
-          if (!rimEdges.has(a < b ? a * 4_294_967_296 + b : b * 4_294_967_296 + a)) continue
+          if (!rimEdges.has(rimKey(a, b))) continue
           if (segmentDistance(near.px, near.py, near.pz, S, a, b) < 1e-3 * h) {
             values[v] = NaN
             break
@@ -649,7 +654,8 @@ export function volumeDeviation(o: VolumeDeviationOptions): VolumeDeviation {
   // What each region says.
   t = performance.now()
   progress('Measuring the regions…', 0.96)
-  const original = originalTriangles(o.reference.indices, refSurface)
+  const nearest = { point: new THREE.Vector3(), distance: 0, faceIndex: -1 }
+  const probe = new THREE.Vector3()
   const patchHit = emptyHit()
   // The regions' surfaces, for drawing: each region's cells' outer faces.
   const shells = o.meshes ? [new Shell(), new Shell(), new Shell()] : null
@@ -702,7 +708,7 @@ export function volumeDeviation(o: VolumeDeviationOptions): VolumeDeviation {
     for (const c of cells) kind[c] = kd | VISITED
     const di = deepest % nx, dj = ((deepest / nx) | 0) % ny, dk = (deepest / nxy) | 0
     const deep: Vec3 = [ox + (di + 0.5) * h, oy + (dj + 0.5) * h, oz + (dk + 0.5) * h]
-    refSurface.closest(deep[0], deep[1], deep[2], hit)
+    const onReference = refTree.closestPointToPoint(probe.set(deep[0], deep[1], deep[2]), nearest)
     const faces = Math.min(modelFaces, otherFaces) || Math.max(modelFaces, otherFaces)
     const volume = cells.length * cellVolume
     regions.push({
@@ -714,7 +720,7 @@ export function volumeDeviation(o: VolumeDeviationOptions): VolumeDeviation {
       box: { min: bmin.map((v) => v - h / 2) as Vec3, max: bmax.map((v) => v + h / 2) as Vec3 },
       centroid: [sx / cells.length, sy / cells.length, sz / cells.length],
       deepest: deep,
-      referenceTriangle: hit.faceIndex >= 0 ? original[hit.faceIndex] : -1,
+      referenceTriangle: onReference ? onReference.faceIndex : -1,
       evidence: bounded > 0 ? real / bounded : 1,
       confidence: conf / cells.length,
     })
@@ -1336,14 +1342,13 @@ function dilateInto(from: Uint8Array, into: Uint8Array, cx: number, cy: number, 
   }
 }
 
-/** For each triangle of a surface's tree order, its index in the mesh it
- *  was built from: the tree reorders its triangles, and reports them so. */
-function originalTriangles(indices: Uint32Array, surface: NominalSurface): Int32Array {
-  const key = (a: number, b: number, c: number) => `${a},${b},${c}`
-  const at = new Map<string, number>()
-  for (let t = 0; t < indices.length / 3; t++) at.set(key(indices[t * 3], indices[t * 3 + 1], indices[t * 3 + 2]), t)
-  const out = new Int32Array(surface.triangleCount)
-  const s = surface.index
-  for (let f = 0; f < surface.triangleCount; f++) out[f] = at.get(key(s[f * 3], s[f * 3 + 1], s[f * 3 + 2])) ?? -1
-  return out
+/** A bounding-volume tree over the reference that keeps its triangles in
+ *  their own order — `indirect` sorts a list of them instead of the index —
+ *  so the faces it reports are the reference's own. */
+function referenceTree(positions: Float32Array, indices: Uint32Array): MeshBVH {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1))
+  // The option is in the library but not in its type declarations.
+  return new MeshBVH(geometry, { indirect: true } as ConstructorParameters<typeof MeshBVH>[1])
 }

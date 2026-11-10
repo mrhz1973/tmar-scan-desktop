@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "scope": "compiled browser worker recipe contract; not host history",
+  "originalVolume": 6094.724657678973,
+  "replayVolume": 6094.724657678973,
+  "restoredVolume": 6094.724657678973,
+  "preservedVolume": 6094.724657678973,
+  "valid": true,
+  "hasStep": true,
+  "netEqual": true,
+  "locks": [
+    12
+  ],
+  "rejection": "Base NURBS o raffinamento diverso dalla ricetta.",
+  "preparation": "bicubic-midpoint-refinement",
+  "free": {
+    "version": 3,
+    "mode": "free-natural",
+    "valid": true,
+    "hasStep": true,
+    "restoredMode": true,
+    "netEqual": true,
+    "locks": [
+      0
+    ],
+    "before": 2,
+    "after": 2,
+    "rejection": "Ricetta Edit Surface non supportata o incompleta."
+  },
+  "elapsedMs": 2886.3768999999998,
+  "consoleErrors": []
+}

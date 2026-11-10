@@ -7,6 +7,7 @@ import { ZebraQuickButton } from './ZebraQuickButton'
 
 const plugin: ScanRulerPlugin = {
   id: 'tmar-zebra',
+  requires: ['reverse'],
   name: 'TMAR Zebra surface analysis',
   install() {
     if (!plugins().some((p) => p.id === 'reverse')) return

@@ -11,10 +11,20 @@
 // (src/app/session.ts) stands under the app's panels. Under a test it
 // stands without a viewport, its kernel in the test's own thread.
 
+import { annotationNoteDelta } from './annotatedNoteDelta'
+import { claimQualifiedSurfaceHistory, assertFrozenHistoryCurrent, readStoredSurfaceHistory, canonicalReplayStep, verifyAnnotatedHistoryPlan, type QualifiedSurfaceHistory } from './surfaceEditHistory'
+import { assertArchivedSurfaceHistorySource, type ArchivedSurfaceHistorySource } from './surfaceHistoryRecovery'
+import type { validateAnnotatedCopy } from '../../../src/plugins/annotatedCopyValidation'
+import { historyAtomic } from '../../../src/state/historyStore'
+import { abortIfNeeded, editorSha256 } from '../../../src/plugins/editorLifetime'
+import type { CommitReceipt } from '../../../src/plugins/workspaceEditorTypes'
+import { stepFileKey, type ImportFeature } from '../core/features'
+import { nameBodies } from '../state/reFeatureHelpers'
 import { fmtLen, fmtVol, type DisplayUnits } from '../../../src/core/units'
 import type { Vec3 } from '../../../src/core/types'
 import type { RefObject } from 'react'
 import { exportStem } from '../../../src/app/exports'
+import { onScan } from '../../../src/app/scanEvents'
 import { commandHost } from '../../../src/commands/host'
 import { useStore } from '../../../src/state/store'
 import type { SceneManager } from '../../../src/viewer/SceneManager'
@@ -27,6 +37,7 @@ import type { CompareDetail, PatchRequest } from '../core/compareDetail'
 import { type BuildStep, type Feature, type ResolveContext, type SketchFeature, type SurfaceFeature } from '../core/features'
 import { resolveFeatures } from '../core/resolve'
 import type { KernelMesh, StepCheck, StepMend } from '../core/kernel'
+import { withoutCollapsed } from '../core/kernelMesh'
 import type { ScanSide, SparseField } from '../core/liveMap'
 import { type BuildInPlay, ReClient } from '../core/reClient'
 import { findRegions, type Region } from '../core/regions'
@@ -35,6 +46,16 @@ import { withStepsSaid } from '../core/stepWords'
 import { kernelUnavailableReason } from '../core/wasmSupport'
 import { bodyColor, featuresToBuild, useReverse } from '../state/reStore'
 import { regionOf } from './reSurfaceRegion'
+
+/** How many times a scan has been loaded or swapped for another version of
+ *  itself. A smoothed or offset copy keeps the file's name and its triangle
+ *  count, so the kernel's copy of the scan is told stale by this, not by
+ *  what the store says of the scan. */
+let scanChanges = 0
+onScan({
+  loaded: () => void scanChanges++,
+  swapped: () => void scanChanges++,
+})
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -83,7 +104,9 @@ export function meshDiagonal(mesh: KernelMesh): number {
 export function stepFilesFor(steps: readonly { kind: string; file?: unknown }[]): Map<string, string> {
   const stored = useReverse.getState().stepFiles
   const out = new Map<string, string>()
-  for (const s of steps) if (s.kind === 'import' && typeof s.file === 'string' && stored[s.file] !== undefined) out.set(s.file, stored[s.file])
+  // Own keys only: a key a project file gives may be `constructor` or the
+  // like, which a plain object answers from its prototype.
+  for (const s of steps) if (s.kind === 'import' && typeof s.file === 'string' && Object.hasOwn(stored, s.file)) out.set(s.file, stored[s.file])
   return out
 }
 
@@ -146,6 +169,12 @@ export function createReverseSession({
   let stopping: Promise<Stopped | null> | null = null
   /** The store's build version the last build that landed was made for. */
   let landed: number | null = null
+  /** Builds asked for, counted, and the count of the last that landed: an
+   *  answer to an earlier one is overtaken (see overtaken). The session's
+   *  own count, which no reset of the store puts back. */
+  let asks = 0
+  let landedAsk = 0
+  let adoptingEditor = false
   /** Builds held back while changes are made one after another, to build
    *  once after the last of them (see hold); the timer lets them go should
    *  nothing else — a caller gone before its last change. */
@@ -233,11 +262,13 @@ export function createReverseSession({
     const re = useReverse.getState()
     if (!client || re.kernelStatus !== 'ready') return
     const version = re.buildVersion
+    const ask = ++asks
     if (re.features.length === 0) {
       meshes.clear()
       topologies.clear()
       re.finishBuild([], [])
       landed = version
+      landedAsk = ask
       return
     }
     const built = featuresToBuild(re)
@@ -260,6 +291,7 @@ export function createReverseSession({
       client.steps.builds++
       re.finishBuild([], [])
       landed = version
+      landedAsk = ask
       return
     }
     const sketches = new Map(built.filter((f): f is SketchFeature => f.kind === 'sketch').map((f) => [f.id, f.sketch]))
@@ -269,23 +301,58 @@ export function createReverseSession({
     // A build of a kernel a stop let go answers nothing: the stop took it
     // off the count.
     const c = client
+    // Taken off the count once only: a throw while the answer is written
+    // into the store lands in the catch below, which must not count it off
+    // a second time.
+    let counted = true
+    const uncount = () => {
+      if (!counted) return
+      counted = false
+      running--
+      kernelBuilds--
+    }
     c.build(steps, sketches, stepFilesFor(steps))
       .then((answer) => {
         if (c !== client) return
         // Not running any more before the store says what landed, so that
         // what waits on the store finds the session idle when it looks.
-        running--
-        kernelBuilds--
-        if (!answer) return
+        uncount()
+        if (!answer || overtaken(ask)) return
         // A body the build left as it was comes back the very object it
         // was, so what the viewport made of its mesh stays.
         meshes.clear()
         topologies.clear()
         for (const b of answer.bodies) {
           meshes.set(b.id, b.mesh)
-          topologies.set(b.id, b.topology)
+          if (b.topology) topologies.set(b.id, b.topology)
+        }
+        // A body handed over before its faces were read is drawn now and
+        // can be picked once they are, read straight after — counted as a
+        // build running from before the store hears of this one, so what
+        // waits for the build waits for them too.
+        const unread = answer.bodies.filter((b) => !b.topology)
+        if (unread.length > 0) {
+          running++
+          kernelBuilds++
+          const read = c.topologies(unread.map((b) => b.id)).then(
+            () => true,
+            // The bodies stay drawn, without picks; a kernel that failed
+            // says so through onFailure.
+            () => false,
+          )
+          void read.then((ok) => {
+            if (c !== client) return
+            running--
+            kernelBuilds--
+            if (!ok) return
+            // The client gave each body held its topology: the ones still
+            // drawn take it, a build landed since having handed over its own.
+            for (const b of unread) if (b.topology && meshes.get(b.id) === b.mesh) topologies.set(b.id, b.topology)
+            useReverse.setState((s) => ({ bodiesVersion: s.bodiesVersion + 1 }))
+          })
         }
         landed = version
+        landedAsk = ask
         useReverse.getState().finishBuild(
           withStepsSaid(answer.results, built),
           answer.bodies.map((b) => ({
@@ -304,12 +371,20 @@ export function createReverseSession({
       })
       .catch((e) => {
         if (c !== client) return
-        running--
-        kernelBuilds--
+        uncount()
+        if (overtaken(ask)) return
         landed = version
+        landedAsk = ask
         useReverse.getState().failBuild(message(e))
       })
   }
+
+  /** Whether a build for a newer list has landed since this one was asked
+   *  for. A list emptied, or left with sketches alone, lands at once with
+   *  no kernel call to overtake the build still running — whose answer,
+   *  landing after, brought the deleted bodies back and set the version
+   *  landed back, so a wait for the build sat out its limit (issue 34). */
+  const overtaken = (ask: number): boolean => landedAsk > ask
 
   /** The surfaces' regions read again in their boxes, written into the
    *  list — not a step of its own: the change that moved the box is — and
@@ -339,8 +414,11 @@ export function createReverseSession({
         }
         return { features: s.features.map(patch), rolledBack: s.rolledBack.map(patch), buildVersion: s.buildVersion + 1 }
       })
-      running--
     })
+      // Off the count whatever happened, or a wait for the build would wait
+      // out its whole limit for a read that is over.
+      .catch((e) => useReverse.getState().failBuild(message(e)))
+      .finally(() => running--)
   }
 
   const schedule = () => {
@@ -380,6 +458,7 @@ export function createReverseSession({
    *  once the kernel is up. The returned function stops it. */
   const watch = (): (() => void) => {
     const stop = useReverse.subscribe((s, prev) => {
+      if (adoptingEditor) return
       if (s.buildVersion === prev.buildVersion && s.kernelStatus === prev.kernelStatus) return
       if (holding) {
         heldBack = true
@@ -589,7 +668,7 @@ export function createReverseSession({
   // The viewport's vertices, every datum alignment baked in — the frame the
   // bodies are built in — handed over once per file and once more per
   // alignment.
-  let scanSent: { fileName: string | null; triangles: number; alignment: unknown } | null = null
+  let scanSent: { fileName: string | null; triangles: number; alignment: unknown; changes: number } | null = null
   let scanSending: Promise<void> | null = null
 
   /** The scan's vertices without a viewport to read them off — every one
@@ -618,8 +697,8 @@ export function createReverseSession({
     if (!client || useReverse.getState().kernelStatus !== 'ready') return 'none'
     const s = useStore.getState()
     if (!scene && !s.fileName) return 'none'
-    const now = { fileName: s.fileName, triangles: s.triangleCount, alignment: s.appliedAlignment }
-    if (scanSent && scanSent.fileName === now.fileName && scanSent.triangles === now.triangles && scanSent.alignment === now.alignment) {
+    const now = { fileName: s.fileName, triangles: s.triangleCount, alignment: s.appliedAlignment, changes: scanChanges }
+    if (scanSent && scanSent.fileName === now.fileName && scanSent.triangles === now.triangles && scanSent.alignment === now.alignment && scanSent.changes === now.changes) {
       if (scanSending) await scanSending
       return 'same'
     }
@@ -704,12 +783,13 @@ export function createReverseSession({
     return c.compare(bodyIds, range, spots, patches, within, far, side)
   }
 
-  /** The given solid bodies meshed to the chord — what a printer takes —
-   *  as one binary STL, or a 3MF with each body an object of its own under
-   *  its name, and how many triangles it holds. */
-  const meshFile = async (bodies: { id: number; name: string }[], chord: number, format: MeshFormat): Promise<(MeshFile & { name: string }) | null> => {
-    const meshes = await requireClient().referenceMeshes(bodies.map((b) => b.id), chord)
-    const parts = meshes.map((m, i) => ({ name: meshes.length === bodies.length ? bodies[i].name : `Body ${i + 1}`, positions: m.positions, indices: m.indices }))
+  /** The given solid bodies meshed to the chord and the angle (degrees;
+   *  see core/meshResolution) — what a printer takes — as one binary STL,
+   *  or a 3MF with each body an object of its own under its name, and how
+   *  many triangles it holds. */
+  const meshFile = async (bodies: { id: number; name: string }[], chord: number, format: MeshFormat, angleDeg?: number): Promise<(MeshFile & { name: string }) | null> => {
+    const meshes = await requireClient().referenceMeshes(bodies.map((b) => b.id), chord, false, angleDeg !== undefined ? (angleDeg * Math.PI) / 180 : undefined, true)
+    const parts = meshes.map((m, i) => ({ name: meshes.length === bodies.length ? bodies[i].name : `Body ${i + 1}`, positions: m.positions, indices: withoutCollapsed(m.positions, m.indices) }))
     const file = buildMeshFile(format, parts, null, 'ScanRuler - bodies from Reverse engineer')
     return file && { ...file, name: `${exportStem('model')}-body.${file.extension}` }
   }
@@ -738,8 +818,191 @@ export function createReverseSession({
     return deleteFaceGroup(topology, faceHash, (e) => joins.get(e), tangent).flatMap((h) => byHash.get(h) ?? [])
   }
 
+  /** Build an immutable copy candidate in a DIFFERENT kernel. Nothing enters the
+   * project before all CAD validation finishes. The tested kernel is adopted,
+   * avoiding a second fallible rebuild after publication. */
+  const stageEditorCopy = async (text: string, name: string, assertCurrent: () => void, signal: AbortSignal, display?: Readonly<{ hideSourceBodyId: number }>, annotation?: Awaited<ReturnType<typeof validateAnnotatedCopy>>, history?: QualifiedSurfaceHistory, archivedSource?: ArchivedSurfaceHistorySource) => {
+    assertCurrent(); abortIfNeeded(signal)
+    const before = useReverse.getState(), originalClient = requireClient()
+    // Host-derived identity, not an arbitrary ID from the plugin payload.
+    const hideSourceBodyId = display?.hideSourceBodyId
+    // Reverse bodies may be fractional islands (featureId + n / ISLAND_IDS).
+    // Keep the same positive finite ID contract as workspaceEditors.open.
+    if (hideSourceBodyId !== undefined && (!Number.isFinite(hideSourceBodyId) || hideSourceBodyId <= 0 ||
+        !before.bodies.some(b => b.id === hideSourceBodyId)))
+      throw new Error('Corpo sorgente da nascondere non disponibile.')
+    if (running || scheduled || holding || before.building || before.playback ||
+        before.sketchDraft || before.featureDraft || before.extrudeDraft || before.revolveDraft)
+      throw new Error('Concludi la costruzione o la bozza CAD corrente.')
+    if (!/^\s*ISO-10303-21\s*;/.test(text.slice(0, 256))) throw new Error('Il risultato non è un file STEP.')
+    // The ordinary CAD-copy path is untouched. History provenance may only
+    // enter via a one-use, independently replay-qualified host token.
+    const qualified = history ? claimQualifiedSurfaceHistory(history) : null
+    if (qualified) assertFrozenHistoryCurrent(qualified)
+    // A one-use host-qualified token already passed the explicit v8 opt-in and independent replay.
+    // Re-read the exact record without enabling any UI or unqualified publication path.
+    const record = qualified ? readStoredSurfaceHistory(qualified.record,{experimentalAdaptiveV8:true}) : null
+    if (archivedSource && !record) throw new Error('Sorgente archiviata senza cronologia qualificata.')
+    if (record && (record.notePolicy==='annotated-v1') !== !!annotation)
+      throw new Error('La ricetta e il tipo di copia CAD non coincidono.')
+    if (record?.notePolicy==='annotated-v1' && annotation) {
+      await verifyAnnotatedHistoryPlan(record,annotation)
+      // Own the fully validated note ticket across async candidate builds.
+      // A caller mutating its prepared note array after this boundary cannot
+      // change the staged witness, persisted association or atomic commit.
+      annotation=structuredClone(annotation)
+    }
+    if (record) {
+      const originalText = qualified!.sourceStep
+      if ((!archivedSource && !before.bodies.some(b => b.id === record.source.bodyId)) ||
+          stepFileKey(originalText) !== record.source.file.key ||
+          originalText.length !== record.source.file.size)
+        throw new Error('Sorgente della ricetta assente o differente.')
+      if (await editorSha256(new TextEncoder().encode(originalText)) !== record.source.stepSha256 ||
+          await editorSha256(new TextEncoder().encode(text)) !== record.resultStepSha256)
+        throw new Error('L\u2019impronta STEP della ricetta non coincide.')
+      assertCurrent(); abortIfNeeded(signal)
+      if (archivedSource) {
+        const verified = assertArchivedSurfaceHistorySource(archivedSource, record)
+        // A structural caller lease cannot substitute for the current native
+        // result. Recheck the body before accepting archived upstream geometry.
+        const actual = await originalClient.bodyEditSource(verified.resultBodyId)
+        assertCurrent(); abortIfNeeded(signal); assertArchivedSurfaceHistorySource(archivedSource, record)
+        if (await editorSha256(new TextEncoder().encode(canonicalReplayStep(actual.text))) !== verified.replayStepSha256)
+          throw new Error('Il risultato CAD da riprendere non coincide più con quello archiviato.')
+      } else {
+        const actual = await originalClient.bodyEditSource(record.source.bodyId, record.source.bodyKey)
+        assertCurrent(); abortIfNeeded(signal)
+        if (actual.bodyKey !== record.source.bodyKey ||
+            await editorSha256(new TextEncoder().encode(canonicalReplayStep(actual.text))) !== record.source.sourceReplaySha256)
+          throw new Error('Corpo CAD sorgente diverso da quello qualificato per il replay.')
+      }
+    }
+    const feature: ImportFeature = { ...(record ? {surfaceEditHistory:record} : {}), ...(annotation?{annotationSource:{version:1 as const,featureUuid:record?.annotation?.featureUuid ?? crypto.randomUUID(),stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256,faceBrep:annotation.prepared.witnesses[0].brep}}:{}), id: before.nextFeatureId, kind: 'import', name: name.replace(/\.(step|stp)$/i, ''), visible: true,
+      file: { key: stepFileKey(text), name, size: text.length } }
+    if (record && record.source.file.key === feature.file.key)
+      throw new Error('La sorgente e il risultato condividono la stessa chiave STEP: history rifiutata.')
+    if (before.stepFiles[feature.file.key] !== undefined && before.stepFiles[feature.file.key] !== text)
+      throw new Error('Collisione della chiave STEP: importazione rifiutata.')
+    if (record && before.stepFiles[record.source.file.key] !== undefined &&
+        before.stepFiles[record.source.file.key] !== qualified!.sourceStep)
+      throw new Error('Collisione nell\u2019archivio STEP sorgente.')
+    const files = { ...before.stepFiles,
+      ...(record ? {[record.source.file.key]:qualified!.sourceStep} : {}),
+      [feature.file.key]: text }
+    const features = [...before.features, feature]
+    const built = featuresToBuild({ ...before, features })
+    const candidate = kernel()
+    let adopted = false, disposed = false, receipt: CommitReceipt | null = null
+    const dispose = () => { if (!adopted && !disposed) { disposed = true; candidate.dispose() } }
+    const deadline = setTimeout(dispose, 120_000)
+    const alive = () => { assertCurrent(); if (qualified) assertFrozenHistoryCurrent(qualified); if (archivedSource && record) assertArchivedSurfaceHistorySource(archivedSource, record); abortIfNeeded(signal); if (disposed) throw new Error('Staged CAD was disposed.') }
+    signal.addEventListener('abort', dispose, { once: true })
+    try {
+      await candidate.init(); alive()
+      const scene = sceneRef.current, fromWorker = scene ? null : await scanFromWorker()
+      alive()
+      const positions = scene ? scene.scanPositions() : (fromWorker?.positions ?? null)
+      const indices = scene?.scanIndices() ?? null
+      if (positions) await candidate.setScan(positions.slice(), null, indices?.slice() ?? null, fromWorker?.normals?.slice() ?? null)
+      alive()
+      const steps = resolveFeatures(built, resolveContext(), regionsOf)
+      const answer = await candidate.build(steps, new Map(built.filter((f): f is SketchFeature => f.kind === 'sketch').map(f => [f.id, f.sketch])), new Map(Object.entries(files)))
+      alive()
+      if (!answer || answer.results.some(r => r.status !== 'ok')) throw new Error('Il CAD preparato non ricostruisce tutta la storia corrente.')
+      // Upstream builds can hand over meshes before their topology. Complete
+      // this in the staged kernel: the adopted copy must be pickable at once,
+      // with no fallible topology read left after atomic publication.
+      const unread = answer.bodies.filter(body => !body.topology)
+      if (unread.length) { await candidate.topologies(unread.map(body => body.id)); alive() }
+      const candidateTopologies = new Map<number, BuiltBody['topology']>()
+      for (const body of answer.bodies) {
+        if (!body.topology) throw new Error('La topologia del CAD preparato non è disponibile.')
+        candidateTopologies.set(body.id, body.topology)
+      }
+      const oldIds = new Set(before.bodies.map(b => b.id)), made = answer.bodies.filter(b => !oldIds.has(b.id))
+      if (made.length !== 1 || answer.bodies.length !== before.bodies.length + 1)
+        throw new Error('Applica copia richiede esattamente un nuovo corpo CAD.')
+      for (const old of before.bodies) {
+        const next = answer.bodies.find(b => b.id === old.id)
+        if (!next || next.faces !== old.faces || next.closed !== old.closed || Math.abs(next.volume - old.volume) > 1e-8 * Math.max(1, Math.abs(old.volume)))
+          throw new Error('La preparazione ha cambiato un corpo precedente.')
+      }
+      const check = await candidate.check(made[0].id, 0)
+      alive()
+      if (!check?.valid || check.faces < 1) throw new Error('La copia CAD preparata non è valida.')
+      const verified=annotation?await candidate.verifyAnnotatedNotes(made[0].id,annotation.prepared.witnesses[0].brep,annotation.prepared.notes):null
+      alive()
+      const notes=annotation&&verified?annotationNoteDelta({prepared:annotation.prepared,verified,face:verified.face,bodyId:made[0].id,featureUuid:feature.annotationSource!.featureUuid,documentEpoch:before.documentEpoch,stepSha256:annotation.artifactSha256,witnessSha256:annotation.witnessSha256}):null
+      return {
+        publish: (operationId: string, artifactSha256: string): CommitReceipt => {
+          if (receipt) {
+            if (receipt.operationId !== operationId || receipt.artifactSha256 !== artifactSha256) throw new Error('Operazione già pubblicata con un altro contenuto.')
+            return receipt
+          }
+          if(annotation&&(operationId!==annotation.prepared.operationId||artifactSha256!==annotation.artifactSha256))throw new Error('Ticket annotato o hash CAD cambiato.')
+          if (record && artifactSha256 !== record.resultStepSha256)
+            throw new Error('Hash del replay CAD differente al commit: history rifiutata.')
+          alive()
+          if (client !== originalClient) throw new Error('Il kernel sorgente è cambiato.')
+          const live = useReverse.getState(), oldMeshes = new Map(meshes), oldTopologies = new Map(topologies), oldLanded = landed, oldLandedAsk = landedAsk
+          const nextVersion = live.buildVersion + 1
+          const hiddenBodies = hideSourceBodyId === undefined || live.hiddenBodies.includes(hideSourceBodyId)
+            ? live.hiddenBodies : [...live.hiddenBodies, hideSourceBodyId]
+          const restoreEffect = hideSourceBodyId === undefined ? undefined : {
+            undo: () => useReverse.getState().setBodiesVisible([hideSourceBodyId], !live.hiddenBodies.includes(hideSourceBodyId)),
+            redo: () => useReverse.getState().setBodiesVisible([hideSourceBodyId], false),
+          }
+          const restore = () => {
+            client = originalClient; landed = oldLanded; landedAsk = oldLandedAsk
+            meshes.clear(); oldMeshes.forEach((m, id) => meshes.set(id, m))
+            topologies.clear(); oldTopologies.forEach((m, id) => topologies.set(id, m))
+            useReverse.setState(live, true)
+            notes?.rollback()
+          }
+          notes?.capturePublication()
+          adoptingEditor = true
+          try {
+            historyAtomic('Edit Surface: copia CAD', () => {
+              assertCurrent()
+              if (qualified) assertFrozenHistoryCurrent(qualified)
+              if (archivedSource && record) assertArchivedSurfaceHistorySource(archivedSource, record)
+              client = candidate; landed = nextVersion
+              // Adopting a separately built kernel lands a newer request too.
+              // The request counter stays monotonic if publication rolls back.
+              landedAsk = ++asks
+              meshes.clear(); topologies.clear()
+              for (const body of answer.bodies) meshes.set(body.id, body.mesh)
+              candidateTopologies.forEach((topology, id) => topologies.set(id, topology))
+              const bodies = nameBodies(answer.bodies.map(b => ({ id: b.id, name: b.name, visible: !hiddenBodies.includes(b.id), volume: b.volume,
+                faces: b.faces, closed: b.closed, triangles: b.triangles, surface: b.surface, ...(b.box ? { box: b.box } : {}), ...(b.label ? { label: b.label } : {}) })), features, live.bodyStyles)
+              useReverse.setState({ features, stepFiles: files, hiddenBodies, nextFeatureId: feature.id + 1,
+                nextOfKind: { ...live.nextOfKind, import: (live.nextOfKind.import ?? 0) + 1 },
+                buildVersion: nextVersion, bodiesVersion: live.bodiesVersion + 1, building: false, buildError: null,
+                bodies, results: Object.fromEntries(withStepsSaid(answer.results, built).map(result => [result.id, result])) })
+              notes?.publish()
+            }, restore, operationId, restoreEffect, notes ?? undefined)
+            adopted = true
+          } finally { adoptingEditor = false }
+          candidate.onFailure = why => { if (client === candidate) { useReverse.getState().failBuild(why); useReverse.getState().setKernel('unavailable', why) } }
+          // Scan data was copied to the staged worker; clear this cache for a safe resync.
+          scanSent = null; scanSending = null; extractedFrom = extractSources()
+          signal.removeEventListener('abort', dispose)
+          clearTimeout(deadline)
+          originalClient.onFailure = null
+          try { originalClient.dispose() } catch { /* Published CAD remains owned by candidate. */ }
+          receipt = Object.freeze({ operationId, artifactSha256, documentEpoch: live.documentEpoch,
+            createdBodyIds: Object.freeze(made.map(b => b.id)), historyActionId: operationId, mode: annotation?'annotated-cad-copy' as const:'cad-copy' as const, ...(annotation?{annotationVersion:1 as const,envelopeSha256:annotation.envelopeSha256,createdFeatureUuid:feature.annotationSource!.featureUuid,notes:notes!.receipt()}: {}) })
+          return receipt
+        },
+        dispose: () => { clearTimeout(deadline); signal.removeEventListener('abort', dispose); dispose() },
+      }
+    } catch (error) { clearTimeout(deadline); signal.removeEventListener('abort', dispose); dispose(); throw error }
+  }
+
   return {
     sceneRef,
+    stageEditorCopy,
     /** The kernel's client once it has been started, else null. */
     client: () => client,
     startKernel,

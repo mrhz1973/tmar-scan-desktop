@@ -11,7 +11,9 @@
 
 import { unzipSync } from 'fflate'
 import { is3mfFile, isModelFile, isTextureFile } from '../core/formats'
+import { assertImageDecodable } from '../core/flat/image'
 import type { ObjCompanions, TextureImage } from '../core/parsers/objTexture'
+import { ArchiveLimitError, limitedArchiveFilter, THREE_MF_LIMITS, type ArchiveLimits } from '../core/parsers/archiveLimits'
 
 /** What came with a model file, by the file. */
 const companions = new WeakMap<File, readonly File[]>()
@@ -94,12 +96,13 @@ export async function readCompanions(files: readonly { name: string; bytes: Uint
  *  came with a textured OBJ (readCompanions), or the images a 3MF packs —
  *  decoded here, as the worker has no way to — named by their path in the
  *  package. The package's thumbnails, under Metadata/, are not the part's. */
-export async function scanCompanions(name: string, bytes: Uint8Array, extras: readonly { name: string; bytes: Uint8Array }[]): Promise<ObjCompanions | undefined> {
+export async function scanCompanions(name: string, bytes: Uint8Array, extras: readonly { name: string; bytes: Uint8Array }[], limits: ArchiveLimits = THREE_MF_LIMITS): Promise<ObjCompanions | undefined> {
   if (!is3mfFile(name)) return readCompanions(extras)
   let packed: Record<string, Uint8Array>
   try {
-    packed = unzipSync(bytes, { filter: (f) => /\.(png|jpe?g)$/i.test(f.name) && !/^\/?metadata\//i.test(f.name) })
-  } catch {
+    packed = unzipSync(bytes, { filter: limitedArchiveFilter((f) => /\.(png|jpe?g)$/i.test(f.name) && !/^\/?metadata\//i.test(f.name), limits) })
+  } catch (error) {
+    if (error instanceof ArchiveLimitError) throw error
     return undefined // the worker says what is wrong with the file
   }
   const images: TextureImage[] = []
@@ -113,6 +116,7 @@ export async function scanCompanions(name: string, bytes: Uint8Array, extras: re
 async function decodeImage(name: string, bytes: Uint8Array): Promise<TextureImage> {
   // Colours as the file has them: no colour management, and no
   // premultiplying, which would darken whatever the alpha channel holds.
+  assertImageDecodable(name, bytes)
   const bitmap = await createImageBitmap(new Blob([bytes as BlobPart]), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' })
   try {
     const { width, height } = bitmap

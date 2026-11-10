@@ -1,0 +1,18 @@
+{
+  "scope": "Synthetic source app; fixture seeded explicitly, later controls/pointer operations real",
+  "checks": [
+    "existing on-scan pointer mode projects the point onto the mesh without a 3D offset",
+    "normal numeric movement persists a signed off-scan node target",
+    "numeric movement creates exactly one local Undo",
+    "changing the motion axis never reinterprets or moves the point",
+    "captured 3D drag blocks Create without disabling live preview",
+    "a second pointer cannot change the active gesture"
+  ],
+  "consoleErrors": [],
+  "verdict": "INCOMPLETE",
+  "fixture": {
+    "path": "[QA_EVIDENCE]\\baseline-source\\source-network-OMMrRz\\downloads\\baseline\\synthetic-plane.scanruler",
+    "sha256": "1b09f3276405bd34e111b1ff2dc0432ea592d6d577cdd74d16704bfd9819f1cb"
+  },
+  "error": "AssertionError [ERR_ASSERTION]: Ctrl+Z cannot interrupt an active 3D gesture; Escape owns cancellation\n    at check (file:///D:/TMAR-QA/tmar-patch-network-resume-20261104/plugins/reverse/scripts/e2e-network-point-motion.mjs:31:25)\n    at file:///D:/TMAR-QA/tmar-patch-network-resume-20261104/plugins/reverse/scripts/e2e-network-point-motion.mjs:88:2\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+}

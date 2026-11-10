@@ -1,0 +1,29 @@
+{
+  "pass": true,
+  "before": {
+    "revision": 1,
+    "volume": 6000,
+    "text": "CAD valido · volume 6000.000 mm³ · scarto bordo 3.6e-15 mm"
+  },
+  "after": {
+    "revision": 19,
+    "volume": 6092.091596374792,
+    "text": "CAD valido · volume 6092.092 mm³ · scarto bordo 4.0e-15 mm"
+  },
+  "liveCount": 21,
+  "firstLive": {
+    "revision": 2,
+    "volume": 6007.674290925396,
+    "text": "Aggiornamento e verifica CAD…"
+  },
+  "samples": 24,
+  "race": {
+    "heldWorkerRequests": true,
+    "obsoleteError": "Modifica rifiutata: la superficie attraversa una faccia non adiacente.",
+    "applyDisabledWhilePending": true,
+    "finalVolume": 6112.502924991527,
+    "oldModeResultIgnored": true,
+    "closeWhilePending": true
+  },
+  "consoleErrors": []
+}

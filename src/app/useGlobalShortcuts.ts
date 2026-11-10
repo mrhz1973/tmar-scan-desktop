@@ -14,6 +14,9 @@
 // else is pending — a part is turned to see where the next pick goes, and
 // making the draft first stand down would defeat that.
 import { useEffect } from 'react'
+import { useWorkspaceEditor, workspaceEditors } from '../plugins/workspaceEditors'
+import { requestEditorCancel } from '../ui/WorkspaceEditorDock'
+import { usePrefs } from '../state/prefsStore'
 import { creationMethod, takesSurface } from '../core/elements/construct'
 import { evaluateDimension } from '../core/dimensions'
 import type { FitData } from '../core/types'
@@ -46,6 +49,11 @@ const VIEW_KEYS: Record<string, StandardView> = {
 /** The arrow keys, as steps through what lies under the cursor: down and
  *  right go further back, up and left come forward again. */
 const ARROW_STEPS: Record<string, 1 | -1> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
+
+/** Whether a modal dialog is open over the app: Settings, the imprint, the
+ *  agent warning, the units question, the support card — each laid over a
+ *  `.modalback`. */
+export const dialogOpen = (): boolean => document.querySelector('.modalback') !== null
 
 export function useGlobalShortcuts({
   stopMarking,
@@ -103,7 +111,21 @@ export function useGlobalShortcuts({
       return buttons[0]
     }
     const onKey = (e: KeyboardEvent) => {
+      // A dialog over the app has the keys: Enter, the view keys, undo and
+      // the rest acted on the workspace behind Settings, the imprint or the
+      // agent warning — Enter could press "Align automatically" behind
+      // Settings (issue 34). The dialog's own keys are its own.
+      if (dialogOpen()) return
       const target = e.target as HTMLElement | null
+      if (workspaceEditors.active()) {
+        if (e.defaultPrevented || e.repeat || usePrefs.getState().settingsOpen || target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && ['z','y'].includes(e.key.toLowerCase())) {
+          e.preventDefault(); e.stopImmediatePropagation()
+          if (e.key.toLowerCase() === 'y' || e.shiftKey) workspaceEditors.redo(); else workspaceEditors.undo()
+        } else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); requestEditorCancel() }
+        else if (VIEW_KEYS[e.key] && !e.ctrlKey && !e.metaKey && !e.altKey && useWorkspaceEditor.getState().snapshot?.gesture === 'idle') viewFrom(VIEW_KEYS[e.key])
+        return
+      }
       if (target && (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable)) {
         // Escape in a field of a box or a tool leaves the field and goes on
         // to close what it is in, as it does with the focus anywhere else —
@@ -147,6 +169,13 @@ export function useGlobalShortcuts({
           e.preventDefault()
           return
         }
+      }
+      // A best fit running takes Escape before a plugin's workspace does,
+      // whose handler may take every key: started in Reverse engineer, it
+      // could not be stopped by the key (issue 34).
+      if (e.key === 'Escape' && useDeviation.getState().alignStatus === 'running') {
+        abortAlign()
+        return
       }
       // A plugin's workspace has the keys first.
       if (pluginKeys()?.keydown?.(e, { confirmButton })) return
@@ -211,6 +240,14 @@ export function useGlobalShortcuts({
         } else if (e.key === 'Enter' && store.draft.status === 'ready') confirmDraft()
         return
       }
+      if (store.scaleDraft) {
+        // First Escape leaves point picking, the second closes the box.
+        if (e.key === 'Escape') {
+          if (store.scaleDraft.pickRow !== null) store.setScaleDraft({ pickRow: null })
+          else store.cancelScale()
+        } else if (e.key === 'Enter') confirmButton()?.click()
+        return
+      }
       if (store.alignDraft) {
         // First Escape leaves point picking, the second closes the editor.
         if (e.key === 'Escape') {
@@ -247,13 +284,15 @@ export function useGlobalShortcuts({
     }
     let middleDown: { x: number; y: number } | null = null
     const onPointerDown = (e: PointerEvent) => {
-      if (e.button !== 1) return
+      // A middle click on a dialog, or its backdrop, confirms nothing behind.
+      if (e.button !== 1 || dialogOpen()) return
       middleDown = { x: e.clientX, y: e.clientY }
       // Keep the browser's middle-click autoscroll out of the way while an
       // element or dimension is waiting to be confirmed.
       if (confirmable()) e.preventDefault()
     }
     const onPointerUp = (e: PointerEvent) => {
+      if (workspaceEditors.active()) { middleDown = null; return }
       const down = middleDown
       middleDown = null
       if (e.button !== 1 || !down) return

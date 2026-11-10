@@ -584,6 +584,17 @@
   overflow-wrap: anywhere;
 }
 
+/* What the last build said was wrong, at the head of a feature's box: a
+   short line a step, its full sentence on hover. */
+.says ul {
+  margin: 2px 0 2px;
+  padding-left: 16px;
+}
+
+.says li {
+  margin: 2px 0;
+}
+
 /* A window beside the panel, not over the page: no backdrop, because the
    sketch behind it is what its slider is watched on. Dragged by its head. */
 .modal.fitoptions {
@@ -668,11 +679,21 @@
    given, the full width; a refused edit says why on a line under that. */
 .kv.parameter {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
   align-items: center;
   gap: 3px 6px;
   padding: 4px 1px;
   border-bottom: 1px solid var(--line);
+}
+
+/* The star before the name: a parameter marked important, listed first. */
+.kv.parameter .star {
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.kv.parameter.pinned .star {
+  color: var(--amber);
 }
 
 .kv.parameter input[data-test='parameter-expression'],
@@ -1337,7 +1358,7 @@
 
 /* A note's text beside its pin in the viewport, right of the badge; the
    whole of it under the cursor, the start of it otherwise. */
-.note-label {
+.re-note-label {
   margin: -17px 0 0 34px;
   max-width: 220px;
   padding: 2px 7px;
@@ -1353,26 +1374,26 @@
   text-overflow: ellipsis;
 }
 
-.note-label:empty,
-.nolabels .note-label {
+.re-note-label:empty,
+.nolabels .re-note-label {
   display: none;
 }
 
-.note-label.lit {
+.re-note-label.lit {
   max-width: 300px;
   white-space: normal;
 }
 
-.note-label.agent {
+.re-note-label.agent {
   border-left: 3px solid #1877c0;
 }
 
-.note-label.done {
+.re-note-label.done {
   color: var(--dim);
   text-decoration: line-through;
 }
 
-.note-label.away {
+.re-note-label.away {
   opacity: 0.5;
 }
 
@@ -1393,4 +1414,32 @@
 .note-focus-ring::before, .note-focus-ring::after { content: ''; position: absolute; background: #ffe35c; box-shadow: 0 0 0 1px #111; }
 .note-focus-ring::before { width: 18px; height: 3px; left: 15px; top: 22px; }
 .note-focus-ring::after { width: 3px; height: 18px; left: 22px; top: 15px; }
-.note-label.focused { border: 2px solid #e8b400; background: #fff7cf; color: #191919; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px #181818; margin-left: 38px; }
+.re-note-label.focused { border: 2px solid #e8b400; background: #fff7cf; color: #191919; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px #181818; margin-left: 38px; }
+
+/* Explicit 3D controls must fit the resizable narrow model column. */
+[data-test='network-point-motion'],
+[data-test='network-point-motion'] fieldset {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-left: 0;
+  margin-right: 0;
+}
+[data-test='network-point-motion'] .field > span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  flex: 1 1 45%;
+  min-width: 0;
+}
+[data-test='network-point-motion'] .field > select,
+[data-test='network-point-motion'] .field > .unitfield {
+  flex: 1 1 50%;
+  min-width: 0;
+  max-width: 55%;
+}
+[data-test='network-point-motion'] .unitfield input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+[data-test='network-point-motion'] p { overflow-wrap: anywhere; }

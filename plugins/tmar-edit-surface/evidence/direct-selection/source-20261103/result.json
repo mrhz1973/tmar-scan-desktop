@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "defaultMode": "auto",
+  "emptyLeftDragChanged": false,
+  "pointEdgeCellHoverAndSelection": true,
+  "ctrlToggle": true,
+  "directDragAndUndo": true,
+  "pointerCancelRestored": true,
+  "lockedReleaseOutside": true,
+  "middleDragRotates": true,
+  "rightDragPans": true,
+  "wheelZooms": true,
+  "consoleErrors": []
+}

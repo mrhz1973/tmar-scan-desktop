@@ -12,6 +12,7 @@ import { NoteShortcutSettings, QuickNoteButton, useQuickAccess } from './quickAc
 import './quickNotes.css'
 const plugin: ScanRulerPlugin = {
   id: 'tmar-quick-notes',
+  requires: ['reverse'],
   name: 'TMAR local notes and navigation',
   install() {
     if (!plugins().some((p) => p.id === 'reverse')) return

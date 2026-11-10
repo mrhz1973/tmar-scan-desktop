@@ -54,6 +54,11 @@ The initial [Zebra plugin](tmar-zebra/README.md) is developed separately under t
 `installPlugins()` asks `pluginEnabled()` of every one found and installs those
 it allows. `?plugins=none` in the address runs the app without any.
 
+A plugin that needs another plugin's registrations declares its ids in
+`requires`. Dependencies install first; `plugins()` inside `install()` lists
+only successful installations. A missing, disabled or failed dependency leaves
+the dependent plugin out too. Cyclic dependencies are rejected.
+
 | Extension point | Where | What for |
 |---|---|---|
 | `workspace` | `plugin.ts` | the tab, and the guided hint's step |

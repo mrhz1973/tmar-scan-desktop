@@ -12,6 +12,7 @@ import { useLength } from '../../../src/app/useUnits'
 import { sceneOf } from '../../../src/commands/host'
 import { fmtLen, type DisplayUnits } from '../../../src/core/units'
 import { InfoDot } from '../../../src/ui/InfoDot'
+import { NumberInput } from '../../../src/ui/NumberField'
 import type { NetworkReport } from '../core/networkBody'
 import { DEFAULT_TOLERANCE, SPANS_MAX, SPANS_MIN } from '../core/networkCurve'
 import { acceptCreases, addSeeds, redoNetwork, removeReportedPatch, removeSeed, setNetworkFit, setSide, setStripSpans, setSuggested, undoNetwork } from '../state/reNetworkDraft'
@@ -20,9 +21,10 @@ import type { FaceInfo } from '../core/build'
 import type { EdgeRef } from '../core/features'
 import { describeFaceIn, matchEdge, matchTolerance } from '../core/topo'
 import { reverseSession } from '../app/reSession'
-import { useNetworkReport } from '../app/useNetworkLayer'
+import { useNetworkReport, useNetworkReportCurrent } from '../app/useNetworkLayer'
 import { type FeatureDraft, useReverse } from '../state/reStore'
 import { Num } from './featureFields'
+import { NetworkPointFields } from './NetworkPointFields'
 
 type NetworkDraftOpen = Extract<FeatureDraft, { kind: 'network' }>
 
@@ -59,6 +61,9 @@ function stripOf(report: NetworkReport | undefined, curve: number | undefined) {
 
 export function NetworkFields({ d }: { d: NetworkDraftOpen }) {
   const report = useNetworkReport() ?? undefined
+  // The last report's patch numbers, while a later change builds, are not
+  // this draft's: what acts on them waits for the build.
+  const current = useNetworkReportCurrent()
   const len = useLength()
   const edit = (change: (x: NetworkDraftOpen) => NetworkDraftOpen) => useReverse.getState().editNetwork(change)
   const picked = d.picked !== null && report ? report.patches[d.picked] : undefined
@@ -87,16 +92,16 @@ export function NetworkFields({ d }: { d: NetworkDraftOpen }) {
             <input type="checkbox" data-test={`${testId}-auto`} checked={strip.auto} onChange={(e) => edit((x) => setStripSpans(x, strip.curves, e.target.checked ? null : strip.spans))} />
             <span>Auto</span>
           </label>
-          <input
-            type="number"
+          <NumberInput
             data-test={testId}
             min={SPANS_MIN}
             max={SPANS_MAX}
             value={strip.spans}
             disabled={strip.auto}
-            onChange={(e) => {
-              const v = Math.round(Number(e.target.value))
-              if (Number.isFinite(v)) edit((x) => setStripSpans(x, strip.curves, Math.max(SPANS_MIN, Math.min(SPANS_MAX, v))))
+            onCommit={(typed) => {
+              if (typed === null) return
+              const v = Math.max(SPANS_MIN, Math.min(SPANS_MAX, Math.round(typed)))
+              if (v !== strip.spans) edit((x) => setStripSpans(x, strip.curves, v))
             }}
             style={{ width: 52 }}
           />
@@ -156,10 +161,10 @@ export function NetworkFields({ d }: { d: NetworkDraftOpen }) {
         <button data-test="network-suggest" disabled={finding} title="Find the scan's sharp edges and folds, to take as crease curves" onClick={suggest}>
           {finding ? 'Finding creases…' : 'Suggest creases'}
         </button>
-        <button data-test="network-undo" disabled={d.history.length === 0} title="Undo the last edit of the network (Ctrl+Z)" onClick={() => edit(undoNetwork)}>
+        <button data-test="network-undo" disabled={!!d.motionActive || d.history.length === 0} title="Undo the last edit of the network (Ctrl+Z)" onClick={() => edit(undoNetwork)}>
           Undo
         </button>
-        <button data-test="network-redo" disabled={d.future.length === 0} title="Redo (Ctrl+Y)" onClick={() => edit(redoNetwork)}>
+        <button data-test="network-redo" disabled={!!d.motionActive || d.future.length === 0} title="Redo (Ctrl+Y)" onClick={() => edit(redoNetwork)}>
           Redo
         </button>
       </div>
@@ -200,7 +205,7 @@ export function NetworkFields({ d }: { d: NetworkDraftOpen }) {
       {report && report.patches.length > 0 && (
         <div className="checklist" data-test="network-patches">
           {report.patches.map((p, i) => (
-            <button key={i} data-test={`network-patch-${i}`} className={'netpatch' + (d.picked === i ? ' on' : '')} title={`Off the scan beyond its noise: ${len.fmt(p.misfit, 3)} (the tolerance ${len.fmt(d.fit.tolerance ?? DEFAULT_TOLERANCE, 3, { bare: true })}). The patch's worst points: ${p.worst.map((w) => `${len.fmt(w.off, 3, { signed: true })} at (${w.at.map((x) => len.fmt(x, 1, { bare: true })).join(', ')})`).join('; ')}`} onClick={() => edit((x) => ({ ...x, picked: x.picked === i ? null : i }))}>
+            <button key={i} data-test={`network-patch-${i}`} disabled={!current} className={'netpatch' + (d.picked === i ? ' on' : '')} title={`Off the scan beyond its noise: ${len.fmt(p.misfit, 3)} (the tolerance ${len.fmt(d.fit.tolerance ?? DEFAULT_TOLERANCE, 3, { bare: true })}). The patch's worst points: ${p.worst.map((w) => `${len.fmt(w.off, 3, { signed: true })} at (${w.at.map((x) => len.fmt(x, 1, { bare: true })).join(', ')})`).join('; ')}`} onClick={() => edit((x) => ({ ...x, picked: x.picked === i ? null : i }))}>
               Patch {i + 1} · σ {len.fmt(p.rms, 3, { bare: true })} · worst {len.fmt(p.max, 3)} · {p.net.u} × {p.net.v}
             </button>
           ))}
@@ -211,7 +216,7 @@ export function NetworkFields({ d }: { d: NetworkDraftOpen }) {
           {stripField('Spans along', picked.sides[0]?.[0], 'network-spans-u')}
           {stripField('Spans across', picked.sides[1]?.[0], 'network-spans-v')}
           <div className="toolrow">
-            <button data-test="network-delete-patch" title="Take the patch out, with the edges no other patch has (Delete)" onClick={() => edit((x) => removeReportedPatch(x, report, d.picked!))}>
+            <button data-test="network-delete-patch" disabled={!current} title={current ? 'Take the patch out, with the edges no other patch has (Delete)' : 'Wait for the build: the patches are numbered as they were before your last change'} onClick={() => edit((x) => removeReportedPatch(x, report, d.picked!))}>
               Delete patch {d.picked + 1}
             </button>
           </div>
@@ -229,6 +234,7 @@ export function NetworkFields({ d }: { d: NetworkDraftOpen }) {
           ))}
         </div>
       )}
+      <NetworkPointFields d={d} report={report} />
       <BodySides d={d} />
       <Num label="Smoothness" unit="" testId="network-smooth" value={d.fit.smoothness} onCommit={(v) => edit((x) => setNetworkFit(x, { smoothness: Math.max(0, Math.abs(v)) }))} hint="How hard the patches and their edges are held fair against the scan: 0 follows it exactly, 0.001 fairs its noise, 0.1 smooths well over it, from 1 detail goes" />
       <Num label="Tolerance" testId="network-tolerance" value={d.fit.tolerance ?? DEFAULT_TOLERANCE} onCommit={(v) => edit((x) => setNetworkFit(x, { tolerance: Math.max(0, Math.abs(v)) }))} hint="How far a patch may stray from the scan beyond its noise before Auto gives its strips more spans: they start at 4 and get more only where a patch misses by more than this, and only while that helps. Fewer spans are smoother" />

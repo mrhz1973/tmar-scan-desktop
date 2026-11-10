@@ -699,6 +699,11 @@ export function stepFileKey(text: string): string {
  *  in the file, named after its part where the file names it. A file of
  *  faces with no solid comes in as a surface body. */
 export interface ImportFeature extends FeatureFlags {
+  annotationSource?: {version:1;featureUuid:string;stepSha256:string;witnessSha256:string;faceBrep:string}
+  /** Inert, versioned history record. The CAD copy stays authoritative until
+   * an independent replay has verified it; unknown/corrupt records never
+   * prevent the original STEP import from loading. */
+  surfaceEditHistory?: unknown
   id: number
   kind: 'import'
   name: string
@@ -736,9 +741,16 @@ export interface BooleanFeature extends FeatureFlags {
   name: string
   op: BooleanOp
   body: number
-  tool: number
+  /** One body, or several: joined all, or cut or intersected by each in
+   *  turn. A project from before several keeps one. */
+  tool: number | number[]
   keep?: boolean
   visible: boolean
+}
+
+/** A Combine's tools as a list, one or several. */
+export function toolsOf(f: { tool: number | readonly number[] }): number[] {
+  return typeof f.tool === 'number' ? [f.tool] : [...f.tool]
 }
 
 /** A sketch's pieces — an open chain, or a closed one — extruded as a
@@ -948,6 +960,8 @@ export interface SurfaceFeature extends FeatureFlags {
  *  the scan's frame, and taken onto it again at every build; or on a body's
  *  edge or corner (`on`), where it is found again on the body as built. */
 export interface NetworkNode {
+  /** Explicit part-frame displacement; at remains the scan topology anchor. */
+  offset?: import("./networkNormalMotion").CentreOffset
   id: number
   at: Vec3
   on?: { body: number; edge: EdgeRef; t: number } | { body: number; vertex: EdgeRef; end: 0 | 1 }
@@ -963,6 +977,8 @@ export interface NetworkCurve {
   from: number
   to: number
   via: Vec3[]
+  /** One optional displacement per grip, indexed exactly as via. */
+  viaOffsets?: (import("./networkNormalMotion").CentreOffset | null)[]
   /** A fold or a parting line: the patches either side meet at an angle.
    *  Absent: they meet tangent. */
   crease?: boolean
@@ -981,6 +997,8 @@ export interface NetworkCurve {
  *  little the boundary turns there, and the box puts its seed back in its
  *  middle when they move. */
 export interface NetworkCell {
+  /** Deliberate split-centre displacement; topology still uses the on-scan centre. */
+  centreOffset?: import("./networkNormalMotion").CentreOffset
   seed: Vec3
   centre?: Vec3
   corners?: number[]
@@ -1139,7 +1157,7 @@ export function referencesOf(f: Feature): number[] {
     case 'extract':
       return f.target === undefined ? [] : [f.target]
     case 'boolean':
-      return [f.body, f.tool]
+      return [f.body, ...toolsOf(f)]
     case 'sheet':
       return [f.sketchId]
     case 'surface': {

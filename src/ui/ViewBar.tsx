@@ -15,7 +15,7 @@ import type { ReactNode } from 'react'
 import type { Vec3 } from '../core/types'
 import type { PluginRuntime } from '../plugins/api'
 import { PluginPanelExtensions } from '../plugins/panelExtensions'
-import { useDeviation } from '../state/deviationStore'
+import { mapHeld, useDeviation } from '../state/deviationStore'
 import { useSectionView } from '../state/sectionViewStore'
 import { useShell } from '../state/shellStore'
 import { useStore } from '../state/store'
@@ -91,9 +91,7 @@ export function ViewBar({
   const referenceRunning = useDeviation((s) => s.referenceStatus === 'running')
   const nominalName = useDeviation((s) => s.nominalName)
   const nominalBusy = useDeviation((s) => s.nominalBusy)
-  const hasMap = useDeviation((s) =>
-    s.source === 'element' ? s.elementStatus === 'ready' : s.mapStatus === 'ready',
-  )
+  const hasMap = useDeviation(mapHeld)
   const nominalReady = Boolean(nominalName) && !nominalBusy
   // Nothing to stand a second viewport up with until both parts are in.
   const canSplit = Boolean(fileName) && nominalReady

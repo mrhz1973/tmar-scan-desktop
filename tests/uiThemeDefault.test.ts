@@ -5,8 +5,8 @@ import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
-const boot = html.match(/<script>([\s\S]*?)<\/script>/)?.[1]
-if (!boot) throw new Error('Missing first-paint theme script')
+if (!html.includes('<script src="/theme.js"></script>')) throw new Error('Missing blocking external first-paint theme script')
+const boot = readFileSync(new URL('../public/theme.js', import.meta.url), 'utf8')
 const cases = [
   { name: 'fresh light OS', saved: null, os: false, theme: 'dark', dark: true },
   { name: 'fresh dark OS', saved: null, os: true, theme: 'dark', dark: true },

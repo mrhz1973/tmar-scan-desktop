@@ -5,6 +5,7 @@ import { build3mf, weldExact } from '../src/core/export3mf'
 import { buildMeshFile } from '../src/core/exportMesh'
 import { parse3MF } from '../src/core/parsers/threemf'
 import { parseSTL } from '../src/core/parsers/stl'
+import { scanCompanions } from '../src/app/scanFiles'
 
 /** A unit cube as a triangle soup: twelve triangles, each corner its own
  *  vertex — how an STL lays a mesh out. */
@@ -118,6 +119,34 @@ describe('3MF import', () => {
     expect(() => parse3MF(pack({ '3D/3dmodel.model': model(`<resources>${objects.join('')}</resources><build><item objectid="30"/></build>`) }))).toThrow(/more objects than ScanRuler can open/)
   })
 
+  it('refuses archives whose expanded contents exceed the supported limits', async () => {
+    const archive = pack({
+      '3D/3dmodel.model': model(`<resources><object id="1" type="model">${TRIANGLE}</object></resources><build><item objectid="1"/></build>`),
+      'Metadata/large.rels': 'x'.repeat(256),
+      '3D/Textures/large.png': new Uint8Array(256),
+    })
+    const limits = { members: 10, entryBytes: 1024, totalBytes: 200 }
+    expect(() => parse3MF(archive, undefined, undefined, limits)).toThrow(/supported archive size limits/)
+    await expect(scanCompanions('large.3mf', new Uint8Array(archive), [], limits)).rejects.toThrow(/supported archive size limits/)
+  })
+
+  it('counts a stored member at its stored size, whatever size it declares', () => {
+    const files = unzipSync(new Uint8Array(pack({
+      '3D/3dmodel.model': model(`<resources><object id="1" type="model">${TRIANGLE}</object></resources><build><item objectid="1"/></build>`),
+    })))
+    // Stored, not deflated — then every member said to expand to nothing,
+    // in its local header and in the central directory both.
+    const stored = zipSync(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, [v, { level: 0 }]])))
+    const view = new DataView(stored.buffer)
+    for (let i = 0; i + 4 <= stored.length; i++) {
+      const signature = view.getUint32(i, true)
+      if (signature === 0x04034b50) view.setUint32(i + 22, 0, true)
+      else if (signature === 0x02014b50) view.setUint32(i + 24, 0, true)
+    }
+    const limits = { members: 10, entryBytes: 1024, totalBytes: 200 }
+    expect(() => parse3MF(stored.buffer as ArrayBuffer, undefined, undefined, limits)).toThrow(/supported archive size limits/)
+  })
+
   it('reads the model’s unit into millimetres', () => {
     const inch = parse3MF(pack({ '3D/3dmodel.model': model(`<resources><object id="1" type="model">${TRIANGLE}</object></resources><build><item objectid="1"/></build>`, 'inch') }))
     expect(Array.from(inch.positions)).toEqual([0, 0, 0, 25.4, 0, 0, 0, 25.4, 0].map((v) => Math.fround(v)))
@@ -193,5 +222,42 @@ describe('3MF import', () => {
     expect(() => parse3MF(new Uint8Array([1, 2, 3]).buffer)).toThrow(/could not be unzipped/)
     expect(() => parse3MF(pack({ '3D/3dmodel.model': model('<resources/><build/>') }))).toThrow(/no triangles/)
     expect(() => parse3MF(pack({ '3D/3dmodel.model': model('<resources/><build><item objectid="4"/></build>') }))).toThrow(/object 4/)
+  })
+
+  it('leaves out many PrusaSlicer modifier runs without checking each against every triangle', () => {
+    const n = 80000
+    let verts = ''
+    let tris = ''
+    let vols = ''
+    for (let i = 0; i < n; i++) {
+      verts += `<vertex x="${i}" y="${i % 7}" z="${i % 3}"/>`
+      if (i >= 2) tris += `<triangle v1="${i - 2}" v2="${i - 1}" v3="${i}"/>`
+      // One-triangle modifier runs on every other triangle, past the end too.
+      vols += `<volume firstid="${2 * i}" lastid="${2 * i}"><metadata type="volume" key="modifier" value="1"/></volume>`
+    }
+    const file = pack({
+      '3D/3dmodel.model': model(`<resources><object id="1"><mesh><vertices>${verts}</vertices><triangles>${tris}</triangles></mesh></object></resources><build><item objectid="1"/></build>`),
+      'Metadata/Slic3r_PE_model.config': `<config><object id="1">${vols}</object></config>`,
+    })
+    const t = performance.now()
+    const mesh = parse3MF(file)
+    expect(performance.now() - t).toBeLessThan(1500)
+    expect(mesh.indices!.length / 3).toBe((n - 2) / 2)
+  })
+
+  it('reads a numeric entity past Unicode as a replacement character, not a RangeError', () => {
+    expect(() => parse3MF(pack({ '3D/3dmodel.model': model('<resources><object id="&#x110000;"/></resources><build/>') })))
+      .toThrow(/no triangles/)
+  })
+
+  it('does not take Object members for package parts', () => {
+    const rels = RELS.replace('/3D/3dmodel.model', 'constructor')
+    const zip = zipSync({
+      '_rels/.rels': strToU8(rels),
+      '3D/3dmodel.model': strToU8(model(`<resources><object id="1">${TRIANGLE}</object></resources><build><item objectid="1"/></build>`)),
+    })
+    expect(parse3MF(zip.buffer as ArrayBuffer).indices!.length).toBe(3)
+    const component = model(`<resources><object id="2"><components><component objectid="1" p:path="toString"/></components></object><object id="1">${TRIANGLE}</object></resources><build><item objectid="2"/></build>`)
+    expect(() => parse3MF(pack({ '3D/3dmodel.model': component }))).toThrow('This 3MF names toString, which it does not hold.')
   })
 })

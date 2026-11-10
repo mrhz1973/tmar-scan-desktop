@@ -62,6 +62,11 @@ export { CommandError } from '../commands/types'
 export type { Command, CommandContext, CommandErrorCode, FileOut } from '../commands/types'
 export type { JsonSchema } from '../commands/schema'
 
+// Optional workspace-editor composition, registered by the owning plugin.
+// Core keeps these contracts generic and does not import geometry plugins.
+export { registerWorkspaceEditorHistory } from './workspaceEditors'
+export type { EditorHistoryProvider, EditorHistoryReplay, PreparedEditorHistory, RecoveredEditorSession } from './workspaceEditors'
+
 /** A workspace's tab in the top bar. */
 export interface WorkspaceTab {
   /** The workspace's id — the shell store's `workspace` while it is open,
@@ -118,8 +123,9 @@ export interface PluginHost {
    *  plugin made from the session's work with `fromSession` (see
    *  ReferenceOptions). */
   openReference(file: File, units?: MeshUnits, options?: ReferenceOptions): Promise<void>
-  /** Fit an element again, from its recipe. */
-  runFit(id: number, kind: ElementKind, seeds: number[], selection?: Uint32Array, regionsOnly?: boolean): Promise<void>
+  /** Fit an element again, from its recipe. Resolves to why it failed, or
+   *  null — it did not, or was overtaken. */
+  runFit(id: number, kind: ElementKind, seeds: number[], selection?: Uint32Array, regionsOnly?: boolean): Promise<string | null>
   /** Measure the deviation map again, under the alignment in hand. */
   runDeviation(): Promise<void>
   /** Measure the wall thickness again. */
@@ -243,6 +249,9 @@ export interface ScanRulerPlugin {
   id: string
   /** The plugin's name as a person reads it. */
   name: string
+  /** Other plugins that must install successfully first. An absent, disabled
+   *  or failed dependency leaves this plugin out too. */
+  requires?: readonly string[]
   /** Still in beta: left out — not installed at all — until switched on in
    *  Settings, where it is offered under its workspace's label. A project
    *  opened while it is off keeps its part of the file, as in a build

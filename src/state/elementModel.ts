@@ -10,6 +10,7 @@ import type { Rigid } from '../core/deviation/rigid'
 import type { Limit, SphereAnchor } from '../core/dimensions'
 import { ConstructionError, creationMethod, evaluateConstruction, takesSurface } from '../core/elements/construct'
 import type { Extension } from '../core/elements/extend'
+import { moveGuide, type FitGuide } from '../core/fit/guide'
 import { isOrientable, type Orient, OrientError, orientFit, referenceNormal } from '../core/elements/orient'
 import type { ElementKind, ElementSource, FitData, FitOutput, FitSettings, Vec3 } from '../core/types'
 import { PALETTE } from './palette'
@@ -69,6 +70,11 @@ export interface Draft {
    *  from a click. Carried into the element so a change of outlier cut-off
    *  re-fits on exactly the same points. */
   selection?: Uint32Array
+  /** What the fit from the picks was told about the surface it is after
+   *  (element.fit's side, radius, axis, within). Part of the recipe like the
+   *  settings: every re-fit of the picks runs with it, and it goes into the
+   *  element. */
+  guide?: FitGuide
   /** The method and outlier cut-off this draft's fit runs with. A new draft
    *  starts on the settings last chosen; a re-opened element brings its own.
    *  Changing them re-fits this draft alone — every other element keeps the
@@ -161,7 +167,7 @@ export function freshDraft(
     pickPoints: [],
     settings,
     refs: m.slots.map(() => null),
-    params: m.params.map(() => NaN),
+    params: m.params.map((p) => p.initial ?? NaN),
     status: 'empty',
     ...edit,
   }
@@ -257,10 +263,10 @@ export function draftFromElement(
     )
   }
   if (el.source.type === 'picked') return base
-  const { seeds, selection } = el.source
+  const { seeds, selection, guide } = el.source
   const picks: [number, number, number][] = []
   for (let i = 0; i + 2 < seeds.length; i += 3) picks.push([seeds[i], seeds[i + 1], seeds[i + 2]])
-  return { ...base, picks, selection }
+  return { ...base, picks, selection, ...(guide ? { guide } : {}) }
 }
 
 /** Elements an edited element must not be built on: itself, and everything
@@ -365,20 +371,23 @@ export function evalConstructDraft(d: Draft, elements: readonly Pick<Element, 'i
   }
 }
 
-/** Re-evaluate every constructed element from its sources, in creation order
- *  (constructions can only reference older elements, so one pass settles the
- *  whole chain). Called after anything that changes a geometry. `planes` are
- *  the sections as the planes they were cut on: a construction or an
- *  alignment may stand on one. A section keeps its plane whatever happens to
- *  the elements, so it never moves in this pass. */
+/** Re-evaluate every constructed element from its sources, and re-apply
+ *  every alignment to its reference. Called after anything that changes a
+ *  geometry. Each element is settled after what it rests on: a construction
+ *  only references older elements, but an alignment may point at a newer
+ *  plane — a constructed one recomputed in this same pass — and must read
+ *  it after it moved, not before. `planes` are the sections as the planes
+ *  they were cut on: a construction or an alignment may stand on one. A
+ *  section keeps its plane whatever happens to the elements, so it never
+ *  moves in this pass. */
 export function reevaluateConstructions(
   elements: Element[],
   modelSize: number,
   planes: readonly Pick<Element, 'id' | 'fit'>[] = [],
 ): Element[] {
-  // Alignments may point at planes anywhere in the list, so the current
-  // geometry of everything is on hand before the pass; constructions and
-  // alignments that are recomputed overwrite their entry as they go.
+  // The current geometry of everything is on hand before the pass;
+  // constructions and alignments that are recomputed overwrite their entry
+  // as they go.
   const byId = new Map<number, FitData>()
   for (const p of planes) if (p.fit) byId.set(p.id, p.fit)
   for (const el of elements) if (el.fit) byId.set(el.id, el.fit)
@@ -387,7 +396,7 @@ export function reevaluateConstructions(
     if (out.fit) byId.set(out.id, out.fit)
     return out
   }
-  return elements.map((el) => {
+  const evaluate = (el: Element): Element => {
     if (el.source.type !== 'constructed') return settle(el)
     const { method, refs, params } = el.source
     const fits: FitData[] = []
@@ -416,7 +425,30 @@ export function reevaluateConstructions(
         message: e instanceof ConstructionError ? e.message : 'Construction failed.',
       }
     }
-  })
+  }
+
+  const byElement = new Map(elements.map((el) => [el.id, el]))
+  const done = new Map<number, Element>()
+  const busy = new Set<number>()
+  // Depth first through what each element rests on. A loop cannot be made
+  // (dependentsOf refuses one); should a project bring one, the element met
+  // again is left to read what is on hand, as the plain pass did.
+  const visit = (el: Element): Element => {
+    const settled = done.get(el.id)
+    if (settled) return settled
+    busy.add(el.id)
+    const rests = el.source.type === 'constructed' ? [...el.source.refs] : []
+    if (el.orient) rests.push(el.orient.ref)
+    for (const id of rests) {
+      const dep = byElement.get(id)
+      if (dep && !busy.has(id)) visit(dep)
+    }
+    const out = evaluate(el)
+    busy.delete(el.id)
+    done.set(el.id, out)
+    return out
+  }
+  return elements.map(visit)
 }
 
 /** Cheap identity check so untouched constructions keep their object and the
@@ -430,6 +462,9 @@ function sameFit(a: FitData, b: FitData): boolean {
  *  vertex indices (which do not change when the vertices move) or references
  *  to other elements. */
 export function transformSource(source: ElementSource, m: Rigid): ElementSource {
+  // A fit's seeds are vertices, which move with the part; what its guide
+  // says in coordinates moves with them.
+  if (source.type === 'fitted') return source.guide ? { ...source, guide: moveGuide(source.guide, m) } : source
   if (source.type !== 'constructed') return source
   if (source.method === 'point-coords' || source.method === 'point-centroid') {
     const p = transformFit(
@@ -449,6 +484,15 @@ export function transformSource(source: ElementSource, m: Rigid): ElementSource 
     if (moved.kind !== 'line') return source
     return { ...source, params: [...moved.dir, ...moved.center, ...rest] }
   }
+  if (source.method === 'line-coords') {
+    const [dx, dy, dz, px, py, pz, ...rest] = source.params
+    const moved = transformFit(
+      { kind: 'line', center: [px, py, pz], dir: [dx, dy, dz], length: 0, sigma: 0, usedPoints: 0, regionSize: 0 },
+      m,
+    )
+    if (moved.kind !== 'line') return source
+    return { ...source, params: [...moved.dir, ...moved.center, ...rest] }
+  }
   if (source.method === 'circle-coords') {
     const [d, nx, ny, nz, cx, cy, cz] = source.params
     const moved = transformFit(
@@ -459,6 +503,38 @@ export function transformSource(source: ElementSource, m: Rigid): ElementSource 
     return { ...source, params: [d, ...moved.dir, ...moved.center] }
   }
   return source
+}
+
+/** The constructions that hold coordinates of their own rather than
+ *  sources: what an unlinked construction becomes. */
+export const COORDINATE_METHODS: ReadonlySet<string> = new Set(['point-coords', 'line-coords', 'plane-coords', 'circle-coords'])
+
+/**
+ * A constructed element's recipe frozen where it stands: the coordinates of
+ * its kind (a point's, a line's, a plane's, a circle's) in place of its
+ * sources, so it no longer moves when they do and outlives them (issue 46).
+ * The construction's own result, before any alignment of the element to a
+ * plane, which stays on top. Null for an element that has nothing to
+ * unlink — not constructed, already coordinates, or with no geometry.
+ */
+export function unlinkedSource(el: Element): ElementSource | null {
+  if (el.source.type !== 'constructed' || COORDINATE_METHODS.has(el.source.method)) return null
+  if (el.source.refs.length === 0) return null
+  const fit = el.measured ?? el.fit
+  if (!fit) return null
+  const params =
+    fit.kind === 'point'
+      ? [...fit.center]
+      : fit.kind === 'line'
+        ? [...fit.dir, ...fit.center, fit.length]
+        : fit.kind === 'plane'
+          ? [...fit.normal, ...fit.center]
+          : fit.kind === 'circle'
+            ? [2 * fit.radius, ...fit.normal, ...fit.center]
+            : null
+  if (!params) return null
+  const method = `${fit.kind}-coords`
+  return { type: 'constructed', method, refs: [], params }
 }
 
 /** All elements that (transitively) build on the given one. Being aligned to

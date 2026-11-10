@@ -1,25 +1,17 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-# TMAR build identification
+# TMAR numbered version and build identification
 
-The top bar shows **TMAR web** and the seven-character source commit beside
-ScanRuler's branding. Click the badge for Settings: full source revision, UTC
-build timestamp and whether the source tree was modified. This is the identity
-of the loaded bundle, not a query of the latest GitHub version. Frozen previews
-keep their original identity even if main advances.
+The top bar shows **Versione 1**, followed by 2, 3, and so on for subsequent coordinated deliveries. **Anteprima** remains explicit; a number alone never declares a stable release. Click the badge for Settings: source revision, build timestamp and dirty-tree status are under the initially collapsed **Dettagli tecnici** section.
 
-`+modified` explicitly means the bundle is not exactly its recorded commit.
-A source archive without Git metadata says `unknown`, never an invented version.
-The inherited package version, project appVersion and original attribution are
-unchanged. This is not a new desktop release or an automatic update mechanism.
+The human number is validated from `tmar-version.json` at build time, separately from the actual Git provenance captured by `scripts/buildIdentity.mjs`. No repository lookup, commit count, date-based counter, localStorage counter or runtime network call determines the displayed number. Rebuilding and reloading leave it unchanged. Missing or malformed manifests stop the build rather than inventing a number. Without Git metadata the technical commit remains `unknown`, while a valid explicit delivery number is still available.
 
-The plugin registers the generic `topbar.identity` and `settings.tools` slots.
-The build-time helper is `scripts/buildIdentity.mjs`; host data is exposed through
-`src/buildIdentity.ts`. No dependency on Reverse engineer and no network calls.
-The optional plugin can be omitted without breaking the original header.
+The inherited package version, project appVersion and original attribution remain unchanged. Old frozen previews retain their original identities; opening them does not upgrade them. This is not a desktop release or an automatic update mechanism.
+
+[Numbering policy, next-delivery command and version history](../../docs/tmar-versions.md).
+
+The plugin uses the existing `topbar.identity` and `settings.tools` slots. It has no dependency on Reverse engineer. Omitting the plugin leaves the original header available.
 
 ```sh
-node --test scripts/test-build-identity.mjs
-npx vitest run plugins/tmar-build-info/tests
+node --test scripts/test-tmar-version.mjs scripts/test-build-identity.mjs
+node node_modules/vitest/vitest.mjs run plugins/tmar-build-info/tests
 ```
-
-[Integration validation](../../docs/tmar-step-scan-validation.md).

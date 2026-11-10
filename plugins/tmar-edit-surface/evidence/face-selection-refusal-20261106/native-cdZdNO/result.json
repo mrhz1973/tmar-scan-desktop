@@ -1,0 +1,19 @@
+{
+  "scope": "real OCCT WASM in Node; in-process transport bridge, no browser Worker, dialog, host UI or user project",
+  "verdict": "PASS",
+  "bottomFace": 4,
+  "refusedFace": 6,
+  "refusalReason": "Prototipo: solo piani e B-spline non periodiche.",
+  "retainedExactSnapshot": true,
+  "retainedHistory": true,
+  "retainedNotes": true,
+  "retainedWorkerWitness": true,
+  "firstPoleZ": -0.2,
+  "secondPoleZ": -0.30000000000000004,
+  "firstPreviewRevision": 2,
+  "secondPreviewRevision": 3,
+  "exportValid": true,
+  "solidCount": 1,
+  "faceCount": 8,
+  "volumeChangeMm3": 11.250292499163152
+}
