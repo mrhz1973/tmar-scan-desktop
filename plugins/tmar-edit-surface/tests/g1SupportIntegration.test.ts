@@ -66,7 +66,7 @@ describe('G1 support listing — kernel-owned identity, real OCCT', () => {
     } finally { editor.dispose() }
   }, 60000)
 
-  it('fences pending digest responses and invalidates failed selection/preparation attempts', async () => {
+  it('fences real source/selection changes and preserves G1 identity and preview on rejected preparation', async () => {
     const {editor, step} = await fixture()
     try {
       editor.open(step); editor.select(0)
@@ -74,13 +74,28 @@ describe('G1 support listing — kernel-owned identity, real OCCT', () => {
       editor.select(1)
       await expect(pending).rejects.toThrow('scaduto')
       const pendingReopen = editor.g1SupportCandidates()
-      editor.open(step); editor.select(0)
+      editor.open(step); const net = editor.select(0)
       await expect(pendingReopen).rejects.toThrow('scaduto')
+      const retained = await editor.g1SupportCandidates()
+      const preview = editor.evaluate(net, 'G1')
+      const witness = editor.finalFaceWitness(preview.previewRevision!)
+      // Preparation commits atomically. A rejected request must retain the
+      // current face, its existing G1 generation and its validated preview.
+      const pendingRejectedSelection = editor.g1SupportCandidates()
       expect(() => editor.select(999)).toThrow()
-      await expect(editor.g1SupportCandidates()).rejects.toThrow('Seleziona')
-      editor.select(0)
+      await expect(pendingRejectedSelection).resolves.toEqual(retained)
+      expect(await editor.g1SupportCandidates()).toEqual(retained)
+      expect(await editor.resolveG1SupportCandidate(retained.candidates[0])).toEqual(retained.candidates[0])
+      expect(editor.finalFaceWitness(preview.previewRevision!)).toEqual(witness)
+      const pendingRejectedCylinder = editor.g1SupportCandidates()
       expect(() => editor.prepareCylinderForPreview(0)).toThrow()
-      await expect(editor.g1SupportCandidates()).rejects.toThrow('Seleziona')
+      await expect(pendingRejectedCylinder).resolves.toEqual(retained)
+      expect(await editor.g1SupportCandidates()).toEqual(retained)
+      expect(await editor.resolveG1SupportCandidate(retained.candidates[0])).toEqual(retained.candidates[0])
+      expect(editor.finalFaceWitness(preview.previewRevision!)).toEqual(witness)
+      // An actual successful reselect still revokes the retained generation.
+      editor.select(0)
+      await expect(editor.resolveG1SupportCandidate(retained.candidates[0])).rejects.toThrow('scaduta')
       expect(() => editor.open('invalid STEP')).toThrow()
       await expect(editor.g1SupportCandidates()).rejects.toThrow('Seleziona')
     } finally { editor.dispose() }

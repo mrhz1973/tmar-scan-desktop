@@ -60,25 +60,32 @@ describe('a failed shell diagnosed within its budget', () => {
     builder.dispose()
   })
 
-  it('stays within twice the time of a try, and says how far it got', async () => {
+  it('stops after two real attempts exhaust the controlled time budget, and says how far it got', async () => {
     const k = await kernelPromise
     const builder = new Builder(k)
     const { features, step } = await pinnedBox(builder)
     await build(builder, features)
     const body = bodyFor(builder, step)
-    // One shell the way the step tried it: what a try takes here.
-    const t0 = performance.now()
-    expect(() => k.shellTracked(body.shape, [], 3)).toThrow()
-    const perTry = Math.max(1, performance.now() - t0)
+    // The native shell remains real. Charge each attempt the same controlled
+    // duration: wall-clock scheduling can make the initial measured try much
+    // slower than every subsequent try, legitimately allowing a full diagnosis.
+    const perTry = 100
     const limit = { ms: 2 * perTry, perTry }
-    const t1 = performance.now()
-    const d = diagnoseShell(k, builder, step, body, limit)!
-    const spent = performance.now() - t1
-    expect(d.message).toMatch(/face \d+ \(cylinder of 1 mm radius, made by feature 4\)/)
-    expect(d.message).toMatch(/not bisected( further)?: over budget \(a try takes about \d+ m?s, the diagnosis \d+ m?s at most\)/i)
-    // The budget, and the reading of the body before any try.
-    expect(spent).toBeLessThan(limit.ms + 1000)
-    builder.dispose()
+    let elapsed = 0
+    const actualShell = k.shellTracked.bind(k)
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
+    const attempts = vi.spyOn(k, 'shellTracked').mockImplementation((...args) => {
+      try { return actualShell(...args) }
+      finally { elapsed += perTry }
+    })
+    try {
+      const d = diagnoseShell(k, builder, step, body, limit)!
+      expect(d.message).toMatch(/face \d+ \(cylinder of 1 mm radius, made by feature 4\)/)
+      expect(d.message).toMatch(/not bisected( further)?: over budget \(a try takes about \d+ m?s, the diagnosis \d+ m?s at most\)/i)
+      expect(attempts).toHaveBeenCalledTimes(2)
+      expect(elapsed).toBe(limit.ms)
+      expect(d.where.length).toBeGreaterThan(0)
+    } finally { attempts.mockRestore(); clock.mockRestore(); builder.dispose() }
   })
 
   it('with no time for a try, names the round off the body alone', async () => {

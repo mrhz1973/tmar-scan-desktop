@@ -82,9 +82,35 @@ to inflate a unique test count.
 | Navigation, gizmo, reticle, duplicate, annotated thin-face group | 34 unique tests PASS, including 4 new native tests |
 | Final native history integration, including archived-source hardening | 7 tests PASS: plain/annotated ZIP recovery, original removed, re-Apply and atomic rejection cases |
 | Complete TypeScript | PASS on the final production-source delta |
-| Complete app regression suite | Running at publication; consult the attached run result |
+| First complete local app suite | 4,199 PASS, 4 FAIL, 39 skipped (4,243 tests); negative result retained |
+| First complete GitHub app suite | 4,201 PASS, 2 FAIL, 39 skipped; run `42799700713`, browser not reached |
+| Follow-up for the four affected test files | 143/143 PASS; test-only corrections described below |
 | Integrated production build | PASS; the downloadable preview manifest identifies its exact final source revision |
 | New browser workflows | Prepared; local browser launch blocked before app checks |
+
+### Full-suite follow-up
+
+The first complete run found two assertions predating the plugin's current
+atomic-selection contract and two scheduling-sensitive fixtures. The native
+CAD code and its criteria were not changed to make those tests pass.
+
+- G1 selection now explicitly checks that a **rejected** preparation keeps the
+  existing selection, valid G1 generation and native preview. Actual source or
+  successful selection changes still revoke the old generation.
+- Recipe saving checks the complete existing source/preview refusal message.
+- Bundle recovery waits for the real native recipe restore and WebCrypto
+  completion, then advances the known preview debounce. It no longer assumes
+  twenty microtask turns complete a native digest.
+- The shell budget test runs real OCCT attempts against a controlled clock and
+  verifies that exactly two attempts exhaust the budget. A slow measured first
+  attempt must not accidentally grant a much larger real-time budget and make
+  the expected incomplete diagnosis finish successfully.
+
+The affected files passed **129 + 8 + 6** targeted tests. Those results overlap
+the complete suite and are not new unique tests. The normal CI pipeline runs
+the complete suite again, followed by all browser gates. Its overall timeout
+is 45 minutes for the expanded native suite and 30 browser scenarios; CAD
+tolerances, native deadlines and assertions are unchanged.
 
 ### Thin-face evidence
 

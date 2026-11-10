@@ -1356,10 +1356,16 @@ describe('WorkspaceSurfaceSession',()=>{
       try {
         bundleSession=await createWorkspaceSurfaceSession({...context,sessionId:'bundle-reopen',reportFatal:bundleFatal} as never,
           vi.fn() as never,{runtime:bundleRuntime,sha256:async bytes=>sha(bytes)})
+        // Observe the real restore: its kernel hashes use WebCrypto, which a
+        // fixed number of fake-clock/microtask turns cannot finish reliably.
+        const restoring=vi.spyOn(bundleSession,'restoreHistoryRecipe')
         const operation=bundleSession.restoreHistoryBundle({recipe:annotated.recipe,notes:annotated.notes})
-        let settled=false;void operation.then(()=>{settled=true},()=>{settled=true})
-        for(let i=0;i<20&&!settled;i++){await flush();await vi.advanceTimersByTimeAsync(90)}
-        expect(settled).toBe(true);await operation
+        expect(restoring).toHaveBeenCalledOnce()
+        await restoring.mock.results[0].value
+        // Only after native restore has scheduled the new preview do we
+        // advance its debounce, then await the complete notes transaction.
+        await vi.advanceTimersByTimeAsync(90)
+        await expect(operation).resolves.toBeUndefined()
         expect(bundleSession.getSnapshot().validation.kind).toBe('valid')
         expect(bundleSession.getPanelState().notes[0]).toMatchObject({id:note.id,text:'Controlla la faccia inversa'})
         expect(bundleFatal).not.toHaveBeenCalled()
@@ -1370,11 +1376,13 @@ describe('WorkspaceSurfaceSession',()=>{
       try {
         rejectedSession=await createWorkspaceSurfaceSession({...context,sessionId:'bundle-reject',reportFatal:rejectedFatal} as never,
           vi.fn() as never,{runtime:rejectedRuntime,sha256:async bytes=>sha(bytes)})
+        const restoring=vi.spyOn(rejectedSession,'restoreHistoryRecipe')
         const operation=rejectedSession.restoreHistoryBundle({recipe:annotated.recipe,notes:[{...annotated.notes[0],u:1e9}]})
         const rejection=expect(operation).rejects.toThrow()
-        let settled=false;void operation.then(()=>{settled=true},()=>{settled=true})
-        for(let i=0;i<20&&!settled;i++){await flush();await vi.advanceTimersByTimeAsync(90)}
-        expect(settled).toBe(true);await rejection
+        expect(restoring).toHaveBeenCalledOnce()
+        await restoring.mock.results[0].value
+        await vi.advanceTimersByTimeAsync(90)
+        await rejection
         expect(rejectedFatal).toHaveBeenCalledOnce()
         expect(rejectedRuntime.active).toBe(false)
         expect(session.getSnapshot().validation.kind).toBe('valid')

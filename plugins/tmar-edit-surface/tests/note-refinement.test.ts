@@ -42,7 +42,7 @@ it('retains UV note identity across refinement, undo/redo preparation and empty 
     // though it intentionally preserves the logical anchor selection.
     const saving = editor.createRecipe(refined, 'G1', [], 'body')
     editor.selectRefined(0, operations)
-    await expect(saving).rejects.toThrow(/Sorgente cambiata/)
+    await expect(saving).rejects.toThrow('Sorgente o anteprima cambiata durante il salvataggio della ricetta.')
     compare(refined)
     await expect(editor.createRecipe(refined, 'G1', [], 'body')).resolves.toMatchObject({ version: 4 })
     compare(refined)

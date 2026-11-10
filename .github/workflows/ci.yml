@@ -20,7 +20,9 @@ concurrency:
 jobs:
   test-and-build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The consolidated suite includes native editor tests and 30 browser
+    # scenarios. Keep every gate; allow their combined runtime on CI.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
