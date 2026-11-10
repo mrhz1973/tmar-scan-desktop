@@ -10,7 +10,7 @@ import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
 
 
 export function RecoveryBar({ recovery }: { recovery: RecoveryStatus }) {
-  useTmarLanguage()
+  const language = useTmarLanguage()
 
   const [selected, setSelected] = useState('')
   const busy = useStore((s) => s.busy)
@@ -20,7 +20,7 @@ export function RecoveryBar({ recovery }: { recovery: RecoveryStatus }) {
     <span>{tmarText("A local checkpoint is available.")}</span>
     <select aria-label={tmarText("Checkpoint")} value={id} onChange={(event) => setSelected(event.target.value)}>
       {recovery.available.map((item) => <option key={item.id} value={item.id}>
-        {item.name} — {new Date(item.savedAt).toLocaleString()}
+        {item.name} — {new Date(item.savedAt).toLocaleString(language === 'it' ? 'it-IT' : 'en-US')}
       </option>)}
     </select>
     <button data-test="restore-checkpoint" disabled={busy || recovery.working} onClick={() => void recovery.restore(id)}>{tmarText("Restore")}</button>

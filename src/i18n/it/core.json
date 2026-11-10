@@ -2027,5 +2027,14 @@
   "A reference model": "Un modello di riferimento",
   "A fitted element": "Un elemento adattato",
   "A shadow": "Una proiezione",
-  "A spline": "Una spline"
+  "A spline": "Una spline",
+  "Blue through cyan, green and yellow to red, a saturated green in the middle — the inspection-software classic. Uneven in lightness, so cyan and yellow show as bands the part does not have": "Dal blu al rosso passando per ciano, verde e giallo, con verde saturo al centro: la scala classica dei programmi di controllo dimensionale. La luminosità non è uniforme, quindi ciano e giallo possono suggerire fasce assenti nel pezzo",
+  "Dark blue through teal and green to yellow. Perceptually uniform — an even step in the reading is an even step in colour — and as legible to colour-blind eyes and in greyscale": "Dal blu scuro al giallo passando per verde petrolio e verde. Percettivamente uniforme: variazioni uguali della misura producono variazioni uguali del colore. Leggibile anche in presenza di daltonismo e in scala di grigi",
+  "Black through purple and pink to pale cream. Perceptually uniform and colour-blind safe": "Dal nero al crema chiaro passando per viola e rosa. Percettivamente uniforme e adatta anche in presenza di daltonismo",
+  "Indigo through magenta and orange to yellow — no black end. Perceptually uniform and colour-blind safe": "Dall’indaco al giallo passando per magenta e arancione, senza un’estremità nera. Percettivamente uniforme e adatta anche in presenza di daltonismo",
+  "Black through purple, red and orange to pale yellow. Perceptually uniform and colour-blind safe": "Dal nero al giallo chiaro passando per viola, rosso e arancione. Percettivamente uniforme e adatta anche in presenza di daltonismo",
+  "Navy through grey to yellow, made to look the same to red–green colour blindness as to anyone else. Perceptually uniform": "Dal blu navy al giallo passando per il grigio, progettata per apparire allo stesso modo anche a chi presenta daltonismo rosso-verde. Percettivamente uniforme",
+  "Black through deep blue and teal to mint. Perceptually uniform and colour-blind safe": "Dal nero al verde menta passando per blu intenso e verde petrolio. Percettivamente uniforme e adatta anche in presenza di daltonismo",
+  "Black through purple and red to cream. Perceptually uniform and colour-blind safe": "Dal nero al crema passando per viola e rosso. Percettivamente uniforme e adatta anche in presenza di daltonismo",
+  "A rainbow like jet, dark blue through green to dark red, but smooth — without the bands jet shows. Not for red–green colour blindness": "Una scala arcobaleno simile a Jet, dal blu scuro al rosso scuro passando per il verde, ma con transizioni uniformi e senza le fasce di Jet. Non adatta in presenza di daltonismo rosso-verde"
 }

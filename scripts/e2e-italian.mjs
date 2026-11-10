@@ -39,6 +39,12 @@ try {
     ['reverse', /Ricostruzione CAD/], ['mesh', /Strumenti mesh/],
   ]) check(expected.test(await text(`[data-test="workspace-${workspace}"]`)), `${workspace} workspace is labelled in Italian`)
   check(await page.$eval('[data-test="project-name"]', el => el.getAttribute('aria-label')) === 'Nome del progetto', 'accessible project-name label is Italian')
+  await page.click('[data-test="open-settings"]')
+  for (const name of ['jet', 'viridis', 'magma', 'plasma', 'inferno', 'cividis', 'mako', 'rocket', 'turbo']) {
+    const hint = await page.$eval(`[data-test="colormap-${name}"]`, el => el.title)
+    check(hint.length > 30 && !/Blue through|Dark blue|Black through|Indigo through|Navy through|A rainbow|Perceptually|colour-blind/.test(hint), `${name} color-map description is Italian`)
+  }
+  await page.click('[data-test="settings-close"]')
 
   await drop(mesh, 'Apply.obj')
   await page.waitForFunction(() => document.querySelector('.file-info')?.textContent.includes('Apply.obj'))
