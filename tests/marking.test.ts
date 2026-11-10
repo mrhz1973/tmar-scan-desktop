@@ -3,19 +3,26 @@ import * as THREE from 'three'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { capsulePoints, lineSteps, SurfaceMarking, type MarkingContext, type PaintBrush } from '../src/viewer/marking'
 
+const disposeRigs: (() => void)[] = []
+
 /** A hundred units of world on a hundred pixels of screen: one unit is one pixel
  *  at this camera, which keeps the arithmetic below readable. */
 function rig(brush: Partial<PaintBrush> = {}, navigates = false) {
   const listeners: Record<string, (e: PointerEvent) => void> = {}
   const element = () => ({ setAttribute: vi.fn(), append: vi.fn(), remove: vi.fn(), style: { display: '', setProperty: vi.fn() } })
   const svg = element()
-  vi.stubGlobal('document', {
+  const documentTarget = {
     createElementNS: vi.fn((_ns: string, name: string) => (name === 'svg' ? svg : element())),
     addEventListener: (type: string, fn: (e: PointerEvent) => void) => {
       listeners[type] = fn
     },
-    removeEventListener: vi.fn(),
-  })
+    removeEventListener: (type: string, fn: (e: PointerEvent) => void) => {
+      if (listeners[type] === fn) delete listeners[type]
+    },
+  }
+  const windowTarget = new EventTarget()
+  vi.stubGlobal('document', documentTarget)
+  vi.stubGlobal('window', windowTarget)
   // Every dab asks for a pick ray first, so these are where the dabs landed.
   const dabs: { x: number; y: number }[] = []
   const ctx = {
@@ -37,15 +44,23 @@ function rig(brush: Partial<PaintBrush> = {}, navigates = false) {
     graphVertex: (v: number) => v,
     setPaintColor: vi.fn(),
     invalidate: vi.fn(),
+    wake: vi.fn(),
     claimDrag: vi.fn(),
     navigates: () => navigates,
     requestHover: vi.fn(),
     onPaintChange: vi.fn(),
   } as unknown as MarkingContext
   const marking = new SurfaceMarking(ctx)
+  disposeRigs.push(() => {
+    // A modifier test can create several rigs. Dispose on each rig's own
+    // event targets before restoring the globals, so its listeners are removed.
+    vi.stubGlobal('document', documentTarget)
+    vi.stubGlobal('window', windowTarget)
+    marking.dispose()
+  })
   marking.setPaintBrush({ color: '#fff', diameter: 16, erase: false, gesture: 'brush', ...brush })
   const event = (x: number, y: number, more: Partial<PointerEvent> = {}) =>
-    ({ button: 0, buttons: 1, clientX: x, clientY: y, pointerType: 'mouse', ...more }) as PointerEvent
+    ({ button: 0, buttons: 1, clientX: x, clientY: y, pointerType: 'mouse', shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...more }) as PointerEvent
   return {
     marking,
     dabs,
@@ -57,7 +72,10 @@ function rig(brush: Partial<PaintBrush> = {}, navigates = false) {
   }
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  try { for (const dispose of disposeRigs.splice(0)) dispose() }
+  finally { vi.unstubAllGlobals() }
+})
 
 describe('a straight brush line', () => {
   it('runs from press to release, whatever the cursor did between, and marks only at the end', () => {

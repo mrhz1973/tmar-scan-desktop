@@ -108,6 +108,8 @@ function windowRig(geometry: THREE.BufferGeometry, through = false, clip: THREE.
     },
     removeEventListener: vi.fn(),
   })
+  // Shift navigation also listens to the browser window losing focus.
+  vi.stubGlobal('window', new EventTarget())
   const camera = perspective ? new THREE.PerspectiveCamera(30, 1, 1, 1000) : new THREE.OrthographicCamera(-50, 50, 50, -50, 1, 1000)
   camera.position.set(0, 0, perspective ? 50 / Math.tan(THREE.MathUtils.degToRad(15)) : 500)
   camera.lookAt(0, 0, 0)
@@ -148,10 +150,11 @@ function windowRig(geometry: THREE.BufferGeometry, through = false, clip: THREE.
   const marking = new SurfaceMarking(ctx)
   marking.setPaintBrush({ color: '#fff', diameter: 4, erase: false, gesture: 'window', backfaces: through })
   const event = (x: number, y: number, buttons: number) =>
-    ({ button: 0, buttons, clientX: x, clientY: y, altKey: false, pointerType: 'mouse' }) as PointerEvent
+    ({ button: 0, buttons, clientX: x, clientY: y, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, pointerType: 'mouse' }) as PointerEvent
   marking.handlePointerDown(event(12, 22, 1))
   listeners.pointermove(event(108, 118, 1))
   listeners.pointerup(event(108, 118, 0))
+  marking.dispose()
   return marked
 }
 

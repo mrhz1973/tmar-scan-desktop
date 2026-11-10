@@ -23,11 +23,11 @@ describe('a stroke laid while the tree is out', () => {
   let turn = 0
 
   const fire = (type: string, e: Partial<PointerEvent>) => {
-    for (const l of on[type] ?? []) l(e)
+    for (const l of on[type] ?? []) l({ pointerType: 'mouse', shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...e })
   }
   const press = (x: number, y: number) =>
-    marking.handlePointerDown({ button: 0, pointerType: 'mouse', clientX: x, clientY: y, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false } as PointerEvent)
-  const release = (x: number, y: number) => fire('pointerup', { button: 0, clientX: x, clientY: y })
+    marking.handlePointerDown({ button: 0, buttons: 1, pointerType: 'mouse', clientX: x, clientY: y, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false } as PointerEvent)
+  const release = (x: number, y: number) => fire('pointerup', { button: 0, buttons: 0, clientX: x, clientY: y })
   /** The marked vertices, as points on the part. */
   const marked = () => {
     const pos = mesh.geometry.getAttribute('position')
@@ -44,8 +44,11 @@ describe('a stroke laid while the tree is out', () => {
       addEventListener: (type: string, l: Listener) => {
         ;(on[type] ??= []).push(l)
       },
-      removeEventListener: () => {},
+      removeEventListener: (type: string, l: Listener) => {
+        on[type] = (on[type] ?? []).filter(listener => listener !== l)
+      },
     })
+    vi.stubGlobal('window', new EventTarget())
     // A 4 × 4 mm sheet in 0.1 mm squares, facing the view.
     const geometry = new THREE.PlaneGeometry(4, 4, 40, 40)
     const n = geometry.getAttribute('position').count
@@ -81,8 +84,8 @@ describe('a stroke laid while the tree is out', () => {
   })
 
   afterEach(() => {
-    marking.dispose()
-    vi.unstubAllGlobals()
+    try { marking.dispose() }
+    finally { vi.unstubAllGlobals() }
   })
 
   it('marks nothing until the tree lands, then marks where it was laid', () => {
