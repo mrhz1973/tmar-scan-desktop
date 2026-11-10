@@ -51,6 +51,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install the agent server used by browser scenarios
+        run: npm --prefix mcp ci
       - id: build
         run: npm run build
       - name: Each worker gets the Content-Security-Policy its code needs

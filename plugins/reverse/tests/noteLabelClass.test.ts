@@ -22,4 +22,13 @@ describe('reverse.css and the 2D note', () => {
   it('gives the note pins their own class', () => {
     expect(selectors).toContain('.re-note-label')
   })
+
+  it('keeps the temporary Labels-off exception on nonempty focused 3D pins', () => {
+    const quickCss = readFileSync(new URL('../../tmar-quick-notes/quickNotes.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const quickSelectors = [...quickCss.matchAll(/([^{}]+)\{/g)].flatMap(m => m[1].split(',').map(s => s.trim())).filter(Boolean)
+    // Quick Notes must not override FlatScene's label visibility. The
+    // temporary exception belongs only to the pin focused in the 3D view.
+    expect(quickSelectors.filter(s => /\.note-label\b/.test(s))).toEqual([])
+    expect(quickSelectors).toContain('.nolabels .re-note-label.focused:not(:empty)')
+  })
 })
