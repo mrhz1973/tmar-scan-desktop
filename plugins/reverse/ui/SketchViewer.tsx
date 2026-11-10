@@ -15,6 +15,8 @@ import { FlatScene } from '../../../src/viewer/FlatScene'
 import { schemeById } from '../../../src/viewer/navSchemes'
 import { sceneTheme } from '../../../src/viewer/viewThemes'
 import { useFlatSceneSettings } from '../../../src/ui/FlatViewer'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 export function SketchViewer({
   onReady,
@@ -53,6 +55,8 @@ export function SketchViewer({
    *  the 3D viewport underneath to follow. */
   onViewChange: (centre: Vec2, unitsPerScreenPx: number) => void
 }) {
+  useTmarLanguage()
+
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef(onViewChange)
   viewRef.current = onViewChange
@@ -115,8 +119,8 @@ export function SketchViewer({
     <div className="viewport" ref={containerRef} data-test="sketch-viewport">
       {webglError !== null && (
         <div className="webgl-missing" role="alert">
-          <b>The sketch view could not be started.</b>
-          <p className="webgl-missing-detail">{webglError}</p>
+          <b>{tmarText("The sketch view could not be started.")}</b>
+          <p className="webgl-missing-detail">{tmarText(webglError)}</p>
         </div>
       )}
     </div>

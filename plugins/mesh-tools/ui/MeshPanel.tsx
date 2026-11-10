@@ -42,6 +42,8 @@ import { OffsetTool } from './tools/OffsetTool'
 import { ShellTool } from './tools/ShellTool'
 import { WrapTool } from './tools/WrapTool'
 import type { MeshFormat } from '../../../src/core/exportMesh'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 const TOOLS: { id: MeshTool; icon: ReactNode; label: string; title: string }[] = [
   {
@@ -193,6 +195,8 @@ export function MeshPanel({
   onUseEdited: () => void
   onDiscardEdited: () => void
 }) {
+  useTmarLanguage()
+
   const scanName = useStore((s) => s.fileName)
   const scanTriangles = useStore((s) => s.triangleCount)
   const scanBusy = useStore((s) => s.busy)
@@ -207,23 +211,11 @@ export function MeshPanel({
   return (
     <aside className="panel">
       <div className="group">
-        <div className="sec-head">
-          Model
-          <InfoDot title="The scan">
+        <div className="sec-head">{tmarText("Model")}<InfoDot title={tmarText("The scan")}>
+            <p>{tmarText("The part as scanned — an ")}<b>{tmarText("STL")}</b>, <b>{tmarText("PLY")}</b>{tmarText(" or ")}<b>{tmarText("OBJ")}</b>{tmarText(" in millimetres. Align it first in 3D Measure if it should land in CAD on its datums: a reduced mesh is made from the scan where it stands, and exported there.")}</p>
             <p>
-              The part as scanned — an <b>STL</b>, <b>PLY</b> or <b>OBJ</b> in millimetres. Align it
-              first in 3D Measure if it should land in CAD on its datums: a reduced mesh is made
-              from the scan where it stands, and exported there.
-            </p>
-            <p>
-              <b>Remove islands</b>, <b>Delete marked</b>, <b>Flip normals</b>, <b>Cut</b>, <b>Mirror</b>, <b>Fill holes</b>,{' '}
-              <b>Smooth</b>, <b>Densify</b>, <b>Shrink/expand</b>, <b>Boolean</b> and <b>Shell/hollow</b> edit a copy of the scan, shown
-              here in its place; every other workspace
-              goes on measuring the scan as it was until <b>Use for analysis</b> takes the copy into
-              use. <b>Reduce mesh</b> makes a light mesh beside it — of the copy, when there is one —
-              which <b>Apply</b> makes the edited copy, <b>Wrap</b> a closed skin round it the same way,
-              and <b>Trim to scan</b> a piece cut to fit its break.
-            </p>
+              <b>{tmarText("Remove islands")}</b>, <b>{tmarText("Delete marked")}</b>, <b>{tmarText("Flip normals")}</b>, <b>{tmarText("Cut")}</b>, <b>{tmarText("Mirror")}</b>, <b>{tmarText("Fill holes")}</b>,{' '}
+              <b>{tmarText("Smooth")}</b>, <b>{tmarText("Densify")}</b>, <b>{tmarText("Shrink/expand")}</b>, <b>{tmarText("Boolean")}</b>{tmarText(" and ")}<b>{tmarText("Shell/hollow")}</b>{tmarText(" edit a copy of the scan, shown here in its place; every other workspace goes on measuring the scan as it was until ")}<b>{tmarText("Use for analysis")}</b>{tmarText(" takes the copy into use. ")}<b>{tmarText("Reduce mesh")}</b>{tmarText(" makes a light mesh beside it — of the copy, when there is one — which ")}<b>{tmarText("Apply")}</b>{tmarText(" makes the edited copy, ")}<b>{tmarText("Wrap")}</b>{tmarText(" a closed skin round it the same way, and ")}<b>{tmarText("Trim to scan")}</b>{tmarText(" a piece cut to fit its break.")}</p>
           </InfoDot>
         </div>
         <ModelSlot
@@ -234,23 +226,17 @@ export function MeshPanel({
           busy={busy}
           onOpen={onOpenScan}
         />
-        {!scanName && <p className="hint">Drop it anywhere in the window.</p>}
+        {!scanName && <p className="hint">{tmarText("Drop it anywhere in the window.")}</p>}
       </div>
 
       <PluginPanelExtensions slot="mesh.analysis" />
 
       <div className="group">
-        <div className="sec-head">
-          Tools
-          <InfoDot title="Mesh tools">
-            <p>
-              Tools that work on the mesh itself rather than measure it. The edits are made on a copy
-              of the scan — each one step of the undo history, kept in a saved project — and reach the
-              other workspaces only when the copy is taken into use.
-            </p>
+        <div className="sec-head">{tmarText("Tools")}<InfoDot title={tmarText("Mesh tools")}>
+            <p>{tmarText("Tools that work on the mesh itself rather than measure it. The edits are made on a copy of the scan — each one step of the undo history, kept in a saved project — and reach the other workspaces only when the copy is taken into use.")}</p>
           </InfoDot>
         </div>
-        <div className="kindrow featurekeys three" role="radiogroup" aria-label="Mesh tool">
+        <div className="kindrow featurekeys three" role="radiogroup" aria-label={tmarText("Mesh tool")}>
           {TOOLS.map((t) => (
             <button
               key={t.id}
@@ -259,18 +245,16 @@ export function MeshPanel({
               className={tool === t.id ? 'on' : undefined}
               data-test={`mesh-tool-${t.id}`}
               disabled={busy}
-              title={t.title}
+              title={tmarText(t.title)}
               onClick={() => setTool(tool === t.id ? null : t.id)}
             >
               {t.icon}
-              <span>{t.label}</span>
+              <span>{tmarText(t.label)}</span>
             </button>
           ))}
         </div>
         {tool === null && (
-          <p className="hint" data-test="mesh-no-tool">
-            Pick a tool. <b>Escape</b>, or its key again, puts the one in hand away.
-          </p>
+          <p className="hint" data-test="mesh-no-tool">{tmarText("Pick a tool. ")}<b>{tmarText("Escape")}</b>{tmarText(", or its key again, puts the one in hand away.")}</p>
         )}
       </div>
 
@@ -313,19 +297,16 @@ export function MeshPanel({
       {edits.length > 0 && (
         <div className="group" data-test="scan-edits">
           <div className="g-label">
-            <span>In use for analysis</span>
+            <span>{tmarText("In use for analysis")}</span>
             <span>{edits.length}</span>
           </div>
           {edits.map((e, i) => (
             <div key={i} className="kv" data-test="scan-edit">
-              <span className="name">{scanEditText(e, units)}</span>
+              <span className="name">{tmarText(scanEditText(e, units))}</span>
               <b>{scanEditFigure(e, units)}</b>
             </div>
           ))}
-          <p className="hint">
-            Edits taken into use: every workspace measures the scan as these left it. Ctrl+Z steps
-            back through them; a saved project keeps the scan as it now is.
-          </p>
+          <p className="hint">{tmarText("Edits taken into use: every workspace measures the scan as these left it. Ctrl+Z steps back through them; a saved project keeps the scan as it now is.")}</p>
         </div>
       )}
     </aside>

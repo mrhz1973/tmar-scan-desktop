@@ -16,6 +16,8 @@ import {
   type ScaleRefDraft,
 } from '../state/scaleModel'
 import { InfoDot } from './InfoDot'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** A row's choice as the select holds it. */
 const valueOf = (r: ScaleRefDraft): string =>
@@ -32,6 +34,8 @@ export function ScaleBox({
   refusal: string | null
   onApply: (factor: number, references: ScaleReference[]) => void
 }) {
+  useTmarLanguage()
+
   const draft = useStore((s) => s.scaleDraft)!
   const elements = useStore((s) => s.elements)
   const dimensions = useStore((s) => s.dimensions)
@@ -71,50 +75,29 @@ export function ScaleBox({
 
   return (
     <div className="draftbox" data-test="scale-box">
-      <div className="sec-head">
-        Scale part
-        <InfoDot title="Scale part">
-          <p>
-            Makes the scan its true size. A photogrammetry scan — from Meshroom, say — is right in shape
-            but has no size of its own: it comes out in whatever units the program chose.
-          </p>
-          <p>
-            Measure a length on the scan as usual — two planes and the distance between them, a bore’s
-            diameter, two balls’ centres — then pick it here and type how long it really is, from
-            calipers on the real part. Several lengths are averaged, the longer ones counting more,
-            and each says how far it is off the rest, so a bad one shows.
-          </p>
-          <p>
-            The best lengths are long and run between centres — hole to hole, ball to ball: a centre
-            stays put when the scanned surface sits a little proud or sunk, which photogrammetry
-            surfaces do. A fitted element averages thousands of points; two clicked points are
-            quick but each is one spot of noise.
-          </p>
-          <p>
-            The part is scaled about its zero point. Elements, dimensions and sections scale with
-            it; the fit to a reference part is made again. Scale before modelling on the scan.
-          </p>
+      <div className="sec-head">{tmarText("Scale part")}<InfoDot title={tmarText("Scale part")}>
+          <p>{tmarText("Makes the scan its true size. A photogrammetry scan — from Meshroom, say — is right in shape but has no size of its own: it comes out in whatever units the program chose.")}</p>
+          <p>{tmarText("Measure a length on the scan as usual — two planes and the distance between them, a bore’s diameter, two balls’ centres — then pick it here and type how long it really is, from calipers on the real part. Several lengths are averaged, the longer ones counting more, and each says how far it is off the rest, so a bad one shows.")}</p>
+          <p>{tmarText("The best lengths are long and run between centres — hole to hole, ball to ball: a centre stays put when the scanned surface sits a little proud or sunk, which photogrammetry surfaces do. A fitted element averages thousands of points; two clicked points are quick but each is one spot of noise.")}</p>
+          <p>{tmarText("The part is scaled about its zero point. Elements, dimensions and sections scale with it; the fit to a reference part is made again. Scale before modelling on the scan.")}</p>
         </InfoDot>
       </div>
       <label className="field">
-        <span>From</span>
+        <span>{tmarText("From")}</span>
         <select
           data-test="scale-mode"
           value={draft.mode}
           onChange={(e) => setDraft({ mode: e.target.value as 'reference' | 'factor', pickRow: null })}
         >
-          <option value="reference">Measured lengths</option>
-          <option value="factor">A factor</option>
+          <option value="reference">{tmarText("Measured lengths")}</option>
+          <option value="factor">{tmarText("A factor")}</option>
         </select>
       </label>
 
       {draft.mode === 'reference' ? (
         <>
           {dims.length === 0 && diameters.length === 0 && (
-            <p className="hint" data-test="scale-nothing">
-              No length is measured yet. Measure one — two planes and a distance, a cylinder’s diameter —
-              or click two points on the scan.
-            </p>
+            <p className="hint" data-test="scale-nothing">{tmarText("No length is measured yet. Measure one — two planes and a distance, a cylinder’s diameter — or click two points on the scan.")}</p>
           )}
           {draft.refs.map((ref, i) => {
             const m = measuredOf(ref, state)
@@ -123,11 +106,11 @@ export function ScaleBox({
             return (
               <div className="dro" key={i} data-test={`scale-ref-${i}`}>
                 <label className="field">
-                  <span>Length {draft.refs.length > 1 ? i + 1 : ''}</span>
+                  <span>{tmarText("Length ")}{draft.refs.length > 1 ? i + 1 : ''}</span>
                   <select data-test={`scale-ref-${i}-what`} value={valueOf(ref)} onChange={(e) => choose(i, e.target.value)}>
-                    <option value="">Select…</option>
+                    <option value="">{tmarText("Select…")}</option>
                     {dims.length > 0 && (
-                      <optgroup label="Dimensions">
+                      <optgroup label={tmarText("Dimensions")}>
                         {dims.map((d) => (
                           <option key={d.id} value={`d:${d.id}`}>
                             {d.name}
@@ -136,15 +119,14 @@ export function ScaleBox({
                       </optgroup>
                     )}
                     {diameters.length > 0 && (
-                      <optgroup label="Diameters">
+                      <optgroup label={tmarText("Diameters")}>
                         {diameters.map((e) => (
                           <option key={e.id} value={`e:${e.id}`}>
-                            {e.name} Ø
-                          </option>
+                            {e.name}{tmarText(" Ø")}</option>
                         ))}
                       </optgroup>
                     )}
-                    <option value="points">Two points on the scan</option>
+                    <option value="points">{tmarText("Two points on the scan")}</option>
                   </select>
                 </label>
                 {ref.kind === 'points' && (
@@ -154,12 +136,12 @@ export function ScaleBox({
                       className={picking ? 'on' : ''}
                       onClick={() => setDraft({ pickRow: picking ? null : i, refs: draft.refs.map((r, j) => (j === i && r.kind === 'points' && !picking ? { ...r, points: [] } : r)) })}
                     >
-                      {picking ? `Picking — ${ref.points.length} / 2 on the scan…` : ref.points.length === 2 ? 'Pick again' : 'Pick 2 points'}
+                      {picking ? tmarText("Picking — {0} / 2 on the scan…", [ref.points.length]) : ref.points.length === 2 ? tmarText("Pick again") : tmarText("Pick 2 points")}
                     </button>
                   </div>
                 )}
                 <label className="field">
-                  <span>True length ({len.word()})</span>
+                  <span>{tmarText("True length (")}{len.word()})</span>
                   <input
                     type="number"
                     step="any"
@@ -170,10 +152,9 @@ export function ScaleBox({
                   />
                 </label>
                 {Number.isFinite(m.measured) && (
-                  <div className="dro-note" data-test={`scale-ref-${i}-reading`}>
-                    On the scan {len.fmt(m.measured, 4)}
-                    {weighed && ` — asks for ${factorText(weighed.factor)}`}
-                    {weighed && read.combined!.references.length > 1 && `, ${pctText(weighed.off)} off the average`}
+                  <div className="dro-note" data-test={`scale-ref-${i}-reading`}>{tmarText("On the scan ")}{len.fmt(m.measured, 4)}
+                    {weighed && (tmarText(" — asks for {0}", [tmarText(factorText(weighed.factor))]))}
+                    {weighed && read.combined!.references.length > 1 && (tmarText(", {0} off the average", [tmarText(pctText(weighed.off))]))}
                   </div>
                 )}
                 {draft.refs.length > 1 && (
@@ -181,31 +162,24 @@ export function ScaleBox({
                     <button
                       data-test={`scale-ref-${i}-remove`}
                       onClick={() => setDraft({ refs: draft.refs.filter((_, j) => j !== i), pickRow: null })}
-                    >
-                      Remove
-                    </button>
+                    >{tmarText("Remove")}</button>
                   </div>
                 )}
               </div>
             )
           })}
           <div className="toolrow">
-            <button data-test="scale-add-ref" onClick={() => setDraft({ refs: [...draft.refs, freshScaleRef('dimension')] })}>
-              + Another length
-            </button>
+            <button data-test="scale-add-ref" onClick={() => setDraft({ refs: [...draft.refs, freshScaleRef('dimension')] })}>{tmarText("+ Another length")}</button>
           </div>
-          {read.problem && <p className="hint">{read.problem}</p>}
+          {read.problem && <p className="hint">{tmarText(read.problem)}</p>}
           {read.combined && read.combined.references.length > 1 && read.combined.spread > 0.01 && (
-            <p className="alarmtext" data-test="scale-spread">
-              The lengths disagree by up to {(read.combined.spread * 100).toFixed(1)} % — check the one furthest off:
-              a fit running onto a chamfer, a typo, or a length taken across a different feature.
-            </p>
+            <p className="alarmtext" data-test="scale-spread">{tmarText("The lengths disagree by up to ")}{(read.combined.spread * 100).toFixed(1)}{tmarText(" % — check the one furthest off: a fit running onto a chamfer, a typo, or a length taken across a different feature.")}</p>
           )}
         </>
       ) : (
         <>
           <label className="field">
-            <span>Factor</span>
+            <span>{tmarText("Factor")}</span>
             <input
               type="number"
               step="any"
@@ -218,8 +192,8 @@ export function ScaleBox({
           {off && off.guesses.length > 0 && (
             <div className="toolrow">
               {off.guesses.map((g) => (
-                <button key={g.factor} data-test={`scale-guess-${g.factor}`} title={`The file was in ${g.word}`} onClick={() => setDraft({ factor: g.factor })}>
-                  {factorText(g.factor)} ({g.word})
+                <button key={g.factor} data-test={`scale-guess-${g.factor}`} title={tmarText("The file was in {0}", [tmarText(g.word)])} onClick={() => setDraft({ factor: g.factor })}>
+                  {tmarText(factorText(g.factor))} ({tmarText(g.word)})
                 </button>
               ))}
             </div>
@@ -229,12 +203,11 @@ export function ScaleBox({
 
       {ready && (
         <p className="hint" data-test="scale-result">
-          {factorText(factor)} — the part {len.fmt(across, 3)} across now, {len.fmt(across * factor, 3)} after.
-        </p>
+          {tmarText(factorText(factor))}{tmarText(" — the part ")}{len.fmt(across, 3)}{tmarText(" across now, ")}{len.fmt(across * factor, 3)}{tmarText(" after.")}</p>
       )}
       {refusal && (
         <p className="alarmtext" data-test="scale-refusal">
-          {refusal}
+          {tmarText(refusal)}
         </p>
       )}
       <button
@@ -243,13 +216,9 @@ export function ScaleBox({
         data-confirm={1}
         disabled={!ready || busy || refusal !== null}
         onClick={() => onApply(factor, draft.mode === 'factor' ? [] : read.references)}
-      >
-        Scale part
-      </button>
+      >{tmarText("Scale part")}</button>
       <div className="toolrow">
-        <button data-test="cancel-scale" onClick={cancel}>
-          Cancel
-        </button>
+        <button data-test="cancel-scale" onClick={cancel}>{tmarText("Cancel")}</button>
       </div>
     </div>
   )

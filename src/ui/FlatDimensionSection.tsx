@@ -23,6 +23,8 @@ import { DimDraftHead } from './DimensionSection'
 import { sheetUnits } from '../core/flat/summary'
 import { useUnits } from '../app/useUnits'
 import { sheetFrame } from '../app/flatSheet'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function FlatDimensionSection({
   editorOpen,
@@ -30,6 +32,8 @@ export function FlatDimensionSection({
   /** True while any editor is open — element or dimension. */
   editorOpen: boolean
 }) {
+  useTmarLanguage()
+
   const elements = useFlat((s) => s.elements)
   const dimensions = useFlat((s) => s.dimensions)
   const dimDraft = useFlat((s) => s.dimDraft)
@@ -72,23 +76,12 @@ export function FlatDimensionSection({
 
   return (
     <div className="group">
-      <div className="sec-head">
-        Create dimensions
-        <InfoDot title="Dimensions">
+      <div className="sec-head">{tmarText("Create dimensions")}<InfoDot title={tmarText("Dimensions")}>
+          <p>{tmarText("Measurements between elements: point–point and point–line distances, the width between two near-parallel lines, the angle between two lines. Values follow the elements — re-fit or recalibrate and every dimension updates.")}</p>
+          <p>{tmarText("Distances and angles between elements never change under an alignment.")}</p>
+          <p>{tmarText("Fill a slot from its dropdown, or click the element on the sheet — a circle or an arc by its edge or by the cross at its center, which is the point it measures from.")}</p>
           <p>
-            Measurements between elements: point–point and point–line distances, the width between
-            two near-parallel lines, the angle between two lines. Values follow the elements — re-fit
-            or recalibrate and every dimension updates.
-          </p>
-          <p>Distances and angles between elements never change under an alignment.</p>
-          <p>
-            Fill a slot from its dropdown, or click the element on the sheet — a circle or an arc
-            by its edge or by the cross at its center, which is the point it measures from.
-          </p>
-          <p>
-            <b>Add dimension</b> leaves the box open for the next one of the same type, its
-            slots empty; <b>Cancel</b> or <b>Esc</b> closes it.
-          </p>
+            <b>{tmarText("Add dimension")}</b>{tmarText(" leaves the box open for the next one of the same type, its slots empty; ")}<b>{tmarText("Cancel")}</b>{tmarText(" or ")}<b>{tmarText("Esc")}</b>{tmarText(" closes it.")}</p>
         </InfoDot>
         {dimensions.length > 0 && <b>{dimensions.length}</b>}
       </div>
@@ -100,11 +93,9 @@ export function FlatDimensionSection({
             data-test="flat-new-dimension"
             disabled={measurable < 2 || draftBusy}
             onClick={startDimDraft}
-          >
-            New dimension
-          </button>
+          >{tmarText("New dimension")}</button>
           {measurable < 2 && (
-            <p className="hint">Create at least two elements first, then measure between them.</p>
+            <p className="hint">{tmarText("Create at least two elements first, then measure between them.")}</p>
           )}
         </>
       ) : (
@@ -112,33 +103,33 @@ export function FlatDimensionSection({
           <div className="draftbox dimbox">
             <DimDraftHead editId={dimDraft.editId} name={dimDraft.name} dimensions={dimensions} nameTestId="flat-dim-name" onName={setDimName} />
             <label className="field">
-              <span>Type</span>
+              <span>{tmarText("Type")}</span>
               <select
                 data-test="flat-dim-type"
                 value={dimDraft.type}
                 onChange={(e) => setDimType(e.target.value)}
               >
-                <optgroup label="Distance">
+                <optgroup label={tmarText("Distance")}>
                   {FLAT_DIMENSION_TYPES.filter((t) => t.group === 'distance').map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.label}
+                      {tmarText(t.label)}
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="Angle">
+                <optgroup label={tmarText("Angle")}>
                   {FLAT_DIMENSION_TYPES.filter((t) => t.group === 'angle').map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.label}
+                      {tmarText(t.label)}
                     </option>
                   ))}
                 </optgroup>
               </select>
             </label>
-            <p className="hint">{dimInfo.hint}</p>
+            <p className="hint">{tmarText(dimInfo.hint)}</p>
             {dimInfo.slots.map((slot, i) => (
               <RefSelect
                 key={slot.label + i}
-                label={slot.label}
+                label={tmarText(slot.label)}
                 options={elements.filter(
                   (el) =>
                     el.fit &&
@@ -154,11 +145,11 @@ export function FlatDimensionSection({
             {dimPreview && (
               <div className="dro">
                 <div className="dro-label">
-                  <span>{dimPreview.label}</span>
+                  <span>{tmarText(dimPreview.label)}</span>
                 </div>
                 <ValueWindow value={dimPreview} testId="flat-dim-preview" />
                 {(dimPreview.warning ?? dimPreview.invalid) && (
-                  <WarningNote text={(dimPreview.warning ?? dimPreview.invalid)!} />
+                  <WarningNote text={tmarText((dimPreview.warning ?? dimPreview.invalid)!)} />
                 )}
               </div>
             )}
@@ -169,12 +160,10 @@ export function FlatDimensionSection({
               disabled={!dimPreview || Boolean(dimPreview.invalid)}
               onClick={commitDim}
             >
-              {dimDraft.editId !== undefined ? 'Save changes' : 'Add dimension'}
+              {dimDraft.editId !== undefined ? tmarText("Save changes") : tmarText("Add dimension")}
             </button>
             <div className="toolrow">
-              <button data-test="flat-dim-cancel" onClick={cancelDimDraft}>
-                Cancel
-              </button>
+              <button data-test="flat-dim-cancel" onClick={cancelDimDraft}>{tmarText("Cancel")}</button>
             </div>
           </div>
         )
@@ -182,10 +171,10 @@ export function FlatDimensionSection({
 
       {dimensions.length > 0 && (
         <div className="g-label">
-          <span>Dimensions</span>
+          <span>{tmarText("Dimensions")}</span>
           <ShowAllButton
             anyVisible={dimensions.some((d) => d.visible)}
-            what="dimensions"
+            what={tmarText("dimensions")}
             testId="flat-dimensions-show-all"
             onSet={setAllDimensionsVisible}
           />
@@ -196,7 +185,7 @@ export function FlatDimensionSection({
           key={dim.id}
           name={dim.name}
           visible={dim.visible}
-          title={title}
+          title={tmarText(title)}
           value={value}
           editorOpen={editorOpen}
           onEdit={() => editDimension(dim.id)}

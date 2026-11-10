@@ -13,6 +13,8 @@ import { schemeById } from '../viewer/navSchemes'
 import { sceneTheme } from '../viewer/viewThemes'
 import { usePrefs } from '../state/prefsStore'
 import { useStore } from '../state/store'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** How much of the image the loupe shows (source pixels across its face) and
  *  how big its face is on screen. 30 px over 120 px is a fixed 4× — honest
@@ -100,6 +102,8 @@ export function FlatViewer({
     active: boolean
   }
 }) {
+  useTmarLanguage()
+
   const containerRef = useRef<HTMLDivElement>(null)
   const loupeRef = useRef<HTMLCanvasElement>(null)
   const pickRef = useRef(onPick)
@@ -258,13 +262,9 @@ export function FlatViewer({
       />
       {webglError !== null && (
         <div className="webgl-missing" role="alert">
-          <b>The 2D view could not be started.</b>
-          <p>
-            This tool draws everything with WebGL, and your browser refused to create a WebGL
-            context. Usually that means hardware acceleration is switched off or the graphics
-            driver is blocklisted.
-          </p>
-          <p className="webgl-missing-detail">{webglError}</p>
+          <b>{tmarText("The 2D view could not be started.")}</b>
+          <p>{tmarText("This tool draws everything with WebGL, and your browser refused to create a WebGL context. Usually that means hardware acceleration is switched off or the graphics driver is blocklisted.")}</p>
+          <p className="webgl-missing-detail">{tmarText(webglError)}</p>
         </div>
       )}
     </div>

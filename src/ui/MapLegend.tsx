@@ -12,6 +12,8 @@ import { colormapById, cssRgb, legendGradient, scaleCaps, type FieldScale } from
 import type { FieldHistogram } from '../core/field/stats'
 import { usePrefs } from '../state/prefsStore'
 import { useLength } from '../app/useUnits'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 const TICKS = 9
 
@@ -88,6 +90,8 @@ export function MapLegend({
    *  the user does not set. */
   onLimit?: (end: 'high' | 'low', value: number) => void
 }) {
+  useTmarLanguage()
+
   // Drawn in the same ramp as the map it stands beside — the one chosen in
   // the settings.
   const map = colormapById(usePrefs((s) => s.colormap))
@@ -106,10 +110,10 @@ export function MapLegend({
 
   return (
     <div className="devlegend" data-test={`${id}-legend`}>
-      <div className="devlegend-unit">{head}</div>
+      <div className="devlegend-unit">{tmarText(head)}</div>
       {ends && (
         <div className="devlegend-end high" data-test={`${id}-end-high`}>
-          <b>+</b> {ends.high}
+          <b>+</b> {tmarText(ends.high)}
         </div>
       )}
       <div className="devlegend-body">
@@ -118,7 +122,7 @@ export function MapLegend({
           <div
             className="devramp-cap"
             style={{ background: cssRgb(caps.high) }}
-            title="Beyond the top of the scale"
+            title={tmarText("Beyond the top of the scale")}
           />
           <div
             className="devramp-bar"
@@ -127,13 +131,13 @@ export function MapLegend({
           <div
             className="devramp-cap"
             style={{ background: cssRgb(caps.low) }}
-            title="Beyond the bottom of the scale"
+            title={tmarText("Beyond the bottom of the scale")}
           />
           {shown.map((m) => {
             const a = share(m.value)
             const b = m.to !== undefined ? Math.min(1, Math.max(0, share(m.to))) : a
             return (
-              <div key={`${m.value}:${m.label}`} title={m.title}>
+              <div key={`${m.value}:${m.label}`} title={tmarText(m.title)}>
                 {b !== a && (
                   <div className="devramp-band" style={{ bottom: `${Math.min(a, b) * 100}%`, height: `${Math.abs(b - a) * 100}%` }} />
                 )}
@@ -171,15 +175,15 @@ export function MapLegend({
             )
           })}
           {shown.map((m) => (
-            <span key={`${m.value}:${m.label}`} className="mark" title={m.title} style={{ bottom: `${share(m.value) * 100}%` }}>
-              {m.label}
+            <span key={`${m.value}:${m.label}`} className="mark" title={tmarText(m.title)} style={{ bottom: `${share(m.value) * 100}%` }}>
+              {tmarText(m.label)}
             </span>
           ))}
         </div>
       </div>
       {ends && (
         <div className="devlegend-end low" data-test={`${id}-end-low`}>
-          <b>−</b> {ends.low}
+          <b>−</b> {tmarText(ends.low)}
         </div>
       )}
 
@@ -187,7 +191,7 @@ export function MapLegend({
         <div className="devstats" data-test={`${id}-stats`}>
           {stats.map((s) => (
             <div key={s.label} className={s.wide ? 'wide' : undefined}>
-              <span>{s.label}</span>
+              <span>{tmarText(s.label)}</span>
               <b>{s.value}</b>
             </div>
           ))}
@@ -211,6 +215,8 @@ function Histogram({
   histogram: FieldHistogram
   format: (v: number) => string
 }) {
+  useTmarLanguage()
+
   const [hover, setHover] = useState<number | null>(null)
   const { bins, low, high, peak } = histogram
   const n = bins.length
@@ -247,7 +253,7 @@ function Histogram({
         >
           <b>{range(hover)}</b>
           <span>
-            {bins[hover].toLocaleString('en-US')} pts · {total ? ((bins[hover] / total) * 100).toFixed(1) : '0.0'} %
+            {bins[hover].toLocaleString('en-US')}{tmarText(" pts · ")}{total ? ((bins[hover] / total) * 100).toFixed(1) : '0.0'} %
           </span>
         </div>
       )}
@@ -281,6 +287,8 @@ function LimitTick({
   fromTyped?: (v: number) => number
   onCommit: (magnitude: number) => void
 }) {
+  useTmarLanguage()
+
   const [editing, setEditing] = useState(false)
   const ref = useRef<HTMLInputElement>(null)
   // Closing the box takes the focus with it, and the blur that follows must
@@ -326,7 +334,7 @@ function LimitTick({
       className="devtick-edit"
       data-test={`${id}-limit-${end}`}
       style={{ bottom: `${fraction * 100}%` }}
-      title="Click to set the range of the scale"
+      title={tmarText("Click to set the range of the scale")}
       onClick={() => setEditing(true)}
     >
       {format(value)}

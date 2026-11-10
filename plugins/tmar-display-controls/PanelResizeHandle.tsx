@@ -2,8 +2,12 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 import { effectivePanelWidth, panelLimits, PANEL_DEFAULT, PANEL_MIN, PANEL_MAX, usePanelWidth } from './panelWidth'
 import './panelResize.css'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 export function PanelResizeHandle() {
+  useTmarLanguage()
+
   const ref = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; width: number; original: number } | null>(null)
   const [available, setAvailable] = useState(1200)
@@ -29,9 +33,9 @@ export function PanelResizeHandle() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
   return <div ref={ref} className="tmar-panel-resizer" data-test="panel-resize" role="separator"
-    aria-label="Resize left panel" aria-orientation="vertical" aria-valuemin={limits.min} aria-valuemax={limits.max}
+    aria-label={tmarText("Resize left panel")} aria-orientation="vertical" aria-valuemin={limits.min} aria-valuemax={limits.max}
     aria-valuenow={actual} aria-valuetext={`${actual} pixels`} tabIndex={0}
-    title="Drag to resize the left panel. Arrow keys adjust width; double-click resets."
+    title={tmarText("Drag to resize the left panel. Arrow keys adjust width; double-click resets.")}
     onPointerDown={(event) => {
       if (event.button !== 0) return
       event.preventDefault(); event.stopPropagation(); event.currentTarget.focus()
@@ -65,13 +69,14 @@ export function PanelResizeHandle() {
 }
 
 export function PanelWidthSettings() {
+  useTmarLanguage()
+
   const width = usePanelWidth((s) => s.width)
-  return <section data-test="panel-layout-settings"><h3>Panel layout</h3>
-    <label className="setting">Left panel width
-      <input data-test="panel-width-setting" type="range" min={PANEL_MIN} max={PANEL_MAX} step={1} value={width}
-        onChange={(e) => usePanelWidth.getState().setWidth(Number(e.target.value))}/><output>{width} px</output>
+  return <section data-test="panel-layout-settings"><h3>{tmarText("Panel layout")}</h3>
+    <label className="setting">{tmarText("Left panel width")}<input data-test="panel-width-setting" type="range" min={PANEL_MIN} max={PANEL_MAX} step={1} value={width}
+        onChange={(e) => usePanelWidth.getState().setWidth(Number(e.target.value))}/><output>{width}{tmarText(" px")}</output>
     </label>
-    <p className="hint">Drag the vertical divider beside the panel. Width is remembered in this browser and limited to leave room for the model. Phone layouts keep their stacked panels.</p>
-    <button onClick={() => usePanelWidth.getState().setWidth(PANEL_DEFAULT)}>Reset panel width</button>
+    <p className="hint">{tmarText("Drag the vertical divider beside the panel. Width is remembered in this browser and limited to leave room for the model. Phone layouts keep their stacked panels.")}</p>
+    <button onClick={() => usePanelWidth.getState().setWidth(PANEL_DEFAULT)}>{tmarText("Reset panel width")}</button>
   </section>
 }

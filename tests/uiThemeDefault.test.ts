@@ -82,7 +82,7 @@ describe('TMAR Dark default', () => {
     expect(e.values.get('scanruler.uitheme')).toBe('dark')
   })
   it('declares a dark shell even before JavaScript', () => {
-    expect(html).toContain('<html lang="en" data-theme="dark">')
+    expect(html).toContain('<html lang="it" data-theme="dark">')
     expect(html).toContain('html { background: #1b1d20; }')
   })
 })

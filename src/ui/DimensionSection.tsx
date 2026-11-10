@@ -25,6 +25,8 @@ import { NameField, providersFor, RefSelect } from './RefSelect'
 import { DimensionRow, VerdictNote, WarningNote } from './DimensionRow'
 import { LimitFields } from './LimitFields'
 import { ShowAllButton } from './ShowAllButton'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** The head of a dimension's draft box: what the box is making or
  *  editing, and while it edits one, the name to change. */
@@ -41,10 +43,12 @@ export function DimDraftHead({
   nameTestId: string
   onName: (name: string) => void
 }) {
+  useTmarLanguage()
+
   return (
     <>
       <div className="sec-head">
-        {editId !== undefined ? `Edit ${dimensions.find((d) => d.id === editId)?.name ?? 'dimension'}` : 'New dimension'}
+        {editId !== undefined ? tmarText("Edit {0}", [dimensions.find((d) => d.id === editId)?.name ?? (tmarText("dimension"))]) : tmarText("New dimension")}
       </div>
       {editId !== undefined && <NameField value={name ?? ''} testId={nameTestId} onChange={onName} />}
     </>
@@ -60,6 +64,8 @@ export function DimensionSection({
   /** Fill dimension slot n by picking a new point on the scan. */
   onPickPoint: (slot: number) => void
 }) {
+  useTmarLanguage()
+
   const fileName = useStore((s) => s.fileName)
   const elements = useStore((s) => s.elements)
   const sections = useStore((s) => s.sections)
@@ -130,29 +136,13 @@ export function DimensionSection({
 
   return (
     <div className="group">
-      <div className="sec-head">
-        Create dimensions
-        <InfoDot title="Dimensions">
+      <div className="sec-head">{tmarText("Create dimensions")}<InfoDot title={tmarText("Dimensions")}>
+          <p>{tmarText("What you actually read off the part: distances, diameters and angles measured between the elements you have created.")}</p>
+          <p>{tmarText("Fill a slot from the dropdown, or click the element straight in the viewport — the dimension type switches to match what you pick, so a click on two circles becomes a centre distance without you choosing it.")}</p>
+          <p>{tmarText("Between two spheres you can also measure the surface gap or the outer span instead of centre to centre — a ball-bar length is centre to centre.")}</p>
           <p>
-            What you actually read off the part: distances, diameters and angles measured between
-            the elements you have created.
-          </p>
-          <p>
-            Fill a slot from the dropdown, or click the element straight in the viewport — the
-            dimension type switches to match what you pick, so a click on two circles becomes a
-            centre distance without you choosing it.
-          </p>
-          <p>
-            Between two spheres you can also measure the surface gap or the outer span instead of
-            centre to centre — a ball-bar length is centre to centre.
-          </p>
-          <p>
-            <b>Add dimension</b> leaves the box open for the next one of the same type, its
-            slots empty; <b>Cancel</b> or <b>Esc</b> closes it.
-          </p>
-          <p>
-            One box is open at a time: while an element kind is in hand, put it down first with
-            <b> Cancel</b> or <b>Esc</b>.
+            <b>{tmarText("Add dimension")}</b>{tmarText(" leaves the box open for the next one of the same type, its slots empty; ")}<b>{tmarText("Cancel")}</b>{tmarText(" or ")}<b>{tmarText("Esc")}</b>{tmarText(" closes it.")}</p>
+          <p>{tmarText("One box is open at a time: while an element kind is in hand, put it down first with")}<b>{tmarText(" Cancel")}</b>{tmarText(" or ")}<b>{tmarText("Esc")}</b>.
           </p>
         </InfoDot>
         {own.length > 0 && <b>{own.length}</b>}
@@ -167,11 +157,9 @@ export function DimensionSection({
             // is no work to keep: a dimension starts over it.
             disabled={refs.every((e) => !e.fit) || dimHolds(dimDraft) || draftOpen}
             onClick={() => startDimension('dist-point-point')}
-          >
-            New dimension
-          </button>
+          >{tmarText("New dimension")}</button>
           {refs.every((e) => !e.fit) && fileName && (
-            <p className="hint">Create at least one element first, then measure between them.</p>
+            <p className="hint">{tmarText("Create at least one element first, then measure between them.")}</p>
           )}
         </>
       ) : (
@@ -180,40 +168,40 @@ export function DimensionSection({
           <div className="draftbox dimbox">
             <DimDraftHead editId={dimDraft.editId} name={dimDraft.name} dimensions={dimensions} nameTestId="dim-name" onName={(name) => setDimensionName(name)} />
             <label className="field">
-              <span>Type</span>
+              <span>{tmarText("Type")}</span>
               <select
                 data-test="dim-type"
                 value={dimDraft.type}
                 onChange={(e) => setDimensionType(e.target.value)}
               >
-                <optgroup label="Distance">
+                <optgroup label={tmarText("Distance")}>
                   {DIMENSION_TYPES.filter((t) => t.group === 'distance').map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.label}
+                      {tmarText(t.label)}
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="Angle">
+                <optgroup label={tmarText("Angle")}>
                   {DIMENSION_TYPES.filter((t) => t.group === 'angle').map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.label}
+                      {tmarText(t.label)}
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="Size">
+                <optgroup label={tmarText("Size")}>
                   {DIMENSION_TYPES.filter((t) => t.group === 'size').map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.label}
+                      {tmarText(t.label)}
                     </option>
                   ))}
                 </optgroup>
               </select>
             </label>
-            <p className="hint">{dimInfo.hint}</p>
+            <p className="hint">{tmarText(dimInfo.hint)}</p>
             {dimInfo.slots.map((slot, i) => (
               <RefSelect
                 key={i}
-                label={slot.label}
+                label={tmarText(slot.label)}
                 options={providersFor(slot.roles, refs, undefined, slot.kinds)}
                 value={dimDraft.refs[i]}
                 testId={`dim-ref-${i}`}
@@ -226,15 +214,15 @@ export function DimensionSection({
             ))}
             {dimRefsAreSpheres && (
               <label className="field">
-                <span>Measure</span>
+                <span>{tmarText("Measure")}</span>
                 <select
                   data-test="dim-anchor"
                   value={dimDraft.anchor}
                   onChange={(e) => setDimensionAnchor(e.target.value as SphereAnchor)}
                 >
-                  <option value="center">Center to center</option>
-                  <option value="gap">Surface gap (− radii)</option>
-                  <option value="span">Outer span (+ radii)</option>
+                  <option value="center">{tmarText("Center to center")}</option>
+                  <option value="gap">{tmarText("Surface gap (− radii)")}</option>
+                  <option value="span">{tmarText("Outer span (+ radii)")}</option>
                 </select>
               </label>
             )}
@@ -248,7 +236,7 @@ export function DimensionSection({
             {dimPreview && (
               <div className="dro">
                 <div className="dro-label">
-                  <span>{dimPreview.label}</span>
+                  <span>{tmarText(dimPreview.label)}</span>
                 </div>
                 <ValueWindow
                   value={dimPreview}
@@ -257,10 +245,10 @@ export function DimensionSection({
                 />
                 {previewVerdict && <VerdictNote verdict={previewVerdict} />}
                 {dimPreview.detail && !dimPreview.invalid && (
-                  <div className="dro-note">{dimPreview.detail}</div>
+                  <div className="dro-note">{tmarText(dimPreview.detail)}</div>
                 )}
                 {(dimPreview.warning ?? dimPreview.invalid) && (
-                  <WarningNote text={(dimPreview.warning ?? dimPreview.invalid)!} />
+                  <WarningNote text={tmarText((dimPreview.warning ?? dimPreview.invalid)!)} />
                 )}
               </div>
             )}
@@ -271,12 +259,10 @@ export function DimensionSection({
               disabled={!dimPreview || Boolean(dimPreview.invalid)}
               onClick={commitDimension}
             >
-              {dimDraft.editId !== undefined ? 'Save changes' : 'Add dimension'}
+              {dimDraft.editId !== undefined ? tmarText("Save changes") : tmarText("Add dimension")}
             </button>
             <div className="toolrow">
-              <button data-test="cancel-dimension" onClick={cancelDimension}>
-                Cancel
-              </button>
+              <button data-test="cancel-dimension" onClick={cancelDimension}>{tmarText("Cancel")}</button>
             </div>
           </div>
         )
@@ -284,10 +270,10 @@ export function DimensionSection({
 
       {own.length > 0 && (
         <div className="g-label">
-          <span>Dimensions</span>
+          <span>{tmarText("Dimensions")}</span>
           <ShowAllButton
             anyVisible={own.some((d) => d.visible !== false)}
-            what="dimensions"
+            what={tmarText("dimensions")}
             testId="dimensions-show-all"
             onSet={(visible) => setAllDimensionsVisible(visible, 'dimension')}
           />
@@ -298,7 +284,7 @@ export function DimensionSection({
           key={dim.id}
           name={dim.name}
           visible={dim.visible !== false}
-          title={title}
+          title={tmarText(title)}
           value={value}
           verdict={verdict}
           editorOpen={editorOpen || draftOpen}

@@ -1,0 +1,24 @@
+{
+  "status": "deployed",
+  "time_utc": "2026-11-10T21:15:01.249379+00:00",
+  "backup": "/opt/tmar-scanruler-launcher/backups/repair-20261110T211501Z",
+  "files": {
+    "index.html": {
+      "bytes": 6127,
+      "sha256": "ae1357c0f4a60a834cae108794cb529dae6587a8213e6ccea61fa43db0f5f382"
+    },
+    "launcher-version.js": {
+      "bytes": 2961,
+      "sha256": "74e576bfd4809d4b26696d375e55cbfc79ff7981ddbf93059f6b1a9d0c019dae"
+    }
+  },
+  "caddy_config_sha256": "517e4299ae546b52f2074201c9958e59094044b3b1ca1eba49935a904e0a2331",
+  "only_two_metadata_routes_added": true,
+  "other_hosts_unchanged": true,
+  "launcher_process_unchanged": true,
+  "release_pointers_unchanged": {
+    "stable": "/opt/tmar-scanruler-preview/releases/d87c7bbc016ccd23a31d73608fc5b508d4007d67",
+    "dev": "/opt/tmar-scanruler-dev/releases/d87c7bbc016ccd23a31d73608fc5b508d4007d67"
+  },
+  "host_caddyfile_unchanged": true
+}

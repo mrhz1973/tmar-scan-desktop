@@ -7,8 +7,12 @@
 
 import { usePrefs } from '../state/prefsStore'
 import { useDismiss } from './useDismiss'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function AgentDataWarning() {
+  useTmarLanguage()
+
   const asking = usePrefs((s) => s.agentDataAsking)
   const answer = usePrefs((s) => s.answerAgentData)
   useDismiss(asking, () => answer(false))
@@ -25,33 +29,15 @@ export function AgentDataWarning() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modalhead">
-          <h2 id="agent-data-title">Your data will no longer stay on this computer</h2>
-          <button className="x" onClick={() => answer(false)} aria-label="Cancel">
-            ×
-          </button>
+          <h2 id="agent-data-title">{tmarText("Your data will no longer stay on this computer")}</h2>
+          <button className="x" onClick={() => answer(false)} aria-label={tmarText("Cancel")}>{tmarText("×")}</button>
         </div>
-        <p>
-          Without an agent, everything stays in this browser. With one connected, what the agent
-          reads — measurements, reports, pictures of the part, file names, notes, and any file it
-          opens itself — is processed by the agent and the AI model behind it. <b>Unless that model
-          runs on this computer, all of this goes to the model’s provider</b>, under that provider’s
-          terms.
-        </p>
-        <p>
-          ScanRuler itself sends nothing anywhere: the connection only reaches the agent’s helper on
-          this computer. Don’t connect an agent while you work on parts you may not share with its
-          provider.
-        </p>
-        <p className="dim">
-          Asked once in this browser. Settings → Agents switches the connection off at any time.
-        </p>
+        <p>{tmarText("Without an agent, everything stays in this browser. With one connected, what the agent reads — measurements, reports, pictures of the part, file names, notes, and any file it opens itself — is processed by the agent and the AI model behind it. ")}<b>{tmarText("Unless that model runs on this computer, all of this goes to the model’s provider")}</b>{tmarText(", under that provider’s terms.")}</p>
+        <p>{tmarText("ScanRuler itself sends nothing anywhere: the connection only reaches the agent’s helper on this computer. Don’t connect an agent while you work on parts you may not share with its provider.")}</p>
+        <p className="dim">{tmarText("Asked once in this browser. Settings → Agents switches the connection off at any time.")}</p>
         <div className="modalfoot">
-          <button data-test="agent-data-decline" onClick={() => answer(false)}>
-            Cancel
-          </button>
-          <button className="primary" data-test="agent-data-accept" onClick={() => answer(true)}>
-            Connect the agent
-          </button>
+          <button data-test="agent-data-decline" onClick={() => answer(false)}>{tmarText("Cancel")}</button>
+          <button className="primary" data-test="agent-data-accept" onClick={() => answer(true)}>{tmarText("Connect the agent")}</button>
         </div>
       </div>
     </div>

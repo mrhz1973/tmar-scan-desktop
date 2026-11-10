@@ -10,6 +10,8 @@ import type { ThickenSide } from '../../core/offset'
 import { shellModeOf, useMeshTools } from '../../state/meshStore'
 import { count, typedLen } from '../meshFormat'
 import { SurveyWait } from '../SurveyWait'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../../../src/i18n'
+
 
 const SIDES: { id: ThickenSide; label: string; title: string }[] = [
   { id: 'in', label: 'Inward', title: 'The wall grows behind the surface — the scanned surface stays the outside' },
@@ -18,6 +20,8 @@ const SIDES: { id: ThickenSide; label: string; title: string }[] = [
 ]
 
 export function ShellTool({ ready, busy, onShell }: { ready: boolean; busy: boolean; onShell: (mode: 'hollow' | 'thicken') => void }) {
+  useTmarLanguage()
+
   // Only what the panel reads: the whole store would render it again on
   // every write to it, the cut preview's while its offset is dragged.
   const m = useMeshTools(
@@ -36,40 +40,22 @@ export function ShellTool({ ready, busy, onShell }: { ready: boolean; busy: bool
   const len = useLength()
   const t = typedLen(m.shellThickness, len.units)
   const twice = typedLen(2 * m.shellThickness, len.units)
-  const way = m.shellSide === 'out' ? 'outward' : m.shellSide === 'both' ? 'to both sides' : 'inward'
-  const n = (k: number, one: string, many: string) => `${count(k)} ${k === 1 ? one : many}`
+  const way = tmarText(m.shellSide === 'out' ? 'outward' : m.shellSide === 'both' ? 'to both sides' : 'inward')
+  const n = (k: number, one: string, many: string) => `${count(k)} ${tmarText(k === 1 ? one : many)}`
 
   return (
     <div className="group" data-test="shell-tool">
-      <div className="sec-head">
-        Shell / hollow
-        <InfoDot title="Hollowing a part, or thickening a surface">
-          <p>
-            A <b>closed</b> part is hollowed: its outside stays as scanned, and an inner wall the
-            thickness in from it all round seals a cavity — what a resin print is hollowed with.
-            The inner wall is built from the part's distance field, not by moving the scan in:
-            where the part is thinner than twice the wall it simply stays solid, and the wall never
-            comes nearer the outside than the thickness. It is smoother and lighter than the scan,
-            needing none of its detail. The cavity is sealed; open it with <b>Boolean</b> or{' '}
-            <b>Cut</b> if it should drain.
-          </p>
-          <p>
-            An <b>open</b> surface — one side of a part, a sheet — is thickened into a solid: a
-            second skin the thickness from it, <b>inward</b> (the scanned surface stays the
-            outside), <b>outward</b> or half to <b>both sides</b>, and a wall round every rim
-            joining the two.
-          </p>
-          <p>
-            A part closed but for a few small holes — no larger than Fill holes would fill — is
-            asked to have them filled first, so it can be hollowed; thickened as it is, it would
-            come out with a wall round every hole. <b>Cut</b> shows the inside without cutting.{' '}
-            <b>Ctrl+Z</b> puts the part back.
-          </p>
+      <div className="sec-head">{tmarText("Shell / hollow")}<InfoDot title={tmarText("Hollowing a part, or thickening a surface")}>
+          <p><b>{tmarText("A closed part")}</b>{tmarText(" is hollowed: its outside stays as scanned, and an inner wall the thickness in from it all round seals a cavity — what a resin print is hollowed with. The inner wall is built from the part's distance field, not by moving the scan in: where the part is thinner than twice the wall it simply stays solid, and the wall never comes nearer the outside than the thickness. It is smoother and lighter than the scan, needing none of its detail. The cavity is sealed; open it with ")}<b>{tmarText("Boolean")}</b>{tmarText(" or")}{' '}
+            <b>{tmarText("Cut")}</b>{tmarText(" if it should drain.")}</p>
+          <p><b>{tmarText("An open surface")}</b>{tmarText(" — one side of a part, a sheet — is thickened into a solid: a second skin the thickness from it, ")}<b>{tmarText("inward")}</b>{tmarText(" (the scanned surface stays the outside), ")}<b>{tmarText("outward")}</b>{tmarText(" or half to ")}<b>{tmarText("both sides")}</b>{tmarText(", and a wall round every rim joining the two.")}</p>
+          <p>{tmarText("A part closed but for a few small holes — no larger than Fill holes would fill — is asked to have them filled first, so it can be hollowed; thickened as it is, it would come out with a wall round every hole. ")}<b>{tmarText("Cut")}</b>{tmarText(" shows the inside without cutting.")}{' '}
+            <b>{tmarText("Ctrl+Z")}</b>{tmarText(" puts the part back.")}</p>
         </InfoDot>
       </div>
 
       <NumberField
-        label={mode === 'hollow' ? 'Wall' : 'Thickness'}
+        label={mode === 'hollow' ? tmarText("Wall") : tmarText("Thickness")}
         testId="shell-thickness"
         value={m.shellThickness}
         step={0.5}
@@ -77,11 +63,11 @@ export function ShellTool({ ready, busy, onShell }: { ready: boolean; busy: bool
         kind="length"
         disabled={busy}
         onCommit={m.setShellThickness}
-        hint={`The wall left round the cavity of a hollowed part, or the thickness an open surface is given. It starts at a hundred-and-twenty-fifth of the part's size — ${len.fmt(2, 0)} for a part a hand's width across.`}
+        hint={tmarText("The wall left round the cavity of a hollowed part, or the thickness an open surface is given. It starts at a hundred-and-twenty-fifth of the part's size — {0} for a part a hand's width across.", [len.fmt(2, 0)])}
       />
 
       {mode !== null && mode !== 'hollow' && (
-        <div className="moderow shell-sides" role="radiogroup" aria-label="Which way to thicken">
+        <div className="moderow shell-sides" role="radiogroup" aria-label={tmarText("Which way to thicken")}>
           {SIDES.map((x) => (
             <button
               key={x.id}
@@ -91,9 +77,9 @@ export function ShellTool({ ready, busy, onShell }: { ready: boolean; busy: bool
               data-test={`shell-side-${x.id}`}
               disabled={busy}
               onClick={() => m.setShellSide(x.id)}
-              title={x.title}
+              title={tmarText(x.title)}
             >
-              {x.label}
+              {tmarText(x.label)}
             </button>
           ))}
         </div>
@@ -101,34 +87,20 @@ export function ShellTool({ ready, busy, onShell }: { ready: boolean; busy: bool
 
       {ready && survey === null && <SurveyWait looking="Looking at the mesh…" />}
       {survey && mode === 'hollow' && (
-        <p className="hint" data-test="shell-closed">
-          The mesh is closed, so it is hollowed: the outside stays as it is, and an inner wall {t}
-          in from it seals a cavity. Where the part is thinner than {twice} it stays solid.
-          {survey.bad > 0 ? ` ${n(survey.bad, 'edge is', 'edges are')} shared by more than two triangles — the inside is read by which way the surface faces, and may be off there.` : ''}
+        <p className="hint" data-test="shell-closed">{tmarText("The mesh is closed, so it is hollowed: the outside stays as it is, and an inner wall ")}{t}{tmarText("in from it seals a cavity. Where the part is thinner than ")}{twice}{tmarText(" it stays solid.")}{survey.bad > 0 ? tmarText(" {0} shared by more than two triangles — the inside is read by which way the surface faces, and may be off there.", [n(survey.bad, 'edge is', 'edges are')]) : ''}
         </p>
       )}
       {survey && mode === 'thicken' && (
-        <p className="hint" data-test="shell-open">
-          The mesh is an open surface — {n(survey.rims, 'open rim', 'open rims')} — so it is thickened
-          into a solid: a second skin {t} {way}, and a wall round every rim.
-        </p>
+        <p className="hint" data-test="shell-open">{tmarText("The mesh is an open surface — ")}{n(survey.rims, 'open rim', 'open rims')}{tmarText(" — so it is thickened into a solid: a second skin ")}{t} {way}{tmarText(", and a wall round every rim.")}</p>
       )}
       {survey && mode === 'holes' && (
-        <p className="warnnote" data-test="shell-holes">
-          ⚠ The mesh is closed but for {n(survey.holes, 'hole', 'holes')} under {typedLen(survey.holeSize, len.units)}.
-          Hollowing needs it closed: fill {survey.holes === 1 ? 'it' : 'them'} first — or thicken it as
-          it is, with a wall round every hole.
-        </p>
+        <p className="warnnote" data-test="shell-holes">{tmarText("⚠ The mesh is closed but for ")}{n(survey.holes, 'hole', 'holes')}{tmarText(" under ")}{typedLen(survey.holeSize, len.units)}{tmarText(". Hollowing needs it closed: fill ")}{survey.holes === 1 ? tmarText("it") : tmarText("them")}{tmarText(" first — or thicken it as it is, with a wall round every hole.")}</p>
       )}
 
       {mode === 'holes' ? (
         <div className="toolrow">
-          <button data-test="shell-thicken-anyway" disabled={!ready || busy} onClick={() => onShell('thicken')} title="Thicken the surface as it is, a wall round every hole">
-            Thicken as it is
-          </button>
-          <button className="primary" data-test="shell-fill-first" data-confirm={1} disabled={busy} onClick={() => m.setTool('holes')} title="Go to Fill holes, to close the holes and hollow the part after">
-            Fill holes first
-          </button>
+          <button data-test="shell-thicken-anyway" disabled={!ready || busy} onClick={() => onShell('thicken')} title={tmarText("Thicken the surface as it is, a wall round every hole")}>{tmarText("Thicken as it is")}</button>
+          <button className="primary" data-test="shell-fill-first" data-confirm={1} disabled={busy} onClick={() => m.setTool('holes')} title={tmarText("Go to Fill holes, to close the holes and hollow the part after")}>{tmarText("Fill holes first")}</button>
         </div>
       ) : (
         <button
@@ -141,14 +113,14 @@ export function ShellTool({ ready, busy, onShell }: { ready: boolean; busy: bool
           {m.editing ? (
             <>
               <span className="spinner" />
-              {mode === 'hollow' ? 'Hollowing…' : 'Thickening…'}
+              {mode === 'hollow' ? tmarText("Hollowing…") : tmarText("Thickening…")}
             </>
           ) : mode === 'hollow' ? (
-            `Hollow with a ${t} wall`
+            tmarText('Hollow with a {0} wall', [t])
           ) : mode === 'thicken' ? (
-            `Thicken ${t} ${way}`
+            tmarText('Thicken {0} {1}', [t, way])
           ) : (
-            'Shell'
+            tmarText('Shell')
           )}
         </button>
       )}

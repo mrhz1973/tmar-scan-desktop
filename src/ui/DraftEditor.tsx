@@ -25,6 +25,8 @@ import { OrientFields } from './OrientFields'
 import { NameField, providersFor, RefSelect } from './RefSelect'
 import { tintStyle } from './tint'
 import { useLength } from '../app/useUnits'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function DraftEditor({
   onSelectMode,
@@ -51,6 +53,8 @@ export function DraftEditor({
    *  draft — from its seed plane, or from the scan's principal planes. */
   onFindSymmetry: () => void
 }) {
+  useTmarLanguage()
+
   const busy = useStore((s) => s.busy)
   const elements = useStore((s) => s.elements)
   const sections = useStore((s) => s.sections)
@@ -95,7 +99,7 @@ export function DraftEditor({
     draft !== null && method !== null && takesSurface(method) && selectMode === 'paint'
   // What the brush is being dragged over: the feature itself for a fit, the
   // part of the scan a search may use for a construction.
-  const marked = method?.mode === 'fit' ? draftKind?.noun ?? 'surface' : 'surface the search may use'
+  const marked = tmarText(method?.mode === 'fit' ? draftKind?.noun ?? 'surface' : 'surface the search may use')
   const pickHint =
     !draft || !draftKind || !method
       ? ''
@@ -109,13 +113,13 @@ export function DraftEditor({
           ? method.hint
           : method.mode === 'pick'
             ? draft.kind === 'point'
-              ? `Click again to move the point, or ${edited ? 'save it' : 'create it'}.`
+              ? `Click again to move the point, or ${tmarText(edited ? 'save it' : 'create it')}.`
               : draft.picks.length < (method.minPicks ?? 1)
                 ? `${(method.minPicks ?? 1) - draft.picks.length} more point${
                     (method.minPicks ?? 1) - draft.picks.length === 1 ? '' : 's'
-                  } to go — spread them around the ${draftKind.noun}.`
-                : `More points refine the fit, or ${edited ? 'save it' : 'create it'}.`
-            : `Add more points if the ${draftKind.noun} is split across unconnected patches.`
+                  } to go — spread them around the ${tmarText(draftKind.noun)}.`
+                : `More points refine the fit, or ${tmarText(edited ? 'save it' : 'create it')}.`
+            : `Add more points if the ${tmarText(draftKind.noun)} is split across unconnected patches.`
 
   if (draft === null) return null
 
@@ -125,7 +129,7 @@ export function DraftEditor({
         <div className="draftbox" style={{ borderLeftColor: draftColor }}>
           <div className="sec-head">
             <span className="dot" style={{ background: draftColor }} />
-            {edited ? `Edit ${edited.name}` : `New ${draftKind.noun}`}
+            {edited ? tmarText("Edit {0}", [edited.name]) : tmarText("New {0}", [tmarText(draftKind.noun)])}
           </div>
 
           {draft.editId !== undefined && (
@@ -138,24 +142,20 @@ export function DraftEditor({
 
           {edited && unlinkedSource(edited) && (
             <>
-              <p className="hint" data-test="linked-note">
-                Linked: built from the elements below, and rebuilt whenever one of them changes.
-              </p>
+              <p className="hint" data-test="linked-note">{tmarText("Linked: built from the elements below, and rebuilt whenever one of them changes.")}</p>
               <button
                 type="button"
                 className="block"
                 data-test="unlink-element"
-                title="Keep it where it stands now, as coordinates of its own: it no longer moves when its sources do, and stays if they are deleted"
+                title={tmarText("Keep it where it stands now, as coordinates of its own: it no longer moves when its sources do, and stays if they are deleted")}
                 onClick={() => unlinkElement(edited.id)}
-              >
-                Unlink from its sources
-              </button>
+              >{tmarText("Unlink from its sources")}</button>
             </>
           )}
 
           {kindMethods.length > 1 && (
             <label className="field">
-              <span>Created</span>
+              <span>{tmarText("Created")}</span>
               <select
                 data-test="draft-method"
                 value={draft.method}
@@ -163,7 +163,7 @@ export function DraftEditor({
               >
                 {kindMethods.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.label}
+                    {tmarText(m.label)}
                   </option>
                 ))}
               </select>
@@ -172,26 +172,12 @@ export function DraftEditor({
 
           {method.mode === 'fit' && (
             <label className="field">
-              <span>
-                Surface
-                <InfoDot title="Which surface is fitted">
+              <span>{tmarText("Surface")}<InfoDot title={tmarText("Which surface is fitted")}>
                   <p>
-                    <b>Found from a click:</b> click once on the feature and the patch grows outward
-                    across the scan on its own, stopping where the surface stops being flat or round
-                    enough to belong. Fast, and right most of the time.
-                  </p>
+                    <b>{tmarText("Found from a click:")}</b>{tmarText(" click once on the feature and the patch grows outward across the scan on its own, stopping where the surface stops being flat or round enough to belong. Fast, and right most of the time.")}</p>
                   <p>
-                    <b>Marked by hand:</b> take exactly the triangles you want — with a window, a
-                    round brush or a lasso, the same three tools the deviation workspace marks a
-                    local fine fit with. Use it when a click runs off across a fillet, when noise
-                    breaks the feature into unconnected patches, or when only part of a face is
-                    worth trusting.
-                  </p>
-                  <p>
-                    Nothing is armed until you pick one of them: while a tool is live it takes both
-                    plain drags — left marks, right rubs out — and <b>Navigate</b> or Esc hands them
-                    back to the camera. Shift-drag orbits either way.
-                  </p>
+                    <b>{tmarText("Marked by hand:")}</b>{tmarText(" take exactly the triangles you want — with a window, a round brush or a lasso, the same three tools the deviation workspace marks a local fine fit with. Use it when a click runs off across a fillet, when noise breaks the feature into unconnected patches, or when only part of a face is worth trusting.")}</p>
+                  <p>{tmarText("Nothing is armed until you pick one of them: while a tool is live it takes both plain drags — left marks, right rubs out — and ")}<b>{tmarText("Navigate")}</b>{tmarText(" or Esc hands them back to the camera. Shift-drag orbits either way.")}</p>
                 </InfoDot>
               </span>
               <select
@@ -199,28 +185,19 @@ export function DraftEditor({
                 value={selectMode}
                 onChange={(e) => onSelectMode(e.target.value as SelectMode)}
               >
-                <option value="auto">Found from a click</option>
-                <option value="paint">Marked by hand</option>
+                <option value="auto">{tmarText("Found from a click")}</option>
+                <option value="paint">{tmarText("Marked by hand")}</option>
               </select>
             </label>
           )}
 
           {method.mode === 'construct' && method.surface && (
             <label className="field">
-              <span>
-                Search on
-                <InfoDot title="Which surface the search may use">
+              <span>{tmarText("Search on")}<InfoDot title={tmarText("Which surface the search may use")}>
                   <p>
-                    <b>Whole scan:</b> every triangle of the part takes part — the right choice for
-                    a clean scan of the part alone.
-                  </p>
+                    <b>{tmarText("Whole scan:")}</b>{tmarText(" every triangle of the part takes part — the right choice for a clean scan of the part alone.")}</p>
                   <p>
-                    <b>Marked surface:</b> mark the part of the scan the search may use, with the
-                    same window, brush and lasso a hand-marked fit uses, and leave out what should
-                    not count — a fixture, a stamped number, a patch the scanner missed or
-                    smeared. Only the marked points are searched, and only the marked triangles
-                    are surface a mirror image may land on. The marking is saved with the element.
-                  </p>
+                    <b>{tmarText("Marked surface:")}</b>{tmarText(" mark the part of the scan the search may use, with the same window, brush and lasso a hand-marked fit uses, and leave out what should not count — a fixture, a stamped number, a patch the scanner missed or smeared. Only the marked points are searched, and only the marked triangles are surface a mirror image may land on. The marking is saved with the element.")}</p>
                 </InfoDot>
               </span>
               <select
@@ -228,8 +205,8 @@ export function DraftEditor({
                 value={selectMode}
                 onChange={(e) => onSelectMode(e.target.value as SelectMode)}
               >
-                <option value="auto">Whole scan</option>
-                <option value="paint">Marked surface</option>
+                <option value="auto">{tmarText("Whole scan")}</option>
+                <option value="paint">{tmarText("Marked surface")}</option>
               </select>
             </label>
           )}
@@ -244,11 +221,11 @@ export function DraftEditor({
 
           {method.mode === 'construct' ? (
             <>
-              <p className="hint">{method.hint}</p>
+              <p className="hint">{tmarText(method.hint)}</p>
               {method.id === 'plane-symmetry' && (
                 <>
                   <RefSelect
-                    label="Seed plane (optional)"
+                    label={tmarText("Seed plane (optional)")}
                     options={[...BASE_PLANE_SEEDS, ...providersFor(['plane'], refPool, blocked)]}
                     value={draft.seed ?? null}
                     testId="draft-seed"
@@ -259,21 +236,21 @@ export function DraftEditor({
                     data-test="find-symmetry"
                     disabled={busy || draft.status === 'fitting'}
                     onClick={onFindSymmetry}
-                    title="Reflect the scan through the seed — a coordinate plane, a plane element or a section; with none, through each of its principal planes — fit the reflection back onto the scan, and read the mirror plane off the fit"
+                    title={tmarText("Reflect the scan through the seed — a coordinate plane, a plane element or a section; with none, through each of its principal planes — fit the reflection back onto the scan, and read the mirror plane off the fit")}
                   >
-                    {draft.status === 'ready' ? 'Find again' : 'Find symmetry plane'}
+                    {draft.status === 'ready' ? tmarText("Find again") : tmarText("Find symmetry plane")}
                   </button>
                 </>
               )}
               {draft.note && (
                 <p className="hint" data-test="draft-note">
-                  {draft.note}
+                  {tmarText(draft.note)}
                 </p>
               )}
               {method.slots.map((slot, i) => (
                 <RefSelect
                   key={i}
-                  label={slot.label}
+                  label={tmarText(slot.label)}
                   options={providersFor([slot.role], refPool, blocked, slot.kinds)}
                   value={draft.refs[i]}
                   testId={`draft-ref-${i}`}
@@ -293,8 +270,8 @@ export function DraftEditor({
                 return (
                   <label className="field" key={p.key}>
                     <span>
-                      {p.label}
-                      {length ? ` (${len.word()})` : ''}
+                      {tmarText(p.label)}
+                      {length ? tmarText(" ({0})", [len.word()]) : ''}
                     </span>
                     <input
                       type="number"
@@ -311,22 +288,19 @@ export function DraftEditor({
               })}
             </>
           ) : (
-            <p className="hint">{pickHint}</p>
+            <p className="hint">{tmarText(pickHint)}</p>
           )}
 
           <div className="dro">
             <div className="dro-label">
-              <span>Preview</span>
+              <span>{tmarText("Preview")}</span>
               {paintingSurface ? (
                 <span data-test="paint-count">
-                  {paintCount.toLocaleString('en-US')} point
-                  {paintCount === 1 ? '' : 's'} marked
-                </span>
+                  {tmarText('Marked points: {0}', [paintCount.toLocaleString('en-US')])}</span>
               ) : (
                 method.mode !== 'construct' && (
                   <span>
-                    {draft.picks.length} pick
-                    {draft.picks.length === 1 ? '' : 's'}
+                    {tmarText('Picked points: {0}', [draft.picks.length])}
                   </span>
                 )
               )}
@@ -345,36 +319,28 @@ export function DraftEditor({
             >
               {draft.status === 'empty' && (
                 <b style={{ fontSize: 12, fontWeight: 400, color: 'var(--dim)' }}>
-                  {method.mode === 'construct'
-                    ? 'Incomplete'
-                    : paintingSurface
-                      ? 'Nothing marked'
-                      : draft.picks.length > 0
-                        ? `${draft.picks.length} of ${method.minPicks ?? 1} points`
-                        : 'No points picked'}
+                  {method.mode === 'construct' ? tmarText("Incomplete") : paintingSurface ? tmarText("Nothing marked") : draft.picks.length > 0 ? tmarText("{0} of {1} points", [draft.picks.length, method.minPicks ?? (1)]) : tmarText("No points picked")}
                 </b>
               )}
               {draft.status === 'fitting' && (
                 <b>
-                  <span className="spinner" />
-                  Fitting…
-                </b>
+                  <span className="spinner" />{tmarText("Fitting…")}</b>
               )}
-              {draft.status === 'failed' && <b>{draft.message ?? 'Failed'}</b>}
+              {draft.status === 'failed' && <b>{draft.message ?? (tmarText("Failed"))}</b>}
               {draft.status === 'ready' &&
                 (() => {
                   const primary = formatPrimary(shownFit!, len.units)
                   if (shownFit!.kind === 'point' || shownFit!.kind === 'line' || primary === '') {
                     return (
                       <b className="tinted" style={tintStyle(draftColor)}>
-                        ✓ {draftKind.label}
+                        ✓ {tmarText(draftKind.label)}
                       </b>
                     )
                   }
                   return <DroValue value={primary} color={draftColor} />
                 })()}
             </div>
-            {draft.status === 'ready' && <div className="dro-note">{formatDetail(shownFit!, len.units)}</div>}
+          {draft.status === 'ready' && <div className="dro-note">{formatDetail(shownFit!, len.units).split(' · ').map((part) => tmarText(part)).join(' · ')}</div>}
           </div>
 
           {/* The design value behind the measurement, for the kinds defined by
@@ -400,17 +366,13 @@ export function DraftEditor({
             disabled={draft.status !== 'ready'}
             onClick={onConfirmDraft}
           >
-            {edited ? 'Save changes' : `Create ${draftKind.noun}`}
+            {edited ? tmarText("Save changes") : tmarText("Create {0}", [tmarText(draftKind.noun)])}
           </button>
           <div className="toolrow">
             {method.mode !== 'construct' && !paintingSurface && (
-              <button disabled={draft.picks.length === 0} onClick={onUndoPick}>
-                Undo point
-              </button>
+              <button disabled={draft.picks.length === 0} onClick={onUndoPick}>{tmarText("Undo point")}</button>
             )}
-            <button data-test="cancel-draft" onClick={onCancelDraft}>
-              Cancel
-            </button>
+            <button data-test="cancel-draft" onClick={onCancelDraft}>{tmarText("Cancel")}</button>
           </div>
         </div>
       )}
@@ -422,35 +384,19 @@ export function DraftEditor({
       {draft && method?.mode === 'fit' && (
         <div className="group">
           <div className="g-label">
-            <span>Fitting {edited ? edited.name : `this ${draftKind?.noun ?? 'element'}`}</span>
+            <span>{tmarText("Fitting ")}{edited ? edited.name : tmarText("this {0}", [tmarText(draftKind?.noun ?? 'element')])}</span>
           </div>
           <label className="field">
-            <span>Method</span>
+            <span>{tmarText("Method")}</span>
             <select value={draft.settings.method} disabled>
-              <option value="gaussian">Gaussian best-fit</option>
+              <option value="gaussian">{tmarText("Gaussian best-fit")}</option>
             </select>
           </label>
           <label className="field">
-            <span>
-              Used points
-              <InfoDot title="Used points">
-                <p>
-                  Every element is a Gaussian best fit — the plane, cylinder or sphere that
-                  minimises the squared distance to the points taken from the scan.
-                </p>
-                <p>
-                  This is the outlier cut-off. Points further from that first fit than the chosen
-                  multiple of the standard deviation are dropped and the fit is repeated, so scan
-                  noise, a stray edge triangle or a speck of spray cannot drag the result. Tighter
-                  cut-offs give a cleaner element from fewer points; <i>all points</i> keeps
-                  everything.
-                </p>
-                <p>
-                  The setting belongs to this element: changing it re-fits this one from the
-                  points it was built on, and every other element keeps the cut-off it was
-                  measured with. Re-open an element to change its own. The last choice is
-                  what the next new element starts with.
-                </p>
+            <span>{tmarText("Used points")}<InfoDot title={tmarText("Used points")}>
+                <p>{tmarText("Every element is a Gaussian best fit — the plane, cylinder or sphere that minimises the squared distance to the points taken from the scan.")}</p>
+                <p>{tmarText("This is the outlier cut-off. Points further from that first fit than the chosen multiple of the standard deviation are dropped and the fit is repeated, so scan noise, a stray edge triangle or a speck of spray cannot drag the result. Tighter cut-offs give a cleaner element from fewer points; ")}<i>{tmarText("all points")}</i>{tmarText(" keeps everything.")}</p>
+                <p>{tmarText("The setting belongs to this element: changing it re-fits this one from the points it was built on, and every other element keeps the cut-off it was measured with. Re-open an element to change its own. The last choice is what the next new element starts with.")}</p>
               </InfoDot>
             </span>
             <select
@@ -461,7 +407,7 @@ export function DraftEditor({
             >
               {([3, 2, 1, 0] as SigmaPreset[]).map((k) => (
                 <option key={k} value={k}>
-                  {SIGMA_LABELS[k]}
+                  {tmarText(SIGMA_LABELS[k])}
                 </option>
               ))}
             </select>

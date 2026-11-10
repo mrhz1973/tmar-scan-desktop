@@ -17,6 +17,8 @@ import { useLength } from '../app/useUnits'
 import { lengthInputText } from '../core/units'
 import { ProbeList } from './ProbeList'
 import { ScaleControls } from './ScaleControls'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function ThicknessPanel({
   onOpenScan,
@@ -27,6 +29,8 @@ export function ThicknessPanel({
   onMeasure: () => void
   onCopy: () => void
 }) {
+  useTmarLanguage()
+
   const scanName = useStore((s) => s.fileName)
   const scanTriangles = useStore((s) => s.triangleCount)
   const scanBusy = useStore((s) => s.busy)
@@ -72,15 +76,9 @@ export function ThicknessPanel({
   return (
     <aside className="panel">
       <div className="group">
-        <div className="sec-head">
-          Model
-          <InfoDot title="The scan">
-            <p>
-              The part as scanned — an <b>STL</b>, <b>PLY</b> or <b>OBJ</b> in millimetres.
-              Nothing else is needed here: wall thickness is a property of the part itself, so
-              there is no reference model and no alignment step.
-            </p>
-            <p>Drop it anywhere in the window. Nothing is uploaded.</p>
+        <div className="sec-head">{tmarText("Model")}<InfoDot title={tmarText("The scan")}>
+            <p>{tmarText("The part as scanned — an ")}<b>{tmarText("STL")}</b>, <b>{tmarText("PLY")}</b>{tmarText(" or ")}<b>{tmarText("OBJ")}</b>{tmarText(" in millimetres. Nothing else is needed here: wall thickness is a property of the part itself, so there is no reference model and no alignment step.")}</p>
+            <p>{tmarText("Drop it anywhere in the window. Nothing is uploaded.")}</p>
           </InfoDot>
         </div>
         <ModelSlot
@@ -91,30 +89,18 @@ export function ThicknessPanel({
           busy={busy}
           onOpen={onOpenScan}
         />
-        {!scanName && <p className="hint">Drop it anywhere in the window.</p>}
+        {!scanName && <p className="hint">{tmarText("Drop it anywhere in the window.")}</p>}
       </div>
 
       <div className="group">
-        <div className="sec-head">Measurement</div>
+        <div className="sec-head">{tmarText("Measurement")}</div>
         <label className="field">
-          <span>
-            Method
-            <InfoDot title="How thickness is measured">
+          <span>{tmarText("Method")}<InfoDot title={tmarText("How thickness is measured")}>
               <p>
-                <b>Ray along the normal</b> fires a ray straight into the material at each point
-                and takes how far it travels before it comes out the far side. Simple, and it is
-                what most tools mean by wall thickness.
-              </p>
+                <b>{tmarText("Ray along the normal")}</b>{tmarText(" fires a ray straight into the material at each point and takes how far it travels before it comes out the far side. Simple, and it is what most tools mean by wall thickness.")}</p>
               <p>
-                <b>Sphere across the wall</b> places a sphere halfway along that ray and grows it
-                until it touches. It can never read longer than the ray and usually reads shorter,
-                because it is not tied to the ray's direction: it finds a wedge square across, and
-                the width of a block rather than the diagonal its corner points down.
-              </p>
-              <p>
-                Neither is wrong — the ray answers “how far through here”, the sphere answers “how
-                much material is actually there”.
-              </p>
+                <b>{tmarText("Sphere across the wall")}</b>{tmarText(" places a sphere halfway along that ray and grows it until it touches. It can never read longer than the ray and usually reads shorter, because it is not tied to the ray's direction: it finds a wedge square across, and the width of a block rather than the diagonal its corner points down.")}</p>
+              <p>{tmarText("Neither is wrong — the ray answers “how far through here”, the sphere answers “how much material is actually there”.")}</p>
             </InfoDot>
           </span>
           <select
@@ -123,13 +109,13 @@ export function ThicknessPanel({
             disabled={busy}
             onChange={(e) => t.setMethod(e.target.value as 'ray' | 'sphere')}
           >
-            <option value="ray">Ray along the normal</option>
-            <option value="sphere">Sphere across the wall</option>
+            <option value="ray">{tmarText("Ray along the normal")}</option>
+            <option value="sphere">{tmarText("Sphere across the wall")}</option>
           </select>
         </label>
 
         <NumberField
-          label="Max. thickness"
+          label={tmarText("Max. thickness")}
           testId="thickness-max"
           value={t.maxThickness}
           step={1}
@@ -139,12 +125,8 @@ export function ThicknessPanel({
           onCommit={t.setMaxThickness}
           hint={
             <>
-              <p>Where the search stops. Nothing thicker than this is measured.</p>
-              <p>
-                A point with nothing behind it inside this distance is left unmeasured rather than
-                reported, which is what keeps a ray escaping through an open rim from coming back
-                as a wall the length of the part.
-              </p>
+              <p>{tmarText("Where the search stops. Nothing thicker than this is measured.")}</p>
+              <p>{tmarText("A point with nothing behind it inside this distance is left unmeasured rather than reported, which is what keeps a ray escaping through an open rim from coming back as a wall the length of the part.")}</p>
             </>
           }
         />
@@ -152,18 +134,9 @@ export function ThicknessPanel({
         {t.method === 'ray' && (
           <>
             <label className="field">
-              <span>
-                Rays
-                <InfoDot title="Rays">
-                  <p>
-                    A single ray along the normal reads the wall square-on, which over-reads
-                    wherever the surface is not parallel to the one behind it — a chamfer, a
-                    tapered rib, the inside of a corner.
-                  </p>
-                  <p>
-                    Spreading extra rays through a cone around the normal and keeping the shortest
-                    finds the true way across instead. More rays cost measurement time.
-                  </p>
+              <span>{tmarText("Rays")}<InfoDot title={tmarText("Rays")}>
+                  <p>{tmarText("A single ray along the normal reads the wall square-on, which over-reads wherever the surface is not parallel to the one behind it — a chamfer, a tapered rib, the inside of a corner.")}</p>
+                  <p>{tmarText("Spreading extra rays through a cone around the normal and keeping the shortest finds the true way across instead. More rays cost measurement time.")}</p>
                 </InfoDot>
               </span>
               <select
@@ -174,14 +147,14 @@ export function ThicknessPanel({
               >
                 {CONE_CHOICES.map((c) => (
                   <option key={c.rays} value={c.rays}>
-                    {c.label}
+                    {tmarText(c.label)}
                   </option>
                 ))}
               </select>
             </label>
             {t.coneRays > 0 && (
               <NumberField
-                label="Max. opening angle"
+                label={tmarText("Max. opening angle")}
                 testId="thickness-cone-angle"
                 value={t.coneAngleDeg}
                 step={5}
@@ -189,7 +162,7 @@ export function ThicknessPanel({
                 unit="°"
                 disabled={busy}
                 onCommit={t.setConeAngle}
-                hint="How far off the normal the cone of rays may look for a shorter way across the wall."
+                hint={tmarText("How far off the normal the cone of rays may look for a shorter way across the wall.")}
               />
             )}
           </>
@@ -203,21 +176,15 @@ export function ThicknessPanel({
             checked={t.normalDeviationDeg !== null}
             onChange={(e) => t.setNormalDeviation(e.target.checked ? 60 : null)}
           />
-          <span>Far surface must face back</span>
-          <InfoDot title="Far surface must face back">
-            <p>
-              A surface nearly edge-on to the ray is a rib the ray is running alongside, or the rim
-              of an open scan — not the far side of a wall.
-            </p>
-            <p>
-              With this on, such a hit is stepped over and the search carries on behind it, so the
-              wall reported is the one a caliper would find.
-            </p>
+          <span>{tmarText("Far surface must face back")}</span>
+          <InfoDot title={tmarText("Far surface must face back")}>
+            <p>{tmarText("A surface nearly edge-on to the ray is a rib the ray is running alongside, or the rim of an open scan — not the far side of a wall.")}</p>
+            <p>{tmarText("With this on, such a hit is stepped over and the search carries on behind it, so the wall reported is the one a caliper would find.")}</p>
           </InfoDot>
         </label>
         {t.normalDeviationDeg !== null && (
           <NumberField
-            label="Max. deviation of normals"
+            label={tmarText("Max. deviation of normals")}
             testId="thickness-normal-deviation"
             value={t.normalDeviationDeg}
             step={5}
@@ -225,7 +192,7 @@ export function ThicknessPanel({
             unit="°"
             disabled={busy}
             onCommit={(v) => t.setNormalDeviation(v)}
-            hint="How far the surface a ray lands on may be from squarely facing it and still count as the other side of the wall. Anything beyond this is stepped over."
+            hint={tmarText("How far the surface a ray lands on may be from squarely facing it and still count as the other side of the wall. Anything beyond this is stepped over.")}
           />
         )}
 
@@ -238,58 +205,45 @@ export function ThicknessPanel({
         >
           {t.status === 'running' ? (
             <>
-              <span className="spinner" />
-              Measuring…
-            </>
+              <span className="spinner" />{tmarText("Measuring…")}</>
           ) : t.status === 'ready' ? (
-            'Measure again'
+            tmarText('Measure again')
           ) : (
-            'Measure wall thickness'
+            tmarText('Measure wall thickness')
           )}
         </button>
-        <p className="hint">Everything above shapes the search, so changing it means measuring again.</p>
-        {t.message && <p className="alarmtext">{t.message}</p>}
+        <p className="hint">{tmarText("Everything above shapes the search, so changing it means measuring again.")}</p>
+        {t.message && <p className="alarmtext">{tmarText(t.message)}</p>}
       </div>
 
       {t.status === 'ready' && (
         <>
           <div className="group">
-            <div className="sec-head">
-              Colour scale
-              <InfoDot title="Colour scale">
-                <p>
-                  Red is thin, blue is thick. Both ends default to the spread of this part, so the
-                  first map you see uses the full range of colour on the walls it actually found.
-                </p>
-                <p>
-                  Anything past either end is drawn in a dark cap, so a wall beyond the scale
-                  cannot be mistaken for one sitting exactly on it.
-                </p>
-                <p>
-                  Moving the ends only re-paints — nothing here is re-measured, and nothing above
-                  changes.
-                </p>
+            <div className="sec-head">{tmarText("Colour scale")}<InfoDot title={tmarText("Colour scale")}>
+                <p>{tmarText("Red is thin, blue is thick. Both ends default to the spread of this part, so the first map you see uses the full range of colour on the walls it actually found.")}</p>
+                <p>{tmarText("Anything past either end is drawn in a dark cap, so a wall beyond the scale cannot be mistaken for one sitting exactly on it.")}</p>
+                <p>{tmarText("Moving the ends only re-paints — nothing here is re-measured, and nothing above changes.")}</p>
               </InfoDot>
             </div>
             <NumberField
-              label="Thin end"
+              label={tmarText("Thin end")}
               testId="thickness-low"
               value={t.low}
               step={0.1}
               min={0}
               kind="length"
               onCommit={t.setLow}
-              hint="Wall thickness at the bottom of the scale — the red end. Anything thinner is drawn in a dark red cap."
+              hint={tmarText("Wall thickness at the bottom of the scale — the red end. Anything thinner is drawn in a dark red cap.")}
             />
             <NumberField
-              label="Thick end"
+              label={tmarText("Thick end")}
               testId="thickness-high"
               value={t.high}
               step={0.1}
               min={0.001}
               kind="length"
               onCommit={t.setHigh}
-              hint="Wall thickness at the top of the scale — the blue end. Anything thicker is drawn in a dark blue cap."
+              hint={tmarText("Wall thickness at the top of the scale — the blue end. Anything thicker is drawn in a dark blue cap.")}
             />
             <ScaleControls
               bands={t.bands}
@@ -301,9 +255,9 @@ export function ThicknessPanel({
           </div>
 
           <div className="group">
-            <div className="sec-head">Minimum wall</div>
+            <div className="sec-head">{tmarText("Minimum wall")}</div>
             <NumberField
-              label="Thinner than"
+              label={tmarText("Thinner than")}
               testId="thickness-limit"
               value={t.limit}
               step={0.1}
@@ -312,13 +266,8 @@ export function ThicknessPanel({
               onCommit={t.setLimit}
               hint={
                 <>
-                  <p>
-                    The wall the <b>under {lengthInputText(t.limit, len.units)} {len.word()}</b> figure below the scale counts.
-                  </p>
-                  <p>
-                    It is a tally only and does not change the colours. Set the thin end of the
-                    scale to the same number if you want the map itself to call it out.
-                  </p>
+                  <p>{tmarText("The wall the ")}<b>{tmarText("under ")}{tmarText(lengthInputText(t.limit, len.units))} {len.word()}</b>{tmarText(" figure below the scale counts.")}</p>
+                  <p>{tmarText("It is a tally only and does not change the colours. Set the thin end of the scale to the same number if you want the map itself to call it out.")}</p>
                 </>
               }
             />
@@ -333,7 +282,7 @@ export function ThicknessPanel({
           />
 
           <div className="divider" />
-          <CopyButton className="block" label="Copy report" onCopy={onCopy} />
+          <CopyButton className="block" label={tmarText("Copy report")} onCopy={onCopy} />
         </>
       )}
     </aside>

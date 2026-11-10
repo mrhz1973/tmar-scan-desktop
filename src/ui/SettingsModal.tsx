@@ -32,6 +32,8 @@ import { VIEW_THEMES, themeById } from '../viewer/viewThemes'
 import { useDismiss } from './useDismiss'
 import { NumberInput } from './NumberField'
 import { PluginPanelExtensions } from '../plugins/panelExtensions'
+import { coreText as tmarText, setLanguage, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** The puck's six motions by 3Dconnexion's names, in the order its trainer
  *  walks through them. */
@@ -48,6 +50,8 @@ const PUCK_AXES: { id: SpaceMouseAxisId; label: string }[] = [
  *  on, and taken into use or put away when the page is next loaded, since a
  *  plugin installs once. Nothing at all in a build that has none. */
 function BetaWorkspaces() {
+  useTmarLanguage()
+
   // The switches read storage; this re-renders them when one is flipped.
   const [, flipped] = useState(0)
   const beta = betaPlugins()
@@ -55,7 +59,7 @@ function BetaWorkspaces() {
   const pending = beta.some((p) => pluginEnabled(p) !== plugins().includes(p))
   return (
     <>
-      <h3>Beta</h3>
+      <h3>{tmarText("Beta")}</h3>
       {beta.map((p) => (
         <label key={p.id} className="checkrow settings-check">
           <input
@@ -68,19 +72,13 @@ function BetaWorkspaces() {
             }}
           />
           <span>
-            <b>{p.workspace?.label ?? p.name}</b> — {p.workspace ? `${p.workspace.title}. ` : ''}A
-            workspace still in beta: it may change, and work done in it may not open the same in a
-            later version. Off, a project made with it keeps that work, untouched.
-          </span>
+            <b>{tmarText(p.workspace?.label ?? p.name)}</b> — {p.workspace ? tmarText("{0}. ", [tmarText(p.workspace.title)]) : ''}{tmarText("A workspace still in beta: it may change, and work done in it may not open the same in a later version. Off, a project made with it keeps that work, untouched.")}</span>
         </label>
       ))}
       {pending && (
         <div className="setting" data-test="beta-reload">
-          <small>
-            Takes effect when the page is reloaded.{' '}
-            <button type="button" onClick={() => location.reload()}>
-              Reload now
-            </button>
+          <small>{tmarText("Takes effect when the page is reloaded.")}{' '}
+            <button type="button" onClick={() => location.reload()}>{tmarText("Reload now")}</button>
           </small>
         </div>
       )}
@@ -89,6 +87,8 @@ function BetaWorkspaces() {
 }
 
 export function SettingsModal() {
+  const language = useTmarLanguage()
+
   const open = usePrefs((s) => s.settingsOpen)
   const close = usePrefs((s) => s.openSettings)
   const uiTheme = usePrefs((s) => s.uiTheme)
@@ -158,24 +158,29 @@ export function SettingsModal() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modalhead">
-          <h2 id="settings-title">Settings</h2>
+          <h2 id="settings-title">{tmarText("Settings")}</h2>
           <button
             className="x"
             data-test="settings-close"
             onClick={() => close(false)}
-            aria-label="Close"
-          >
-            ×
-          </button>
+            aria-label={tmarText("Close")}
+          >{tmarText("×")}</button>
         </div>
-        <p className="dim">
-          How the instrument looks and behaves. Remembered in this browser — nothing here is a
-          property of the part, and none of it is saved with a project.
-        </p>
+        <p className="dim">{tmarText("How the instrument looks and behaves. Remembered in this browser — nothing here is a property of the part, and none of it is saved with a project.")}</p>
 
-        <h3>Units</h3>
+        <h3>{language === 'it' ? 'Lingua' : 'Language'}</h3>
         <div className="setting">
-          <span id="units-label">Lengths in</span>
+          <label htmlFor="interface-language">{language === 'it' ? 'Lingua dell’interfaccia' : 'Interface language'}</label>
+          <select id="interface-language" data-test="interface-language" value={language}
+            onChange={event => { if (event.target.value === 'it' || event.target.value === 'en') setLanguage(event.target.value) }}>
+            <option value="it">Italiano</option>
+            <option value="en">English</option>
+          </select>
+          <small>{language === 'it' ? 'La scelta viene ricordata in questo browser. Il progetto aperto rimane disponibile.' : 'Remembered in this browser. Your open project stays available.'}</small>
+        </div>
+        <h3>{tmarText("Units")}</h3>
+        <div className="setting">
+          <span id="units-label">{tmarText("Lengths in")}</span>
           <div className="keys" role="radiogroup" aria-labelledby="units-label">
             {DISPLAY_UNITS.map((u) => (
               <button
@@ -186,18 +191,16 @@ export function SettingsModal() {
                 data-test={`units-${u.id}`}
                 onClick={() => setUnits(u.id)}
               >
-                {u.label}
+                {tmarText(u.label)}
               </button>
             ))}
           </div>
-          <small>
-            What is shown and typed. Files, projects and agent answers stay in millimetres.
-          </small>
+          <small>{tmarText("What is shown and typed. Files, projects and agent answers stay in millimetres.")}</small>
         </div>
 
-        <h3>Appearance</h3>
+        <h3>{tmarText("Appearance")}</h3>
         <div className="setting">
-          <span id="uitheme-label">Interface</span>
+          <span id="uitheme-label">{tmarText("Interface")}</span>
           <div className="keys" role="radiogroup" aria-labelledby="uitheme-label">
             {UI_THEMES.map((t) => (
               <button
@@ -208,17 +211,15 @@ export function SettingsModal() {
                 data-test={`ui-theme-${t.id}`}
                 onClick={() => setUiTheme(t.id)}
               >
-                {t.label}
+                {tmarText(t.label)}
               </button>
             ))}
           </div>
           <small>
-            <b>Dark</b> is the default. Your explicit choice is remembered in this browser.
-            <b> System</b> follows the operating system only when selected.
-          </small>
+            <b>{tmarText("Dark")}</b>{tmarText(" is the default. Your explicit choice is remembered in this browser.")}<b>{tmarText(" System")}</b>{tmarText(" follows the operating system only when selected.")}</small>
         </div>
         <div className="setting">
-          <label htmlFor="viewtheme">Colour mode</label>
+          <label htmlFor="viewtheme">{tmarText("Colour mode")}</label>
           <select
             id="viewtheme"
             data-test="view-theme"
@@ -227,17 +228,15 @@ export function SettingsModal() {
           >
             {VIEW_THEMES.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.label}
+                {tmarText(t.label)}
               </option>
             ))}
           </select>
           <small>
-            {theme.hint}. What has been measured keeps its colour either way — the element
-            tints and the deviation ramp are the same in both.
-          </small>
+            {tmarText(theme.hint)}{tmarText(". What has been measured keeps its colour either way — the element tints and the deviation ramp are the same in both.")}</small>
         </div>
         <div className="setting colormaps">
-          <span id="colormap-label">Colour map</span>
+          <span id="colormap-label">{tmarText("Colour map")}</span>
           <div className="cmaps" role="radiogroup" aria-labelledby="colormap-label">
             {COLORMAPS.map((m) => (
               <button
@@ -246,7 +245,7 @@ export function SettingsModal() {
                 aria-checked={colormap === m.id}
                 className={colormap === m.id ? 'on' : undefined}
                 data-test={`colormap-${m.id}`}
-                title={m.hint}
+                title={tmarText(m.hint)}
                 onClick={() => setColormap(m.id)}
               >
                 {/* The ramp as a legend shows it, low end on the left, with
@@ -256,29 +255,26 @@ export function SettingsModal() {
                   <i style={{ background: legendGradient(m, null, false, 'right') }} />
                   <i style={{ background: cssRgb(m.over) }} />
                 </span>
-                {m.label}
+                {tmarText(m.label)}
               </button>
             ))}
           </div>
           <small>
-            <b>{map.label}.</b> {map.hint}. Every map painted on the part, and the scale beside
-            it, is drawn in it; the block at either end is what a reading past that end of the
-            scale wears.
-          </small>
+            <b>{tmarText(map.label)}.</b> {tmarText(map.hint)}{tmarText(". Every map painted on the part, and the scale beside it, is drawn in it; the block at either end is what a reading past that end of the scale wears.")}</small>
         </div>
         <div className="setting">
-          <label htmlFor="crease">Sharp edges</label>
+          <label htmlFor="crease">{tmarText("Sharp edges")}</label>
           <select
             id="crease"
             data-test="crease-mode"
             value={creaseMode}
             onChange={(e) => setCreaseMode(e.target.value as CreaseMode)}
           >
-            <option value="on">Always sharp</option>
-            <option value="auto">Auto — sharp on a CAD-like mesh</option>
-            <option value="off">Always smooth</option>
+            <option value="on">{tmarText("Always sharp")}</option>
+            <option value="auto">{tmarText("Auto — sharp on a CAD-like mesh")}</option>
+            <option value="off">{tmarText("Always smooth")}</option>
           </select>
-          <label htmlFor="creaseangle">Sharp from</label>
+          <label htmlFor="creaseangle">{tmarText("Sharp from")}</label>
           <div className="range">
             <input
               id="creaseangle"
@@ -293,38 +289,28 @@ export function SettingsModal() {
             />
             <output htmlFor="creaseangle">{creaseAngle}°</output>
           </div>
-          <small>
-            Whether an edge of the scan is shaded as a crease, each face with its own normal, or
-            smoothed across so a box looks pillowed — and from what angle between its two faces an
-            edge counts as sharp. <b>Always sharp</b> draws a CAD mesh's faces flat and a scan's
-            real edges — the rim of a bore, a step — as edges; noise seldom tips a scan's triangles
-            that far, and if it still shows, a larger angle, 50° or 60°, leaves it smooth.{' '}
-            <b>Auto</b> draws the creases only on a mesh that reads as a tessellation of CAD, a scan
-            smooth all over. A reference part is always drawn sharp, from {CREASE_ANGLE_DEG}°.
+          <small>{tmarText("Whether an edge of the scan is shaded as a crease, each face with its own normal, or smoothed across so a box looks pillowed — and from what angle between its two faces an edge counts as sharp. ")}<b>{tmarText("Always sharp")}</b>{tmarText(" draws a CAD mesh's faces flat and a scan's real edges — the rim of a bore, a step — as edges; noise seldom tips a scan's triangles that far, and if it still shows, a larger angle, 50° or 60°, leaves it smooth.")}{' '}
+            <b>{tmarText("Auto")}</b>{tmarText(" draws the creases only on a mesh that reads as a tessellation of CAD, a scan smooth all over. A reference part is always drawn sharp, from ")}{CREASE_ANGLE_DEG}°.
           </small>
         </div>
 
-        <h3>Navigation</h3>
+        <h3>{tmarText("Navigation")}</h3>
         <div className="setting">
-          <label htmlFor="navscheme">Mouse controls</label>
+          <label htmlFor="navscheme">{tmarText("Mouse controls")}</label>
           <select id="navscheme" value={scheme.id} onChange={(e) => setNavScheme(e.target.value)}>
             {SCHEMES.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.label}
+                {tmarText(s.label)}
               </option>
             ))}
           </select>
-          <small className="navhint">{scheme.hint}</small>
-          <small>
-            A <b>3Dconnexion SpaceMouse</b> works beside any of these, in Chrome and Edge: push or
-            pull the puck to zoom, slide it to pan, tilt, twist and roll it to turn the part. It connects
-            the first time you touch it, and drives the view the mouse was last over.
-          </small>
+          <small className="navhint">{tmarText(scheme.hint)}</small>
+          <small><b>{tmarText("A 3Dconnexion SpaceMouse")}</b>{tmarText(" works beside any of these, in Chrome and Edge: push or pull the puck to zoom, slide it to pan, tilt, twist and roll it to turn the part. It connects the first time you touch it, and drives the view the mouse was last over.")}</small>
         </div>
         {(puck !== null || puckSeen) && (
           <>
             <div className="setting" data-test="spacemouse-settings">
-              <label htmlFor="puckspeed">SpaceMouse speed</label>
+              <label htmlFor="puckspeed">{tmarText("SpaceMouse speed")}</label>
               <div className="range">
                 <input
                   id="puckspeed"
@@ -336,21 +322,20 @@ export function SettingsModal() {
                   value={puckSpeed}
                   onChange={(e) => setPuckSpeed(Number(e.target.value))}
                 />
-                <output htmlFor="puckspeed">{puckSpeed.toFixed(2)}×</output>
+                <output htmlFor="puckspeed">{puckSpeed.toFixed(2)}{tmarText("×")}</output>
               </div>
               <small data-test="spacemouse-status">
                 {puck !== null ? (
-                  <>
-                    Connected: <b>{puck.replace(/\s*\(.*\)$/, '')}</b>.
+                  <>{tmarText("Connected: ")}<b>{puck.replace(/\s*\(.*\)$/, '')}</b>.
                   </>
                 ) : (
-                  <>Not connected — touch the puck to connect it.</>
+                  <>{tmarText("Not connected — touch the puck to connect it.")}</>
                 )}
               </small>
             </div>
             <div className="setting puckaxes-row">
-              <span>Reverse</span>
-              <div className="puckaxes" role="group" aria-label="Reverse SpaceMouse axes">
+              <span>{tmarText("Reverse")}</span>
+              <div className="puckaxes" role="group" aria-label={tmarText("Reverse SpaceMouse axes")}>
                 {PUCK_AXES.map((a) => {
                   const on = puckReverse.includes(a.id)
                   return (
@@ -362,21 +347,17 @@ export function SettingsModal() {
                       aria-pressed={on}
                       onClick={() => setPuckReversed(a.id, !on)}
                     >
-                      {a.label}
+                      {tmarText(a.label)}
                     </button>
                   )
                 })}
               </div>
-              <small>
-                By default the puck moves the part, the way the 3Dconnexion driver does. The browser
-                reads the puck directly, so the driver's own speed and reversed axes do not reach
-                here; set them here instead.
-              </small>
+              <small>{tmarText("By default the puck moves the part, the way the 3Dconnexion driver does. The browser reads the puck directly, so the driver's own speed and reversed axes do not reach here; set them here instead.")}</small>
             </div>
           </>
         )}
 
-        <h3>Files</h3>
+        <h3>{tmarText("Files")}</h3>
         <label className="checkrow settings-check">
           <input
             type="checkbox"
@@ -385,13 +366,10 @@ export function SettingsModal() {
             onChange={(e) => setAskStlUnits(e.target.checked)}
           />
           <span>
-            <b>Ask what units an STL is in</b> — the format carries none, and a part read at the
-            wrong scale measures wrong in every number after. Off, every STL is read in the units
-            below without asking.
-          </span>
+            <b>{tmarText("Ask what units an STL is in")}</b>{tmarText(" — the format carries none, and a part read at the wrong scale measures wrong in every number after. Off, every STL is read in the units below without asking.")}</span>
         </label>
         <div className="setting">
-          <label htmlFor="stlunits">STL import units</label>
+          <label htmlFor="stlunits">{tmarText("STL import units")}</label>
           <select
             id="stlunits"
             data-test="stl-units"
@@ -400,20 +378,16 @@ export function SettingsModal() {
           >
             {MESH_UNITS.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.label}
+                {tmarText(u.label)}
               </option>
             ))}
           </select>
-          <small>
-            What an STL is read in when the question is off, and the answer the question offers
-            first — the last one given. A PLY or OBJ is always read in millimetres; a STEP file
-            says its own.
-          </small>
+          <small>{tmarText("What an STL is read in when the question is off, and the answer the question offers first — the last one given. A PLY or OBJ is always read in millimetres; a STEP file says its own.")}</small>
         </div>
 
-        <h3>Lines</h3>
+        <h3>{tmarText("Lines")}</h3>
         <div className="setting">
-          <label htmlFor="sectionlines">Section cuts</label>
+          <label htmlFor="sectionlines">{tmarText("Section cuts")}</label>
           <div className="range">
             <input
               id="sectionlines"
@@ -425,15 +399,12 @@ export function SettingsModal() {
               value={sectionLines}
               onChange={(e) => setSectionLines(Number(e.target.value))}
             />
-            <output htmlFor="sectionlines">{sectionLines.toFixed(1)} px</output>
+            <output htmlFor="sectionlines">{sectionLines.toFixed(1)}{tmarText(" px")}</output>
           </div>
-          <small>
-            How heavy a section's cut is drawn on the part in 3D Measure. The curves measured
-            on its sheet follow in proportion.
-          </small>
+          <small>{tmarText("How heavy a section's cut is drawn on the part in 3D Measure. The curves measured on its sheet follow in proportion.")}</small>
         </div>
         <div className="setting">
-          <label htmlFor="sheetlines">2D fitted curves</label>
+          <label htmlFor="sheetlines">{tmarText("2D fitted curves")}</label>
           <div className="range">
             <input
               id="sheetlines"
@@ -445,15 +416,12 @@ export function SettingsModal() {
               value={sheetLines}
               onChange={(e) => setSheetLines(Number(e.target.value))}
             />
-            <output htmlFor="sheetlines">{sheetLines.toFixed(1)} px</output>
+            <output htmlFor="sheetlines">{sheetLines.toFixed(1)}{tmarText(" px")}</output>
           </div>
-          <small>
-            The lines, circles and splines fitted over a flatbed scan in 2D Measure, and the
-            callouts drawn with them.
-          </small>
+          <small>{tmarText("The lines, circles and splines fitted over a flatbed scan in 2D Measure, and the callouts drawn with them.")}</small>
         </div>
         <div className="setting">
-          <label htmlFor="marksize">Points and grips</label>
+          <label htmlFor="marksize">{tmarText("Points and grips")}</label>
           <div className="range">
             <input
               id="marksize"
@@ -465,17 +433,12 @@ export function SettingsModal() {
               value={markSize}
               onChange={(e) => setMarkSize(Number(e.target.value))}
             />
-            <output htmlFor="marksize">{markSize.toFixed(2)}×</output>
+            <output htmlFor="marksize">{markSize.toFixed(2)}{tmarText("×")}</output>
           </div>
-          <small>
-            How large the marks that keep their size on the screen are drawn on the part: points,
-            picked spots, the arrows and bars on an element being made, and the section's handle.
-            Larger is easier to see and take hold of on a big screen; elements with a size of their
-            own, such as cylinders and planes, keep it.
-          </small>
+          <small>{tmarText("How large the marks that keep their size on the screen are drawn on the part: points, picked spots, the arrows and bars on an element being made, and the section's handle. Larger is easier to see and take hold of on a big screen; elements with a size of their own, such as cylinders and planes, keep it.")}</small>
         </div>
         <div className="setting">
-          <label htmlFor="edgelines">2D edges</label>
+          <label htmlFor="edgelines">{tmarText("2D edges")}</label>
           <div className="range">
             <input
               id="edgelines"
@@ -487,15 +450,13 @@ export function SettingsModal() {
               value={edgeLines}
               onChange={(e) => setEdgeLines(Number(e.target.value))}
             />
-            <output htmlFor="edgelines">{edgeLines.toFixed(1)} px</output>
+            <output htmlFor="edgelines">{edgeLines.toFixed(1)}{tmarText(" px")}</output>
           </div>
-          <small>
-            The edge chains the curves are fitted to — found in the scan, or cut by a section.
-          </small>
+          <small>{tmarText("The edge chains the curves are fitted to — found in the scan, or cut by a section.")}</small>
         </div>
 
         <PluginPanelExtensions slot="settings.tools" />
-        <h3>Guidance</h3>
+        <h3>{tmarText("Guidance")}</h3>
         <label className="checkrow settings-check">
           <input
             type="checkbox"
@@ -504,12 +465,10 @@ export function SettingsModal() {
             onChange={(e) => setHintsOn(e.target.checked)}
           />
           <span>
-            <b>Guided hints</b> — ring the control to press next, until you have been through
-            a workspace twice. Switching it back on starts the guidance over.
-          </span>
+            <b>{tmarText("Guided hints")}</b>{tmarText(" — ring the control to press next, until you have been through a workspace twice. Switching it back on starts the guidance over.")}</span>
         </label>
 
-        <h3>Agents</h3>
+        <h3>{tmarText("Agents")}</h3>
         <label className="checkrow settings-check">
           <input
             type="checkbox"
@@ -518,17 +477,10 @@ export function SettingsModal() {
             onChange={(e) => setAgentLink(e.target.checked)}
           />
           <span>
-            <b>Local agent connection</b> — let an AI agent on this computer (Claude Code, Claude
-            Desktop, Cursor …) drive this tab through its ScanRuler tools, the scanruler-mcp server.
-            You watch every step here and can undo it. <b>Your data no longer stays on this
-            computer:</b> what the agent reads — measurements, reports, pictures of the part, file
-            names, notes — is processed by the agent and goes to its model’s provider, unless the
-            model runs on this computer. ScanRuler itself sends nothing anywhere; the connection is
-            to 127.0.0.1.
-          </span>
+            <b>{tmarText("Local agent connection")}</b>{tmarText(" — let an AI agent on this computer (Claude Code, Claude Desktop, Cursor …) drive this tab through its ScanRuler tools, the scanruler-mcp server. You watch every step here and can undo it. ")}<b>{tmarText("Your data no longer stays on this computer:")}</b>{tmarText(" what the agent reads — measurements, reports, pictures of the part, file names, notes — is processed by the agent and goes to its model’s provider, unless the model runs on this computer. ScanRuler itself sends nothing anywhere; the connection is to 127.0.0.1.")}</span>
         </label>
         <div className="setting">
-          <label htmlFor="agentport">Port</label>
+          <label htmlFor="agentport">{tmarText("Port")}</label>
           <NumberInput
             id="agentport"
             data-test="agent-port"
@@ -541,7 +493,7 @@ export function SettingsModal() {
               if (v !== null && Number.isInteger(v) && v >= 1 && v <= 65535) setAgentPort(v)
             }}
           />
-          <label htmlFor="agenttoken">Token</label>
+          <label htmlFor="agenttoken">{tmarText("Token")}</label>
           <input
             id="agenttoken"
             data-test="agent-token"
@@ -554,22 +506,20 @@ export function SettingsModal() {
           <small data-test="agent-status">
             {agentLink ? (
               <b>
-                {AGENT_STATUS[link.status]}
-                {link.status === 'connected' && link.server?.version ? ` (scanruler-mcp ${link.server.version})` : ''}.
+                {tmarText(AGENT_STATUS[link.status])}
+                {link.status === 'connected' && link.server?.version ? tmarText(" (scanruler-mcp {0})", [link.server.version]) : ''}.
               </b>
             ) : null}{' '}
-            {link.detail ?? (
+            {link.detail ? tmarText(link.detail) : (
               <>
-                <code>npx -y scanruler-mcp@latest --pair</code> prints the port and the token, and a link
-                that fills them in.
-              </>
+                <code>{tmarText("npx -y scanruler-mcp@latest --pair")}</code>{tmarText(" prints the port and the token, and a link that fills them in.")}</>
             )}
           </small>
         </div>
 
         <BetaWorkspaces />
 
-        <h3>Support</h3>
+        <h3>{tmarText("Support")}</h3>
         <label className="checkrow settings-check">
           <input
             type="checkbox"
@@ -578,10 +528,7 @@ export function SettingsModal() {
             onChange={(e) => setSupportCard(e.target.checked)}
           />
           <span>
-            <b>Support card</b> — the thank-you in the corner of the stage, with the ways to
-            give something back. Its × closes it for this visit; switched off here it stays
-            away, the big one below with it.
-          </span>
+            <b>{tmarText("Support card")}</b>{tmarText(" — the thank-you in the corner of the stage, with the ways to give something back. Its × closes it for this visit; switched off here it stays away, the big one below with it.")}</span>
         </label>
         <label className="checkrow settings-check">
           <input
@@ -592,10 +539,7 @@ export function SettingsModal() {
             onChange={(e) => setSupportAsk(e.target.checked)}
           />
           <span>
-            <b>Big card on saving</b> — the same thank-you in the middle of the screen after a save
-            or an export, at most once in ten minutes. The file does not wait for it. Its "Don't
-            show this again for a week" shows here as off until the week is over.
-          </span>
+            <b>{tmarText("Big card on saving")}</b>{tmarText(" — the same thank-you in the middle of the screen after a save or an export, at most once in ten minutes. The file does not wait for it. Its \"Don't show this again for a week\" shows here as off until the week is over.")}</span>
         </label>
       </div>
     </div>

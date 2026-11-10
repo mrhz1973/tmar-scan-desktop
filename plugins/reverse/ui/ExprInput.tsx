@@ -18,6 +18,8 @@ import { unitWord } from '../../../src/core/units'
 import { formatValue, type ParameterKind } from '../core/expression'
 import { useReverse } from '../state/reStore'
 import { fieldText, readField } from './reLength'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 /** The id of the datalist of parameter names, rendered once by the
  *  parameter list. */
@@ -58,6 +60,8 @@ export function ExprInput({
   /** Enter, once the text has been taken. */
   onEnter?: () => void
 }) {
+  useTmarLanguage()
+
   const scope = useReverse((s) => s.parameterTable.scope)
   const units = useUnits()
   const [error, setError] = useState<string | null>(null)
@@ -112,15 +116,15 @@ export function ExprInput({
           data-dimension={dataDimension}
           key={shown}
           defaultValue={shown}
-          title={expr ? `${expr} = ${result}` : undefined}
+          title={expr ? tmarText("{0} = {1}", [expr, result]) : tmarText(undefined)}
           onBlur={(e) => take(e.target.value)}
           onKeyDown={keys}
         />
-        <i>{expr ? `= ${result}` : word}</i>
+        <i>{expr ? tmarText("= {0}", [result]) : word}</i>
       </span>
       {error && (
         <span className="hint warn exprerror" data-test={`${testId}-error`}>
-          {error}
+          {tmarText(error)}
         </span>
       )}
     </>

@@ -13,8 +13,12 @@ import { progressPhaseText, useTaskActivity } from '../state/taskActivity'
 import { useDeviation } from '../state/deviationStore'
 import { useThickness } from '../state/thicknessStore'
 import { useFlat } from '../state/flatStore'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function StatusStrip() {
+  useTmarLanguage()
+
   const busy = useStore((s) => s.busy)
   const errorText = useStore((s) => s.errorText)
   const statusText = useStore((s) => s.statusText)
@@ -49,7 +53,7 @@ export function StatusStrip() {
     ? Math.round(Math.max(0, Math.min(100, progress * 100))) : null
   const percent = task ? task.percent : fraction
   const note = task?.text ?? (busy || working ? statusText || activity : activity) ?? statusText
-  const phase = progressPhaseText(note, percent)
+  const phase = progressPhaseText(tmarText(note), percent)
 
   const done = elements.filter((e) => e.fit)
   const dimensions = useStore((s) => s.dimensions)
@@ -57,44 +61,41 @@ export function StatusStrip() {
   return (
     <footer className="strip">
       <div data-test="app-activity-state" role="status">
-        <span className={lamp} /> {state}{state === 'WORKING' && percent !== null ? ` ${percent}%` : ''}
+        <span className={lamp} /> {tmarText(state)}{state === 'WORKING' && percent !== null ? tmarText(" {0}%", [percent]) : ''}
       </div>
       {elements.length > 0 && (
-        <div>
-          ELEMENTS <b>{done.length}</b>
-          {done.length !== elements.length && ` of ${elements.length}`} · DIM{' '}
+        <div>{tmarText("ELEMENTS ")}<b>{done.length}</b>
+          {done.length !== elements.length && (tmarText(" of {0}", [elements.length]))}{tmarText(" · DIM")}{' '}
           <b>{dimensions.length}</b>
         </div>
       )}
       <div className="msg grow">
         {errorText ? (
-          <span className="warn">⚠ {errorText}</span>
+          <span className="warn">⚠ {tmarText(errorText)}</span>
         ) : agent ? (
           <span data-test="agent-running">
-            <b>{agent.title}</b> <code>{agent.name}</code>
-            {phase ? ` — ${phase}` : ''}
+            <b>{tmarText(agent.title)}</b> <code>{agent.name}</code>
+            {phase ? tmarText(" — {0}", [tmarText(phase)]) : ''}
           </span>
         ) : active ? (
-          <span data-test="task-progress">{phase}</span>
+          <span data-test="task-progress">{tmarText(phase)}</span>
         ) : (
-          statusText
+          tmarText(statusText)
         )}
       </div>
       <button
         className="stripimprint"
         onClick={() => openImprint(true)}
-        title="Impressum & Datenschutzerklärung"
+        title={tmarText("Impressum & Datenschutzerklärung")}
       >
-        § <span className="btxt">IMPRINT</span>
+        § <span className="btxt">{tmarText("IMPRINT")}</span>
       </button>
       <a href="https://www.cnckitchen.com" target="_blank" rel="noreferrer" data-test="local-note">
         {agentConnected ? (
-          <>
-            AGENT CONNECTED<span className="ltxt"> · WHAT IT READS GOES TO ITS AI MODEL</span>
+          <>{tmarText("AGENT CONNECTED")}<span className="ltxt">{tmarText(" · WHAT IT READS GOES TO ITS AI MODEL")}</span>
           </>
         ) : (
-          <>
-            LOCAL ONLY<span className="ltxt"> · FILES NEVER LEAVE YOUR BROWSER</span>
+          <>{tmarText("LOCAL ONLY")}<span className="ltxt">{tmarText(" · FILES NEVER LEAVE YOUR BROWSER")}</span>
           </>
         )}
       </a>

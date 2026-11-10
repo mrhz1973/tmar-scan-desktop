@@ -80,7 +80,7 @@ export async function finish(browser, consoleErrors) {
  *  minimised window hides as a person's would); `agentDataOk: false` leaves the
  *  agent connection's warning unanswered.
  *  Returns { browser, page, consoleErrors }. */
-export async function launchApp({ width = 1500, height = 950, protocolTimeout, url = APP_URL, headless = 'new', agentDataOk = true, userDataDir } = {}) {
+export async function launchApp({ width = 1500, height = 950, protocolTimeout, url = APP_URL, headless = 'new', agentDataOk = true, userDataDir, language = 'en' } = {}) {
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     // Only an explicitly owned test profile; callers must never use a personal profile.
@@ -91,6 +91,11 @@ export async function launchApp({ width = 1500, height = 950, protocolTimeout, u
     ...(protocolTimeout ? { protocolTimeout } : {}),
   })
   const page = await browser.newPage()
+  // Existing functional checks use explicit English copy. The Italian suite
+  // passes language: 'it' and also verifies a fresh browser's Italian default.
+  await page.evaluateOnNewDocument(value => {
+    if (value) try { localStorage.setItem('tmar.language', value) } catch { /* Optional test preference. */ }
+  }, language)
   const consoleErrors = []
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(m.text())

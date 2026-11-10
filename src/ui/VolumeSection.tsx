@@ -14,6 +14,8 @@ import { VOLUME_COLORS } from '../viewer/volumeLayer'
 import { InfoDot } from './InfoDot'
 import { useLength } from '../app/useUnits'
 import { fmtVol, lengthInputText, MM_PER_INCH, unitWord, type DisplayUnits } from '../core/units'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** Rows in the list; the rest are counted under it. */
 const LISTED = 15
@@ -37,6 +39,8 @@ export function VolumeSection({
   /** Frame a box in the viewport, in the reference's frame. */
   onFrame: (min: Vec3, max: Vec3) => void
 }) {
+  useTmarLanguage()
+
   const volume = useDeviation((s) => s.volume)
   const status = useDeviation((s) => s.volumeStatus)
   const message = useDeviation((s) => s.volumeMessage)
@@ -55,63 +59,46 @@ export function VolumeSection({
 
   return (
     <div className={className} data-test="volume-section">
-      <div className="sec-head">
-        Volume error
-        <InfoDot title="Volume error">
-          <p>
-            The scan and the reference compared as solids rather than surfaces: on a grid of small
-            cells, each cell inside one and not the other is an error, and touching cells make a
-            region. <b>Excess</b> is material the reference has and the part has not, <b>missing</b>{' '}
-            the other way round — a boss not modelled, a pocket not cut, wherever it is, behind a wall
-            or inside a cavity too.
-          </p>
-          <p>
-            Where the scan has a hole, the reference stands in for it. What the scan still does not
-            say is <b>unsure</b>, never called an error. Within the tolerance of the scan's surface a
-            difference is the scan's noise and not counted, and nothing thinner than about two cells
-            is seen: the surface map stays the tool for fine offsets.
-          </p>
+      <div className="sec-head">{tmarText("Volume error")}<InfoDot title={tmarText("Volume error")}>
+          <p>{tmarText("The scan and the reference compared as solids rather than surfaces: on a grid of small cells, each cell inside one and not the other is an error, and touching cells make a region. ")}<b>{tmarText("Excess")}</b>{tmarText(" is material the reference has and the part has not, ")}<b>{tmarText("missing")}</b>{' '}{tmarText("the other way round — a boss not modelled, a pocket not cut, wherever it is, behind a wall or inside a cavity too.")}</p>
+          <p>{tmarText("Where the scan has a hole, the reference stands in for it. What the scan still does not say is ")}<b>{tmarText("unsure")}</b>{tmarText(", never called an error. Within the tolerance of the scan's surface a difference is the scan's noise and not counted, and nothing thinner than about two cells is seen: the surface map stays the tool for fine offsets.")}</p>
         </InfoDot>
       </div>
       <button className="primary block" data-test="volume-measure" disabled={running} onClick={onMeasure}>
         {running ? (
           <>
-            <span className="spinner" /> Finding volume errors…{progress !== null ? ` ${Math.round(progress * 100)} %` : ''}
+            <span className="spinner" />{tmarText(" Finding volume errors…")}{progress !== null ? tmarText(" {0} %", [Math.round(progress * 100)]) : ''}
           </>
         ) : volume ? (
-          'Find volume errors again'
+          tmarText('Find volume errors again')
         ) : (
-          'Find volume errors'
+          tmarText('Find volume errors')
         )}
       </button>
-      {message && <p className="alarmtext">{message}</p>}
+      {message && <p className="alarmtext">{tmarText(message)}</p>}
       {!volume && !running && !message && (
-        <p className="hint">
-          Material the model has too much of or lacks — a boss not modelled, a pocket not cut — as volumes. Takes some seconds on a large scan; uses the tolerance ±{typed(tolerance)}.
+        <p className="hint">{tmarText("Material the model has too much of or lacks — a boss not modelled, a pocket not cut — as volumes. Takes some seconds on a large scan; uses the tolerance ±")}{typed(tolerance)}.
         </p>
       )}
       {volume && (
         <>
-          {volume.tolerance !== tolerance && <p className="hint">Measured at ±{typed(volume.tolerance)}; the tolerance is ±{typed(tolerance)} now.</p>}
+          {volume.tolerance !== tolerance && <p className="hint">{tmarText("Measured at ±")}{typed(volume.tolerance)}{tmarText("; the tolerance is ±")}{typed(tolerance)}{tmarText(" now.")}</p>}
           {(['excess', 'missing', 'unsure'] as const).map((k) => (
             <div className="kv" key={k} data-test={`volume-total-${k}`}>
               <span className="dot" style={{ background: VOLUME_COLORS[k] }} />
-              <span className="name">{KIND_NAMES[k]}</span>
+              <span className="name">{tmarText(KIND_NAMES[k])}</span>
               <b>
                 {mm3(volume.totals[k].volume)} · {volume.totals[k].share.toFixed(2)} %
               </b>
             </div>
           ))}
-          <p className="hint">
-            Cells {len.fmt(volume.cell, 2)} — sees {len.fmt(volume.smallestSeen, 2)} and thicker. Of the
-            reference's {mm3(volume.modelVolume)}, in {(volume.timings.total / 1000).toFixed(1)} s.
-          </p>
+          <p className="hint">{tmarText("Cells ")}{len.fmt(volume.cell, 2)}{tmarText(" — sees ")}{len.fmt(volume.smallestSeen, 2)}{tmarText(" and thicker. Of the reference's ")}{mm3(volume.modelVolume)}{tmarText(", in ")}{(volume.timings.total / 1000).toFixed(1)}{tmarText(" s.")}</p>
           <label className="checkrow">
             <input type="checkbox" data-test="volume-show" checked={show} onChange={(e) => setShow(e.target.checked)} />
-            <span>Show the regions</span>
+            <span>{tmarText("Show the regions")}</span>
           </label>
           {kept.length === 0 ? (
-            <p className="hint">No region bigger than a few cells.</p>
+            <p className="hint">{tmarText("No region bigger than a few cells.")}</p>
           ) : (
             <div onPointerLeave={() => setHover(null)}>
               {kept.slice(0, LISTED).map((r) => {
@@ -122,19 +109,18 @@ export function VolumeSection({
                     key={index}
                     data-test="volume-region"
                     style={{ cursor: 'pointer' }}
-                    title={`${KIND_NAMES[r.kind]}: ${mm3(r.volume)}, up to ${len.fmt(r.maxDepth, 2)} from the scan, about ${len.fmt(r.thickness, 2)} thick — ${r.thickness < 3 * volume.cell ? 'a layer: a face standing off' : 'a lump: material there or not'}. Click to frame it.`}
+                    title={tmarText("{0}: {1}, up to {2} from the scan, about {3} thick — {4}. Click to frame it.", [tmarText(KIND_NAMES[r.kind]), mm3(r.volume), len.fmt(r.maxDepth, 2), len.fmt(r.thickness, 2), r.thickness < 3 * volume.cell ? tmarText("a layer: a face standing off") : tmarText("a lump: material there or not")])}
                     onPointerEnter={() => setHover(index)}
                     onClick={() => onFrame(r.box.min, r.box.max)}
                   >
                     <span className="dot" style={{ background: VOLUME_COLORS[r.kind] }} />
                     <span className="name">
-                      {KIND_NAMES[r.kind]} · {len.fmt(r.maxDepth, 1)} deep
-                    </span>
+                      {tmarText(KIND_NAMES[r.kind])} · {len.fmt(r.maxDepth, 1)}{tmarText(" deep")}</span>
                     <b>{mm3(r.volume)}</b>
                   </div>
                 )
               })}
-              {kept.length > LISTED && <p className="hint">and {kept.length - LISTED} smaller.</p>}
+              {kept.length > LISTED && <p className="hint">{tmarText("and ")}{kept.length - LISTED}{tmarText(" smaller.")}</p>}
             </div>
           )}
         </>

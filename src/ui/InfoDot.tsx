@@ -11,6 +11,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** Gap between the dot and the card, and the margin the card keeps to the
  *  window edge. */
@@ -27,6 +29,8 @@ export function InfoDot({
   children: ReactNode
   testId?: string
 }) {
+  useTmarLanguage()
+
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const dotRef = useRef<HTMLButtonElement>(null)
@@ -100,7 +104,7 @@ export function InfoDot({
         // not to the explanation between them. The mouse still opens it.
         tabIndex={-1}
         aria-expanded={open}
-        aria-label={`More about ${title}`}
+        aria-label={tmarText("More about {0}", [title])}
         onClick={(e) => {
           // The dot lives inside <label> rows, where an unswallowed click
           // would toggle the checkbox or focus the input it labels.
@@ -108,9 +112,7 @@ export function InfoDot({
           e.stopPropagation()
           setOpen((v) => !v)
         }}
-      >
-        i
-      </button>
+      >{tmarText("i")}</button>
       {open &&
         createPortal(
           <div

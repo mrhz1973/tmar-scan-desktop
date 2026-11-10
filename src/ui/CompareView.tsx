@@ -26,6 +26,8 @@ import { CompareScene } from '../viewer/CompareScene'
 import { schemeById } from '../viewer/navSchemes'
 import type { SceneManager } from '../viewer/SceneManager'
 import { sceneTheme } from '../viewer/viewThemes'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function CompareView({
   scene,
@@ -44,6 +46,8 @@ export function CompareView({
    *  but paused and out of the layout. */
   active: boolean
 }) {
+  useTmarLanguage()
+
   const holder = useRef<HTMLDivElement>(null)
   const compareRef = useRef<CompareScene | null>(null)
   const navScheme = useStore((s) => s.navScheme)
@@ -119,7 +123,7 @@ export function CompareView({
     <div className="comparehalf" data-test="compare-half" hidden={!active}>
       <div className="compareview" ref={holder} />
       <div className="splitcap">
-        <b>{role}</b>
+        <b>{tmarText(role)}</b>
         <span>{name}</span>
       </div>
     </div>

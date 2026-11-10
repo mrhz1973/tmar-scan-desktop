@@ -28,6 +28,8 @@ import { useEffect, useState } from 'react'
 import { usePrefs } from '../state/prefsStore'
 import { useStore } from '../state/store'
 import { ASK_OFF_MS, useSupportAsk } from '../state/supportAskStore'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 let closedThisLoad = false
 
@@ -65,11 +67,13 @@ const supportLinks = (onOpen?: () => void) =>
       <span className="sc-icon" aria-hidden="true">
         {l.icon}
       </span>
-      {l.label}
+      {tmarText(l.label)}
     </a>
   ))
 
 export function SupportCard() {
+  useTmarLanguage()
+
   const [closed, setClosed] = useState(closedThisLoad)
   const shown = usePrefs((s) => s.supportCard)
   if (closed || !shown) return null
@@ -80,21 +84,18 @@ export function SupportCard() {
   return (
     <aside className="supportcard" data-test="support-card">
       <div className="sc-head">
-        <b>Thanks for using ScanRuler!</b>
-        <button className="sc-x" onClick={close} title="Close" aria-label="Close">
-          ×
-        </button>
+        <b>{tmarText("Thanks for using ScanRuler!")}</b>
+        <button className="sc-x" onClick={close} title={tmarText("Close")} aria-label={tmarText("Close")}>{tmarText("×")}</button>
       </div>
-      <p>
-        This tool is provided <b>completely free</b> by CNC Kitchen. Once you have finished
-        measuring, why not have a look at the store that keeps us making things like this?
-      </p>
+      <p>{tmarText("This tool is provided ")}<b>{tmarText("completely free")}</b>{tmarText(" by CNC Kitchen. Once you have finished measuring, why not have a look at the store that keeps us making things like this?")}</p>
       {supportLinks()}
     </aside>
   )
 }
 
 export function SupportAsk() {
+  useTmarLanguage()
+
   const open = useSupportAsk((s) => s.open)
   const closeAsk = useSupportAsk((s) => s.close)
   const errorText = useStore((s) => s.errorText)
@@ -144,15 +145,9 @@ export function SupportAsk() {
         aria-labelledby="support-ask-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="support-ask-title">Thanks for using ScanRuler by CNC Kitchen!</h2>
-        <p>
-          This tool is provided <b>completely free</b> by CNC Kitchen. Your file is on its way —
-          why not check out the{' '}
-          <a href={store.href} target="_blank" rel="noopener noreferrer" onClick={close}>
-            store
-          </a>{' '}
-          that helps us keep making things like this?
-        </p>
+        <h2 id="support-ask-title">{tmarText("Thanks for using ScanRuler by CNC Kitchen!")}</h2>
+        <p>{tmarText("This tool is provided ")}<b>{tmarText("completely free")}</b>{tmarText(" by CNC Kitchen. Your file is on its way — why not check out the")}{' '}
+          <a href={store.href} target="_blank" rel="noopener noreferrer" onClick={close}>{tmarText("store")}</a>{' '}{tmarText("that helps us keep making things like this?")}</p>
         {supportLinks(close)}
         <label className="supportask-off">
           <input
@@ -160,13 +155,9 @@ export function SupportAsk() {
             data-test="support-ask-off"
             checked={offForAWeek}
             onChange={(e) => setOffForAWeek(e.target.checked)}
-          />
-          Don't show this again for a week
-        </label>
+          />{tmarText("Don't show this again for a week")}</label>
         <div className="supportask-foot">
-          <button data-test="support-ask-close" autoFocus onClick={close}>
-            Close &amp; Continue
-          </button>
+          <button data-test="support-ask-close" autoFocus onClick={close}>{tmarText("Close & Continue")}</button>
         </div>
       </div>
     </div>

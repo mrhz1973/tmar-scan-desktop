@@ -12,6 +12,8 @@ import type { DisplayUnits } from '../core/units'
 import { useUnits } from '../app/useUnits'
 import { useDismiss } from './useDismiss'
 import { useOpenUp } from './useOpenUp'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 const FORMAT_LABEL: Record<MeshFormat, string> = {
   stl: 'STL in millimetres',
@@ -31,7 +33,7 @@ function formatsFor(units: DisplayUnits): readonly MeshFormat[] {
 }
 
 export function ExportMeshButton({
-  label = 'Export mesh',
+  label,
   testId,
   disabled,
   title,
@@ -47,6 +49,8 @@ export function ExportMeshButton({
   block?: boolean
   onExport: (format: MeshFormat) => void
 }) {
+  useTmarLanguage()
+
   const [open, setOpen] = useState(false)
   const units = useUnits()
   const menuId = useId()
@@ -68,13 +72,13 @@ export function ExportMeshButton({
         onClick={() => setOpen((o) => !o)}
         title={title}
       >
-        {label} <i aria-hidden>▾</i>
+        {label ?? tmarText('Export mesh')} <i aria-hidden>▾</i>
       </button>
       {open && !disabled && (
         <div className={'picklist' + (up ? ' up' : '')} role="menu" ref={list}>
           {formatsFor(units).map((f) => (
-            <button key={f} type="button" role="menuitem" className="pickoption" data-test={`${testId}-${f}`} title={FORMAT_TITLE[f]} onClick={() => choose(f)}>
-              {FORMAT_LABEL[f]}
+            <button key={f} type="button" role="menuitem" className="pickoption" data-test={`${testId}-${f}`} title={tmarText(FORMAT_TITLE[f])} onClick={() => choose(f)}>
+              {tmarText(FORMAT_LABEL[f])}
             </button>
           ))}
         </div>

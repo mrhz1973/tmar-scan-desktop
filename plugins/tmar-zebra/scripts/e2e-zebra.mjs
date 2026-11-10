@@ -42,6 +42,8 @@ try {
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()) })
   page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`))
   await page.evaluateOnNewDocument(() => {
+    // This functional scenario asserts English copy; e2e-italian covers the default locale.
+    localStorage.setItem('tmar.language', 'en')
     localStorage.setItem('scanruler.askstlunits', '0')
     localStorage.setItem('scanruler.beta', 'all')
     localStorage.setItem('scanruler.supportask', '0')

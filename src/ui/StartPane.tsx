@@ -14,6 +14,8 @@ import { usePulse } from '../app/useHints'
 import { SAMPLE_DETAIL } from '../app/sampleScan'
 import { bundleFiles, droppedFiles } from '../app/scanFiles'
 import { HiddenFileInput } from './ModelSlot'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export interface StartSlot {
   role: string
@@ -25,6 +27,8 @@ export interface StartSlot {
 }
 
 function Tile({ role, what, name, accept = SCAN_ACCEPT, onOpen }: StartSlot) {
+  useTmarLanguage()
+
   const inputRef = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
   // Keyed to the step rather than to this pane, so that the tile and the
@@ -59,20 +63,20 @@ function Tile({ role, what, name, accept = SCAN_ACCEPT, onOpen }: StartSlot) {
       }}
     >
       <HiddenFileInput inputRef={inputRef} accept={accept} onOpen={onOpen} multiple={accept === SCAN_ACCEPT} />
-      <div className="starttile-role">{role}</div>
-      <div className="starttile-what">{what}</div>
+      <div className="starttile-role">{tmarText(role)}</div>
+      <div className="starttile-what">{tmarText(what)}</div>
       {name ? (
         <div className="starttile-name" title={name}>
           ✓ {name}
         </div>
       ) : (
-        <div className="starttile-drop">Drop it here</div>
+        <div className="starttile-drop">{tmarText("Drop it here")}</div>
       )}
       <button
         className={((name ? '' : 'primary ') + (pulse ? 'pulse' : '')).trim() || undefined}
         onClick={() => inputRef.current?.click()}
       >
-        {name ? 'Replace…' : 'Choose file…'}
+        {name ? tmarText("Replace…") : tmarText("Choose file…")}
       </button>
     </div>
   )
@@ -94,6 +98,8 @@ export function StartPane({
   /** For someone with no scan to hand: the one that ships with the build. */
   onOpenSample?: () => Promise<void>
 }) {
+  useTmarLanguage()
+
   // A workspace that wants two models can have the second one dropped first —
   // a STEP file can only ever be the reference — so the prompt says what is
   // still outstanding rather than repeating the blurb at someone who has
@@ -104,37 +110,35 @@ export function StartPane({
   return (
     <div className="startpane" data-test="start-pane">
       <div className="starthead">
-        <b>{title}</b>
-        <span>{started ? 'One to go — load the scan to measure it.' : blurb}</span>
+        <b>{tmarText(title)}</b>
+        <span>{started ? tmarText("One to go — load the scan to measure it.") : tmarText(blurb)}</span>
       </div>
       <div className="starttiles">
         {slots.map((slot) => (
           <Tile key={slot.role} {...slot} />
         ))}
       </div>
-      <div className="startfoot">
-        Drag &amp; drop works anywhere in the window — the first empty slot takes it.
-      </div>
+      <div className="startfoot">{tmarText("Drag & drop works anywhere in the window — the first empty slot takes it.")}</div>
       {onOpenSample && (
         <div className="startsample">
           <button
             data-test="start-sample"
-            title={SAMPLE_DETAIL}
+            title={tmarText(SAMPLE_DETAIL)}
             disabled={fetching}
             onClick={() => {
               setFetching(true)
               void onOpenSample().finally(() => setFetching(false))
             }}
           >
-            {fetching ? 'Opening…' : 'Open a sample scan'}
+            {fetching ? tmarText("Opening…") : tmarText("Open a sample scan")}
           </button>
-          <small>No scan to hand? {SAMPLE_DETAIL}.</small>
+          <small>{tmarText("No scan to hand? ")}{tmarText(SAMPLE_DETAIL)}.</small>
         </div>
       )}
       {skip && (
         <div className="startskip">
-          <button className="ghost" data-test="start-skip" title={skip.title} onClick={skip.onClick}>
-            {skip.label}
+          <button className="ghost" data-test="start-skip" title={tmarText(skip.title)} onClick={skip.onClick}>
+            {tmarText(skip.label)}
           </button>
         </div>
       )}

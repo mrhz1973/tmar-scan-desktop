@@ -28,6 +28,8 @@ import { commonFolder, folderOf } from '../core/bodyFolders'
 import type { FaceInfo } from '../core/build'
 import { folderPathText, isolateBodies, othersHidden } from './BodyList'
 import { pinNoteOnItems, useNotesOn } from '../app/useNotePins'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 /** What the status line says as a sketch opens on a plane — from a chip or
  *  from the panel's Sketch on list. */
@@ -246,6 +248,8 @@ function chipsFor(sel: ReSelection): { key: string; label: string; title: string
  *  that shows them all again once they are — and, for picks on several,
  *  a component made of them. */
 function BodyLine({ ids }: { ids: number[] }) {
+  useTmarLanguage()
+
   const bodies = useReverse((s) => s.bodies)
   const folders = useReverse((s) => s.bodyFolders)
   const these = bodies.filter((b) => ids.includes(b.id))
@@ -258,37 +262,33 @@ function BodyLine({ ids }: { ids: number[] }) {
   return (
     <div className="chipbody" data-test="chip-body">
       {one && <span className="dot" style={{ background: one.color ?? bodyColor(one.id) }} />}
-      <span className="chipbody-name" title={one ? (path ? `${one.name}, in ${path}` : one.name) : names}>
-        <span data-test="chip-body-name">{one ? one.name : `${these.length} bodies`}</span>
-        {path && <small data-test="chip-body-path">in {path}</small>}
+      <span className="chipbody-name" title={one ? (path ? tmarText("{0}, in {1}", [one.name, path]) : one.name) : names}>
+        <span data-test="chip-body-name">{one ? one.name : tmarText("{0} bodies", [these.length])}</span>
+        {path && <small data-test="chip-body-path">{tmarText("in ")}{path}</small>}
       </span>
       <span className="chipbody-keys">
         <button
           data-test="chip-hide-body"
-          title={one ? `Hide ${one.name} — its eye in the body list brings it back` : `Hide these bodies — ${names}`}
+          title={one ? tmarText("Hide {0} — its eye in the body list brings it back", [one.name]) : tmarText("Hide these bodies — {0}", [names])}
           onClick={() => {
             re().setSelection(null)
             re().setBodiesVisible(ids, false)
           }}
-        >
-          Hide
-        </button>
+        >{tmarText("Hide")}</button>
         {bodies.length > these.length && (
-          <button data-test="chip-hide-others" title={alone ? 'Show every body again' : `Hide every body but ${one ? one.name : 'these'}`} onClick={() => (alone ? re().setAllBodiesVisible(true) : isolateBodies(ids))}>
-            {alone ? 'Show all' : 'Hide others'}
+          <button data-test="chip-hide-others" title={alone ? tmarText("Show every body again") : tmarText("Hide every body but {0}", [one ? one.name : tmarText("these")])} onClick={() => (alone ? re().setAllBodiesVisible(true) : isolateBodies(ids))}>
+            {alone ? tmarText("Show all") : tmarText("Hide others")}
           </button>
         )}
         {these.length > 1 && (
           <button
             data-test="chip-make-component"
-            title={`Put ${names} into a new component in the body list`}
+            title={tmarText("Put {0} into a new component in the body list", [names])}
             onClick={() => {
               const id = re().addBodyFolder(commonFolder(re().bodyFolders, { bodies: ids }), { bodies: ids })
               useStore.getState().setStatus(`${re().bodyFolders.find((f) => f.id === id)?.name ?? 'A component'} holds them now — double-click its name in the body list to name it.`)
             }}
-          >
-            Make component
-          </button>
+          >{tmarText("Make component")}</button>
         )}
       </span>
     </div>
@@ -296,6 +296,8 @@ function BodyLine({ ids }: { ids: number[] }) {
 }
 
 export function ContextChips() {
+  useTmarLanguage()
+
   const selection = useReverse((s) => s.selection)
   const notesOn = useNotesOn()
   const units = useUnits()
@@ -349,28 +351,28 @@ export function ContextChips() {
       {info && (
         <div className="chipinfo" data-test="chip-info">
           {items.length > 0 && <BodyLine ids={[...new Set(items.map((i) => i.bodyId))]} />}
-          <b>{info.title}</b>
+          <b>{tmarText(info.title)}</b>
           {info.rows.map((r) => (
             <div key={r.label} className="chipinfo-row">
-              <span>{r.label}</span>
+              <span>{tmarText(r.label)}</span>
               <span className="chipinfo-value">{r.value}</span>
             </div>
           ))}
-          {selection.kind !== 'bodyItems' && <div className="chipinfo-tip">Ctrl+click adds · Shift+drag a window</div>}
+          {selection.kind !== 'bodyItems' && <div className="chipinfo-tip">{tmarText("Ctrl+click adds · Shift+drag a window")}</div>}
         </div>
       )}
       {chips.map((c) => (
         <button
           key={c.key}
           data-test={`chip-${c.key}`}
-          title={c.title}
+          title={tmarText(c.title)}
           onClick={() => {
             useReverse.getState().setSelection(null)
             c.run()
           }}
         >
           {c.key === 'thread' ? <ThreadIcon size={16} /> : CHIP_ICON[c.key] && <KeyIcon name={CHIP_ICON[c.key]} size={16} />}
-          {c.label}
+          {tmarText(c.label)}
         </button>
       ))}
     </div>

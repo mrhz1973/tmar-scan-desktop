@@ -27,6 +27,8 @@ import { FitButton } from './FitButton'
 import { BrushNumber, BrushSlider } from './MarkTools'
 import { modLabel } from './platform'
 import { useLength } from '../app/useUnits'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** Below this the picked points are effectively on one line. */
 const MIN_CONDITIONING = 0.02
@@ -69,6 +71,8 @@ function Half({
   onPick: (p: Vec3) => void
   onPaintChange?: (count: number) => void
 }) {
+  useTmarLanguage()
+
   const holder = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<PickScene | null>(null)
   const pickRef = useRef(onPick)
@@ -151,8 +155,8 @@ function Half({
   return (
     <div className={'splithalf' + (active ? ' active' : '')}>
       <div className="splithead">
-        <b>{title}</b>
-        <span>{subtitle}</span>
+        <b>{tmarText(title)}</b>
+          <span>{subtitle}</span>
       </div>
       {tools}
       <div className="splitview" ref={holder}>
@@ -165,6 +169,8 @@ function Half({
 /** The scan half's second line: what the left button does on it, and what has
  *  been selected so far. */
 function PickTools({ onClear }: { onClear: () => void }) {
+  useTmarLanguage()
+
   // The same slice MarkTools draws: `inverts` is nothing this strip shows.
   const m = useMark(
     useShallow((s) => ({
@@ -195,19 +201,19 @@ function PickTools({ onClear }: { onClear: () => void }) {
             className={m.gesture === g.id ? 'withicon on' : 'withicon'}
             data-test={`pick-${g.id ?? 'points'}`}
             aria-pressed={m.gesture === g.id}
-            title={g.title}
+            title={tmarText(g.title)}
             // Clicking the live gesture again hands the camera back and the
             // clicks back to picking — the same key disarms it.
             onClick={() => m.setGesture(m.gesture === g.id ? null : g.id)}
           >
             <Icon name={g.icon} size={16} />
-            {g.label}
+            {tmarText(g.label)}
           </button>
         ))}
       </div>
       {m.gesture === 'brush' && (
         <label className="picksize">
-          <span>Ø</span>
+          <span>{tmarText("Ø")}</span>
           <BrushNumber diameter={m.diameter} setDiameter={m.setDiameter} testId="pick-brush-diameter" />
           <BrushSlider diameter={m.diameter} setDiameter={m.setDiameter} brush={brush} />
         </label>
@@ -217,11 +223,9 @@ function PickTools({ onClear }: { onClear: () => void }) {
           className={m.straight ? 'on' : ''}
           data-test="pick-straight"
           aria-pressed={m.straight}
-          title={`Each drag is a straight line from press to release — ${modLabel}-drag inverts this for one drag`}
+          title={tmarText("Each drag is a straight line from press to release — {0}-drag inverts this for one drag", [modLabel])}
           onClick={() => m.setStraight(!m.straight)}
-        >
-          Straight
-        </button>
+        >{tmarText("Straight")}</button>
       )}
       {m.gesture !== null && (
         <>
@@ -229,40 +233,30 @@ function PickTools({ onClear }: { onClear: () => void }) {
             className={m.erase ? 'withicon on' : 'withicon'}
             data-test="pick-erase"
             aria-pressed={m.erase}
-            title="The gesture takes surface out of the selection instead of adding it — the right button always does, and Alt inverts either way"
+            title={tmarText("The gesture takes surface out of the selection instead of adding it — the right button always does, and Alt inverts either way")}
             onClick={() => m.setErase(!m.erase)}
           >
             <Icon name="erase" size={16} />
-            {m.erase ? 'Erasing' : 'Erase'}
+            {m.erase ? tmarText("Erasing") : tmarText("Erase")}
           </button>
           <button
             className={m.backfaces ? 'on' : ''}
             data-test="pick-backfaces"
             aria-pressed={m.backfaces}
-            title="Go through the part: take surface facing away from you and surface hidden behind nearer surface as well — off, a window or lasso takes only what you can see"
+            title={tmarText("Go through the part: take surface facing away from you and surface hidden behind nearer surface as well — off, a window or lasso takes only what you can see")}
             onClick={() => m.setBackfaces(!m.backfaces)}
-          >
-            ⧉ Through
-          </button>
+          >{tmarText("⧉ Through")}</button>
         </>
       )}
       <button
         data-test="pick-invert"
         disabled={m.count === 0}
-        title="Select everything that is not selected and drop what is — to fit on all but a fixture or a riser, select it and invert"
+        title={tmarText("Select everything that is not selected and drop what is — to fit on all but a fixture or a riser, select it and invert")}
         onClick={m.invert}
-      >
-        Invert selection
-      </button>
-      <button data-test="pick-clear" disabled={m.count === 0} onClick={onClear}>
-        Clear selection
-      </button>
+      >{tmarText("Invert selection")}</button>
+      <button data-test="pick-clear" disabled={m.count === 0} onClick={onClear}>{tmarText("Clear selection")}</button>
       <span className={short ? 'pickcount short' : 'pickcount'} data-test="pick-count">
-        {m.count === 0
-          ? 'Nothing selected — the whole scan is fitted'
-          : short
-            ? `${m.count.toLocaleString('en-US')} points — too few to fit on, select more or clear it`
-            : `${m.count.toLocaleString('en-US')} points selected — only these are fitted`}
+        {m.count === 0 ? tmarText("Nothing selected — the whole scan is fitted") : short ? tmarText("{0} points — too few to fit on, select more or clear it", [m.count.toLocaleString('en-US')]) : tmarText("{0} points selected — only these are fitted", [m.count.toLocaleString('en-US')])}
       </span>
     </div>
   )
@@ -291,6 +285,8 @@ export function SplitPicker({
   onClearSelection: () => void
   onCancel: () => void
 }) {
+  useTmarLanguage()
+
   // The picker's own slice: the store is also written on every map repaint,
   // probe and band change, and none of those is drawn here.
   const {
@@ -357,7 +353,7 @@ export function SplitPicker({
     <div className="splitpicker" data-test="split-picker">
       <div className="splitbody">
         <Half
-          title="Scan"
+          title={tmarText("Scan")}
           subtitle={scanName}
           geometry={scanGeometry}
           markers={scanMarkers}
@@ -368,7 +364,7 @@ export function SplitPicker({
           onPaintChange={(count) => useMark.getState().setCount(count)}
         />
         <Half
-          title="Reference"
+          title={tmarText("Reference")}
           subtitle={nominalName}
           geometry={nominalGeometry}
           markers={nominalMarkers}
@@ -380,20 +376,10 @@ export function SplitPicker({
       <div className="splitbar">
         <div className="splitstep">
           <b>
-            {selecting
-              ? 'Selecting the surface to fit on — drag on the scan'
-              : waitingFor === 'scan'
-                ? `Click point ${pairs.length + 1} on the scan`
-                : `Now click the same feature on the reference`}
+            {selecting ? tmarText("Selecting the surface to fit on — drag on the scan") : waitingFor === 'scan' ? tmarText("Click point {0} on the scan", [pairs.length + 1]) : tmarText("Now click the same feature on the reference")}
           </b>
           <span>
-            {selecting
-              ? 'Left-drag selects, right-drag takes it back, Shift-drag still orbits · Pick points when you are done'
-              : degenerate
-                ? `${pairs.length} pairs, but they are nearly in a line — add one well away from it.`
-                : enough
-                  ? `${pairs.length} pairs — enough to align. More improves the starting guess.`
-                  : `${pairs.length} of 3 pairs. Spread them out: three points in a line cannot fix a rotation.`}
+            {selecting ? tmarText("Left-drag selects, right-drag takes it back, Shift-drag still orbits · Pick points when you are done") : degenerate ? tmarText("{0} pairs, but they are nearly in a line — add one well away from it.", [pairs.length]) : enough ? tmarText("{0} pairs — enough to align. More improves the starting guess.", [pairs.length]) : tmarText("{0} of 3 pairs. Spread them out: three points in a line cannot fix a rotation.", [pairs.length])}
           </span>
         </div>
         <div className="splitpins">
@@ -410,20 +396,14 @@ export function SplitPicker({
         </div>
         <div className="grow" />
         {alignMessage && alignStatus === 'failed' && (
-          <span className="splitwarn">{alignMessage}</span>
+          <span className="splitwarn">{tmarText(alignMessage)}</span>
         )}
         {solved && !degenerate && (
-          <span className="splitfit">picked spread {len.fmt(solved.rms, 2)}</span>
+          <span className="splitfit">{tmarText("picked spread ")}{len.fmt(solved.rms, 2)}</span>
         )}
-        <button disabled={running || (!pairs.length && !pendingScan)} onClick={undoPair}>
-          Undo
-        </button>
-        <button disabled={running || (!pairs.length && !pendingScan)} onClick={clearPairs}>
-          Clear
-        </button>
-        <button data-test="split-cancel" disabled={running} onClick={onCancel}>
-          Cancel
-        </button>
+        <button disabled={running || (!pairs.length && !pendingScan)} onClick={undoPair}>{tmarText("Undo")}</button>
+        <button disabled={running || (!pairs.length && !pendingScan)} onClick={clearPairs}>{tmarText("Clear")}</button>
+        <button data-test="split-cancel" disabled={running} onClick={onCancel}>{tmarText("Cancel")}</button>
         {running ? (
           <button
             className="primary"
@@ -432,7 +412,7 @@ export function SplitPicker({
             onClick={onStop}
           >
             <span className="spinner" />
-            {alignStopping ? 'Stopping…' : 'Stop'}
+            {alignStopping ? tmarText("Stopping…") : tmarText("Stop")}
           </button>
         ) : (
           <button
@@ -440,9 +420,7 @@ export function SplitPicker({
             data-test="split-align"
             disabled={!enough}
             onClick={onAlign}
-          >
-            Align from these points
-          </button>
+          >{tmarText("Align from these points")}</button>
         )}
       </div>
     </div>

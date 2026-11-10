@@ -243,6 +243,7 @@ try {
   page.on('pageerror', error => report.consoleErrors.push('fresh-context pageerror: ' + error.message))
   page.on('console', message => { if (message.type() === 'error') report.consoleErrors.push('fresh-context: ' + message.text()) })
   await page.evaluateOnNewDocument(() => {
+    localStorage.setItem('tmar.language', 'en')
     localStorage.setItem('scanruler.askstlunits', '0')
     localStorage.setItem('scanruler.beta', 'all')
     localStorage.setItem('scanruler.supportask', '0')

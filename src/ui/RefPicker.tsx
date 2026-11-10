@@ -8,6 +8,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useOpenUp } from './useOpenUp'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export interface PickerOption {
   key: string
@@ -35,6 +37,8 @@ export function RefPicker({
    *  the list closed. */
   onHover?: (key: string | null) => void
 }) {
+  useTmarLanguage()
+
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
   const root = useRef<HTMLDivElement>(null)
@@ -92,7 +96,7 @@ export function RefPicker({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <span className={chosen ? undefined : 'placeholder'}>{chosen?.label ?? placeholder}</span>
+        <span className={chosen ? undefined : 'placeholder'}>{chosen ? chosen.label : placeholder}</span>
         <i>▾</i>
       </button>
       {open && (
@@ -110,7 +114,7 @@ export function RefPicker({
         >
           {groups.map((g) => (
             <div key={g} className="pickgroup">
-              {g && <div className="pickgroup-label">{g}</div>}
+              {g && <div className="pickgroup-label">{tmarText(g)}</div>}
               {options
                 .filter((o) => (o.group ?? '') === g)
                 .map((o) => {
@@ -134,7 +138,7 @@ export function RefPicker({
                 })}
             </div>
           ))}
-          {options.length === 0 && <div className="pickoption empty">Nothing to choose from</div>}
+          {options.length === 0 && <div className="pickoption empty">{tmarText("Nothing to choose from")}</div>}
         </div>
       )}
     </div>

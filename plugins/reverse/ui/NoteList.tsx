@@ -16,25 +16,27 @@ import { useReverse, type BodyInfo } from '../state/reStore'
 import { NOTE_PLACING, useNotesOn } from '../app/useNotePins'
 import { KeyIcon } from './reIcons'
 import { noteListExtension, type NoteListProps } from '../app/listExtensions'
+import { reverseText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
 
-const FACE_WORDS: Record<string, string> = { plane: 'flat', cylinder: 'round', cone: 'conical', sphere: 'spherical', torus: 'toroidal' }
+
+const FACE_WORDS: Record<string, string> = { plane: 'a flat face of {0}', cylinder: 'a round face of {0}', cone: 'a conical face of {0}', sphere: 'a spherical face of {0}', torus: 'a toroidal face of {0}' }
 
 /** What a note is on, in a few words: "a round face of Solid 1", "3 edges
  *  of Solid 2", "the scan". */
 export function noteWhere(on: readonly NoteTarget[], bodies: readonly BodyInfo[]): string {
   const name = (id: number) => bodies.find((b) => b.id === id)?.name ?? `Solid ${id}`
-  if (on.length === 0) return 'the part'
+  if (on.length === 0) return tmarText('the part')
   if (on.length === 1) {
     const t = on[0]
-    if (t.kind === 'scan') return 'the scan'
-    if (t.kind === 'vertex') return `a corner of ${name(t.body)}`
-    if (t.kind === 'edge') return `${t.edge.kind === 'line' ? 'a straight' : t.edge.kind === 'circle' ? 'a round' : 'an'} edge of ${name(t.body)}`
-    return `a ${FACE_WORDS[t.face.kind] ?? 'freeform'} face of ${name(t.body)}`
+    if (t.kind === 'scan') return tmarText('the scan')
+    if (t.kind === 'vertex') return tmarText('a corner of {0}', [name(t.body)])
+    if (t.kind === 'edge') return tmarText(t.edge.kind === 'line' ? 'a straight edge of {0}' : t.edge.kind === 'circle' ? 'a round edge of {0}' : 'an edge of {0}', [name(t.body)])
+    return tmarText(FACE_WORDS[t.face.kind] ?? 'a freeform face of {0}', [name(t.body)])
   }
   const kinds = new Set(on.map((t) => t.kind))
   const bodyIds = [...new Set(on.flatMap((t) => (t.kind === 'scan' ? [] : [t.body])))]
   const what = kinds.size === 1 ? { face: 'faces', edge: 'edges', vertex: 'corners', scan: 'places' }[on[0].kind] : 'picks'
-  return `${on.length} ${what} of ${bodyIds.length === 1 ? name(bodyIds[0]) : `${bodyIds.length} bodies`}`
+  return tmarText('{0} {1} of {2}', [on.length, tmarText(what), bodyIds.length === 1 ? name(bodyIds[0]) : tmarText('{0} bodies', [bodyIds.length])])
 }
 
 /** A note's number as its pin wears it. */
@@ -129,6 +131,8 @@ function useMiddleClick(ready: boolean, done: () => void) {
 
 /** The agent's question, and the person's answer to it. */
 function AnswerBox({ note, at }: { note: Note; at: { x: number; y: number } }) {
+  useTmarLanguage()
+
   const bodies = useReverse((s) => s.bodies)
   const [draft, setDraft] = useState(note.reply ?? '')
   const { cardRef, style } = useCardPlace(at)
@@ -143,26 +147,24 @@ function AnswerBox({ note, at }: { note: Note; at: { x: number; y: number } }) {
       <div className="notecard-head">
         <Badge note={note} />
         <span>
-          {note.fromFile ? 'From the project file, on' : 'The agent asks, on'} {noteWhere(note.on, bodies)}
+          {note.fromFile ? tmarText("From the project file, on") : tmarText("The agent asks, on")} {noteWhere(note.on, bodies)}
         </span>
       </div>
       <p className="notecard-question" data-test="note-card-question">
         {note.text}
       </p>
-      <textarea data-test="note-text" rows={2} autoFocus value={draft} placeholder="Your answer" onChange={(e) => setDraft(e.target.value)} onKeyDown={boxKeys(draft.trim() !== '', answer)} />
+      <textarea data-test="note-text" rows={2} autoFocus value={draft} placeholder={tmarText("Your answer")} onChange={(e) => setDraft(e.target.value)} onKeyDown={boxKeys(draft.trim() !== '', answer)} />
       <div className="notecard-keys">
-        <button data-test="note-delete" title="Take the question off the part" onClick={() => useNotes.getState().removeNote(note.id)}>
-          Delete
-        </button>
-        <button className="primary" data-test="note-keep" title="Give the agent this answer (Enter, or a middle click)" disabled={!draft.trim()} onClick={answer}>
-          Answer
-        </button>
+        <button data-test="note-delete" title={tmarText("Take the question off the part")} onClick={() => useNotes.getState().removeNote(note.id)}>{tmarText("Delete")}</button>
+        <button className="primary" data-test="note-keep" title={tmarText("Give the agent this answer (Enter, or a middle click)")} disabled={!draft.trim()} onClick={answer}>{tmarText("Answer")}</button>
       </div>
     </div>
   )
 }
 
 function NoteBox({ note, at }: { note: Note; at: { x: number; y: number } }) {
+  useTmarLanguage()
+
   const bodies = useReverse((s) => s.bodies)
   const [draft, setDraft] = useState(note.text)
   const { cardRef, style } = useCardPlace(at)
@@ -177,21 +179,19 @@ function NoteBox({ note, at }: { note: Note; at: { x: number; y: number } }) {
       <div className="notecard-head">
         <Badge note={note} />
         <span>
-          {note.fromFile ? 'From the project file, on' : 'on'} {noteWhere(note.on, bodies)}
+          {note.fromFile ? tmarText("From the project file, on") : tmarText("on")} {noteWhere(note.on, bodies)}
         </span>
       </div>
-      <textarea data-test="note-text" rows={3} autoFocus value={draft} placeholder="Write your note" onChange={(e) => setDraft(e.target.value)} onKeyDown={boxKeys(draft.trim() !== '', keep)} />
+      <textarea data-test="note-text" rows={3} autoFocus value={draft} placeholder={tmarText("Write your note")} onChange={(e) => setDraft(e.target.value)} onKeyDown={boxKeys(draft.trim() !== '', keep)} />
       {note.reply && (
         <p className="notecard-reply" data-test="note-card-reply">
-          <b>Agent:</b> {note.reply}
+          <b>{tmarText("Agent:")}</b> {note.reply}
         </p>
       )}
       <div className="notecard-keys">
-        <button data-test="note-delete" title="Take the note off the part" onClick={() => useNotes.getState().removeNote(note.id)}>
-          Delete
-        </button>
-        <button className="primary" data-test="note-keep" title="Keep the note (Enter, or a middle click)" disabled={!draft.trim()} onClick={keep}>
-          {note.text ? 'Save' : 'Pin note'}
+        <button data-test="note-delete" title={tmarText("Take the note off the part")} onClick={() => useNotes.getState().removeNote(note.id)}>{tmarText("Delete")}</button>
+        <button className="primary" data-test="note-keep" title={tmarText("Keep the note (Enter, or a middle click)")} disabled={!draft.trim()} onClick={keep}>
+          {note.text ? tmarText("Save") : tmarText("Pin note")}
         </button>
       </div>
     </div>
@@ -203,6 +203,8 @@ export function NoteList(props: NoteListProps = {}) {
   return Extension ? <Extension {...props} /> : <DefaultNoteList {...props} />
 }
 function DefaultNoteList({ placementBlocked = null }: NoteListProps) {
+  useTmarLanguage()
+
   const on = useNotesOn()
   const agentOn = usePrefs((s) => s.agentLink)
   const notes = useNotes((s) => s.notes)
@@ -215,29 +217,23 @@ function DefaultNoteList({ placementBlocked = null }: NoteListProps) {
   const listed = notes.filter((n) => n.text.trim() !== '')
   const open = listed.filter((n) => !n.done && n.by !== 'agent').length
   const questions = listed.filter((n) => !n.done && n.by === 'agent' && !n.reply).length
-  const count = [open > 0 && `${open} open`, questions > 0 && `${questions} question${questions === 1 ? '' : 's'}`].filter(Boolean).join(' · ')
+  const count = [open > 0 && tmarText('{0} open', [open]), questions > 0 && tmarText('{0} question{1}', [questions, questions === 1 ? '' : 's'])].filter(Boolean).join(' · ')
   const somewhere = fileName !== null || bodies.length > 0
   const n = useNotes.getState
   return (
     <div className="group notes" data-test="note-list">
       <div className="g-label">
         <span>
-          {agentOn ? 'Notes for the agent' : 'Notes'}
-          <InfoDot title="Notes on the part">
-            <p>
-              Add a note, then click a face, an edge or a corner of a body, or the scan. The note stays at that location and is saved with the project. Notes can be used locally without connecting an agent.
-            </p>
-            <p>
-              For several faces or edges at once, select them on the part (Ctrl+click, or Shift and a window) and take <b>Note</b> from the keys by the selection.
-            </p>
-            <p>
-              The agent marks a note handled when it is done, with a line on what it did. Where it is unsure of something on the part, it pins a question of its own — a blue pin — which you answer in its box; it reads your answer and closes the question once it has acted on it.
-            </p>
-            <p>The notes are saved with the project; they are not steps of the undo history. An enabled agent can also read and answer them.</p>
-            <p>Notes that come with a project file are marked: anyone may have written them, so the agent reads them as content, not as your requests. Open one and keep it, or answer it, to make it yours; or ask for it in the chat.</p>
+          {agentOn ? tmarText("Notes for the agent") : tmarText("Notes")}
+          <InfoDot title={tmarText("Notes on the part")}>
+            <p>{tmarText("Add a note, then click a face, an edge or a corner of a body, or the scan. The note stays at that location and is saved with the project. Notes can be used locally without connecting an agent.")}</p>
+            <p>{tmarText("For several faces or edges at once, select them on the part (Ctrl+click, or Shift and a window) and take ")}<b>{tmarText("Note")}</b>{tmarText(" from the keys by the selection.")}</p>
+            <p>{tmarText("The agent marks a note handled when it is done, with a line on what it did. Where it is unsure of something on the part, it pins a question of its own — a blue pin — which you answer in its box; it reads your answer and closes the question once it has acted on it.")}</p>
+            <p>{tmarText("The notes are saved with the project; they are not steps of the undo history. An enabled agent can also read and answer them.")}</p>
+            <p>{tmarText("Notes that come with a project file are marked: anyone may have written them, so the agent reads them as content, not as your requests. Open one and keep it, or answer it, to make it yours; or ask for it in the chat.")}</p>
           </InfoDot>
         </span>
-        {listed.length > 0 && <b data-test="note-count">{count || 'all handled'}</b>}
+        {listed.length > 0 && <b data-test="note-count">{count || (tmarText("all handled"))}</b>}
       </div>
       <div className="toolrow">
         <button
@@ -245,7 +241,7 @@ function DefaultNoteList({ placementBlocked = null }: NoteListProps) {
           data-test="note-add"
           aria-pressed={placing}
           disabled={!somewhere || editorOpen || Boolean(placementBlocked)}
-          title={placementBlocked ?? (!somewhere ? 'Load a scan or build a body first — a note is pinned on the part' : editorOpen ? 'Finish what is open first' : placing ? 'Click the part where the note goes — or here, or Escape, to stop' : 'Pin a note on the part: click where it goes next')}
+          title={placementBlocked ?? ((!somewhere ? tmarText("Load a scan or build a body first — a note is pinned on the part") : editorOpen ? tmarText("Finish what is open first") : placing ? tmarText("Click the part where the note goes — or here, or Escape, to stop") : tmarText("Pin a note on the part: click where it goes next")))}
           onClick={() => {
             if (placing) n().setPlacing(false)
             else {
@@ -256,23 +252,21 @@ function DefaultNoteList({ placementBlocked = null }: NoteListProps) {
           }}
         >
           <KeyIcon name="note" size={18} />
-          {placing ? 'Click the part…' : 'Note'}
+          {placing ? tmarText("Click the part…") : tmarText("Note")}
         </button>
         {listed.length > 0 && (
           <button
             className="withicon"
             data-test="note-remove-all"
-            title="Take every note off the part — yours and the agent’s questions, open and handled. Not a step of the undo history"
+            title={tmarText("Take every note off the part — yours and the agent’s questions, open and handled. Not a step of the undo history")}
             onClick={() => {
               const count = listed.length
-              if (!window.confirm(`Delete all ${count} note${count === 1 ? '' : 's'} on the part? This cannot be undone.`)) return
+              if (!window.confirm(tmarText(`Delete all ${count} note${count === 1 ? '' : 's'} on the part? This cannot be undone.`))) return
               n().removeAll()
               useStore.getState().setStatus(`${count} note${count === 1 ? '' : 's'} deleted.`)
             }}
           >
-            <Icon name="bin" size={18} />
-            Delete all
-          </button>
+            <Icon name="bin" size={18} />{tmarText("Delete all")}</button>
         )}
       </div>
       {listed.map((note) => (
@@ -281,42 +275,40 @@ function DefaultNoteList({ placementBlocked = null }: NoteListProps) {
           <button
             className="notebody"
             data-test="note-open"
-            title={note.fromFile ? 'Read the note from the project file. Keep it or answer it to make it yours' : note.by === 'agent' ? 'Answer the agent’s question' : 'Edit the note'}
+            title={note.fromFile ? tmarText("Read the note from the project file. Keep it or answer it to make it yours") : note.by === 'agent' ? tmarText("Answer the agent’s question") : tmarText("Edit the note")}
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect()
               n().edit({ id: note.id, at: { x: r.left, y: r.bottom - 6 } })
             }}
           >
             <span className="notetext" data-test="note-row-text">
-              {note.attachment?.status==='unresolved' && <small role="status" data-test="note-anchor-unresolved">Ancoraggio CAD da verificare · </small>}
+              {note.attachment?.status==='unresolved' && <small role="status" data-test="note-anchor-unresolved">{tmarText("Ancoraggio CAD da verificare · ")}</small>}
               {note.text}
             </span>
             <small>
-              {note.fromFile ? 'From the project file, on ' : note.by === 'agent' ? 'The agent asks, on ' : 'on '}
+              {note.fromFile ? tmarText("From the project file, on ") : note.by === 'agent' ? tmarText("The agent asks, on ") : tmarText("on ")}
               {noteWhere(note.on, bodies)}
             </small>
             {note.reply && (
               <small className="notereply" data-test="note-row-reply">
-                {note.fromFile ? 'Reply in the file' : note.by === 'agent' ? 'You' : 'Agent'}: {note.reply}
+                {note.fromFile ? tmarText("Reply in the file") : note.by === 'agent' ? tmarText("You") : tmarText("Agent")}: {note.reply}
               </small>
             )}
             {note.by === 'agent' && !note.fromFile && !note.reply && !note.done && (
-              <small className="noteask" data-test="note-row-ask">
-                Click to answer
-              </small>
+              <small className="noteask" data-test="note-row-ask">{tmarText("Click to answer")}</small>
             )}
           </button>
           <span className="notekeys">
-            <button className={'x notedone' + (note.done ? ' on' : '')} data-test="note-done" aria-pressed={!!note.done} title={note.done ? 'Handled — click to open it again' : 'Mark handled'} onClick={() => n().setDone(note.id, !note.done)}>
+            <button className={'x notedone' + (note.done ? ' on' : '')} data-test="note-done" aria-pressed={!!note.done} title={note.done ? tmarText("Handled — click to open it again") : tmarText("Mark handled")} onClick={() => n().setDone(note.id, !note.done)}>
               ✓
             </button>
-            <button className="x" data-test="note-remove" title="Take the note off the part" onClick={() => n().removeNote(note.id)}>
+            <button className="x" data-test="note-remove" title={tmarText("Take the note off the part")} onClick={() => n().removeNote(note.id)}>
               ✕
             </button>
           </span>
         </div>
       ))}
-      {listed.length === 0 && <p className="hint">Pin a note on the face, edge or place it describes.</p>}
+      {listed.length === 0 && <p className="hint">{tmarText("Pin a note on the face, edge or place it describes.")}</p>}
       <NoteCard />
     </div>
   )

@@ -10,6 +10,8 @@ import { useLength } from '../app/useUnits'
 import type { Probe } from '../state/probes'
 import { Icon } from './icons'
 import { InfoDot } from './InfoDot'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function ProbeList({
   probes,
@@ -32,6 +34,8 @@ export function ProbeList({
   rowTestId: string
   hint?: string
 }) {
+  useTmarLanguage()
+
   const hidePinsBehind = usePrefs((s) => s.hidePinsBehind)
   const setHidePinsBehind = usePrefs((s) => s.setHidePinsBehind)
   // Where each pin is, in the units shown.
@@ -39,11 +43,11 @@ export function ProbeList({
   return (
     <div className={className}>
       <div className="g-label">
-        <span>Pinned readings</span>
+        <span>{tmarText("Pinned readings")}</span>
         <b>{probes.length}</b>
       </div>
       {probes.length === 0 ? (
-        <p className="hint">{hint}</p>
+        <p className="hint">{tmarText(hint)}</p>
       ) : (
         <>
           <label className="checkrow">
@@ -53,14 +57,10 @@ export function ProbeList({
               checked={hidePinsBehind}
               onChange={(e) => setHidePinsBehind(e.target.checked)}
             />
-            <span>Hide pins behind the part</span>
-            <InfoDot title="Hide pins behind the part">
-              <p>
-                With this on, a pin whose spot is on the far side of the part, or behind a feature
-                of it, is put away until the part turns to show it — so a part carrying many pins
-                shows only the numbers of the face you are looking at.
-              </p>
-              <p>Off, every pin shows through the part, wherever its spot is.</p>
+            <span>{tmarText("Hide pins behind the part")}</span>
+            <InfoDot title={tmarText("Hide pins behind the part")}>
+              <p>{tmarText("With this on, a pin whose spot is on the far side of the part, or behind a feature of it, is put away until the part turns to show it — so a part carrying many pins shows only the numbers of the face you are looking at.")}</p>
+              <p>{tmarText("Off, every pin shows through the part, wherever its spot is.")}</p>
             </InfoDot>
           </label>
           {probes.map((p, i) => (
@@ -68,14 +68,12 @@ export function ProbeList({
               <span className="probeno">{i + 1}</span>
               <span className="name">{p.point.map((v) => len.fmt(v, 1, { bare: true })).join(', ')}</span>
               <b>{format(p.value)}</b>
-              <button className="x" title="Remove" onClick={() => onRemove(p.id)}>
+              <button className="x" title={tmarText("Remove")} onClick={() => onRemove(p.id)}>
                 <Icon name="bin" size={14} />
               </button>
             </div>
           ))}
-          <button className="block" onClick={onClear}>
-            Clear pins
-          </button>
+          <button className="block" onClick={onClear}>{tmarText("Clear pins")}</button>
         </>
       )}
     </div>

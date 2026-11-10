@@ -5,6 +5,8 @@
 // stores.
 
 import { BAND_CHOICES } from '../state/deviationStore'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function ScaleControls({
   bands,
@@ -20,16 +22,17 @@ export function ScaleControls({
   onShowHistogram: (v: boolean) => void
   histogramTestId: string
 }) {
+  useTmarLanguage()
+
   return (
     <>
       <label className="field">
-        <span>Bands</span>
+        <span>{tmarText("Bands")}</span>
         <select value={bands ?? 0} onChange={(e) => onBands(Number(e.target.value) || null)}>
-          <option value={0}>Continuous</option>
+          <option value={0}>{tmarText("Continuous")}</option>
           {BAND_CHOICES.map((b) => (
             <option key={b} value={b}>
-              {b} bands
-            </option>
+              {b}{tmarText(" bands")}</option>
           ))}
         </select>
       </label>
@@ -40,7 +43,7 @@ export function ScaleControls({
           checked={showHistogram}
           onChange={(e) => onShowHistogram(e.target.checked)}
         />
-        <span>Histogram beside the scale</span>
+        <span>{tmarText("Histogram beside the scale")}</span>
       </label>
     </>
   )

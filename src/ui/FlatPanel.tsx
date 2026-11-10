@@ -35,6 +35,8 @@ import { ModelSlot } from './ModelSlot'
 import { NumberField } from './NumberField'
 import { useLength } from '../app/useUnits'
 import { tintStyle } from './tint'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 const FLAT_KINDS: FlatElementKind[] = ['point', 'line', 'circle', 'arc', 'spline']
 
@@ -54,6 +56,8 @@ export function FlatPanel({
   onExportSvg: () => void
   onExportDxf: () => void
 }) {
+  useTmarLanguage()
+
   const imageName = useFlat((s) => s.imageName)
   const imageWidth = useFlat((s) => s.imageWidth)
   const imageHeight = useFlat((s) => s.imageHeight)
@@ -147,34 +151,25 @@ export function FlatPanel({
     <aside className="panel">
       <div className="group">
         <div className="sec-head">
-          {sections.length > 0 ? 'Source' : 'Image'}
-          <InfoDot title="What is measured">
-            <p>
-              A flatbed scan of the part — a <b>PNG</b> or <b>JPEG</b> straight from the scanner.
-              Scan at the highest optical resolution you have; the pixels are the measurement.
-            </p>
-            <p>Drop it anywhere in the window. Nothing is uploaded.</p>
-            <p>
-              Or a <b>section</b>: the 3D scan cut with a plane in the 3D Measure workspace. Its
-              edges lie on the sheet at true size already, so there is nothing to calibrate,
-              and they are snapped to, fitted and measured exactly like an image&apos;s. One source
-              is on the sheet at a time; each keeps its own elements, dimensions and alignment, and
-              finds them again when it comes back.
-            </p>
+          {sections.length > 0 ? tmarText("Source") : tmarText("Image")}
+          <InfoDot title={tmarText("What is measured")}>
+            <p>{tmarText("A flatbed scan of the part — a ")}<b>{tmarText("PNG")}</b>{tmarText(" or ")}<b>{tmarText("JPEG")}</b>{tmarText(" straight from the scanner. Scan at the highest optical resolution you have; the pixels are the measurement.")}</p>
+            <p>{tmarText("Drop it anywhere in the window. Nothing is uploaded.")}</p>
+            <p>{tmarText("Or a ")}<b>{tmarText("section")}</b>{tmarText(": the 3D scan cut with a plane in the 3D Measure workspace. Its edges lie on the sheet at true size already, so there is nothing to calibrate, and they are snapped to, fitted and measured exactly like an image's. One source is on the sheet at a time; each keeps its own elements, dimensions and alignment, and finds them again when it comes back.")}</p>
           </InfoDot>
         </div>
         {sections.length > 0 && (
           <label className="field">
-            <span>Measure</span>
+            <span>{tmarText("Measure")}</span>
             <select
               data-test="flat-source"
               value={sheetKeyOf(subject)}
               onChange={(e) => flat.getState().setSubject(subjectFromKey(e.target.value))}
             >
-              <option value="image">{imageName ? `Image — ${imageName}` : 'Flatbed image'}</option>
+              <option value="image">{imageName ? tmarText("Image — {0}", [imageName]) : tmarText("Flatbed image")}</option>
               {sections.map((sec) => (
                 <option key={sec.id} value={`section:${sec.id}`}>
-                  {sec.name} — {cutOf(sec)}
+                  {sec.name} — {tmarText(cutOf(sec))}
                 </option>
               ))}
             </select>
@@ -192,51 +187,25 @@ export function FlatPanel({
             onOpen={onOpenImage}
           />
         )}
-        {!onSection && !imageName && <p className="hint">Drop it anywhere in the window.</p>}
+        {!onSection && !imageName && <p className="hint">{tmarText("Drop it anywhere in the window.")}</p>}
         {activeSection && (
           <p className="hint" data-test="flat-section-status">
-            <b>{activeSection.name}</b>: {scanName ?? 'the scan'} cut {cutOf(activeSection)}. The sheet
-            is at the scan&apos;s true size, origin at the cutting plane&apos;s centre — set an
-            alignment to read coordinates off a feature.
-          </p>
+            <b>{activeSection.name}</b>: {scanName ?? (tmarText("the scan"))}{tmarText(" cut ")}{tmarText(cutOf(activeSection))}{tmarText(". The sheet is at the scan's true size, origin at the cutting plane's centre — set an alignment to read coordinates off a feature.")}</p>
         )}
       </div>
 
       {imageName && !onSection && (
         <div className="group">
-          <div className="sec-head">
-            Calibration
-            <InfoDot title="Calibration">
+          <div className="sec-head">{tmarText("Calibration")}<InfoDot title={tmarText("Calibration")}>
+              <p>{tmarText("Every length this workspace reports is pixels divided by this scale. The file's own dpi is only ")}<b>{tmarText("nominal")}</b>{tmarText(" — scanner transports are off by real fractions of a percent — so measure the scale off something true: scan a gauge block, calliper-measured part or gauge pin along with the part.")}</p>
               <p>
-                Every length this workspace reports is pixels divided by this scale. The
-                file's own dpi is only <b>nominal</b> — scanner transports are off by real
-                fractions of a percent — so measure the scale off something true: scan a gauge
-                block, calliper-measured part or gauge pin along with the part.
-              </p>
-              <p>
-                <b>Known distance</b> takes two picks across the reference and its true length.
-                <b> Known diameter</b> takes three or more picks around a circle's edge and its
-                true diameter.
-              </p>
-              <p>
-                Scanners err differently along the two axes. Calibrating X and Y separately
-                needs a reference laid along each axis in turn.
-              </p>
+                <b>{tmarText("Known distance")}</b>{tmarText(" takes two picks across the reference and its true length.")}<b>{tmarText(" Known diameter")}</b>{tmarText(" takes three or more picks around a circle's edge and its true diameter.")}</p>
+              <p>{tmarText("Scanners err differently along the two axes. Calibrating X and Y separately needs a reference laid along each axis in turn.")}</p>
             </InfoDot>
           </div>
 
           <p className="hint" data-test="flat-cal-status">
-            {calSource === 'measured' && pxPerMm
-              ? pxPerMm.x === pxPerMm.y
-                ? inches
-                  ? `Calibrated: ${toDpi(pxPerMm.x).toFixed(2)} px/in.`
-                  : `Calibrated: ${pxPerMm.x.toFixed(4)} px/${len.word()} (≈${toDpi(pxPerMm.x).toFixed(1)} dpi).`
-                : inches
-                  ? `Calibrated: X ${toDpi(pxPerMm.x).toFixed(2)} · Y ${toDpi(pxPerMm.y).toFixed(2)} px/in.`
-                  : `Calibrated: X ${pxPerMm.x.toFixed(4)} · Y ${pxPerMm.y.toFixed(4)} px/${len.word()}.`
-              : calSource === 'metadata' && meta
-                ? `Nominal, from the file: ${(meta.x * 25.4).toFixed(0)} dpi — ${len.fmt(imageWidth / meta.x, 1, { bare: true })} × ${len.fmt(imageHeight / meta.y, 1)}.`
-                : 'The file declares no physical resolution — sizes are pixels until calibrated.'}
+            {calSource === 'measured' && pxPerMm ? pxPerMm.x === pxPerMm.y ? inches ? tmarText("Calibrated: {0} px/in.", [toDpi(pxPerMm.x).toFixed(2)]) : tmarText("Calibrated: {0} px/{1} (≈{2} dpi).", [pxPerMm.x.toFixed(4), len.word(), toDpi(pxPerMm.x).toFixed(1)]) : inches ? tmarText("Calibrated: X {0} · Y {1} px/in.", [toDpi(pxPerMm.x).toFixed(2), toDpi(pxPerMm.y).toFixed(2)]) : tmarText("Calibrated: X {0} · Y {1} px/{2}.", [pxPerMm.x.toFixed(4), pxPerMm.y.toFixed(4), len.word()]) : calSource === 'metadata' && meta ? tmarText("Nominal, from the file: {0} dpi — {1} × {2}.", [(meta.x * 25.4).toFixed(0), len.fmt(imageWidth / meta.x, 1, { bare: true }), len.fmt(imageHeight / meta.y, 1)]) : tmarText("The file declares no physical resolution — sizes are pixels until calibrated.")}
           </p>
 
           {!calibrating && (
@@ -248,9 +217,7 @@ export function FlatPanel({
                   setCalError(null)
                   flat.getState().startCalibration('distance')
                 }}
-              >
-                Calibrate on a known distance
-              </button>
+              >{tmarText("Calibrate on a known distance")}</button>
               <button
                 className="block"
                 data-test="flat-cal-diameter"
@@ -258,9 +225,7 @@ export function FlatPanel({
                   setCalError(null)
                   flat.getState().startCalibration('diameter')
                 }}
-              >
-                Calibrate on a known diameter
-              </button>
+              >{tmarText("Calibrate on a known diameter")}</button>
               <label className="checkrow">
                 <input
                   type="checkbox"
@@ -268,7 +233,7 @@ export function FlatPanel({
                   checked={splitAxes}
                   onChange={(e) => flat.getState().setSplitAxes(e.target.checked)}
                 />
-                <span>Calibrate X and Y separately</span>
+                <span>{tmarText("Calibrate X and Y separately")}</span>
               </label>
             </>
           )}
@@ -276,16 +241,10 @@ export function FlatPanel({
           {calibrating && (
             <>
               <p className="hint" data-test="flat-cal-collecting">
-                {calibrating.mode === 'distance'
-                  ? picks < 2
-                    ? `Click the two ends of the reference on the image (${picks}/2). Zoom in first — the picks are the measurement.`
-                    : 'Both ends picked — enter the true distance and apply.'
-                  : picks < 3
-                    ? `Click points around the reference circle's edge (${picks}, need 3+).`
-                    : `${picks} points around the edge — more spread the error. Enter the true diameter and apply.`}
+                {calibrating.mode === 'distance' ? picks < 2 ? tmarText("Click the two ends of the reference on the image ({0}/2). Zoom in first — the picks are the measurement.", [picks]) : tmarText("Both ends picked — enter the true distance and apply.") : picks < 3 ? tmarText("Click points around the reference circle's edge ({0}, need 3+).", [picks]) : tmarText("{0} points around the edge — more spread the error. Enter the true diameter and apply.", [picks])}
               </p>
               <NumberField
-                label={calibrating.mode === 'distance' ? 'True distance' : 'True diameter'}
+                label={calibrating.mode === 'distance' ? tmarText("True distance") : tmarText("True diameter")}
                 testId="flat-cal-true"
                 value={trueSize}
                 step={1}
@@ -299,30 +258,21 @@ export function FlatPanel({
                 data-confirm={1}
                 disabled={!enough}
                 onClick={apply}
-              >
-                Apply calibration
-              </button>
+              >{tmarText("Apply calibration")}</button>
               <div className="toolrow">
                 <button
                   data-test="flat-cal-undo"
                   disabled={picks === 0}
                   onClick={() => flat.getState().undoCalPick()}
-                >
-                  Undo pick
-                </button>
-                <button data-test="flat-cal-cancel" onClick={() => flat.getState().cancelCalibration()}>
-                  Cancel
-                </button>
+                >{tmarText("Undo pick")}</button>
+                <button data-test="flat-cal-cancel" onClick={() => flat.getState().cancelCalibration()}>{tmarText("Cancel")}</button>
               </div>
             </>
           )}
-          {calError && <p className="alarmtext">{calError}</p>}
+          {calError && <p className="alarmtext">{tmarText(calError)}</p>}
 
-          <div className="sec-head">Scanner profiles</div>
-          <p className="hint">
-            A measured calibration describes the scanner at one resolution, not the image — save
-            it once, apply it to every scan from that scanner.
-          </p>
+          <div className="sec-head">{tmarText("Scanner profiles")}</div>
+          <p className="hint">{tmarText("A measured calibration describes the scanner at one resolution, not the image — save it once, apply it to every scan from that scanner.")}</p>
           {profiles.length > 0 && (
             <div className="toolrow">
               <select
@@ -330,7 +280,7 @@ export function FlatPanel({
                 value={chosenProfile}
                 onChange={(e) => setChosenProfile(e.target.value)}
               >
-                <option value="">Choose profile…</option>
+                <option value="">{tmarText("Choose profile…")}</option>
                 {profiles.map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name}
@@ -341,9 +291,7 @@ export function FlatPanel({
                 data-test="flat-profile-apply"
                 disabled={!chosenProfile}
                 onClick={() => flat.getState().applyProfile(chosenProfile)}
-              >
-                Apply
-              </button>
+              >{tmarText("Apply")}</button>
               <button
                 data-test="flat-profile-delete"
                 disabled={!chosenProfile}
@@ -351,9 +299,7 @@ export function FlatPanel({
                   flat.getState().deleteProfile(chosenProfile)
                   setChosenProfile('')
                 }}
-              >
-                Delete
-              </button>
+              >{tmarText("Delete")}</button>
             </div>
           )}
           {calSource === 'measured' && (
@@ -361,7 +307,7 @@ export function FlatPanel({
               <input
                 type="text"
                 data-test="flat-profile-name"
-                placeholder="e.g. V600 @ 600 dpi"
+                placeholder={tmarText("e.g. V600 @ 600 dpi")}
                 value={profileName}
                 onChange={(e) => setProfileName(e.target.value)}
               />
@@ -372,9 +318,7 @@ export function FlatPanel({
                   flat.getState().saveProfile(profileName)
                   setProfileName('')
                 }}
-              >
-                Save
-              </button>
+              >{tmarText("Save")}</button>
             </div>
           )}
         </div>
@@ -382,59 +326,19 @@ export function FlatPanel({
 
       {hasSheet && counting === null && !placingNote && !editedNote && (
         <div className="group">
-          <div className="sec-head">
-            Create element
-            <InfoDot title="Elements">
+          <div className="sec-head">{tmarText("Create element")}<InfoDot title={tmarText("Elements")}>
+              <p>{tmarText("Every measurement here starts with an element — a point, a line, a circle, an arc or a spline. Dimensions are then measured between them, never between raw pixels.")}</p>
+              <p>{tmarText("An element is ")}<b>{tmarText("picked")}</b>{tmarText(", by clicking the points it runs through — with")}{' '}
+                <b>{tmarText("Snap to edge")}</b>{tmarText(" on, every click and drag lands on the nearest detected edge at subpixel — or on the center of a circle, an arc or a point when one is within reach — and ")}<b>{tmarText("Alt")}</b>{tmarText(" inverts that for one pick; any pin can be dragged afterwards; ")}<b>{tmarText("fitted to an edge")}</b>{tmarText(" from one click on it, the way a fit from a click works on the scan — the line or circle grows along the detected edge from the point you clicked and stops where the edge bends away, at a corner or into a fillet, so a click on one side of a part takes that side and a click on a hole's rim takes the hole; ")}<b>{tmarText("fitted to an edge region")}</b>{tmarText(", by clicking a detected edge to take all of it or dragging a box over it and letting every edge point inside feed the fit; or ")}<b>{tmarText("constructed")}</b>{tmarText(" from elements you already have — a midpoint, a circle's center, the intersection of two lines, the circle through the centers of a bolt pattern. A construction's sources are clicked on the sheet or chosen in the box.")}</p>
+              <p>{tmarText("Which of those a kind offers appears as ")}<i>{tmarText("Created")}</i>{tmarText(" once you choose it.")}</p>
+              <p>{tmarText("The kind stays in hand after ")}<b>{tmarText("Create")}</b>{tmarText(", ready for the next one, as a sketch tool does — ")}<b>{tmarText("Cancel")}</b>{tmarText(" or ")}<b>{tmarText("Esc")}</b>{tmarText(" puts it down; on a box with picks in it,")}<b>{tmarText(" Esc")}</b>{tmarText(" first empties the box.")}</p>
+              <p><b>{tmarText("A spline")}</b>{tmarText(" is the free curve a CAD sketch draws through fit points — a cam profile, an outline no arc fits. Click its points in order along the edge (they snap like any pick), click on the curve to insert a point there, and drag the")}<b>{tmarText(" tangent handle")}</b>{tmarText(" at any point to bend the curve through it the way you would in CAD; click a handle to let it go automatic again. Click the first point again to close the curve on itself, and it leaves the tool as a real spline in the SVG and the STEP file.")}</p>
               <p>
-                Every measurement here starts with an element — a point, a line, a circle, an arc
-                or a spline. Dimensions are then measured between them, never between raw pixels.
-              </p>
+                <b>{tmarText("Count")}</b>{tmarText(" is a tally rather than a fit: click the features one after another — the teeth of a gear, the holes in a flange — and each click wears the next number, pinned where you clicked.")}</p>
               <p>
-                An element is <b>picked</b>, by clicking the points it runs through — with{' '}
-                <b>Snap to edge</b> on, every click and drag lands on the nearest detected edge
-                at subpixel — or on the center of a circle, an arc or a point when one is within
-                reach — and <b>Alt</b> inverts that for one pick; any pin can be dragged
-                afterwards; <b>fitted to an edge</b> from one click on it, the way a fit from a
-                click works on the scan — the line or circle grows along the detected edge from
-                the point you clicked and stops where the edge bends away, at a corner or into a
-                fillet, so a click on one side of a part takes that side and a click on a hole's
-                rim takes the hole; <b>fitted to an edge region</b>, by clicking a detected edge
-                to take all of it or dragging a box over it and letting every edge point inside
-                feed the fit; or <b>constructed</b> from elements you already have — a midpoint, a
-                circle's center, the intersection of two lines, the circle through the centers of
-                a bolt pattern. A construction's sources are clicked on the sheet or chosen in the
-                box.
-              </p>
+                <b>{tmarText("Text")}</b>{tmarText(" pins a free note to the sheet — a remark, a part number — wherever you click; drag it to move it, click it to change what it says.")}</p>
               <p>
-                Which of those a kind offers appears as <i>Created</i> once you choose it.
-              </p>
-              <p>
-                The kind stays in hand after <b>Create</b>, ready for the next one, as a sketch
-                tool does — <b>Cancel</b> or <b>Esc</b> puts it down; on a box with picks in it,
-                <b> Esc</b> first empties the box.
-              </p>
-              <p>
-                A <b>spline</b> is the free curve a CAD sketch draws through fit points — a cam
-                profile, an outline no arc fits. Click its points in order along the edge (they
-                snap like any pick), click on the curve to insert a point there, and drag the
-                <b> tangent handle</b> at any point to bend the curve through it the way you
-                would in CAD; click a handle to let it go automatic again. Click the first point
-                again to close the curve on itself, and it leaves the tool as a real spline in
-                the SVG and the STEP file.
-              </p>
-              <p>
-                <b>Count</b> is a tally rather than a fit: click the features one after another
-                — the teeth of a gear, the holes in a flange — and each click wears the next
-                number, pinned where you clicked.
-              </p>
-              <p>
-                <b>Text</b> pins a free note to the sheet — a remark, a part number — wherever you
-                click; drag it to move it, click it to change what it says.
-              </p>
-              <p>
-                <b>Enter</b> or a <b>middle click</b> creates whatever is pending; <b>Esc</b>{' '}
-                discards it.
-              </p>
+                <b>{tmarText("Enter")}</b>{tmarText(" or a ")}<b>{tmarText("middle click")}</b>{tmarText(" creates whatever is pending; ")}<b>{tmarText("Esc")}</b>{' '}{tmarText("discards it.")}</p>
             </InfoDot>
           </div>
           <div className="kindrow featurekeys">
@@ -451,7 +355,7 @@ export function FlatPanel({
                 onClick={() => flat.getState().startDraft(k, flatDefaultMethod(k, onSection))}
               >
                 <Icon name={FLAT_KIND_ICON[k]} />
-                <span>{FLAT_KIND_LABELS[k]}</span>
+                <span>{tmarText(FLAT_KIND_LABELS[k])}</span>
               </button>
             ))}
             {/* A tally or a text takes the stage from the kind in hand: the
@@ -465,7 +369,7 @@ export function FlatPanel({
               }}
             >
               <Icon name="count" />
-              <span>Count</span>
+              <span>{tmarText("Count")}</span>
             </button>
             <button
               data-test="flat-fit-text"
@@ -476,7 +380,7 @@ export function FlatPanel({
               }}
             >
               <Icon name="note" />
-              <span>Text</span>
+              <span>{tmarText("Text")}</span>
             </button>
           </div>
         </div>
@@ -484,27 +388,25 @@ export function FlatPanel({
 
       {placingNote && (
         <div className="draftbox" data-test="flat-note-placing">
-          <div className="sec-head">New text</div>
-          <p className="hint">Click the image where the text should sit.</p>
+          <div className="sec-head">{tmarText("New text")}</div>
+          <p className="hint">{tmarText("Click the image where the text should sit.")}</p>
           <div className="toolrow">
-            <button data-test="flat-note-cancel" onClick={() => flat.getState().cancelNote()}>
-              Cancel
-            </button>
+            <button data-test="flat-note-cancel" onClick={() => flat.getState().cancelNote()}>{tmarText("Cancel")}</button>
           </div>
         </div>
       )}
 
       {editedNote && (
         <div className="draftbox" data-test="flat-note-editor">
-          <div className="sec-head">Text</div>
+          <div className="sec-head">{tmarText("Text")}</div>
           <label className="field">
-            <span>Says</span>
+            <span>{tmarText("Says")}</span>
             <input
               type="text"
               autoFocus
               data-test="flat-note-text"
               value={editedNote.text}
-              placeholder="Type here…"
+              placeholder={tmarText("Type here…")}
               onChange={(e) => flat.getState().setNoteText(editedNote.id, e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') flat.getState().finishNote()
@@ -516,18 +418,14 @@ export function FlatPanel({
               }}
             />
           </label>
-          <p className="hint">Drag the label on the image to move it.</p>
+          <p className="hint">{tmarText("Drag the label on the image to move it.")}</p>
           <button
             className="primary block"
             data-test="flat-note-done"
             onClick={() => flat.getState().finishNote()}
-          >
-            Done
-          </button>
+          >{tmarText("Done")}</button>
           <div className="toolrow">
-            <button data-test="flat-note-delete" onClick={() => flat.getState().deleteNote(editedNote.id)}>
-              Delete
-            </button>
+            <button data-test="flat-note-delete" onClick={() => flat.getState().deleteNote(editedNote.id)}>{tmarText("Delete")}</button>
           </div>
         </div>
       )}
@@ -538,12 +436,10 @@ export function FlatPanel({
         <div className="draftbox" style={{ borderLeftColor: countColor }}>
           <div className="sec-head">
             <span className="dot" style={{ background: countColor }} />
-            {editedCount ? `Edit ${editedCount.name}` : 'New count'}
+            {editedCount ? tmarText("Edit {0}", [editedCount.name]) : tmarText("New count")}
           </div>
           <p className="hint" data-test="flat-count-status">
-            {counting.picks.length === 0
-              ? 'Click the first feature on the image.'
-              : `${counting.picks.length} counted — click the next feature, or ${editedCount ? 'save' : 'create'} it.`}
+            {counting.picks.length === 0 ? tmarText("Click the first feature on the image.") : tmarText("{0} counted — click the next feature, or {1} it.", [counting.picks.length, editedCount ? tmarText("save") : tmarText("create")])}
           </p>
           <label className="checkrow">
             <input
@@ -552,11 +448,11 @@ export function FlatPanel({
               checked={snapToEdge}
               onChange={(e) => flat.getState().setSnapToEdge(e.target.checked)}
             />
-            <span>Snap to edge</span>
+            <span>{tmarText("Snap to edge")}</span>
           </label>
           <div className="dro">
             <div className="dro-label">
-              <span>Tally</span>
+              <span>{tmarText("Tally")}</span>
             </div>
             <div
               className={'dro-window ' + (counting.picks.length > 0 ? 'ready' : 'empty')}
@@ -573,19 +469,15 @@ export function FlatPanel({
             disabled={counting.picks.length === 0}
             onClick={() => flat.getState().finishCount()}
           >
-            {editedCount ? 'Save changes' : 'Create count'}
+            {editedCount ? tmarText("Save changes") : tmarText("Create count")}
           </button>
           <div className="toolrow">
             <button
               data-test="flat-count-undo"
               disabled={counting.picks.length === 0}
               onClick={() => flat.getState().undoCountPick()}
-            >
-              Undo point
-            </button>
-            <button data-test="flat-count-cancel" onClick={() => flat.getState().cancelCount()}>
-              Cancel
-            </button>
+            >{tmarText("Undo point")}</button>
+            <button data-test="flat-count-cancel" onClick={() => flat.getState().cancelCount()}>{tmarText("Cancel")}</button>
           </div>
         </div>
       )}
@@ -593,14 +485,14 @@ export function FlatPanel({
       {elements.length + counts.length + notes.length > 0 && (
         <div className="group">
           <div className="g-label">
-            <span>Elements</span>
+            <span>{tmarText("Elements")}</span>
             <ShowAllButton
               anyVisible={
                 elements.some((e) => e.visible) ||
                 counts.some((c) => c.visible) ||
                 notes.some((n) => n.visible)
               }
-              what="elements"
+              what={tmarText("elements")}
               testId="flat-elements-show-all"
               onSet={(v) => flat.getState().setAllElementsVisible(v)}
             />
@@ -614,11 +506,11 @@ export function FlatPanel({
               visible={el.visible}
               reading={
                 el.fit ? (
-                  <b title={formatFlatDetail(el.fit, unit, len.units)}>
-                    {formatFlatPrimary(fitInFrame(el.fit, frame), unit, len.units)}
+                  <b title={formatFlatDetail(el.fit, unit, len.units).split(' · ').map((part) => tmarText(part)).join(' · ')}>
+                    {tmarText(formatFlatPrimary(fitInFrame(el.fit, frame), unit, len.units))}
                   </b>
                 ) : (
-                  <b className="warn" title={el.error ?? undefined}>
+                  <b className="warn" title={tmarText(el.error ?? undefined)}>
                     ⚠
                   </b>
                 )
@@ -647,10 +539,10 @@ export function FlatPanel({
           {notes.map((n) => (
             <ElementRow
               key={`note-${n.id}`}
-              name={n.text.trim() === '' ? 'Text' : n.text}
+              name={n.text.trim() === '' ? tmarText('Text') : n.text}
               color="var(--dim)"
               visible={n.visible}
-              reading={<span className="note-row-kind">text</span>}
+              reading={<span className="note-row-kind">{tmarText("text")}</span>}
               selected={editingNoteId === n.id}
               editorOpen={editorOpen && editingNoteId !== n.id}
               onEdit={() => flat.getState().editNote(n.id)}
@@ -667,82 +559,40 @@ export function FlatPanel({
         <>
           <div className="divider" />
           <div className="toolrow">
-            <CopyButton label="Copy report" disabled={!hasMeasurements} onCopy={onCopy} />
-            <button data-test="flat-export-csv" disabled={!hasMeasurements} onClick={onExportCsv}>
-              Export CSV
-            </button>
+            <CopyButton label={tmarText("Copy report")} disabled={!hasMeasurements} onCopy={onCopy} />
+            <button data-test="flat-export-csv" disabled={!hasMeasurements} onClick={onExportCsv}>{tmarText("Export CSV")}</button>
           </div>
           <div className="toolrow">
             <button
               data-test="flat-export-svg"
               disabled={!drawable}
               onClick={onExportSvg}
-              title="Save the sheet as an SVG at true scale — the edges while they are shown and the visible elements, aligned and turned as shown — for a vector editor, a laser or a print at 1:1"
-            >
-              Export SVG
-            </button>
+              title={tmarText("Save the sheet as an SVG at true scale — the edges while they are shown and the visible elements, aligned and turned as shown — for a vector editor, a laser or a print at 1:1")}
+            >{tmarText("Export SVG")}</button>
             <button
               data-test="flat-export-dxf"
               disabled={!drawable}
               onClick={onExportDxf}
-              title={`Save the sheet as a DXF for CAD — ${
-                inches ? 'inches' : 'millimetres'
-              } on a sheet with a scale, y up, the origin on the alignment; every fit as its own entity, the edges while they are shown as polylines thinned to a sketch's worth`}
-            >
-              Export DXF
-            </button>
+              title={tmarText("Save the sheet as a DXF for CAD — {0} on a sheet with a scale, y up, the origin on the alignment; every fit as its own entity, the edges while they are shown as polylines thinned to a sketch's worth", [inches ? tmarText("inches") : tmarText("millimetres")])}
+            >{tmarText("Export DXF")}</button>
           </div>
-          <p className="hint">
-            The sheet as a drawing at true scale, aligned and turned as shown. SVG for a vector
-            editor or a print at 1:1; DXF for CAD, the origin on the alignment and the edges
-            thinned to a sketch's worth.
-          </p>
+          <p className="hint">{tmarText("The sheet as a drawing at true scale, aligned and turned as shown. SVG for a vector editor or a print at 1:1; DXF for CAD, the origin on the alignment and the edges thinned to a sketch's worth.")}</p>
         </>
       )}
 
       {hasSheet && (
         <div className="group">
-          <div className="sec-head">
-            Alignment
-            <InfoDot title="Alignment">
+          <div className="sec-head">{tmarText("Alignment")}<InfoDot title={tmarText("Alignment")}>
+              <p>{tmarText("Aligns the sheet to the part instead of to the scanner glass: the first pick is the ")}<b>{tmarText("origin")}</b>{tmarText(", the second sets ")}<b>{tmarText("+X")}</b>{tmarText(". The sheet turns so that +X runs to the right of the screen, and coordinates and line angles read from the origin along it from then on. Distances and angles between elements never change under an alignment.")}</p>
+              <p>{tmarText("Both picks snap to detected edges like any other pick — put the origin on a corner or a circle center, run X along a reference edge. The grid shows where the axes lie.")}</p>
               <p>
-                Aligns the sheet to the part instead of to the scanner glass: the first pick is
-                the <b>origin</b>, the second sets <b>+X</b>. The sheet turns so that +X runs to
-                the right of the screen, and coordinates and line angles read from the origin
-                along it from then on. Distances and angles between elements never change under
-                an alignment.
-              </p>
+                <b>{tmarText("Rotate 90°")}</b>{tmarText(" turns the sheet on the stage a quarter turn at a time on top of that — the image or the section as it is looked at, not the frame. Coordinates, the grid and every measurement stay where they are on the part.")}</p>
               <p>
-                Both picks snap to detected edges like any other pick — put the origin on a
-                corner or a circle center, run X along a reference edge. The grid shows where
-                the axes lie.
-              </p>
-              <p>
-                <b>Rotate 90°</b> turns the sheet on the stage a quarter turn at a time on top of
-                that — the image or the section as it is looked at, not the frame. Coordinates,
-                the grid and every measurement stay where they are on the part.
-              </p>
-              <p>
-                <b>Mirror</b> flips the sheet on the stage left-to-right or top-to-bottom, as it
-                is shown. A flatbed scan is the part seen through the glass; mirrored, it is the
-                part seen from above, the way a drawing shows it. Nothing measured moves —
-                distances, diameters and angles between elements are what they were — and an
-                alignment reads right-handed as shown, +X to the right and +Y up the screen, so
-                coordinates and line angles compare with a drawing. The drawing exports come out
-                mirrored the same way.
-              </p>
+                <b>{tmarText("Mirror")}</b>{tmarText(" flips the sheet on the stage left-to-right or top-to-bottom, as it is shown. A flatbed scan is the part seen through the glass; mirrored, it is the part seen from above, the way a drawing shows it. Nothing measured moves — distances, diameters and angles between elements are what they were — and an alignment reads right-handed as shown, +X to the right and +Y up the screen, so coordinates and line angles compare with a drawing. The drawing exports come out mirrored the same way.")}</p>
             </InfoDot>
           </div>
           <p className="hint" data-test="flat-datum-status">
-            {datumPicking
-              ? datumPicking.picks.length === 0
-                ? 'Click the origin on the sheet.'
-                : 'Now click a point along +X — the grid follows the cursor.'
-              : datum
-                ? 'Aligned to the part — +X runs right, coordinates read from the origin.'
-                : onSection
-                  ? 'Section frame — origin at the centre of the cut.'
-                  : "Image frame — origin at the image's bottom-left corner."}
+            {datumPicking ? datumPicking.picks.length === 0 ? tmarText("Click the origin on the sheet.") : tmarText("Now click a point along +X — the grid follows the cursor.") : datum ? tmarText("Aligned to the part — +X runs right, coordinates read from the origin.") : onSection ? tmarText("Section frame — origin at the centre of the cut.") : tmarText("Image frame — origin at the image's bottom-left corner.")}
           </p>
           {!datumPicking ? (
             <div className="toolrow">
@@ -751,20 +601,16 @@ export function FlatPanel({
                 disabled={calibrating !== null}
                 onClick={() => flat.getState().startDatum()}
               >
-                {datum ? 'Re-set alignment' : 'Set alignment'}
+                {datum ? tmarText("Re-set alignment") : tmarText("Set alignment")}
               </button>
               <button
                 data-test="flat-datum-clear"
                 disabled={!datum}
                 onClick={() => flat.getState().clearDatum()}
-              >
-                Clear
-              </button>
+              >{tmarText("Clear")}</button>
             </div>
           ) : (
-            <button className="block" data-test="flat-datum-cancel" onClick={() => flat.getState().cancelDatum()}>
-              Cancel
-            </button>
+            <button className="block" data-test="flat-datum-cancel" onClick={() => flat.getState().cancelDatum()}>{tmarText("Cancel")}</button>
           )}
           {datum && (
             <label className="checkrow">
@@ -774,56 +620,44 @@ export function FlatPanel({
                 checked={showGrid}
                 onChange={(e) => flat.getState().setShowGrid(e.target.checked)}
               />
-              <span>Show grid</span>
+              <span>{tmarText("Show grid")}</span>
             </label>
           )}
           <div className="toolrow">
             <button
               className="withicon"
               data-test="flat-turn-ccw"
-              title="Turn the sheet a quarter turn counter-clockwise"
+              title={tmarText("Turn the sheet a quarter turn counter-clockwise")}
               onClick={() => flat.getState().turnSheet(1)}
             >
-              <Icon name="rotateCcw" size={18} />
-              Rotate 90°
-            </button>
+              <Icon name="rotateCcw" size={18} />{tmarText("Rotate 90°")}</button>
             <button
               className="withicon"
               data-test="flat-turn-cw"
-              title="Turn the sheet a quarter turn clockwise"
+              title={tmarText("Turn the sheet a quarter turn clockwise")}
               onClick={() => flat.getState().turnSheet(-1)}
             >
-              <Icon name="rotateCw" size={18} />
-              Rotate 90°
-            </button>
+              <Icon name="rotateCw" size={18} />{tmarText("Rotate 90°")}</button>
           </div>
           <div className="toolrow">
             <button
               className="withicon"
               data-test="flat-mirror-lr"
-              title="Mirror the sheet left-to-right (horizontally), as it is shown — a scan seen through the glass, shown as from above"
+              title={tmarText("Mirror the sheet left-to-right (horizontally), as it is shown — a scan seen through the glass, shown as from above")}
               onClick={() => flat.getState().mirrorSheet('left-right')}
             >
-              <Icon name="mirror" size={18} />
-              Mirror
-            </button>
+              <Icon name="mirror" size={18} />{tmarText("Mirror")}</button>
             <button
               className="withicon"
               data-test="flat-mirror-tb"
-              title="Mirror the sheet top-to-bottom (vertically), as it is shown"
+              title={tmarText("Mirror the sheet top-to-bottom (vertically), as it is shown")}
               onClick={() => flat.getState().mirrorSheet('top-bottom')}
             >
-              <Icon name="mirrorTB" size={18} />
-              Mirror
-            </button>
+              <Icon name="mirrorTB" size={18} />{tmarText("Mirror")}</button>
           </div>
           {(turns !== 0 || mirror) && (
             <p className="hint" data-test="flat-turn-status">
-              {`Shown ${describeShown(turns, mirror)} — ${
-                mirror
-                  ? 'nothing measured moves; an alignment reads +Y up as shown.'
-                  : 'measurements are unchanged.'
-              }`}
+              {tmarText("Shown {0} — {1}", [tmarText(describeShown(turns, mirror)), mirror ? tmarText("nothing measured moves; an alignment reads +Y up as shown.") : tmarText("measurements are unchanged.")])}
             </p>
           )}
         </div>
@@ -831,25 +665,14 @@ export function FlatPanel({
 
       {onSection && (
         <div className="group">
-          <div className="sec-head">
-            Section edges
-            <InfoDot title="Section edges">
-              <p>
-                The polylines the cutting plane produced through the scan, drawn in teal over
-                the sheet. They are what picks snap to and what an edge-region fit consumes —
-                no detector runs, the cut is the edge.
-              </p>
-              <p>
-                The chains are as fine as the scan&apos;s triangles: coarse on a decimated mesh,
-                subpixel-dense on a fine one. Chains shorter than{' '}
-                {inches ? '0.04 in' : 'a millimetre'} are dropped.
-              </p>
+          <div className="sec-head">{tmarText("Section edges")}<InfoDot title={tmarText("Section edges")}>
+              <p>{tmarText("The polylines the cutting plane produced through the scan, drawn in teal over the sheet. They are what picks snap to and what an edge-region fit consumes — no detector runs, the cut is the edge.")}</p>
+              <p>{tmarText("The chains are as fine as the scan's triangles: coarse on a decimated mesh, subpixel-dense on a fine one. Chains shorter than")}{' '}
+                {inches ? tmarText("0.04 in") : tmarText("a millimetre")}{tmarText(" are dropped.")}</p>
             </InfoDot>
           </div>
           <p className="hint" data-test="flat-edge-status">
-            {edgeStatus === 'ready'
-              ? `${edgeCount.toLocaleString('en-US')} edge chains from the cut.`
-              : 'Cutting the scan…'}
+            {edgeStatus === 'ready' ? tmarText("{0} edge chains from the cut.", [edgeCount.toLocaleString('en-US')]) : tmarText("Cutting the scan…")}
           </p>
           <label className="checkrow">
             <input
@@ -858,36 +681,23 @@ export function FlatPanel({
               checked={showEdges}
               onChange={(e) => flat.getState().setShowEdges(e.target.checked)}
             />
-            <span>Show section edges</span>
+            <span>{tmarText("Show section edges")}</span>
           </label>
         </div>
       )}
 
       {imageName && !onSection && (
         <div className="group">
-          <div className="sec-head">
-            Edge detection
-            <InfoDot title="Edge detection">
-              <p>
-                The image is swept once for edges — where brightness turns over — and each edge
-                comes out as a chain of subpixel points, drawn in teal over the scan. Fits will
-                consume these chains; the overlay shows what they would have to work with.
-              </p>
-              <p>
-                Sensitivity decides how faint an edge still counts. Push it up if a real edge is
-                missing, down if noise and paper texture come up as edges.
-              </p>
+          <div className="sec-head">{tmarText("Edge detection")}<InfoDot title={tmarText("Edge detection")}>
+              <p>{tmarText("The image is swept once for edges — where brightness turns over — and each edge comes out as a chain of subpixel points, drawn in teal over the scan. Fits will consume these chains; the overlay shows what they would have to work with.")}</p>
+              <p>{tmarText("Sensitivity decides how faint an edge still counts. Push it up if a real edge is missing, down if noise and paper texture come up as edges.")}</p>
             </InfoDot>
           </div>
           <p className="hint" data-test="flat-edge-status">
-            {edgeStatus === 'running'
-              ? 'Detecting edges…'
-              : edgeStatus === 'ready'
-                ? `${edgeCount.toLocaleString('en-US')} edge chains found.`
-                : 'No edges detected yet.'}
+            {edgeStatus === 'running' ? tmarText("Detecting edges…") : edgeStatus === 'ready' ? tmarText("{0} edge chains found.", [edgeCount.toLocaleString('en-US')]) : tmarText("No edges detected yet.")}
           </p>
           <label className="field">
-            <span>Sensitivity</span>
+            <span>{tmarText("Sensitivity")}</span>
             <input
               type="range"
               data-test="flat-edge-sensitivity"
@@ -906,7 +716,7 @@ export function FlatPanel({
               checked={showEdges}
               onChange={(e) => flat.getState().setShowEdges(e.target.checked)}
             />
-            <span>Show detected edges</span>
+            <span>{tmarText("Show detected edges")}</span>
           </label>
         </div>
       )}

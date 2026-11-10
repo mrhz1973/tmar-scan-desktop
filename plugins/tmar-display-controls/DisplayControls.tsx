@@ -4,6 +4,8 @@ import { useStore } from '../../src/state/store'
 import { useShell } from '../../src/state/shellStore'
 import { Icon } from '../../src/ui/icons'
 import { useNotes } from '../reverse/state/noteStore'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 const STORAGE_KEY = 'tmar.display.workspaces.v1'
 export interface DisplayPrefs { labels: boolean; pins: boolean }
 export function readDisplayPrefs(workspace: string): DisplayPrefs {
@@ -35,16 +37,17 @@ export function useDisplayControls(): void {
   }, [workspace])
 }
 export function DisplayControls() {
+  useTmarLanguage()
+
   const workspace = useShell((s) => s.workspace)
   const labels = useStore((s) => s.showLabels), pins = useNotes((s) => s.pinsShown)
   const hasNotes = useNotes((s) => s.notes.length > 0)
   return <div className="keys" data-test="tmar-display-controls">
     <button data-test="workspace-labels" className={labels ? 'on' : undefined} aria-pressed={labels}
-      title="Show or hide text labels in this workspace; notes and geometry are kept" onClick={() => useStore.getState().setShowLabels(!labels)}>
-      <Icon name="labels" size={16}/>Labels
-    </button>
+      title={tmarText("Show or hide text labels in this workspace; notes and geometry are kept")} onClick={() => useStore.getState().setShowLabels(!labels)}>
+      <Icon name="labels" size={16}/>{tmarText("Labels")}</button>
     {/* Reverse already offers a Notes key. Other 3D workspaces need one too. */}
     {workspace !== 'reverse' && hasNotes && <button data-test="workspace-note-pins" className={pins ? 'on' : undefined} aria-pressed={pins}
-      title="Show or hide note markers and their text; the notes remain saved" onClick={() => useNotes.getState().setPinsShown(!pins)}>Notes</button>}
+      title={tmarText("Show or hide note markers and their text; the notes remain saved")} onClick={() => useNotes.getState().setPinsShown(!pins)}>{tmarText("Notes")}</button>}
   </div>
 }

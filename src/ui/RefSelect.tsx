@@ -6,6 +6,8 @@
 import { providesRole, type RefRole } from '../core/elements/refs'
 import type { ElementKind } from '../core/types'
 import type { Element } from '../state/store'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** Elements that can fill a reference slot of one of the given roles, minus
  *  any that would close a loop (an edited element and its dependents). `kinds`
@@ -36,9 +38,11 @@ export function NameField({
   testId: string
   onChange: (name: string) => void
 }) {
+  useTmarLanguage()
+
   return (
     <label className="field">
-      <span>Name</span>
+      <span>{tmarText("Name")}</span>
       <input type="text" data-test={testId} value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
   )
@@ -54,7 +58,7 @@ export function RefSelect({
   value,
   testId,
   picking,
-  placeholder = 'Select…',
+  placeholder,
   onChange,
   onPickNew,
 }: {
@@ -72,6 +76,8 @@ export function RefSelect({
   /** Offered on point slots: create the point by clicking the scan. */
   onPickNew?: () => void
 }) {
+  useTmarLanguage()
+
   return (
     <label className="field">
       <span>{label}</span>
@@ -83,7 +89,7 @@ export function RefSelect({
           else onChange(e.target.value === '' ? null : Number(e.target.value))
         }}
       >
-        <option value="">{placeholder}</option>
+        <option value="">{placeholder ?? tmarText('Select…')}</option>
         {options.map((el) => (
           <option key={el.id} value={el.id}>
             {el.name}
@@ -93,7 +99,7 @@ export function RefSelect({
             the one the select shows selected then. */}
         {onPickNew && (
           <option value="__pick__">
-            {picking ? 'Picking — click the scan…' : '+ Pick point on scan…'}
+            {picking ? tmarText("Picking — click the scan…") : tmarText("+ Pick point on scan…")}
           </option>
         )}
       </select>

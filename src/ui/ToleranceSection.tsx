@@ -26,6 +26,8 @@ import { NameField, providersFor, RefSelect } from './RefSelect'
 import { DimensionRow, VerdictNote, WarningNote } from './DimensionRow'
 import { LimitFields, OptionalNumber } from './LimitFields'
 import { ShowAllButton } from './ShowAllButton'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 const GROUPS: { id: DimensionGroup; label: string }[] = [
   { id: 'form', label: 'Form' },
@@ -39,6 +41,8 @@ export function ToleranceSection({
   /** True while any editor is open — element, dimension or alignment. */
   editorOpen: boolean
 }) {
+  useTmarLanguage()
+
   const elements = useStore((s) => s.elements)
   const dimensions = useStore((s) => s.dimensions)
   const dimDraft = useStore((s) => s.dimDraft)
@@ -96,24 +100,10 @@ export function ToleranceSection({
 
   return (
     <div className="group">
-      <div className="sec-head">
-        GD&amp;T
-        <InfoDot title="Geometric tolerances">
-          <p>
-            What a drawing&apos;s feature control frames ask for: how flat, round, cylindrical or
-            spherical a feature is on its own, how parallel, square or angled it lies to a datum,
-            and how well it shares the datum&apos;s axis.
-          </p>
-          <p>
-            Each reads the elements you have fitted — a face by its measured surface, a bore or a
-            pin by its axis, a ball by its centre — and is the width of the narrowest zone that still
-            holds the feature, the number to compare against the frame. Datums are elements too:
-            pick the one the drawing names.
-          </p>
-          <p>
-            Type a limit and the reading is judged against it, here, on the pin and in the copied
-            summary.
-          </p>
+      <div className="sec-head">{tmarText("GD&T")}<InfoDot title={tmarText("Geometric tolerances")}>
+          <p>{tmarText("What a drawing's feature control frames ask for: how flat, round, cylindrical or spherical a feature is on its own, how parallel, square or angled it lies to a datum, and how well it shares the datum's axis.")}</p>
+          <p>{tmarText("Each reads the elements you have fitted — a face by its measured surface, a bore or a pin by its axis, a ball by its centre — and is the width of the narrowest zone that still holds the feature, the number to compare against the frame. Datums are elements too: pick the one the drawing names.")}</p>
+          <p>{tmarText("Type a limit and the reading is judged against it, here, on the pin and in the copied summary.")}</p>
         </InfoDot>
         {own.length > 0 && <b>{own.length}</b>}
       </div>
@@ -125,17 +115,13 @@ export function ToleranceSection({
           // Likewise over an empty dimension box.
           disabled={!anyFitted || dimHolds(dimDraft) || draftOpen}
           onClick={() => startDimension('form-flatness')}
-        >
-          New tolerance
-        </button>
+        >{tmarText("New tolerance")}</button>
       ) : (
         dimDraft &&
         info && (
           <div className="draftbox dimbox">
             <div className="sec-head">
-              {dimDraft.editId !== undefined
-                ? `Edit ${dimensions.find((d) => d.id === dimDraft.editId)?.name ?? 'tolerance'}`
-                : 'New tolerance'}
+              {dimDraft.editId !== undefined ? tmarText("Edit {0}", [dimensions.find((d) => d.id === dimDraft.editId)?.name ?? (tmarText("tolerance"))]) : tmarText("New tolerance")}
             </div>
             {dimDraft.editId !== undefined && (
               <NameField
@@ -145,28 +131,28 @@ export function ToleranceSection({
               />
             )}
             <label className="field">
-              <span>Type</span>
+              <span>{tmarText("Type")}</span>
               <select
                 data-test="tol-type"
                 value={dimDraft.type}
                 onChange={(e) => setDimensionType(e.target.value)}
               >
                 {GROUPS.map((g) => (
-                  <optgroup key={g.id} label={g.label}>
+                  <optgroup key={g.id} label={tmarText(g.label)}>
                     {TOLERANCE_TYPES.filter((t) => t.group === g.id).map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.label}
+                        {tmarText(t.label)}
                       </option>
                     ))}
                   </optgroup>
                 ))}
               </select>
             </label>
-            <p className="hint">{info.hint}</p>
+            <p className="hint">{tmarText(info.hint)}</p>
             {info.slots.map((slot, i) => (
               <RefSelect
                 key={i}
-                label={slot.label}
+                label={tmarText(slot.label)}
                 options={providersFor(slot.roles, elements, undefined, slot.kinds)}
                 value={dimDraft.refs[i]}
                 testId={`tol-ref-${i}`}
@@ -176,19 +162,13 @@ export function ToleranceSection({
             ))}
             {dimDraft.type === 'orient-angularity' && (
               <label className="field">
-                <span>
-                  Basic angle
-                  <InfoDot title="Basic angle">
-                    <p>
-                      The angle the drawing draws the feature at, in a box: the zone is laid at
-                      exactly this angle to the datum, and the value is how far the feature spreads
-                      across it.
-                    </p>
+                <span>{tmarText("Basic angle")}<InfoDot title={tmarText("Basic angle")}>
+                    <p>{tmarText("The angle the drawing draws the feature at, in a box: the zone is laid at exactly this angle to the datum, and the value is how far the feature spreads across it.")}</p>
                   </InfoDot>
                 </span>
                 <OptionalNumber
                   value={dimDraft.basic}
-                  placeholder="type"
+                  placeholder={tmarText("type")}
                   step={0.01}
                   min={0}
                   unit="°"
@@ -207,13 +187,13 @@ export function ToleranceSection({
             {preview && (
               <div className="dro">
                 <div className="dro-label">
-                  <span>{preview.label}</span>
+                  <span>{tmarText(preview.label)}</span>
                 </div>
                 <ValueWindow value={preview} testId="tol-preview" over={verdict ? !verdict.pass : false} />
                 {verdict && <VerdictNote verdict={verdict} />}
-                {preview.detail && !preview.invalid && <div className="dro-note">{preview.detail}</div>}
+                {preview.detail && !preview.invalid && <div className="dro-note">{tmarText(preview.detail)}</div>}
                 {(preview.warning ?? preview.invalid) && (
-                  <WarningNote text={(preview.warning ?? preview.invalid)!} />
+                  <WarningNote text={tmarText((preview.warning ?? preview.invalid)!)} />
                 )}
               </div>
             )}
@@ -224,12 +204,10 @@ export function ToleranceSection({
               disabled={!preview || Boolean(preview.invalid)}
               onClick={commitDimension}
             >
-              {dimDraft.editId !== undefined ? 'Save changes' : 'Add tolerance'}
+              {dimDraft.editId !== undefined ? tmarText("Save changes") : tmarText("Add tolerance")}
             </button>
             <div className="toolrow">
-              <button data-test="cancel-tolerance" onClick={cancelDimension}>
-                Cancel
-              </button>
+              <button data-test="cancel-tolerance" onClick={cancelDimension}>{tmarText("Cancel")}</button>
             </div>
           </div>
         )
@@ -237,10 +215,10 @@ export function ToleranceSection({
 
       {own.length > 0 && (
         <div className="g-label">
-          <span>Tolerances</span>
+          <span>{tmarText("Tolerances")}</span>
           <ShowAllButton
             anyVisible={own.some((d) => d.visible !== false)}
-            what="tolerances"
+            what={tmarText("tolerances")}
             testId="tolerances-show-all"
             onSet={(visible) => setAllDimensionsVisible(visible, 'tolerance')}
           />
@@ -251,7 +229,7 @@ export function ToleranceSection({
           key={dim.id}
           name={dim.name}
           visible={dim.visible !== false}
-          title={title}
+          title={tmarText(title)}
           value={value}
           verdict={v}
           testPrefix="tolerance"

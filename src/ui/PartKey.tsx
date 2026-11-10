@@ -9,6 +9,8 @@
 // opens with, so a setting left on is never out of sight altogether.
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** A switch on the view bar, as whoever holds it gives it. */
 export interface ViewSwitch {
@@ -43,6 +45,7 @@ export function PartKey({
   children,
 }: {
   icon: ReactNode
+  /** Already localized by the caller; never translate a display label twice. */
   label: string
   testId: string
   /** The click: the part shown or put away. */
@@ -54,6 +57,8 @@ export function PartKey({
   /** The menu's rows, PartOption and PartChoice; none, no menu. */
   children?: ReactNode
 }) {
+  useTmarLanguage()
+
   const [open, setOpen] = useState(false)
   // Opened by its caret rather than by hover: the caret then closes it
   // again. Opened by hover it does not — the pointer resting on the caret
@@ -109,11 +114,11 @@ export function PartKey({
         onClick={() => {
           if (!shown.disabled) shown.set(!shown.on)
         }}
-        title={shown.disabled ?? title}
+        title={shown.disabled ? tmarText(shown.disabled) : title}
       >
         {icon}
         {label}
-        {changed && <span className="partdot" role="img" aria-label="set otherwise in its menu" />}
+        {changed && <span className="partdot" role="img" aria-label={tmarText("set otherwise in its menu")} />}
       </button>
       {hasMenu && (
         <button
@@ -127,7 +132,7 @@ export function PartKey({
             pinned.current = !close
             setOpen(!close)
           }}
-          title={`How the ${label.toLowerCase()} ${label.endsWith('s') ? 'are' : 'is'} drawn`}
+          title={tmarText("How the {0} {1} drawn", [label.toLowerCase(), label.endsWith('s') ? tmarText("are") : tmarText("is")])}
         >
           <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false">
             <path d="M1 5.5 4 2.5 7 5.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -158,6 +163,8 @@ export function PartOption({
   value: ViewSwitch
   title: string
 }) {
+  useTmarLanguage()
+
   return (
     <button
       role="menuitemcheckbox"
@@ -166,7 +173,7 @@ export function PartOption({
       aria-checked={value.on}
       disabled={Boolean(value.disabled)}
       onClick={() => value.set(!value.on)}
-      title={value.disabled ?? title}
+      title={value.disabled ? tmarText(value.disabled) : title}
     >
       {icon}
       {label}
@@ -193,6 +200,8 @@ export function PartChoice<T extends string>({
   onChange(value: T): void
   title: string
 }) {
+  useTmarLanguage()
+
   return (
     <div className="partchoice" role="radiogroup" aria-label={label} title={title}>
       <span className="partchoice-label">
@@ -208,9 +217,9 @@ export function PartChoice<T extends string>({
             className={value === o.id ? 'on' : undefined}
             data-test={`${testId}-${o.id}`}
             onClick={() => onChange(o.id)}
-            title={o.title}
+            title={tmarText(o.title)}
           >
-            {o.label}
+            {tmarText(o.label)}
           </button>
         ))}
       </span>

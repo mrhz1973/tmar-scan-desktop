@@ -8,8 +8,12 @@ import { NumberField } from '../../../../src/ui/NumberField'
 import { useMeshTools } from '../../state/meshStore'
 import { SurveyWait } from '../SurveyWait'
 import { count, typedLen } from '../meshFormat'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../../../src/i18n'
+
 
 export function HolesTool({ ready, busy, onFill }: { ready: boolean; busy: boolean; onFill: () => void }) {
+  useTmarLanguage()
+
   const holeSize = useMeshTools((s) => s.holeSize)
   const setHoleSize = useMeshTools((s) => s.setHoleSize)
   const fillMode = useMeshTools((s) => s.fillMode)
@@ -19,34 +23,19 @@ export function HolesTool({ ready, busy, onFill }: { ready: boolean; busy: boole
   const len = useLength()
   // A count for another size than the one in the field is on its way out.
   const s = survey && survey.maxSize === holeSize ? survey : null
-  const holes = (n: number) => `${count(n)} hole${n === 1 ? '' : 's'}`
+  const holes = (n: number) => `${count(n)} ${tmarText(n === 1 ? 'hole' : 'holes')}`
 
   return (
     <div className="group" data-test="holes-tool">
-      <div className="sec-head">
-        Fill holes
-        <InfoDot title="Filling holes">
-          <p>
-            A scanner leaves holes where it could not see: the bottom of a blind bore, the inside of
-            a sharp corner, a shiny spot, the pin the part stood on. Every rim smaller across than
-            the size below is a hole, marked on the part in orange and ringed; larger rims — the
-            scan's own open border, a hole too big to guess across — are drawn faint and left open.
-          </p>
-          <p>
-            Each hole is closed with the patch across it that bends least, given points as dense as
-            the scan around it, and smoothed: <b>Curved</b> carries the surface's curvature across
-            the hole, so a patch on a ball bulges with the ball; <b>Flat</b> lays the tightest patch
-            across the rim, flat wherever the rim is. The scan's own points stay where they are.
-          </p>
-          <p>
-            A filled patch is a guess at what the scanner did not see — the deviation and thickness
-            maps read it like any other surface. <b>Ctrl+Z</b> opens the holes again.
-          </p>
+      <div className="sec-head">{tmarText("Fill holes")}<InfoDot title={tmarText("Filling holes")}>
+          <p>{tmarText("A scanner leaves holes where it could not see: the bottom of a blind bore, the inside of a sharp corner, a shiny spot, the pin the part stood on. Every rim smaller across than the size below is a hole, marked on the part in orange and ringed; larger rims — the scan's own open border, a hole too big to guess across — are drawn faint and left open.")}</p>
+          <p>{tmarText("Each hole is closed with the patch across it that bends least, given points as dense as the scan around it, and smoothed: ")}<b>{tmarText("Curved")}</b>{tmarText(" carries the surface's curvature across the hole, so a patch on a ball bulges with the ball; ")}<b>{tmarText("Flat")}</b>{tmarText(" lays the tightest patch across the rim, flat wherever the rim is. The scan's own points stay where they are.")}</p>
+          <p>{tmarText("A filled patch is a guess at what the scanner did not see — the deviation and thickness maps read it like any other surface. ")}<b>{tmarText("Ctrl+Z")}</b>{tmarText(" opens the holes again.")}</p>
         </InfoDot>
       </div>
 
       <NumberField
-        label="Holes up to"
+        label={tmarText("Holes up to")}
         testId="holes-size"
         value={holeSize}
         step={0.5}
@@ -54,12 +43,12 @@ export function HolesTool({ ready, busy, onFill }: { ready: boolean; busy: boole
         kind="length"
         disabled={busy}
         onCommit={setHoleSize}
-        hint="A rim whose longest span is less than this is a hole to fill. It starts at a twentieth of the part's size."
+        hint={tmarText("A rim whose longest span is less than this is a hole to fill. It starts at a twentieth of the part's size.")}
       />
 
       <div className="field">
-        <span>Patch</span>
-        <div className="moderow" role="radiogroup" aria-label="Patch shape">
+        <span>{tmarText("Patch")}</span>
+        <div className="moderow" role="radiogroup" aria-label={tmarText("Patch shape")}>
           {(['curved', 'flat'] as const).map((mode) => (
             <button
               key={mode}
@@ -70,12 +59,10 @@ export function HolesTool({ ready, busy, onFill }: { ready: boolean; busy: boole
               disabled={busy}
               onClick={() => setFillMode(mode)}
               title={
-                mode === 'curved'
-                  ? 'Carry the surface’s curvature across the hole'
-                  : 'The tightest patch across the rim — flat where the rim is'
+                mode === 'curved' ? tmarText("Carry the surface’s curvature across the hole") : tmarText("The tightest patch across the rim — flat where the rim is")
               }
             >
-              {mode === 'curved' ? 'Curved' : 'Flat'}
+              {mode === 'curved' ? tmarText("Curved") : tmarText("Flat")}
             </button>
           ))}
         </div>
@@ -85,30 +72,23 @@ export function HolesTool({ ready, busy, onFill }: { ready: boolean; busy: boole
       {s && (
         <>
           <div className="kv" data-test="holes-rims">
-            <span className="name">Open rims in the scan</span>
+            <span className="name">{tmarText("Open rims in the scan")}</span>
             <b>{count(s.rims)}</b>
           </div>
           <div className="kv" data-test="holes-count">
-            <span className="name">Holes, under {typedLen(s.maxSize, len.units)}</span>
+            <span className="name">{tmarText("Holes, under ")}{typedLen(s.maxSize, len.units)}</span>
             <b>{count(s.holes)}</b>
           </div>
           {s.holes > 0 && (
-            <p className="hint" data-test="holes-gap">
-              Marked on the part in orange, each in a ring — click a ring to fill just that hole.
-              The largest is{' '}
-              {len.fmt(s.largestHole!, 2)} across
-              {s.smallestOpen !== null ? `, the smallest rim left open ${len.fmt(s.smallestOpen, 2)}` : ''}.
+            <p className="hint" data-test="holes-gap">{tmarText("Marked on the part in orange, each in a ring — click a ring to fill just that hole. The largest is")}{' '}
+              {len.fmt(s.largestHole!, 2)}{tmarText(" across")}{s.smallestOpen !== null ? tmarText(", the smallest rim left open {0}", [len.fmt(s.smallestOpen, 2)]) : ''}.
             </p>
           )}
           {s.rims === 0 && (
-            <p className="hint" data-test="holes-closed">
-              The scan is closed — it has no open edge anywhere.
-            </p>
+            <p className="hint" data-test="holes-closed">{tmarText("The scan is closed — it has no open edge anywhere.")}</p>
           )}
           {s.rims > 0 && s.holes === 0 && (
-            <p className="hint" data-test="holes-none">
-              No rim is smaller than that — the smallest is {len.fmt(s.smallestOpen!, 2)} across.
-            </p>
+            <p className="hint" data-test="holes-none">{tmarText("No rim is smaller than that — the smallest is ")}{len.fmt(s.smallestOpen!, 2)}{tmarText(" across.")}</p>
           )}
         </>
       )}
@@ -122,13 +102,11 @@ export function HolesTool({ ready, busy, onFill }: { ready: boolean; busy: boole
       >
         {editing ? (
           <>
-            <span className="spinner" />
-            Filling…
-          </>
+            <span className="spinner" />{tmarText("Filling…")}</>
         ) : s && s.holes > 0 ? (
-          `Fill ${holes(s.holes)}`
+          tmarText('Fill {0}', [holes(s.holes)])
         ) : (
-          'Fill'
+          tmarText('Fill')
         )}
       </button>
     </div>

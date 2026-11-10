@@ -4,6 +4,8 @@
 
 import type { ReactNode } from 'react'
 import { Icon } from './icons'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function RowTools({
   name,
@@ -30,13 +32,15 @@ export function RowTools({
    *  is not shown or hidden but switched some other way. */
   eyeKey?: ReactNode
 }) {
+  useTmarLanguage()
+
   return (
     <>
       <button
         className="x edit"
         data-test={editTestId}
         disabled={editDisabled}
-        title={editTitle}
+        title={tmarText(editTitle)}
         onClick={onEdit}
       >
         <Icon name="edit" size={14} />
@@ -44,13 +48,13 @@ export function RowTools({
       {eyeKey ?? (
         <button
           className="x eye"
-          title={visible ? `Hide ${name} in the viewport` : `Show ${name}`}
+          title={visible ? tmarText("Hide {0} in the viewport", [name]) : tmarText("Show {0}", [name])}
           onClick={onToggleVisible}
         >
           <Icon name={visible ? 'eye' : 'eyeOff'} size={14} />
         </button>
       )}
-      <button className="x" title={`Delete ${name}`} onClick={onDelete}>
+      <button className="x" title={tmarText("Delete {0}", [name])} onClick={onDelete}>
         <Icon name="bin" size={14} />
       </button>
     </>

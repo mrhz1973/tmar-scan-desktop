@@ -46,6 +46,8 @@ import { NoteList } from './NoteList'
 import { PluginPanelExtensions, panelExtensions } from '../../../src/plugins/panelExtensions'
 import { FeatureListExtension, FeatureRowExtension } from '../app/listExtensions'
 import { fittedOf, useFitMarks } from '../app/reFitMarks'
+import { reverseText as tmarText, coreText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 /** The coordinate planes' rows in the body list, in CAD's order: XY, XZ, YZ. */
 const PLANE_ROWS: readonly WorldAxis[] = ['z', 'y', 'x']
@@ -62,12 +64,14 @@ function exprNote(f: Feature): string {
  *  3MF for a printer — which meshes a STEP to its own tolerance — at one of
  *  the named resolutions (core/meshResolution), the one chosen kept. */
 function MeshExportRow({ disabled, onExport }: { disabled: boolean; onExport: (format: MeshFormat) => void }) {
+  useTmarLanguage()
+
   const chosen = useRePrefs((s) => s.meshResolution)
   const len = useLength()
   return (
     <div data-test="export-body-mesh-row">
-      <ExportMeshButton testId="export-body-mesh" block disabled={disabled} title="Write the visible solid bodies as an STL or a 3MF, meshed as finely as the resolution below says — what a slicer prints as it is" onExport={onExport} />
-      <div className="moderow" role="radiogroup" aria-label="Mesh resolution" data-test="export-mesh-resolution" title="How finely Export mesh meshes the bodies">
+      <ExportMeshButton testId="export-body-mesh" block disabled={disabled} title={tmarText("Write the visible solid bodies as an STL or a 3MF, meshed as finely as the resolution below says — what a slicer prints as it is")} onExport={onExport} />
+      <div className="moderow" role="radiogroup" aria-label={tmarText("Mesh resolution")} data-test="export-mesh-resolution" title={tmarText("How finely Export mesh meshes the bodies")}>
         {MESH_RESOLUTIONS.map((r) => (
           <button
             key={r.id}
@@ -75,10 +79,10 @@ function MeshExportRow({ disabled, onExport }: { disabled: boolean; onExport: (f
             aria-checked={chosen === r.id}
             className={chosen === r.id ? 'on' : undefined}
             data-test={`export-mesh-${r.id}`}
-            title={`${r.label}: no triangle further than ${len.fmt(r.chord, 3)} off a curved face, none turning more than ${Math.round(r.angleDeg * 10) / 10}° round it — finer is larger`}
+            title={tmarText("{0}: no triangle further than {1} off a curved face, none turning more than {2}° round it — finer is larger", [r.label === 'Draft' ? coreText('Draft') : tmarText(r.label), len.fmt(r.chord, 3), Math.round(r.angleDeg * 10) / 10])}
             onClick={() => useRePrefs.getState().setMeshResolution(r.id)}
           >
-            {r.label}
+            {r.label === 'Draft' ? coreText('Draft') : tmarText(r.label)}
           </button>
         ))}
       </div>
@@ -87,6 +91,8 @@ function MeshExportRow({ disabled, onExport }: { disabled: boolean; onExport: (f
 }
 
 export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare, chainsOf }: { onOpenScan: (file: File) => void; onExportStep: () => void; onExportMesh: (format: MeshFormat) => void; onCompare: () => void; chainsOf: () => SketchChains | null }) {
+  useTmarLanguage()
+
   const fileName = useStore((s) => s.fileName)
   const triangleCount = useStore((s) => s.triangleCount)
   const busy = useStore((s) => s.busy)
@@ -198,7 +204,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
       className={'rollbar' + (rollDrag !== null ? ' dragging' : '') + (barLocked ? ' off' : '')}
       data-test="rollback-bar"
       data-at={features.length}
-      title={playback ? 'The playback moves the rollback bar — stop it to move the bar by hand' : editorOpen ? 'Finish what is open first' : 'The rollback bar — drag it up to set the features below it aside and add one earlier in the history; drag it down, or press To end, to build them again'}
+      title={playback ? tmarText("The playback moves the rollback bar — stop it to move the bar by hand") : editorOpen ? tmarText("Finish what is open first") : tmarText("The rollback bar — drag it up to set the features below it aside and add one earlier in the history; drag it down, or press To end, to build them again")}
       onPointerDown={(e) => {
         if (barLocked || e.button !== 0) return
         e.currentTarget.setPointerCapture(e.pointerId)
@@ -217,9 +223,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
     >
       <span className="grip" />
       {rolledBack.length > 0 && rollDrag === null && !playback && (
-        <button data-test="rollback-end" disabled={editorOpen} title="Move the rollback bar to the end of the list: every feature is built again" onPointerDown={(e) => e.stopPropagation()} onClick={() => re.getState().rollTo(null)}>
-          To end
-        </button>
+        <button data-test="rollback-end" disabled={editorOpen} title={tmarText("Move the rollback bar to the end of the list: every feature is built again")} onPointerDown={(e) => e.stopPropagation()} onClick={() => re.getState().rollTo(null)}>{tmarText("To end")}</button>
       )}
     </div>
   )
@@ -229,7 +233,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
    *  the pointer. */
   const marks = (count: number) => (
     <>
-      {count === features.length && bar}
+      {count === features.length && (bar)}
       {rollDrag !== null && rollDrag !== features.length && count === rollDrag && <div className="rollmark" data-test="rollback-mark" />}
     </>
   )
@@ -246,37 +250,23 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
   return (
     <aside className="panel">
       <div className="group">
-        <div className="sec-head">
-          Model
-          <InfoDot title="Reverse engineering">
-            <p>
-              Turn the scan into a <b>solid body</b> CAD opens as one: sketch on a section, a fitted
-              plane or a coordinate plane, extrude or revolve the sketch's regions, and export the
-              bodies as STEP.
-            </p>
-            <p>
-              The body is built in the frame the part stands in now — align the part onto its
-              fitted planes first, in the 3D Measure workspace, so the model is square.
-            </p>
-            <p>
-              Modelling runs on <b>Open CASCADE Technology</b> (LGPL-2.1 with the Open CASCADE
-              exception), compiled to WebAssembly by occt-wasm and loaded as a separate file when
-              this workspace is first opened. Everything stays in this browser.
-            </p>
+        <div className="sec-head">{tmarText("Model")}<InfoDot title={tmarText("Reverse engineering")}>
+            <p>{tmarText("Turn the scan into a ")}<b>{tmarText("solid body")}</b>{tmarText(" CAD opens as one: sketch on a section, a fitted plane or a coordinate plane, extrude or revolve the sketch's regions, and export the bodies as STEP.")}</p>
+            <p>{tmarText("The body is built in the frame the part stands in now — align the part onto its fitted planes first, in the 3D Measure workspace, so the model is square.")}</p>
+            <p>{tmarText("Modelling runs on ")}<b>{tmarText("Open CASCADE Technology")}</b>{tmarText(" (LGPL-2.1 with the Open CASCADE exception), compiled to WebAssembly by occt-wasm and loaded as a separate file when this workspace is first opened. Everything stays in this browser.")}</p>
           </InfoDot>
         </div>
         <ModelSlot role="Scan" name={fileName} detail={`${triangleCount.toLocaleString('en-US')} triangles`} dotColor="#8b9099" busy={busy} onOpen={onOpenScan} />
         <p className="hint" data-test="kernel-status">
-          {kernelStatus === 'idle' && 'CAD kernel: waiting.'}
+          {kernelStatus === 'idle' && (tmarText("CAD kernel: waiting."))}
           {kernelStatus === 'loading' && (
             <>
-              <span className="spinner" /> Loading the CAD kernel (Open CASCADE, about 5 MB)…
-            </>
+              <span className="spinner" />{tmarText(" Loading the CAD kernel (Open CASCADE, about 5 MB)…")}</>
           )}
-          {kernelStatus === 'ready' && `CAD kernel ready — ${kernelVersion}.`}
+          {kernelStatus === 'ready' && (tmarText("CAD kernel ready — {0}.", [kernelVersion]))}
           {kernelStatus === 'unavailable' && <>
-            <span className="warn">⚠ {kernelMessage}</span>
-            <button data-test="retry-kernel" onClick={() => useReverse.getState().setKernel('idle')}>Retry CAD kernel</button>
+            <span className="warn">⚠ {tmarText(kernelMessage)}</span>
+            <button data-test="retry-kernel" onClick={() => useReverse.getState().setKernel('idle')}>{tmarText("Retry CAD kernel")}</button>
           </>}
         </p>
       </div>
@@ -288,137 +278,125 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
 
       {!editorOpen && (
         <div className="group">
-          <div className="sec-head">
-            Create feature
-            <InfoDot title="Features">
+          <div className="sec-head">{tmarText("Create feature")}<InfoDot title={tmarText("Features")}>
               <p>
-                <b>Sketch</b> on a plane: the slice the plane cuts through the scan is fitted with
-                lines and arcs, corners are inferred and the profile closed. The sketch then shows
-                on the part. <b>Extrude</b> picks the sketch's regions in the viewport and pulls
-                them by a distance, to a plane, between two planes or symmetrically; <b>Revolve</b>{' '}
-                turns them about a line, a cylinder's axis or a sketch line. Both show the body
-                as a ghost with grips to drag while they are set up.
-              </p>
-              <p>
-                Every extrude or revolve makes a <b>new body</b>, or <b>joins</b> or <b>cuts</b>{' '}
-                one made before. Features rebuild in order whenever one changes; one whose plane or
-                sketch has gone says so and the rest still build.
-              </p>
+                <b>{tmarText("Sketch")}</b>{tmarText(" on a plane: the slice the plane cuts through the scan is fitted with lines and arcs, corners are inferred and the profile closed. The sketch then shows on the part. ")}<b>{tmarText("Extrude")}</b>{tmarText(" picks the sketch's regions in the viewport and pulls them by a distance, to a plane, between two planes or symmetrically; ")}<b>{tmarText("Revolve")}</b>{' '}{tmarText("turns them about a line, a cylinder's axis or a sketch line. Both show the body as a ghost with grips to drag while they are set up.")}</p>
+              <p>{tmarText("Every extrude or revolve makes a ")}<b>{tmarText("new body")}</b>{tmarText(", or ")}<b>{tmarText("joins")}</b>{tmarText(" or ")}<b>{tmarText("cuts")}</b>{' '}{tmarText("one made before. Features rebuild in order whenever one changes; one whose plane or sketch has gone says so and the rest still build.")}</p>
             </InfoDot>
           </div>
           <label className="field">
-            <span>Sketch on</span>
-            <PlaneSelect value={null} testId="sketch-plane-select" placeholder="Choose a plane…" onChange={startSketchOn} />
+            <span>{tmarText("Sketch on")}</span>
+            <PlaneSelect value={null} testId="sketch-plane-select" placeholder={tmarText("Choose a plane…")} onChange={startSketchOn} />
           </label>
           <div className="kindrow featurekeys" data-test="feature-keys">
-            <button data-test="feature-extrude" disabled={!ready || sketches.length === 0} title="Extrude a sketch's regions — pick them in the viewport" onClick={() => re.getState().startExtrude()}>
+            <button data-test="feature-extrude" disabled={!ready || sketches.length === 0} title={tmarText("Extrude a sketch's regions — pick them in the viewport")} onClick={() => re.getState().startExtrude()}>
               <Icon name="extrude" />
-              <span>Extrude</span>
+              <span>{tmarText("Extrude")}</span>
             </button>
-            <button data-test="feature-revolve" disabled={!ready || sketches.length === 0} title="Revolve a sketch's regions about an axis" onClick={() => re.getState().startRevolve()}>
+            <button data-test="feature-revolve" disabled={!ready || sketches.length === 0} title={tmarText("Revolve a sketch's regions about an axis")} onClick={() => re.getState().startRevolve()}>
               <Icon name="revolve" />
-              <span>Revolve</span>
+              <span>{tmarText("Revolve")}</span>
             </button>
-            <button data-test="feature-extract" disabled={!fileName || !ready || (!hasSolidElement && !hasShadow)} title="A measured plane, cylinder, cone or sphere as a body at its extents, extended as in 3D Measure — a boss or a pin without a sketch — or a shadow section as its block, the outline through the part's thickness" onClick={() => re.getState().startFeature('extract')}>
+            <button data-test="feature-extract" disabled={!fileName || !ready || (!hasSolidElement && !hasShadow)} title={tmarText("A measured plane, cylinder, cone or sphere as a body at its extents, extended as in 3D Measure — a boss or a pin without a sketch — or a shadow section as its block, the outline through the part's thickness")} onClick={() => re.getState().startFeature('extract')}>
               <Icon name="extract" />
-              <span>Extract</span>
+              <span>{tmarText("Extract")}</span>
             </button>
-            <StepFileKey testId="feature-import" disabled={!ready} title="Bring a STEP file in as bodies of its own — a bought-in part, a mating part, the CAD model to check the scan against. A body for every solid in the file, named as the file names its parts; Move body puts them where they belong" onFile={(file) => re.getState().startFeature('import', { file, name: file.name.replace(/\.(step|stp)$/i, '') })}>
+            <StepFileKey testId="feature-import" disabled={!ready} title={tmarText("Bring a STEP file in as bodies of its own — a bought-in part, a mating part, the CAD model to check the scan against. A body for every solid in the file, named as the file names its parts; Move body puts them where they belong")} onFile={(file) => re.getState().startFeature('import', { file, name: file.name.replace(/\.(step|stp)$/i, '') })}>
               <KeyIcon name="importStep" />
-              <span>Import STEP</span>
+              <span>{tmarText("Import STEP")}</span>
             </StepFileKey>
-            <button data-test="feature-shell" disabled={!hasBody} title="Hollow the body to a wall — click the faces to open, or none for a closed hollow; the wall comes from the Thickness map when one was measured" onClick={() => startShell()}>
+            <button data-test="feature-shell" disabled={!hasBody} title={tmarText("Hollow the body to a wall — click the faces to open, or none for a closed hollow; the wall comes from the Thickness map when one was measured")} onClick={() => startShell()}>
               <Icon name="shell" />
-              <span>Shell</span>
+              <span>{tmarText("Shell")}</span>
             </button>
-            <button data-test="feature-fillet" disabled={!hasBody} title="Round edges of the body — click them; the radius is read off the scan across the first" onClick={() => re.getState().startFeature('fillet')}>
+            <button data-test="feature-fillet" disabled={!hasBody} title={tmarText("Round edges of the body — click them; the radius is read off the scan across the first")} onClick={() => re.getState().startFeature('fillet')}>
               <Icon name="fillet" />
-              <span>Fillet</span>
+              <span>{tmarText("Fillet")}</span>
             </button>
-            <button data-test="feature-chamfer" disabled={!hasBody} title="Chamfer edges of the body — click them" onClick={() => re.getState().startFeature('chamfer')}>
+            <button data-test="feature-chamfer" disabled={!hasBody} title={tmarText("Chamfer edges of the body — click them")} onClick={() => re.getState().startFeature('chamfer')}>
               <Icon name="chamfer" />
-              <span>Chamfer</span>
+              <span>{tmarText("Chamfer")}</span>
             </button>
-            <button data-test="feature-draft" disabled={!hasBody} title="Lean faces of the body about a neutral plane — a moulding's draft, put on after the fact: click the flat face that stays, then the faces to lean" onClick={() => re.getState().startFeature('draft')}>
+            <button data-test="feature-draft" disabled={!hasBody} title={tmarText("Lean faces of the body about a neutral plane — a moulding's draft, put on after the fact: click the flat face that stays, then the faces to lean")} onClick={() => re.getState().startFeature('draft')}>
               <Icon name="draft" />
-              <span>Draft</span>
+              <span>{tmarText("Draft")}</span>
             </button>
-            <button data-test="feature-move-face" disabled={!hasBody} title="Offset faces of the body by a distance — a flat face along its normal, a round face in radius; several picked together grow or shrink as a whole, a cylinder's wall and its ends. One face can be snapped onto the scan instead: pick it, take Snap to scan, and click the scan where it should lie" onClick={() => re.getState().startFeature('moveFace')}>
+            <button data-test="feature-move-face" disabled={!hasBody} title={tmarText("Offset faces of the body by a distance — a flat face along its normal, a round face in radius; several picked together grow or shrink as a whole, a cylinder's wall and its ends. One face can be snapped onto the scan instead: pick it, take Snap to scan, and click the scan where it should lie")} onClick={() => re.getState().startFeature('moveFace')}>
               <Icon name="moveFace" />
-              <span>Move face</span>
+              <span>{tmarText("Move face")}</span>
             </button>
-            <button data-test="feature-delete-face" disabled={!hasBody} title="Delete faces of the body and heal the gap — a fillet, a chamfer, a hole or a boss taken out, the faces round it run on to close over where it was: click a face of it, and the rest of the round or hole comes with it" onClick={() => re.getState().startFeature('deleteFace')}>
+            <button data-test="feature-delete-face" disabled={!hasBody} title={tmarText("Delete faces of the body and heal the gap — a fillet, a chamfer, a hole or a boss taken out, the faces round it run on to close over where it was: click a face of it, and the rest of the round or hole comes with it")} onClick={() => re.getState().startFeature('deleteFace')}>
               <KeyIcon name="deleteFace" />
-              <span>Delete face</span>
+              <span>{tmarText("Delete face")}</span>
             </button>
-            <button data-test="feature-hole" disabled={!hasBody} title="A hole through the body along a cylinder or circle element, or a round face of the body" onClick={() => re.getState().startFeature('hole')}>
+            <button data-test="feature-hole" disabled={!hasBody} title={tmarText("A hole through the body along a cylinder or circle element, or a round face of the body")} onClick={() => re.getState().startFeature('hole')}>
               <Icon name="hole" />
-              <span>Hole</span>
+              <span>{tmarText("Hole")}</span>
             </button>
-            <button data-test="feature-thread" disabled={!hasBody} title="A modeled screw thread on a round face of the body — a bolt's on a boss, a nut's in a bore: ISO metric, UNC or UNF, a 45° form that prints without supports, or a diameter and pitch of your own, with an offset for clearance when printing" onClick={() => re.getState().startFeature('thread')}>
+            <button data-test="feature-thread" disabled={!hasBody} title={tmarText("A modeled screw thread on a round face of the body — a bolt's on a boss, a nut's in a bore: ISO metric, UNC or UNF, a 45° form that prints without supports, or a diameter and pitch of your own, with an offset for clearance when printing")} onClick={() => re.getState().startFeature('thread')}>
               <ThreadIcon />
-              <span>Thread</span>
+              <span>{tmarText("Thread")}</span>
             </button>
-            <button data-test="feature-cut-plane" disabled={!hasBody} title="Cut the body at a plane and keep one side" onClick={() => re.getState().startFeature('cutPlane')}>
+            <button data-test="feature-cut-plane" disabled={!hasBody} title={tmarText("Cut the body at a plane and keep one side")} onClick={() => re.getState().startFeature('cutPlane')}>
               <Icon name="cutPlane" />
-              <span>Cut by plane</span>
+              <span>{tmarText("Cut by plane")}</span>
             </button>
-            <button data-test="feature-mirror" disabled={!hasBody} title="Mirror the body about a plane, joined with the source" onClick={() => re.getState().startFeature('mirror')}>
+            <button data-test="feature-mirror" disabled={!hasBody} title={tmarText("Mirror the body about a plane, joined with the source")} onClick={() => re.getState().startFeature('mirror')}>
               <Icon name="mirror" />
-              <span>Mirror</span>
+              <span>{tmarText("Mirror")}</span>
             </button>
-            <button data-test="feature-boolean" disabled={!hasBody || bodies.length < 2} title="Join, cut or intersect two bodies made separately — or trim a sheet by a solid, or sew two sheets into one, before Thicken" onClick={() => re.getState().startFeature('boolean')}>
+            <button data-test="feature-boolean" disabled={!hasBody || bodies.length < 2} title={tmarText("Join, cut or intersect two bodies made separately — or trim a sheet by a solid, or sew two sheets into one, before Thicken")} onClick={() => re.getState().startFeature('boolean')}>
               <Icon name="combine" />
-              <span>Combine</span>
+              <span>{tmarText("Combine")}</span>
             </button>
-            <button data-test="feature-sheet" disabled={!ready || sketches.length === 0} title="A sketch's pieces — an open chain will do — extruded as a surface: a cutter to split a body with" onClick={() => re.getState().startFeature('sheet')}>
+            <button data-test="feature-sheet" disabled={!ready || sketches.length === 0} title={tmarText("A sketch's pieces — an open chain will do — extruded as a surface: a cutter to split a body with")} onClick={() => re.getState().startFeature('sheet')}>
               <Icon name="sheet" />
-              <span>Sheet</span>
+              <span>{tmarText("Sheet")}</span>
             </button>
-            <button data-test="feature-split" disabled={!hasBody || bodies.length < 2} title="Split a body by a sheet and keep the fragments that lie on the scan — or trim a sheet by sheets or solids, keeping its pieces on the scan" onClick={() => re.getState().startFeature('split')}>
+            <button data-test="feature-split" disabled={!hasBody || bodies.length < 2} title={tmarText("Split a body by a sheet and keep the fragments that lie on the scan — or trim a sheet by sheets or solids, keeping its pieces on the scan")} onClick={() => re.getState().startFeature('split')}>
               <Icon name="split" />
-              <span>Split</span>
+              <span>{tmarText("Split")}</span>
             </button>
-            <button data-test="feature-loft" disabled={!ready || sketches.length < 2} title="A solid through the profiles of two or more sketches on their own planes" onClick={() => re.getState().startFeature('loft')}>
+            <button data-test="feature-loft" disabled={!ready || sketches.length < 2} title={tmarText("A solid through the profiles of two or more sketches on their own planes")} onClick={() => re.getState().startFeature('loft')}>
               <Icon name="loft" />
-              <span>Loft</span>
+              <span>{tmarText("Loft")}</span>
             </button>
-            <button data-test="feature-sweep" disabled={!ready || sketches.length < 2} title="A sketch's region swept along a chain of lines and arcs in another sketch — a bent bar, a handle, a rim that follows a curve" onClick={() => re.getState().startFeature('sweep')}>
+            <button data-test="feature-sweep" disabled={!ready || sketches.length < 2} title={tmarText("A sketch's region swept along a chain of lines and arcs in another sketch — a bent bar, a handle, a rim that follows a curve")} onClick={() => re.getState().startFeature('sweep')}>
               <SweepIcon />
-              <span>Sweep</span>
+              <span>{tmarText("Sweep")}</span>
             </button>
-            <button data-test="feature-pattern" disabled={!hasBody} title="Copies of the body about an axis, along a direction, or in a grid" onClick={() => re.getState().startFeature('pattern')}>
+            <button data-test="feature-pattern" disabled={!hasBody} title={tmarText("Copies of the body about an axis, along a direction, or in a grid")} onClick={() => re.getState().startFeature('pattern')}>
               <Icon name="pattern" />
-              <span>Pattern</span>
+              <span>{tmarText("Pattern")}</span>
             </button>
-            <button data-test="feature-move-body" disabled={!hasBody} title="Move and turn bodies — the ones selected on the part or picked in the body list (Ctrl+click or Shift+click rows for several), or click them on the part: drag the gizmo's arrows and rings, or type the distances and angles. Tick Copy to move a copy and leave the body where it is" onClick={() => re.getState().startFeature('moveBody', { bodies: movingBodies() })}>
+            <button data-test="feature-move-body" disabled={!hasBody} title={tmarText("Move and turn bodies — the ones selected on the part or picked in the body list (Ctrl+click or Shift+click rows for several), or click them on the part: drag the gizmo's arrows and rings, or type the distances and angles. Tick Copy to move a copy and leave the body where it is")} onClick={() => re.getState().startFeature('moveBody', { bodies: movingBodies() })}>
               <KeyIcon name="moveBody" />
-              <span>Move body</span>
+              <span>{tmarText("Move body")}</span>
             </button>
-            <button data-test="feature-offset-body" disabled={!hasBody} title="Grow a body all round by a distance, or shrink it — kept beside it as a body of its own, a keep-out round a part or the pocket that holds it with clearance" onClick={() => re.getState().startFeature('offsetBody')}>
+            <button data-test="feature-offset-body" disabled={!hasBody} title={tmarText("Grow a body all round by a distance, or shrink it — kept beside it as a body of its own, a keep-out round a part or the pocket that holds it with clearance")} onClick={() => re.getState().startFeature('offsetBody')}>
               <KeyIcon name="offsetBody" />
-              <span>Offset body</span>
+              <span>{tmarText("Offset body")}</span>
             </button>
-            <button data-test="feature-surface" disabled={!fileName || !ready} title="A smooth freeform surface fitted through a region of the scan — click faces or mark them — for the trim to close into a solid with the others" onClick={() => re.getState().startFeature('surface')}>
+            <button data-test="feature-surface" disabled={!fileName || !ready} title={tmarText("A smooth freeform surface fitted through a region of the scan — click faces or mark them — for the trim to close into a solid with the others")} onClick={() => re.getState().startFeature('surface')}>
               <Icon name="surface" />
-              <span>Fit surface</span>
+              <span>{tmarText("Fit surface")}</span>
             </button>
-            <button data-test="feature-network" disabled={!fileName || !ready} title="Curves drawn on the scan, and the regions they close filled with patches fitted to the scan together — tangent across every curve not marked a crease, sharing their edges: a sheet, or a solid where the network closes. For a freeform skin that folds back or wants more than one patch" onClick={() => re.getState().startFeature('network')}>
+            <button data-test="feature-network" disabled={!fileName || !ready} title={tmarText("Curves drawn on the scan, and the regions they close filled with patches fitted to the scan together — tangent across every curve not marked a crease, sharing their edges: a sheet, or a solid where the network closes. For a freeform skin that folds back or wants more than one patch")} onClick={() => re.getState().startFeature('network')}>
               <Icon name="surface" />
-              <span>Patch network</span>
+              <span>{tmarText("Patch network")}</span>
             </button>
             <PluginPanelExtensions slot="reverse.create.after-network" />
-            <button data-test="feature-trim" disabled={!fileName || !ready || (!bodies.some((b) => b.surface) && !hasSolidElement)} title="Close a set of fitted surfaces, sheets and measured planes, cylinders, cones and spheres into a solid: the faces they cut space into are kept where they lie on the scan and sewn" onClick={() => re.getState().startFeature('trim')}>
+            <button data-test="feature-trim" disabled={!fileName || !ready || (!bodies.some((b) => b.surface) && !hasSolidElement)} title={tmarText("Close a set of fitted surfaces, sheets and measured planes, cylinders, cones and spheres into a solid: the faces they cut space into are kept where they lie on the scan and sewn")} onClick={() => re.getState().startFeature('trim')}>
               <Icon name="trim" />
-              <span>Trim</span>
+              <span>{tmarText("Trim")}</span>
             </button>
-            <button data-test="feature-thicken" disabled={!ready || !bodies.some((b) => b.surface)} title="Make a sheet or a fitted surface a solid of a thickness — a freeform thin shell's wall from its one skin, where a shell or an offset of a lofted body will not go" onClick={() => re.getState().startFeature('thicken')}>
+            <button data-test="feature-thicken" disabled={!ready || !bodies.some((b) => b.surface)} title={tmarText("Make a sheet or a fitted surface a solid of a thickness — a freeform thin shell's wall from its one skin, where a shell or an offset of a lofted body will not go")} onClick={() => re.getState().startFeature('thicken')}>
               <KeyIcon name="shell" />
-              <span>Thicken</span>
+              <span>{tmarText("Thicken")}</span>
             </button>
           </div>
-          {sketches.length === 0 && fileName && <p className="hint">Start with a sketch: choose a plane above, or cut a section in the 3D Measure workspace.</p>}
-          {sketches.length === 0 && !fileName && <p className="hint">Start with a sketch: choose a coordinate plane above. No scan is needed to model.</p>}
+          {sketches.length === 0 && fileName && <p className="hint">{tmarText("Start with a sketch: choose a plane above, or cut a section in the 3D Measure workspace.")}</p>}
+          {sketches.length === 0 && !fileName && <p className="hint">{tmarText("Start with a sketch: choose a coordinate plane above. No scan is needed to model.")}</p>}
         </div>
       )}
 
@@ -433,25 +411,19 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
       {features.length + rolledBack.length > 0 && (
         <FeatureListExtension><div className="group" ref={featureListRef}>
           <div className="g-label">
-            <span>
-              Features
-              <InfoDot title="The feature list">
+            <span>{tmarText("Features")}<InfoDot title={tmarText("The feature list")}>
+                <p>{tmarText("The part is built from the top down. The ")}<b>{tmarText("rollback bar")}</b>{tmarText(" under the list is dragged up to go back in its history: the features below it are set aside, the part stands as it stood there, and whatever is made next goes in at the bar — a fillet before the shell, a cut before the pattern. Drag it back down, or press ")}<b>{tmarText("To end")}</b>{tmarText(", and the rest is built again on top of what was added.")}</p>
+                <p>{tmarText("A feature below the bar that loses what it stood on is marked in its row, as any feature that fails or builds with a warning is: the name red or amber, a ⚠. Open it to read what went wrong.")}</p>
                 <p>
-                  The part is built from the top down. The <b>rollback bar</b> under the list is dragged up to go back in its history: the features below it are set aside, the part stands as it stood there, and whatever is made next goes in at the bar — a fillet before the shell, a cut before the pattern. Drag it back down, or press <b>To end</b>, and the rest is built again on top of what was added.
-                </p>
-                <p>A feature below the bar that loses what it stood on is marked in its row, as any feature that fails or builds with a warning is: the name red or amber, a ⚠. Open it to read what went wrong.</p>
-                <p>
-                  <b>Play</b> builds the part up again step by step for the camera: the bar goes to the top and moves down one feature at a time, each held a moment once it is built, and returns where it was at the end. <b>Space</b> holds it or carries it on, the <b>arrow keys</b> step it, <b>Escape</b> ends it. The caption in the viewport names each step.
-                </p>
+                  <b>{tmarText("Play")}</b>{tmarText(" builds the part up again step by step for the camera: the bar goes to the top and moves down one feature at a time, each held a moment once it is built, and returns where it was at the end. ")}<b>{tmarText("Space")}</b>{tmarText(" holds it or carries it on, the ")}<b>{tmarText("arrow keys")}</b>{tmarText(" step it, ")}<b>{tmarText("Escape")}</b>{tmarText(" ends it. The caption in the viewport names each step.")}</p>
               </InfoDot>
             </span>
             {building && (
               <span className="working">
-                <span className="spinner" /> building
-              </span>
+                <span className="spinner" />{tmarText(" building")}</span>
             )}
             {!playback && <PlaybackKey />}
-            <b>{rolledBack.length > 0 ? `${features.length} of ${features.length + rolledBack.length}` : features.length}</b>
+            <b>{rolledBack.length > 0 ? tmarText("{0} of {1}", [features.length, features.length + rolledBack.length]) : features.length}</b>
           </div>
           <PlaybackBar />
           {marks(0)}
@@ -487,27 +459,23 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
             const warned = r?.status === 'ok' && Boolean(r.warning)
             const reading =
               r?.status === 'failed' ? (
-                <b className="error" data-test="feature-failed" title="Failed to build — open it (✎) to see why">
+                <b className="error" data-test="feature-failed" title={tmarText("Failed to build — open it (✎) to see why")}>
                   ⚠
                 </b>
               ) : r?.trim && !r.trim.closed ? (
-                <b className="warn" title={about}>
-                  ⚠ open
-                </b>
+                <b className="warn" title={tmarText(about)}>{tmarText("⚠ open")}</b>
               ) : warned ? (
-                <b className="warn" data-test="feature-warned" title={`Built, with ${r.stepsBetween?.length ? `${r.stepsBetween.length} step${r.stepsBetween.length === 1 ? '' : 's'} between features` : 'a warning'} — open it (✎) to see ${r.stepsBetween?.length === 1 || !r.stepsBetween?.length ? 'it' : 'them'}`}>
+                <b className="warn" data-test="feature-warned" title={tmarText("Built, with {0} — open it (✎) to see {1}", [r.stepsBetween?.length ? tmarText("{0} step{1} between features", [r.stepsBetween.length, r.stepsBetween.length === 1 ? '' : tmarText("s")]) : tmarText("a warning"), r.stepsBetween?.length === 1 || !r.stepsBetween?.length ? tmarText("it") : tmarText("them")])}>
                   ⚠
                 </b>
               ) : fitted ? (
                 <b
                   className="fitted"
                   data-test="feature-fitted"
-                  title={Object.entries(fitted)
+                  title={tmarText(Object.entries(fitted)
                     .map(([k, v]) => `${k} fitted to the scan: ${v.value}${v.sigma !== null ? ` ± ${v.sigma}` : ''} (nominal ${v.nominal}${v.sigmas !== null ? `, ${v.sigmas} σ off` : ''}, ${v.points} points)`)
-                    .join('\n')}
-                >
-                  fit
-                </b>
+                    .join('\n'))}
+                >{tmarText("fit")}</b>
               ) : null
             const blocked = dependentsOf(f.id, [...features, ...rolledBack]).length > 0
             const bodyOf =
@@ -526,7 +494,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
                 testId="feature-row"
                 name={f.name}
                 picture={<KeyIcon name={FEATURE_ICONS[f.kind]} size={15} />}
-                title={about}
+                title={tmarText(about)}
                 color={bodyOf === null ? '#3d8fd6' : (bodyStyles[bodyOf]?.color ?? bodies.find((b) => b.id === bodyOf)?.color ?? bodyColor(bodyOf))}
                 // A sketch's eye shows it on the part or hides it; any other
                 // feature's row has the suppress key there — hiding its tool
@@ -547,7 +515,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
               /></FeatureRowExtension>
               {r?.status === 'ok' && r.note && (
                 <p className="hint rowerror" data-test="feature-note">
-                  {r.note}
+                  {tmarText(r.note)}
                 </p>
               )}
               {(() => {
@@ -557,7 +525,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
                 const errs = Object.values(featureExpressionErrors(f, scope))
                 return errs.length > 0 ? (
                   <p className="hint warn rowerror" data-test="feature-expr-error">
-                    {errs.join(' · ')}
+                    {errs.map((message) => tmarText(message)).join(' · ')}
                   </p>
                 ) : null
               })()}
@@ -568,15 +536,15 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
           {/* Below the bar: set aside, not built, there to come back. */}
           {rolledBack.map((f, i) => (
             <Fragment key={f.id}>
-              <FeatureRowExtension id={f.id}><div className="kv ghost rolled" data-test="feature-row-rolled" title={playback ? `${f.name} is still to come in the playback` : `${f.name} is below the rollback bar — not built until the bar is moved below it`}>
+              <FeatureRowExtension id={f.id}><div className="kv ghost rolled" data-test="feature-row-rolled" title={playback ? tmarText("{0} is still to come in the playback", [f.name]) : tmarText("{0} is below the rollback bar — not built until the bar is moved below it", [f.name])}>
                 <span className="dot" />
                 <span className="name">{f.name}</span>
-                <b>{playback ? 'to come' : 'rolled back'}</b>
+                <b>{playback ? tmarText("to come") : tmarText("rolled back")}</b>
               </div></FeatureRowExtension>
               {marks(features.length + i + 1)}
             </Fragment>
           ))}
-          {buildError && <p className="hint warn" data-test="build-error">⚠ {buildError}</p>}
+          {buildError && <p className="hint warn" data-test="build-error">⚠ {tmarText(buildError)}</p>}
         </div></FeatureListExtension>
       )}
 
@@ -589,11 +557,11 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
           const shown = coordinatePlaneShown(planesShown, axis, fileName !== null)
           const name = worldPlaneName(axis)
           return (
-            <div key={axis} className={'kv planerow' + (shown ? '' : ' ghost')} data-test="plane-row" title={`The ${name} through the origin — click it in the viewport to sketch on it`}>
+            <div key={axis} className={'kv planerow' + (shown ? '' : ' ghost')} data-test="plane-row" title={tmarText("The {0} through the origin — click it in the viewport to sketch on it", [name])}>
               <span className="dot plane" style={{ background: axisColor(axis) }} />
               <span className="name">{name}</span>
               <b>{axis} = 0</b>
-              <button className={'x eye' + (shown ? '' : ' off')} data-test="plane-visible" title={shown ? `Hide the ${name}` : `Show the ${name} at the origin`} onClick={() => re.getState().setPlaneShown(axis, !shown)}>
+              <button className={'x eye' + (shown ? '' : ' off')} data-test="plane-visible" title={shown ? tmarText("Hide the {0}", [name]) : tmarText("Show the {0} at the origin", [name])} onClick={() => re.getState().setPlaneShown(axis, !shown)}>
                 <Icon name={shown ? 'eye' : 'eyeOff'} size={14} />
               </button>
             </div>
@@ -612,14 +580,10 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
         <>
           <div className="divider" />
           <div className="toolrow">
-            {panelExtensions('reverse.export').length === 0 && <button className="withicon" data-test="export-body-step" disabled={!canExport} onClick={onExportStep} title="Write every visible body into one STEP file as solids — what FreeCAD and Fusion open as a body">
-              <Icon name="exportStep" size={18} />
-              Export body STEP
-            </button>}
-            <button className="withicon" data-test="compare-in-deviation" disabled={!canCompare} onClick={onCompare} title="Measure the scan against the visible bodies in the Deviation workspace — its scale, histogram, pins and report. The bodies go in as the reference part; no best fit is run, they stand in the scan's frame already">
-              <Icon name="compare" size={18} />
-              Compare in Deviation
-            </button>
+            {panelExtensions('reverse.export').length === 0 && <button className="withicon" data-test="export-body-step" disabled={!canExport} onClick={onExportStep} title={tmarText("Write every visible body into one STEP file as solids — what FreeCAD and Fusion open as a body")}>
+              <Icon name="exportStep" size={18} />{tmarText("Export body STEP")}</button>}
+            <button className="withicon" data-test="compare-in-deviation" disabled={!canCompare} onClick={onCompare} title={tmarText("Measure the scan against the visible bodies in the Deviation workspace — its scale, histogram, pins and report. The bodies go in as the reference part; no best fit is run, they stand in the scan's frame already")}>
+              <Icon name="compare" size={18} />{tmarText("Compare in Deviation")}</button>
           </div>
           <MeshExportRow disabled={!canExport} onExport={onExportMesh} />
         </>

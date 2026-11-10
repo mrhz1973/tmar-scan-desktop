@@ -4,8 +4,12 @@ import { useStore } from '../../src/state/store'
 import { useWorkspaceEditor, workspaceEditors } from '../../src/plugins/workspaceEditors'
 import { selectionItems, useReverse } from '../reverse/state/reStore'
 import { bodiesOfPick } from '../reverse/core/bodyFolders'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 export function SurfaceHistoryEntry() {
+  useTmarLanguage()
+
   const [choosing, setChoosing] = useState(false)
   const [bodyId, setBodyId] = useState('')
   const phase = useWorkspaceEditor(s => s.phase)
@@ -32,13 +36,13 @@ export function SurfaceHistoryEntry() {
   }
   return <div className="es-feature-entry" data-test="surface-history-entry">
     <button type="button" data-test="surface-history-reopen" disabled={!saved.length || busy || building || phase !== 'closed'}
-      title="Riprende poli e note di una modifica conservata nel progetto" onClick={begin}>Riprendi modifica</button>
-    {choosing && <div role="group" aria-label="Scegli modifica salvata">
-      <label>Modifica salvata <select data-test="surface-history-body" value={bodyId} onChange={event => setBodyId(event.target.value)}>
-        <option value="">Scegli…</option>{saved.map(body => <option key={body.id} value={body.id}>{body.name}</option>)}
+      title={tmarText("Riprende poli e note di una modifica conservata nel progetto")} onClick={begin}>{tmarText("Riprendi modifica")}</button>
+    {choosing && <div role="group" aria-label={tmarText("Scegli modifica salvata")}>
+      <label>{tmarText("Modifica salvata ")}<select data-test="surface-history-body" value={bodyId} onChange={event => setBodyId(event.target.value)}>
+        <option value="">{tmarText("Scegli…")}</option>{saved.map(body => <option key={body.id} value={body.id}>{body.name}</option>)}
       </select></label>
-      <button type="button" disabled={!bodyId || phase !== 'closed'} onClick={() => { void open(Number(bodyId)) }}>Riprendi</button>
-      <button type="button" onClick={() => setChoosing(false)}>Annulla</button>
+      <button type="button" disabled={!bodyId || phase !== 'closed'} onClick={() => { void open(Number(bodyId)) }}>{tmarText("Riprendi")}</button>
+      <button type="button" onClick={() => setChoosing(false)}>{tmarText("Annulla")}</button>
     </div>}
   </div>
 }

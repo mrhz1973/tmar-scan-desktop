@@ -76,7 +76,7 @@ test('serves UTF-8 HTML, JS and fresh JSON on loopback without taking over app r
     assert.equal(page.status, 200)
     assert.match(page.headers.get('content-type'), /text\/html; charset=utf-8/)
     const html = await page.text()
-    for (const text of ['non è necessario', 'già presenti', 'novità', 'Può contenere', "un'attività", 'href="/?version=stable"', 'href="https://scanruler-dev.31-70-139-73.sslip.io/"']) assert.ok(html.includes(text), text)
+    for (const text of ['non è necessario', 'già presenti', 'Versione TMAR 5', 'Impostazioni → Lingua dell’interfaccia', 'href="/?version=stable"', 'href="https://scanruler-dev.31-70-139-73.sslip.io/"']) assert.ok(html.includes(text), text)
     assert.equal((html.match(/>Non disponibile<\/strong>/g) ?? []).length, 8)
     assert.ok(!html.includes('Caricamento'))
     const script = await fetch(base + '/launcher-version.js')

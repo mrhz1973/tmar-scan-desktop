@@ -4,6 +4,8 @@
 // dimension rows all write their numbers the same way.
 
 import { tintStyle } from './tint'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 /** What a DRO window needs of a dimension's evaluation — the slice the 3D
  *  DimensionValue and the 2D FlatDimensionValue share. */
@@ -51,9 +53,11 @@ export function ValueWindow({
   testId: string
   over?: boolean
 }) {
+  useTmarLanguage()
+
   return value.invalid ? (
     <div className="dro-window alarm" data-test={testId}>
-      <b>no value</b>
+      <b>{tmarText("no value")}</b>
     </div>
   ) : (
     <div className={over ? 'dro-window over' : 'dro-window'} data-test={testId}>

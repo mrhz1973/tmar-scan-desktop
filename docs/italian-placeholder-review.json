@@ -1,0 +1,712 @@
+{
+  "core": {
+    "— {0} at {1} assumed Ø": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il possessivo inglese its/their non è necessario nella costruzione italiana «con Ø ipotizzato»."
+    },
+    "{0} and {1} element{2}": {
+      "omitted": [
+        "{2}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito dalla parola italiana «elementi»."
+    },
+    "{0} edge chain{1}{2}": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "{0} element{1}": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "{0} extruded shadow{1}": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "{0} item{1} on the 2D sheets of sections": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "{0} more point{1} to go — in order along the curve. Pins can be dragged.": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "{0} more point{1} to go — spread them along the {2}. Pins can be dragged.": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "{0} more point{1} to go — spread them around the {2}.": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "{0} outline piece{1} (lines and arcs)": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "{0} pick{1}": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "{0} surface{1} did not convert": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Il suffisso inglese di plurale è sostituito da una formulazione italiana indipendente dal numero."
+    },
+    "How the {0} {1} drawn": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "La copula inglese is/are è sostituita da una costruzione nominale italiana senza distinzione di numero."
+    },
+    "{0} edge{1}": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Suffisso plurale inglese s omesso: formulazione italiana con etichetta plurale e conteggio."
+    },
+    "· {0} element{1}": {
+      "omitted": [
+        "{1}"
+      ],
+      "reason": "Suffisso plurale inglese s omesso: formulazione italiana con etichetta plurale e conteggio."
+    }
+  },
+  "reverse": [
+    {
+      "index": 0,
+      "key": "— {0} piece{1} at a slant to it or end on",
+      "translation": "— {0} elementi sono inclinati rispetto al piano o visti di testa",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "skipped === 1 ? ' lies' : 's lie'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 21,
+      "key": ", all but {0} curved edge{1} the sketcher has no piece for",
+      "translation": ", esclusi {0} bordi curvi che l'editor di schizzi non può rappresentare",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "skipped === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 63,
+      "key": "· {0} closed region{1}",
+      "translation": "· Regioni chiuse: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "found === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 64,
+      "key": "· {0} slice chain{1}",
+      "translation": "· Catene di sezione: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "chainCount === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 76,
+      "key": "· open, {0} open edge{1}",
+      "translation": "· aperto, bordi aperti: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "r.trim.openEdges.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 102,
+      "key": "{0} — {1} bod{2}. Drag bodies onto it to put them in; right-click for more",
+      "translation": "{0} — Corpi: {1}. Trascini qui i corpi per aggiungerli; clic destro per altre opzioni",
+      "omitted": [
+        {
+          "placeholder": "{2}",
+          "expression": "inside.length === 1 ? 'y' : 'ies'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 112,
+      "key": "{0} · 3D route, {1} bend{2}",
+      "translation": "{0} · percorso 3D, curve: {1}",
+      "omitted": [
+        {
+          "placeholder": "{2}",
+          "expression": "bends === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 134,
+      "key": "{0} bod{1} exported to {2} as a STEP solid.",
+      "translation": "Corpi esportati: {0}, nel file {2} come solido STEP.",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "ids.length === 1 ? 'y' : 'ies'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 135,
+      "key": "{0} bod{1} exported to {2}, {3} triangles ({4}).",
+      "translation": "Corpi esportati: {0}, nel file {2}, {3} triangoli ({4}).",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "picked.length === 1 ? 'y' : 'ies'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 143,
+      "key": "{0} crease{1} suggested, dashed — click one to take it.",
+      "translation": "Spigoli suggeriti: {0}, tratteggiati; ne selezioni uno per accettarlo.",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "d.suggested.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 144,
+      "key": "{0} curve{1} · building…",
+      "translation": "Curve: {0} · costruzione…",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "d.curves.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 147,
+      "key": "{0} edge{1} of {2} chamfered{3}{4}: {5}",
+      "translation": "Bordi smussati di {2}: {0}{3}{4}: {5}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "f.edges.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 148,
+      "key": "{0} edge{1} of {2} rounded{3}: {4}",
+      "translation": "Bordi raccordati di {2}: {0}{3}: {4}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "f.edges.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 149,
+      "key": "{0} edge{1} picked",
+      "translation": "Bordi selezionati: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "picked === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 150,
+      "key": "{0} edge{1}{2} rounded at a varying radius, start → end: {3}",
+      "translation": "Bordi raccordati a raggio variabile: {0}{2}, inizio → fine: {3}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "varying.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 151,
+      "key": "{0} face{1}",
+      "translation": "Facce: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "faces.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 152,
+      "key": "{0} face{1} at {2}°",
+      "translation": "Facce: {0}, a {2}°",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "g.faces.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 153,
+      "key": "{0} face{1} of {2} leaned {3}° about {4}: {5}",
+      "translation": "Facce di {2}: {0}, inclinate di {3}° rispetto a {4}: {5}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "f.faces.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 154,
+      "key": "{0} face{1} picked",
+      "translation": "Facce selezionate: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "d.faces.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 155,
+      "key": "{0} face{1} taken off {2}, the faces round them run on over the gap: {3}",
+      "translation": "Facce rimosse da {2}: {0}; le facce circostanti sono state estese per chiudere il vuoto: {3}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "f.faces.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 159,
+      "key": "{0} feature patch{1} over T ({2}) — model {3}, or add the place to the plan as a region skipped with its reason (a warp, lettering) and compare again",
+      "translation": "Patch dell'operazione oltre T: {0} ({2}); modelli {3}, oppure aggiunga l'area al piano come regione esclusa con una motivazione (deformazione, scritta) ed esegua nuovamente il confronto",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "patches.length === 1 ? '' : 'es'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 168,
+      "key": "{0} hollowed to a {1} wall, {2} face{3} opened: {4}",
+      "translation": "{0} svuotato con parete di {1}; facce aperte: {2}: {4}",
+      "omitted": [
+        {
+          "placeholder": "{3}",
+          "expression": "f.faces.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 195,
+      "key": "{0} note{1} deleted.",
+      "translation": "Note eliminate: {0}.",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "count === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 200,
+      "key": "{0} open cell{1}",
+      "translation": "Celle aperte: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "open === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 201,
+      "key": "{0} patch{1}",
+      "translation": "Patch: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "n === 1 ? '' : 'es'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 202,
+      "key": "{0} patch{1} · {2} curve{3}",
+      "translation": "Patch: {0} · Curve: {2}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "cells === 1 ? '' : 'es'"
+        },
+        {
+          "placeholder": "{3}",
+          "expression": "curves === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 203,
+      "key": "{0} piece{1} not fully constrained — drawn in the loose colour",
+      "translation": "Elementi non completamente vincolati: {0}, mostrati con il colore degli elementi liberi",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "report.underConstrained.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 204,
+      "key": "{0} piece{1} on {2} chain{3} — changes refit them",
+      "translation": "Elementi: {0}, su {2} catene; le modifiche ne aggiornano l'adattamento",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "pieces === 1 ? '' : 's'"
+        },
+        {
+          "placeholder": "{3}",
+          "expression": "fittedCount === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 208,
+      "key": "{0} profile{1} of {2}",
+      "translation": "Profili di {2}: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "f.regions.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 210,
+      "key": "{0} question{1}",
+      "translation": "Domande: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "questions === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 212,
+      "key": "{0} region{1} open ({2})",
+      "translation": "Regioni aperte: {0} ({2})",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "open.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 213,
+      "key": "{0} relation{1} say nothing new (redundant)",
+      "translation": "Vincoli che non aggiungono informazioni (ridondanti): {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "report.redundant === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 216,
+      "key": "{0} seam edge{1} left out of the picks{2}: nothing to read a size across.{3}",
+      "translation": "Bordi di cucitura esclusi dalla selezione: {0}{2}; nessuna misura trasversale da leggere.{3}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "seams === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 217,
+      "key": "{0} solver step{1}",
+      "translation": "Iterazioni del risolutore: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "report.iterations === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 218,
+      "key": "{0} speck{1} under {2} cells across left out.",
+      "translation": "Piccole componenti escluse: {0}, di ampiezza inferiore a {2} celle.",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "seen.skipped === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 220,
+      "key": "{0} step{1} between features",
+      "translation": "Passi tra le operazioni: {0}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "r.stepsBetween.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 221,
+      "key": "{0} surface{1} · within {2}",
+      "translation": "Superfici: {0} · entro {2}",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "f.tools.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 305,
+      "key": "{0}° · {1} face{2}",
+      "translation": "{0}° · Facce: {1}",
+      "omitted": [
+        {
+          "placeholder": "{2}",
+          "expression": "f.faces.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 322,
+      "key": "⚠ Not closed: {0} of {1} faces lie on the scan, and they leave {2} open edge{3} — drawn red on the part. Fit the surface that is missing there, or widen the tolerance; Create keeps the faces as a surface body meanwhile.",
+      "translation": "⚠ Non chiuso: {0} facce su {1} coincidono con la scansione, lasciando {2} bordi aperti mostrati in rosso sul pezzo. Adatti la superficie mancante oppure allarghi la tolleranza; nel frattempo Crea conserva le facce come corpo di superficie.",
+      "omitted": [
+        {
+          "placeholder": "{3}",
+          "expression": "preview.trim.openEdges.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 403,
+      "key": "A patch network: {0} curve{1} drawn on the scan, {2} of them creases, and {3} region{4} they close filled with B-spline patches fitted to the scan together — sharing the curves between them and meeting tangent across every one not marked a crease. A sheet, or a solid where the network closes",
+      "translation": "Rete di patch: {0} curve sulla scansione, di cui {2} spigoli, delimitano {3} regioni riempite con patch B-spline adattate congiuntamente. Le patch condividono i bordi e sono tangenti lungo quelli non contrassegnati come spigoli. Il risultato è una superficie oppure un solido se la rete si chiude",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "curves === 1 ? '' : 's'"
+        },
+        {
+          "placeholder": "{4}",
+          "expression": "cells === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 425,
+      "key": "A sheet of {0} face{1} — a cutter to split a body with, or a skin to thicken.",
+      "translation": "Superficie con {0} facce: utilizzabile per dividere un corpo o per creare uno spessore.",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "preview.sheetFaces === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 787,
+      "key": "Delete all {0} note{1} on the part? This cannot be undone.",
+      "translation": "Eliminare tutte le {0} note sul pezzo? L'operazione non può essere annullata.",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "count === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 1494,
+      "key": "region: {0} scan point{1} {2} — a surface needs {3} at least.",
+      "translation": "region: punti della scansione {0} {2}; una superficie ne richiede almeno {3}.",
+      "omitted": [
+        {
+          "placeholder": "{1}",
+          "expression": "vertices.length === 1 ? '' : 's'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 2046,
+      "key": "which go{0} into it",
+      "translation": "che vengono incorporati",
+      "omitted": [
+        {
+          "placeholder": "{0}",
+          "expression": "one ? 'es' : ''"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    },
+    {
+      "index": 2047,
+      "key": "which stay{0} {1} of {2} own",
+      "translation": "che restano indipendenti come {1}",
+      "omitted": [
+        {
+          "placeholder": "{0}",
+          "expression": "one ? 's' : ''"
+        },
+        {
+          "placeholder": "{2}",
+          "expression": "one ? 'its' : 'their'"
+        }
+      ],
+      "reason": "Suffisso o accordo grammaticale inglese sostituito con una formulazione italiana invariabile; le quantità e i dati restano espressi."
+    }
+  ],
+  "plugins": {
+    "— {0} stretch{1} of the cut left open, where the scan is open across the plane": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    "— the cap bridges {0} hole{1} in the scan at the cut; Fill holes closes what is left of {2}": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati.",
+      "2": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    ", {0} piece{1} on the other side of the break dropped": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    ", dropping {0} triangle{1} that lay in the plane": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    "· {0} corner{1}": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    "({0} edit{1} not taken into use)": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    "{0} — {1}{2}, {3} triangles of surface {4} made, grey in the Deviation view. Ctrl+Z puts it back.": {
+      "4": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    "{0} hole{1}": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    "{0} island{1}": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    "{0} point{1} merged where {2} closed up on itself": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    "{0} question{1}": {
+      "1": "Suffisso o pronome grammaticale inglese eliminato dalla formulazione italiana; quantità e dati geometrici conservati."
+    },
+    "Applied the wrap — {0} shell{1}, {2} triangles, gaps under {3} closed.": {
+      "1": "Suffisso o pronome grammaticale inglese sostituito da una formulazione italiana invariabile; dati numerici conservati."
+    },
+    "Delete {0} selected note{1}? This cannot be undone.": {
+      "1": "Suffisso o pronome grammaticale inglese sostituito da una formulazione italiana invariabile; dati numerici conservati."
+    },
+    "Discarded {0} edit{1} — Mesh Tools works on the scan in use again. Ctrl+Z brings them back.": {
+      "1": "Suffisso o pronome grammaticale inglese sostituito da una formulazione italiana invariabile; dati numerici conservati."
+    },
+    "Every workspace measures the edited mesh now — {0} edit{1} taken into use, the elements fitted again on it. Ctrl+Z goes back to the scan before.": {
+      "1": "Suffisso o pronome grammaticale inglese sostituito da una formulazione italiana invariabile; dati numerici conservati."
+    },
+    "Filled {0} with {1} triangles{2}. Ctrl+Z opens {3} again.": {
+      "3": "Suffisso o pronome grammaticale inglese sostituito da una formulazione italiana invariabile; dati numerici conservati."
+    },
+    "Removed {0} island{1} — {2} triangles. Ctrl+Z puts them back.": {
+      "1": "Suffisso plurale inglese sostituito dalla formulazione italiana «Frammenti isolati rimossi: quantità»."
+    },
+    "Showing stripes on {0} visible {1}.": {
+      "1": "Nome inglese object/objects usato per il plurale; sostituito da una formulazione italiana invariabile con conteggio."
+    },
+    "Wrapped — {0} shell{1}, {2} triangles,": {
+      "1": "Suffisso inglese plurale di shell; sostituito da un’etichetta italiana con conteggio."
+    }
+  }
+}

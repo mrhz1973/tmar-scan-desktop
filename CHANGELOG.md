@@ -7,6 +7,16 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Versione 5 — interfaccia italiana — 2026-11-10
+
+- Make Italian the default interface language, with a remembered Italian/English
+  preference in Settings that updates open panels without reloading the project.
+- Localize workspace navigation, menus, dialogs, hints, tooltips, measurement,
+  CAD reconstruction, Mesh Tools and TMAR controls at their rendering boundaries.
+- Preserve command IDs, option values, user-entered names and notes, saved
+  projects and numerical calculations independently of the display language.
+- Keep the official ScanRuler base at 0.11.1 and the existing CAD kernel version.
+
 ### TMAR Versione 4 — ScanRuler 0.11.1 integration — 2026-11-10
 
 - Use the complete official ScanRuler 0.11.1 source as the base, including all

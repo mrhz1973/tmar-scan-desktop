@@ -10,6 +10,8 @@ import type { WorldAxis } from '../core/section/frame'
 import { SceneManager, type GripSide, type PickHit } from '../viewer/SceneManager'
 import { FitButton } from './FitButton'
 import { ProjectionButton } from './ProjectionButton'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function Viewer({
   onReady,
@@ -35,6 +37,8 @@ export function Viewer({
    *  ring. */
   onExtendDrag?: (side: GripSide, delta: number, phase: 'start' | 'move' | 'end') => void
 }) {
+  useTmarLanguage()
+
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<SceneManager | null>(null)
   const pickRef = useRef(onPick)
@@ -86,19 +90,11 @@ export function Viewer({
       {webglError === null && <ProjectionButton />}
       {webglError !== null && (
         <div className="webgl-missing" role="alert">
-          <b>The 3D view could not be started.</b>
-          <p>
-            This tool draws everything with WebGL, and your browser refused to create a WebGL
-            context. Usually that means hardware acceleration is switched off or the graphics
-            driver is blocklisted.
-          </p>
-          <p>
-            In Firefox, check <i>Settings → General → Performance → Use hardware acceleration
-            when available</i> (and that <code>webgl.disabled</code> is <code>false</code> in{' '}
-            <code>about:config</code>), then reload. Failing that, try another browser — nothing
-            is uploaded either way, all processing stays on your machine.
-          </p>
-          <p className="webgl-missing-detail">{webglError}</p>
+          <b>{tmarText("The 3D view could not be started.")}</b>
+          <p>{tmarText("This tool draws everything with WebGL, and your browser refused to create a WebGL context. Usually that means hardware acceleration is switched off or the graphics driver is blocklisted.")}</p>
+          <p>{tmarText("In Firefox, check ")}<i>{tmarText("Settings → General → Performance → Use hardware acceleration when available")}</i>{tmarText(" (and that ")}<code>{tmarText("webgl.disabled")}</code>{tmarText(" is ")}<code>{tmarText("false")}</code>{tmarText(" in")}{' '}
+            <code>{tmarText("about:config")}</code>{tmarText("), then reload. Failing that, try another browser — nothing is uploaded either way, all processing stays on your machine.")}</p>
+          <p className="webgl-missing-detail">{tmarText(webglError)}</p>
         </div>
       )}
     </div>

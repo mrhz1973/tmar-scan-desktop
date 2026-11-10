@@ -15,8 +15,12 @@ import { DroValue } from './DroValue'
 import { NameField, RefSelect } from './RefSelect'
 import { tintStyle } from './tint'
 import { useUnits } from '../app/useUnits'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function FlatDraftEditor() {
+  useTmarLanguage()
+
   const elements = useFlat((s) => s.elements)
   const draft = useFlat((s) => s.draft)
   const draftColor = useFlat(flatDraftColorOf)
@@ -39,14 +43,14 @@ export function FlatDraftEditor() {
 
   const method = flatMethod(draft.method)
   const kindMethods = flatMethodsForKind(draft.kind)
-  const noun = FLAT_KIND_LABELS[draft.kind].toLowerCase()
+  const noun = tmarText(FLAT_KIND_LABELS[draft.kind].toLowerCase())
   const edited = draft.editId !== undefined ? elements.find((e) => e.id === draft.editId) : undefined
   const blocked = flatBlockedRefs(draft.editId, elements)
   const unit = pxPerMm ? 'mm' : 'px' // units-ok: the sheet's document unit, an id
   const frame = datum ? datumFrame(datum, pxPerMm, mirror) : null
   const minPicks = flatPicksNeeded(draft.method, draft.closed)
   const picks = draft.picks.length
-  const saveWord = edited ? 'save it' : 'create it'
+  const saveWord = tmarText(edited ? 'save it' : 'create it')
   const isSpline = draft.kind === 'spline'
   const tangentsSet = draft.tangents.filter((t) => t !== null).length
   // An open spline with points enough to close: a click on its first pin does.
@@ -96,7 +100,7 @@ export function FlatDraftEditor() {
     <div className="draftbox" style={{ borderLeftColor: draftColor }}>
       <div className="sec-head">
         <span className="dot" style={{ background: draftColor }} />
-        {edited ? `Edit ${edited.name}` : `New ${noun}`}
+        {edited ? tmarText("Edit {0}", [edited.name]) : tmarText("New {0}", [noun])}
       </div>
 
       {draft.editId !== undefined && (
@@ -105,7 +109,7 @@ export function FlatDraftEditor() {
 
       {kindMethods.length > 1 && (
         <label className="field">
-          <span>Created</span>
+          <span>{tmarText("Created")}</span>
           <select
             data-test="flat-draft-method"
             value={draft.method}
@@ -113,7 +117,7 @@ export function FlatDraftEditor() {
           >
             {kindMethods.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.label}
+                {tmarText(m.label)}
               </option>
             ))}
           </select>
@@ -128,7 +132,7 @@ export function FlatDraftEditor() {
             checked={snapToEdge}
             onChange={(e) => setSnapToEdge(e.target.checked)}
           />
-          <span>Snap to edge</span>
+          <span>{tmarText("Snap to edge")}</span>
         </label>
       )}
 
@@ -140,12 +144,12 @@ export function FlatDraftEditor() {
             checked={draft.closed}
             onChange={(e) => setDraftClosed(e.target.checked)}
           />
-          <span>Closed curve</span>
+          <span>{tmarText("Closed curve")}</span>
         </label>
       )}
 
       <p className="hint" data-test="flat-draft-hint">
-        {pickHint}
+        {tmarText(pickHint)}
       </p>
 
       {slotRows.map((i) => {
@@ -153,7 +157,7 @@ export function FlatDraftEditor() {
         return (
           <RefSelect
             key={i}
-            label={flatSlotLabel(method, i)}
+            label={tmarText(flatSlotLabel(method, i))}
             options={elements.filter(
               (el) =>
                 el.fit &&
@@ -170,12 +174,10 @@ export function FlatDraftEditor() {
 
       <div className="dro">
         <div className="dro-label">
-          <span>Preview</span>
+          <span>{tmarText("Preview")}</span>
           {method.mode !== 'construct' && (
             <span data-test="flat-draft-picks">
-              {collectsEdgePoints(method)
-                ? `${picks.toLocaleString('en-US')} edge points`
-                : `${picks} pick${picks === 1 ? '' : 's'}`}
+              {collectsEdgePoints(method) ? tmarText("{0} edge points", [picks.toLocaleString('en-US')]) : tmarText("{0} pick{1}", [picks, picks === 1 ? '' : tmarText("s")])}
             </span>
           )}
         </div>
@@ -185,25 +187,21 @@ export function FlatDraftEditor() {
         >
           {status === 'empty' && (
             <b style={{ fontSize: 12, fontWeight: 400, color: 'var(--dim)' }}>
-              {method.mode === 'construct'
-                ? 'Incomplete'
-                : picks > 0
-                  ? `${picks.toLocaleString('en-US')} of ${minPicks} points`
-                  : 'No points picked'}
+              {method.mode === 'construct' ? tmarText("Incomplete") : picks > 0 ? tmarText("{0} of {1} points", [picks.toLocaleString('en-US'), minPicks]) : tmarText("No points picked")}
             </b>
           )}
-          {status === 'failed' && <b>{draft.error}</b>}
+          {status === 'failed' && <b>{tmarText(draft.error)}</b>}
           {status === 'ready' &&
             (draft.fit!.kind === 'circle' || draft.fit!.kind === 'arc' ? (
               <DroValue value={primary} color={draftColor} />
             ) : (
               <b className="tinted" style={tintStyle(draftColor, { fontSize: 13 })}>
-                {primary}
+                {tmarText(primary)}
               </b>
             ))}
         </div>
         {status === 'ready' && formatFlatDetail(draft.fit!, unit, units) && (
-          <div className="dro-note">{formatFlatDetail(draft.fit!, unit, units)}</div>
+          <div className="dro-note">{formatFlatDetail(draft.fit!, unit, units).split(' · ').map((part) => tmarText(part)).join(' · ')}</div>
         )}
       </div>
 
@@ -213,27 +211,23 @@ export function FlatDraftEditor() {
         disabled={!draft.fit}
         onClick={() => commitDraft()}
       >
-        {edited ? 'Save changes' : `Create ${noun}`}
+        {edited ? tmarText("Save changes") : tmarText("Create {0}", [noun])}
       </button>
       <div className="toolrow">
         {method.mode !== 'construct' && (
           <button data-test="flat-draft-undo" disabled={picks === 0} onClick={undoDraftPick}>
-            {collectsEdgePoints(method) ? 'Clear points' : 'Undo point'}
+            {collectsEdgePoints(method) ? tmarText("Clear points") : tmarText("Undo point")}
           </button>
         )}
         {isSpline && (
           <button
             data-test="flat-draft-free-tangents"
             disabled={tangentsSet === 0}
-            title="Every tangent automatic again — the curve as smooth as it can be through the points"
+            title={tmarText("Every tangent automatic again — the curve as smooth as it can be through the points")}
             onClick={freeDraftTangents}
-          >
-            Free tangents
-          </button>
+          >{tmarText("Free tangents")}</button>
         )}
-        <button data-test="flat-draft-cancel" onClick={cancelDraft}>
-          Cancel
-        </button>
+        <button data-test="flat-draft-cancel" onClick={cancelDraft}>{tmarText("Cancel")}</button>
       </div>
     </div>
   )

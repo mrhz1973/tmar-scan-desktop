@@ -12,8 +12,12 @@ import { Icon } from './icons'
 import { providersFor } from './RefSelect'
 import { PlaneRefOptions } from './SectionEditor'
 import { typedFigure, useFieldUnits } from './NumberField'
+import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+
 
 export function SectionViewKeys({ viewDirection }: { viewDirection: () => Vec3 }) {
+  useTmarLanguage()
+
   const ref = useSectionView((s) => s.ref)
   // The offset is held in millimetres and typed in the units shown.
   const u = useFieldUnits('length', undefined)
@@ -34,8 +38,8 @@ export function SectionViewKeys({ viewDirection }: { viewDirection: () => Vec3 }
 
   return (
     <div className="keys sectionkeys" data-test="section-view-keys">
-      <label title="What the plane is laid across: a coordinate plane through the part’s middle, or an element with a direction — a plane’s normal, the axis of a cylinder, cone or line, a circle’s normal. The half toward you is taken away.">
-        <span>Across</span>
+      <label title={tmarText("What the plane is laid across: a coordinate plane through the part’s middle, or an element with a direction — a plane’s normal, the axis of a cylinder, cone or line, a circle’s normal. The half toward you is taken away.")}>
+        <span>{tmarText("Across")}</span>
         <select
           data-test="section-view-ref"
           value={orphan ? '' : String(ref)}
@@ -44,14 +48,14 @@ export function SectionViewKeys({ viewDirection }: { viewDirection: () => Vec3 }
             if (v) setRef(isWorldAxis(v) ? v : Number(v), viewDirection())
           }}
         >
-          {orphan && <option value="">(deleted element)</option>}
+          {orphan && <option value="">{tmarText("(deleted element)")}</option>}
           <PlaneRefOptions options={options} />
         </select>
       </label>
       {/* A plane still square to a coordinate axis has a coordinate, not an
           offset: its Z is what the field holds. */}
-      <label title="Where along its direction the plane lies — drag the arrow on the part, or type it here">
-        <span>{isWorldAxis(ref) && tilt === 0 ? ref.toUpperCase() : 'Offset'}</span>
+      <label title={tmarText("Where along its direction the plane lies — drag the arrow on the part, or type it here")}>
+        <span>{isWorldAxis(ref) && tilt === 0 ? ref.toUpperCase() : tmarText("Offset")}</span>
         <input
           type="number"
           step="any"
@@ -77,16 +81,12 @@ export function SectionViewKeys({ viewDirection }: { viewDirection: () => Vec3 }
         <button
           data-test="section-view-square"
           onClick={() => setRef(ref)}
-          title="The rings have tilted the plane off what it was laid across — turn it square again"
-        >
-          Square
-          <span className="tilt">{tilt.toFixed(1)}°</span>
+          title={tmarText("The rings have tilted the plane off what it was laid across — turn it square again")}
+        >{tmarText("Square")}<span className="tilt">{tilt.toFixed(1)}°</span>
         </button>
       )}
-      <button data-test="section-view-flip" onClick={flip} title="Take away the other half instead">
-        <Icon name="flip" size={16} />
-        Flip
-      </button>
+      <button data-test="section-view-flip" onClick={flip} title={tmarText("Take away the other half instead")}>
+        <Icon name="flip" size={16} />{tmarText("Flip")}</button>
     </div>
   )
 }

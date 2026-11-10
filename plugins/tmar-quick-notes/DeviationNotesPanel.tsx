@@ -9,8 +9,12 @@ import { useNotes } from '../reverse/state/noteStore'
 import { reEditorOpen, useReverse } from '../reverse/state/reStore'
 import { NoteList } from '../reverse/ui/NoteList'
 import { deviationNoteBlock } from './notePlacement'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 export function DeviationNotes() {
+  useTmarLanguage()
+
   const enabled = useNotesOn()
   const hasScan = useStore((s) => s.fileName !== null)
   const busy = useStore((s) => s.busy)
@@ -46,10 +50,10 @@ export function DeviationNotes() {
   }, [])
 
   if (!enabled) return <div className="group" data-test="tmar-deviation-notes-off">
-    <p className="hint">Use the Note button on the view bar to open local notes. No agent connection is required.</p>
+    <p className="hint">{tmarText("Use the Note button on the view bar to open local notes. No agent connection is required.")}</p>
   </div>
-  return <section data-test="tmar-deviation-notes" aria-label="Notes in Deviation">
+  return <section data-test="tmar-deviation-notes" aria-label={tmarText("Notes in Deviation")}>
     <NoteList placementBlocked={blocked} />
-    <p className="hint" data-test="tmar-deviation-note-help">{blocked ?? 'Pin observations directly on the scan-side map. The same notes appear in Reverse engineer and are saved with the project.'}</p>
+    <p className="hint" data-test="tmar-deviation-note-help">{tmarText(blocked) ?? (tmarText("Pin observations directly on the scan-side map. The same notes appear in Reverse engineer and are saved with the project."))}</p>
   </section>
 }

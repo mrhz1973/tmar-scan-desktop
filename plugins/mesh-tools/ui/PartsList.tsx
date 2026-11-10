@@ -10,6 +10,8 @@ import { ExportMeshButton } from '../../../src/ui/ExportMeshButton'
 import type { MeshFormat } from '../../../src/core/exportMesh'
 import { TRIM_MARK_COLOR, useMeshTools } from '../state/meshStore'
 import { count, typedLen } from './meshFormat'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../../src/i18n'
+
 
 /**
  * What is in the viewport with no tool in hand, as CAD's browser lists it:
@@ -20,6 +22,8 @@ import { count, typedLen } from './meshFormat'
  * list shows.
  */
 export function PartsList({ busy, onExportReduced, onExportTrimmed }: { busy: boolean; onExportReduced: (format: MeshFormat) => void; onExportTrimmed: (format: MeshFormat) => void }) {
+  useTmarLanguage()
+
   const scanName = useStore((s) => s.fileName)
   const scanTriangles = useStore((s) => s.triangleCount)
   const copyTriangles = useMeshTools((s) => s.copyTriangles)
@@ -37,40 +41,40 @@ export function PartsList({ busy, onExportReduced, onExportTrimmed }: { busy: bo
   return (
     <div className="group" data-test="mesh-parts">
       <div className="g-label">
-        <span>Parts</span>
+        <span>{tmarText("Parts")}</span>
         <b>{1 + (report ? 1 : 0) + (made ? 1 : 0) + bodies.length}</b>
       </div>
       <PartRow
         part="scan"
         name={scanName}
         dot="#8b9099"
-        reading={`${count(copyTriangles ?? scanTriangles)} triangles${copyTriangles !== null ? ' · edited' : ''}`}
-        title={copyTriangles !== null ? 'The edited copy of the scan, shown in its place' : 'The scan'}
+        reading={tmarText('{0} triangles{1}', [count(copyTriangles ?? scanTriangles), copyTriangles !== null ? tmarText(' · edited') : ''])}
+        title={copyTriangles !== null ? tmarText("The edited copy of the scan, shown in its place") : tmarText("The scan")}
         shown={shownScan}
-        what="the scan"
+        what={tmarText("the scan")}
         onToggle={() => setPartShown('scan', !shownScan)}
       />
       {report && (
         <PartRow
           part="reduced"
-          name="Reduced mesh"
+          name={tmarText('Reduced mesh')}
           dot="#7f8ba0"
-          reading={`${count(report.triangles)} triangles`}
-          title="The scan reduced for CAD — shown in the scan's place, the two lying on one surface"
+          reading={tmarText('{0} triangles', [count(report.triangles)])}
+          title={tmarText("The scan reduced for CAD — shown in the scan's place, the two lying on one surface")}
           shown={shownReduced}
-          what="the reduced mesh"
+          what={tmarText("the reduced mesh")}
           onToggle={() => setPartShown('reduced', !shownReduced)}
         />
       )}
       {made && (
         <PartRow
           part="piece"
-          name={`${made.name}, trimmed`}
+          name={tmarText('{0}, trimmed', [made.name])}
           dot={TRIM_MARK_COLOR}
           reading={len.vol(made.report.volume, 1)}
-          title={`The piece Trim to scan cut of ${made.name}, ${made.report.offset > 0 ? `${typedLen(made.report.offset, len.units)} off the break` : 'on the break'} — its mating face in teal, the scan a veil over it`}
+          title={tmarText("The piece Trim to scan cut of {0}, {1} — its mating face in teal, the scan a veil over it", [made.name, made.report.offset > 0 ? tmarText("{0} off the break", [typedLen(made.report.offset, len.units)]) : tmarText("on the break")])}
           shown={shownPiece}
-          what="the piece"
+          what={tmarText("the piece")}
           onToggle={() => setPartShown('piece', !shownPiece)}
         />
       )}
@@ -82,36 +86,33 @@ export function PartsList({ busy, onExportReduced, onExportTrimmed }: { busy: bo
             part="body"
             name={b.name}
             dot="#8b95a3"
-            reading={b.source}
-            title={`${b.name}, a body from ${b.source} — drawn see-through, as Boolean and Trim to scan offer it`}
+            reading={tmarText(b.source)}
+            title={tmarText("{0}, a body from {1} — drawn see-through, as Boolean and Trim to scan offer it", [b.name, tmarText(b.source)])}
             shown={shown}
             what={b.name}
             onToggle={() => toggleBodyShown(b.key)}
           />
         )
       })}
-      <p className="hint">
-        What the viewport shows with no tool in hand. The scan and the reduced mesh lie on one
-        surface and are shown one at a time; with the piece shown, the scan is a veil over it.
-      </p>
+      <p className="hint">{tmarText("What the viewport shows with no tool in hand. The scan and the reduced mesh lie on one surface and are shown one at a time; with the piece shown, the scan is a veil over it.")}</p>
       {(report || made) && (
         <div className="toolrow">
           {report && (
             <ExportMeshButton
-              label="Export reduced mesh"
+              label={tmarText("Export reduced mesh")}
               testId="parts-export-reduced"
               disabled={busy}
               onExport={onExportReduced}
-              title="Save the reduced mesh as an STL or a 3MF where the part now stands"
+              title={tmarText("Save the reduced mesh as an STL or a 3MF where the part now stands")}
             />
           )}
           {made && (
             <ExportMeshButton
-              label="Export piece mesh"
+              label={tmarText("Export piece mesh")}
               testId="parts-export-trimmed"
               disabled={busy}
               onExport={onExportTrimmed}
-              title="Save the piece as an STL or a 3MF where the part now stands — any alignment or move you applied comes with it"
+              title={tmarText("Save the piece as an STL or a 3MF where the part now stands — any alignment or move you applied comes with it")}
             />
           )}
         </div>
@@ -142,12 +143,14 @@ function PartRow({
   what: string
   onToggle: () => void
 }) {
+  useTmarLanguage()
+
   return (
     <div className={'kv' + (shown ? '' : ' ghost')} data-test={`part-${part}`} title={title}>
       <span className="dot" style={{ background: dot }} />
       <span className="name">{name}</span>
       <b>{reading}</b>
-      <button className={'x eye' + (shown ? '' : ' off')} data-test={`part-${part}-visible`} title={shown ? `Hide ${what}` : `Show ${what}`} onClick={onToggle}>
+      <button className={'x eye' + (shown ? '' : ' off')} data-test={`part-${part}-visible`} title={shown ? tmarText("Hide {0}", [what]) : tmarText("Show {0}", [what])} onClick={onToggle}>
         <Icon name={shown ? 'eye' : 'eyeOff'} size={14} />
       </button>
     </div>

@@ -5,6 +5,8 @@ import { useStore } from '../../src/state/store'
 import { useDeviation } from '../../src/state/deviationStore'
 import { reEditorOpen, useReverse } from '../reverse/state/reStore'
 import type { ZebraTarget } from './ZebraLayer'
+import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+
 
 export const useZebraUi = create<{ enabled: boolean; target: ZebraTarget; setEnabled: (on: boolean) => void; setTarget: (target: ZebraTarget) => void }>((set) => ({
   enabled: false, target: 'visible', setEnabled: (enabled) => set({ enabled }), setTarget: (target) => set({ target }),
@@ -23,6 +25,8 @@ export function enableZebra(on: boolean): void {
   ui.setEnabled(on)
 }
 export function ZebraQuickButton() {
+  useTmarLanguage()
+
   const workspace = useShell((s) => s.workspace)
   const enabled = useZebraUi((s) => s.enabled)
   const cadEditing = useReverse((s) => reEditorOpen(s) || s.building || !!s.playback)
@@ -31,9 +35,9 @@ export function ZebraQuickButton() {
   if (workspace !== 'reverse' && workspace !== 'deviation') return null
   return <div className="keys"><button data-test="zebra-quick-toggle" className={enabled ? 'on' : undefined}
     aria-pressed={enabled} disabled={editing && !enabled}
-    title={editing ? 'Finish the active operation and use a single viewport for Zebra analysis' : enabled ? 'Turn Zebra off' : 'Show Zebra analysis and its stripe controls'}
+    title={editing ? tmarText("Finish the active operation and use a single viewport for Zebra analysis") : enabled ? tmarText("Turn Zebra off") : tmarText("Show Zebra analysis and its stripe controls")}
     onClick={() => {
       enableZebra(!enabled)
       if (!enabled) requestAnimationFrame(() => document.querySelector('[data-test="tmar-zebra"]')?.scrollIntoView({ block: 'nearest' }))
-    }}><ZebraIcon/>Zebra</button></div>
+    }}><ZebraIcon/>{tmarText("Zebra")}</button></div>
 }

@@ -1,0 +1,161 @@
+{
+  "verified_at_utc": "2026-11-10T21:16:01.515462+00:00",
+  "checks": {
+    "all_status_200": true,
+    "html_matches_deployed": true,
+    "javascript_matches_deployed": true,
+    "aggregate_matches_stable": true,
+    "aggregate_matches_dev": true
+  },
+  "responses": [
+    {
+      "name": "launcher",
+      "url": "https://scanruler.31-70-139-73.sslip.io/",
+      "method": "GET",
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "no-store,no-store, max-age=0",
+      "frame_options": "DENY",
+      "nosniff": "nosniff",
+      "bytes": 6127,
+      "sha256": "ae1357c0f4a60a834cae108794cb529dae6587a8213e6ccea61fa43db0f5f382",
+      "utf8_valid": true,
+      "loading_placeholder_absent": true,
+      "correct_accents": true
+    },
+    {
+      "name": "javascript",
+      "url": "https://scanruler.31-70-139-73.sslip.io/launcher-version.js",
+      "method": "GET",
+      "status": 200,
+      "content_type": "application/javascript; charset=utf-8",
+      "cache_control": "no-store,no-store, max-age=0",
+      "frame_options": "DENY",
+      "nosniff": "nosniff",
+      "bytes": 2961,
+      "sha256": "74e576bfd4809d4b26696d375e55cbfc79ff7981ddbf93059f6b1a9d0c019dae"
+    },
+    {
+      "name": "aggregate",
+      "url": "https://scanruler.31-70-139-73.sslip.io/tmar-live-versions.json",
+      "method": "GET",
+      "status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "cache_control": "no-store,no-store, max-age=0",
+      "frame_options": "DENY",
+      "nosniff": "nosniff",
+      "bytes": 519,
+      "sha256": "723d14027d4db389a2e296f09801f6110900c525a8507fd819d3f9ac7ede39be",
+      "json": {
+        "stable": {
+          "revision": "d87c7bbc016ccd23a31d73608fc5b508d4007d67",
+          "built_at_utc": "2026-11-10T13:22:37Z",
+          "cnckitchen_version": "0.11.1",
+          "tmar_number": 4,
+          "tmar_channel": "preview",
+          "source_branch": "main",
+          "channel": "main-tested"
+        },
+        "dev": {
+          "revision": "d87c7bbc016ccd23a31d73608fc5b508d4007d67",
+          "built_at_utc": "2026-11-10T13:21:48Z",
+          "cnckitchen_version": "0.11.1",
+          "tmar_number": 4,
+          "tmar_channel": "preview",
+          "source_branch": "review/edit-surface-integration-20261103",
+          "channel": "experimental-edit-surface"
+        }
+      }
+    },
+    {
+      "name": "stable_app",
+      "url": "https://scanruler.31-70-139-73.sslip.io/?version=stable",
+      "method": "GET",
+      "status": 200,
+      "content_type": "text/html",
+      "cache_control": null,
+      "frame_options": "DENY",
+      "nosniff": "nosniff",
+      "bytes": 2395,
+      "sha256": "63515e7f3034bcb3902319ad6df99178a88c607566135d6d6885785c5d69979f"
+    },
+    {
+      "name": "dev_app",
+      "url": "https://scanruler-dev.31-70-139-73.sslip.io/",
+      "method": "GET",
+      "status": 200,
+      "content_type": "text/html",
+      "cache_control": null,
+      "frame_options": "DENY",
+      "nosniff": "nosniff",
+      "bytes": 2395,
+      "sha256": "c4f724a7102d1bc67f34cb8ef6d12bde0a679b40828e767795c57c3416805769"
+    },
+    {
+      "name": "stable_metadata",
+      "url": "https://scanruler.31-70-139-73.sslip.io/tmar-preview-version.json",
+      "method": "GET",
+      "status": 200,
+      "content_type": "application/json",
+      "cache_control": null,
+      "frame_options": "DENY",
+      "nosniff": "nosniff",
+      "bytes": 212,
+      "sha256": "f92c5cdb2411e2d6035f2aab72b2d5d272650ed7626de975f7c7bbb3359d2833",
+      "json": {
+        "revision": "d87c7bbc016ccd23a31d73608fc5b508d4007d67",
+        "channel": "main-tested",
+        "built_at_utc": "2026-11-10T13:22:37Z",
+        "cnckitchen_version": "0.11.1",
+        "tmar_number": 4,
+        "tmar_channel": "preview",
+        "source_branch": "main"
+      }
+    },
+    {
+      "name": "dev_metadata",
+      "url": "https://scanruler-dev.31-70-139-73.sslip.io/tmar-preview-version.json",
+      "method": "GET",
+      "status": 200,
+      "content_type": "application/json",
+      "cache_control": null,
+      "frame_options": "DENY",
+      "nosniff": "nosniff",
+      "bytes": 262,
+      "sha256": "b89312dcb068bb5423cefcae69275394a383958670c12ad46aa756c4a72c1a9e",
+      "json": {
+        "revision": "d87c7bbc016ccd23a31d73608fc5b508d4007d67",
+        "channel": "experimental-edit-surface",
+        "built_at_utc": "2026-11-10T13:21:48Z",
+        "cnckitchen_version": "0.11.1",
+        "tmar_number": 4,
+        "tmar_channel": "preview",
+        "source_branch": "review/edit-surface-integration-20261103"
+      }
+    },
+    {
+      "name": "examples",
+      "url": "https://scanruler.31-70-139-73.sslip.io/samples/tmar-tests/",
+      "method": "GET",
+      "status": 200,
+      "content_type": "text/html",
+      "cache_control": null,
+      "frame_options": "DENY",
+      "nosniff": "nosniff",
+      "bytes": 2523,
+      "sha256": "a15835ac70df63c08e9944fcf49ff8607623f8673946011cc23515c7faabe405"
+    },
+    {
+      "name": "examples_zip",
+      "url": "https://scanruler.31-70-139-73.sslip.io/samples/tmar-tests/TMAR_ScanRuler_10_Esempi_STL.zip",
+      "method": "HEAD",
+      "status": 200,
+      "content_type": "application/zip",
+      "cache_control": null,
+      "frame_options": "DENY",
+      "nosniff": "nosniff",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}
