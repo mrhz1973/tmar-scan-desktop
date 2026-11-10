@@ -249,6 +249,9 @@ export interface ScanRulerPlugin {
   id: string
   /** The plugin's name as a person reads it. */
   name: string
+  /** Other plugins that must install successfully first. An absent, disabled
+   *  or failed dependency leaves this plugin out too. */
+  requires?: readonly string[]
   /** Still in beta: left out — not installed at all — until switched on in
    *  Settings, where it is offered under its workspace's label. A project
    *  opened while it is off keeps its part of the file, as in a build

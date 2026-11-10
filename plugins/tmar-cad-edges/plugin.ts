@@ -5,6 +5,7 @@ import { plugins } from '../../src/plugins/registry'
 import { CadEdgeButton, CadEdgePanel, useCadEdgeDisplay } from './CadEdgeControls'
 const plugin: ScanRulerPlugin = {
   id:'tmar-cad-edges',name:'TMAR CAD face edges',
+  requires: ['reverse'],
   install(){
     if(!plugins().some(p=>p.id==='reverse'))return
     registerPanelExtension({id:'tmar-cad-edges.reverse',slot:'reverse.analysis',component:CadEdgePanel,order:20})

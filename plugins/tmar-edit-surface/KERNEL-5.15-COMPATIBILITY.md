@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Edit Surface and occt-wasm 5.15.0
 
 Checkpoint: 10 November 2026. This is the plugin compatibility work for the

@@ -18,10 +18,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-and-build:
+  unit-and-mcp:
+    name: Unit, architecture and MCP
     runs-on: ubuntu-24.04
-    # The consolidated suite includes native editor tests and upstream/plugin browser
-    # scenarios. Keep every gate; allow their combined runtime on CI.
+    # These checks and the browser job use the same checkout independently.
+    # A workflow is green only when both jobs pass; no gate is omitted.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -39,6 +40,17 @@ jobs:
       - run: npm test
       - name: The agent server (mcp/), its own package
         run: npm --prefix mcp ci && npm --prefix mcp test
+  build-and-browser:
+    name: Build and browser integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - id: build
         run: npm run build
       - name: Each worker gets the Content-Security-Policy its code needs

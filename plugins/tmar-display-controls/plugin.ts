@@ -6,6 +6,7 @@ import { PanelResizeHandle, PanelWidthSettings } from './PanelResizeHandle'
 import { DisplayControls, useDisplayControls } from './DisplayControls'
 const plugin: ScanRulerPlugin = {
   id: 'tmar-display-controls', name: 'TMAR workspace labels',
+  requires: ['reverse'],
   install() {
     if (!plugins().some((p) => p.id === 'reverse')) return
     registerPanelExtension({ id: 'tmar-display-controls.resize', slot: 'workspace.divider', component: PanelResizeHandle })

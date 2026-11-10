@@ -7,6 +7,7 @@ import { registerFeatureVisibilityHistory } from './featureVisibility'
 import './modelTree.css'
 const plugin: ScanRulerPlugin = {
   id: 'tmar-model-tree', name: 'TMAR feature multi-selection',
+  requires: ['reverse'],
   install() {
     if (!plugins().some((p) => p.id === 'reverse')) return
     registerFeatureListExtension({ list: FeatureSelection, row: FeatureSelectionRow })

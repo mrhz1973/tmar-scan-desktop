@@ -7,6 +7,7 @@ import { EditSurface, useSurfaceDialogs } from './EditSurface'
 import { installWorkspaceIntegration } from './workspaceIntegration'
 const plugin: ScanRulerPlugin = {
   id: 'tmar-edit-surface', name: 'TMAR Edit Surface · CAD prototype',
+  requires: ['reverse'],
   install() {
     if (!plugins().some(p => p.id === 'reverse')) return
     const sharedViewEntry = installWorkspaceIntegration()

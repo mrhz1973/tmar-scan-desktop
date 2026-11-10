@@ -16,6 +16,9 @@ saves carry the same number as `appVersion`. How a release is cut is in
 - Retain the TMAR workspace host, saved edit workflow, navigation, Zebra, notes,
   CAD duplication, display units and regional Smooth alongside the new upstream
   tools and project recovery behavior.
+- Install dependent extensions after their successful dependencies, so the
+  upstream failure-aware plugin registry also registers Edit Surface, history,
+  notes, Zebra and the other TMAR controls. Keep missing or failed plugins out.
 - Keep the CSP check and external first-paint theme script while preserving
   TMAR's dark default. The prior Versione 3 results remain historical.
 - See `docs/tmar-upstream-0.11.1-integration-20261110.md` for the migration

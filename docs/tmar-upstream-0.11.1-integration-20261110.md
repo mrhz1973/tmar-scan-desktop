@@ -52,6 +52,15 @@ groups, together with the fork's native CAD/note deltas and compensation on
 refused publication. The editor camera contract accepts the active upstream
 camera, including perspective, without pretending it is always orthographic.
 
+The upstream plugin registry excludes failed installations. TMAR extensions
+now declare their dependencies through the generic `requires` contract, and
+installation follows those dependencies. During installation, `plugins()`
+exposes only successful predecessors. This prevents silent early returns that
+otherwise omitted Edit Surface and nine other extensions; missing, disabled,
+failed or cyclic dependencies still prevent the dependent plugin from loading.
+The bootstrap regression installs the actual plugins and checks their outlets
+and the preserved empty-model guard, rather than installing entries manually.
+
 ## Kernel and saved recipes
 
 New recipes identify their actual 5.15 runtime. Historical 5.7 recipes are not
@@ -68,6 +77,10 @@ The final publication must include the exact source commit, clean build identity
 full CI outcome and explicit skips. Historical Versione 3 results do not qualify
 this runtime. The pipeline retains all upstream gates, the CSP check, the
 integrated editor browser checks and the upstream/plugin browser regression run.
+Unit/architecture/MCP checks and build/browser checks run as independent jobs
+on the same revision. Both are required for a successful workflow; this allows
+browser integration failures to surface without waiting for the full native
+unit suite. All previously configured gates and scenarios are retained.
 
 Targeted migration checks cover the native history/annotation round trip,
 legacy recipe compatibility, mesh state and units, perspective projection,

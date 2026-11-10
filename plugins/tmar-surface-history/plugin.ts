@@ -10,6 +10,7 @@ import { SurfaceHistoryEntry } from './SurfaceHistoryEntry'
 let installed = false
 const plugin: ScanRulerPlugin = {
   id: 'tmar-surface-history', name: 'TMAR · Modifiche superficie riapribili',
+  requires: ['reverse', 'tmar-edit-surface'],
   install() {
     if (installed || !plugins().some(p => p.id === 'reverse') || !plugins().some(p => p.id === 'tmar-edit-surface')) return
     registerWorkspaceEditorHistory('tmar-edit-surface', {
