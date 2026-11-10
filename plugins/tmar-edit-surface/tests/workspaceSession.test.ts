@@ -5,7 +5,10 @@ import type { Net, Point } from '../brep'
 import { SurfaceEditorKernel } from '../editorKernel'
 import type { StripMove } from '../sheetExtension'
 import { SurfaceRuntime } from '../surfaceRuntime'
+import { SurfaceDraft } from '../surfaceDraft'
 import { createWorkspaceSurfaceSession, type WorkspaceSurfaceSession } from '../workspaceSession'
+import { replaySurfaceHistory } from '../historyReplay'
+import {targetSurfacePoint} from '../surfacePointTarget'
 
 type Msg = { id: number; action: string; exportStep?: boolean; net?: Net; edge?:number; delta?:number[]; path?:number[][]; previous?:Array<{edge:number;delta:number[];path:number[][]}> }
 class FakeWorker {
@@ -29,12 +32,12 @@ const preview = (revision: number) => ({ valid:true, previewRevision:revision, m
 const info = { index:0,kind:'plane',reason:null,converted:true,enriched:false,
   openSheet:false,freeBoundary:false,trimLocks:[],hiddenPoles:[] }
 async function flush() { for (let i=0;i<8;i++) await Promise.resolve() }
-async function setup(options: {sheet?:boolean;annotated?:boolean} = {}) {
+async function setup(options: {sheet?:boolean;annotated?:boolean;bodyId?:number;blockedPlane?:boolean;trimLocks?:number[];hiddenPoles?:number[];duplicateFace?:boolean} = {}) {
   vi.useFakeTimers()
   const worker = new FakeWorker(), runtime = new SurfaceRuntime(() => worker as unknown as Worker)
   const abort = new AbortController(), hash = 'a'.repeat(64)
   let sourceCurrent = true
-  const binding = { documentEpoch:'doc-1',sourceEpoch:3,bodyId:4,bodyKey:'body-key',
+  const binding = { documentEpoch:'doc-1',sourceEpoch:3,bodyId:options.bodyId??4,bodyKey:'body-key',
     buildVersion:5,kernelGeneration:6,frameRevision:7,stepSha256:hash,units:'mm',coordinateFrame:'part' }
   const owned = new Set<() => void>()
   const context = { apiVersion:1,sessionId:'session-1',source:binding,step:new Uint8Array([1,2,3]),
@@ -51,7 +54,9 @@ async function setup(options: {sheet?:boolean;annotated?:boolean} = {}) {
     bytes.length===3 && bytes[0]===1 && bytes[1]===2 && bytes[2]===3 ? hash : createHash('sha256').update(bytes).digest('hex')})
   await flush()
   expect(worker.sent[0]?.action).toBe('open')
-  const faces = options.sheet ? [{...info,openSheet:true,freeBoundary:true}] : [info,{...info,index:1}]
+  const first = {...info,canDuplicateCadFace:options.duplicateFace,trimLocks:options.trimLocks??[],hiddenPoles:options.hiddenPoles??[],
+    ...(options.blockedPlane?{reason:'Tutti i poli influenzano un contorno ritagliato.'}:{})}
+  const faces = options.sheet ? [{...first,openSheet:true,freeBoundary:true}] : [first,{...info,index:1}]
   worker.reply(worker.sent[0].id,{faces,preview:{...preview(0),faceMeshes:faces.map(()=>({}))}})
   const session = await creating
   return { worker, runtime, abort, binding, context, session, layer, owned, invalidate:()=>{sourceCurrent=false} }
@@ -110,7 +115,861 @@ function stripReply(request: Msg, extra: Record<string, unknown> = {}) {
 }
 afterEach(()=>vi.useRealTimers())
 
+describe('whole natural boundary movement',()=>{
+  const ready=async(t:Awaited<ReturnType<typeof setup>>,revision:number)=>{
+    await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.filter(r=>r.action==='evaluate').at(-1)!.id,preview(revision));await flush()
+  }
+  const nativeReply=()=>({face:0,previewRevision:2,results:[{side:'U1',visible:true,point:[4,2,0],pickerSegment:31,
+    reason:'native-section-and-clear-front',frontDistanceMm:1e-5,intersectionCount:1}]})
+  it('locks a full natural side and its shared corners without changing the opposite side or prior locks', async()=>{
+    const t=await setup({sheet:true})
+    await selectFace(t)
+    const s=t.session
+    expect(()=>s.lockWholeBoundary('U0')).toThrow(/bordi liberi/)
+    s.setFreeBoundary(true)
+    await ready(t,2)
+    s.selectPoints([0,12],false)
+    s.lockSelected(true)
+    const before=s.getPanelState().net!, history=s.getSnapshot().historyRevision
+    const selection=s.getPanelState().selected, requests=t.worker.sent.length
+    s.lockWholeBoundary('U0')
+    expect(s.getPanelState().manualLocks).toEqual([0,1,2,3,4,12])
+    expect(s.getPanelState().selected).toEqual(selection)
+    expect(s.getPanelState().net).toEqual(before)
+    expect(s.getSnapshot().historyRevision).toBe(history+1)
+    expect(s.getSnapshot().validation.kind).toBe('valid')
+    expect(t.worker.sent).toHaveLength(requests)
+    s.lockWholeBoundary('U0')
+    expect(s.getSnapshot().historyRevision).toBe(history+1)
+    for (const side of ['U0','V0','V1'] as const)
+      expect(()=>s.moveWholeBoundary(side,[0,0,.1])).toThrow(/polo bloccato/)
+    s.moveWholeBoundary('U1',[0,0,.1])
+    await ready(t,3)
+    expect(s.getSnapshot().validation.kind).toBe('valid')
+    expect(s.getPanelState().net!.poles).toEqual(before.poles.map(([x,y,z],i)=>[x,y,z+(i>=20?.1:0)]))
+    s.undo()
+    await ready(t,4)
+    expect(s.getPanelState().manualLocks).toEqual([0,1,2,3,4,12])
+    s.undo()
+    expect(s.getPanelState().manualLocks).toEqual([0,12])
+    expect(s.getPanelState().net).toEqual(before)
+    expect(s.getSnapshot().validation.kind).toBe('valid')
+    await s.dispose('cancelled')
+  })
+
+  it('refuses a natural-side lock on a solid even with a valid CAD preview',async()=>{
+    const t=await setup()
+    await selectFace(t)
+    const history=t.session.getSnapshot().historyRevision
+    expect(()=>t.session.lockWholeBoundary('U0')).toThrow(/faccia naturale/)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getPanelState().manualLocks).toEqual([])
+    await t.session.dispose('cancelled')
+  })
+
+  it('disarms an affected boundary and releases only the drag-owned selection after locking', async()=>{
+    const t=await setup({sheet:true})
+    await selectFace(t)
+    const s=t.session
+    s.setFreeBoundary(true)
+    await ready(t,2)
+    s.setWholeBoundaryDrag('U0')
+    expect(s.getPanelState().selected).toEqual([0,1,2,3,4])
+    expect(s.beginWholeBoundaryGesture('U0')).toBe(true)
+    const history=s.getSnapshot().historyRevision
+    expect(()=>s.lockWholeBoundary('U0')).toThrow(/trascinamento/)
+    expect(s.getSnapshot().gesture).toBe('pole')
+    expect(s.getSnapshot().historyRevision).toBe(history)
+    expect(s.getPanelState().manualLocks).toEqual([])
+    s.finishPoleGesture(null)
+    s.lockWholeBoundary('U0')
+    expect(s.getPanelState().wholeBoundaryDrag).toBeNull()
+    expect(s.getPanelState().selected).toEqual([])
+    expect(s.beginWholeBoundaryGesture('U0')).toBe(false)
+    s.undo()
+
+    s.setWholeBoundaryDrag('V0')
+    s.selectPoints([12],false)
+    s.lockWholeBoundary('U0')
+    expect(s.getPanelState().wholeBoundaryDrag).toBeNull()
+    expect(s.getPanelState().selected).toEqual([12])
+    s.setWholeBoundaryDrag('U1')
+    expect(s.getPanelState().wholeBoundaryDrag).toBe('U1')
+    await s.dispose('cancelled')
+  })
+
+  it('selects the whole open face, refuses partial movement and makes one Undo entry', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setDragMode('screen')
+    expect(() => s.setWholeFaceDrag(true)).toThrow(/bordi liberi/)
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    s.setWholeBoundaryDrag('U0')
+    s.setWholeFaceDrag(true)
+    expect(s.getPanelState().wholeBoundaryDrag).toBeNull()
+    const before = s.getPanelState().net!
+    const history = s.getSnapshot().historyRevision
+    expect(s.beginWholeFaceGesture(structuredClone(before))).toBe(false)
+    expect(s.beginWholeFaceGesture(before)).toBe(true)
+    expect(s.getPanelState().selected).toEqual(before.poles.map((_, index) => index))
+    const moved = before.poles.map(([x,y,z]): Point => [x + .25, y - .5, z + .125])
+    const partial = structuredClone(moved)
+    partial[12] = before.poles[12]
+    expect(() => s.previewPoles(partial)).toThrow(/tutti i poli/)
+    s.previewPoles(moved)
+    expect(() => s.finishPoleGesture(partial)).toThrow(/tutti i poli/)
+    expect(s.getPanelState().net).toEqual(before)
+    expect(s.getSnapshot().historyRevision).toBe(history)
+    await ready(t, 3)
+    expect(s.beginWholeFaceGesture(s.getPanelState().net!)).toBe(true)
+    s.finishPoleGesture(moved)
+    expect(s.getSnapshot().historyRevision).toBe(history + 1)
+    await ready(t, 4)
+    expect(s.getPanelState().net).toEqual({...before, poles:moved})
+    s.undo()
+    expect(s.getPanelState().net).toEqual(before)
+    await t.session.dispose('cancelled')
+  })
+
+  it.each([
+    {sheet:false}, {sheet:true,trimLocks:[12]}, {sheet:true,hiddenPoles:[12]}, {sheet:true},
+  ])('refuses whole-face mode with a solid, trim protection, hidden pole or manual lock (%j)', async options => {
+    const t = await setup(options)
+    await selectFace(t)
+    const s = t.session
+    s.setDragMode('axis')
+    if (options.sheet) {
+      s.setFreeBoundary(true)
+      await ready(t, 2)
+      if (!options.trimLocks && !options.hiddenPoles) {
+        s.setWholeFaceDrag(true)
+        s.selectPoints([12], false)
+        s.lockSelected(true)
+        await ready(t, 3)
+      }
+    }
+    expect(s.getPanelState().wholeFaceDrag).toBe(false)
+    expect(s.getPanelState().canMoveWholeFace).toBe(false)
+    expect(() => s.setWholeFaceDrag(true)).toThrow(/tutti i poli/)
+    expect(s.beginWholeFaceGesture(s.getPanelState().net!)).toBe(false)
+    await s.dispose('cancelled')
+  })
+
+  it('releases the selection created by the whole-face gesture before the next single-pole drag', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setDragMode('axis')
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    const original = s.getPanelState().net!
+    s.setWholeFaceDrag(true)
+    expect(s.beginWholeFaceGesture(original)).toBe(true)
+    s.finishPoleGesture(original.poles.map(([x,y,z]): Point => [x,y,z+.2]))
+    await ready(t, 3)
+    const translated = s.getPanelState().net!
+    expect(s.getViewState().selected).toHaveLength(original.poles.length)
+
+    s.setWholeFaceDrag(false)
+    expect(s.getViewState().selected).toEqual([])
+    s.selectPoints([12], false)
+    expect(s.beginPoleGesture()).toBe(true)
+    const poles = changedPoles(s, .3)
+    s.finishPoleGesture(poles)
+    expect(s.getPanelState().net!.poles.flatMap((p, i) => p[2] === translated.poles[i][2] ? [] : [i])).toEqual([12])
+    await s.dispose('cancelled')
+  })
+
+  it('preserves independent selection and clears owned selection on automatic whole-face disarm', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setDragMode('screen')
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    const net = s.getPanelState().net!
+    s.selectPoints([12], false)
+    s.setWholeFaceDrag(true)
+    s.setWholeFaceDrag(false)
+    expect(s.getPanelState().selected).toEqual([12])
+    s.setWholeFaceDrag(true)
+    expect(s.beginWholeFaceGesture(net)).toBe(true)
+    s.finishPoleGesture(null)
+    s.setPlacingNote(true)
+    expect(s.getPanelState()).toMatchObject({ wholeFaceDrag:false, selected:[] })
+    s.setPlacingNote(false)
+
+    s.setWholeFaceDrag(true)
+    expect(s.beginWholeFaceGesture(net)).toBe(true)
+    s.finishPoleGesture(null)
+    s.selectAllFree()
+    s.setWholeFaceDrag(false)
+    expect(s.getPanelState().selected).toHaveLength(net.poles.length)
+    await s.dispose('cancelled')
+  })
+
+  const faceRay = { seed:[2,2,0], origin:[2,2,10], direction:[0,0,-1] } as import('../wholeFaceRayPickCad').WholeFaceRayPickInput
+  const faceRayReply = {face:0, previewRevision:2, selectionRevision:1, point:[2,2,0], u:.3, v:.6,
+    normal:[0,0,1], rayDistanceMm:10, seedDistanceMm:0, intersectionCount:1}
+
+  it('requires a current CAD receipt for Local whole-face drag and makes one Undo entry', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    const net = s.getPanelState().net!, history = s.getSnapshot().historyRevision
+    s.setWholeFaceDrag(true)
+    s.setAxis(1)
+    expect(s.beginWholeFaceGesture(net)).toBe(false)
+    const pending = s.prepareWholeFacePick(net, faceRay), request = t.worker.sent.at(-1)!
+    expect(request).toMatchObject({ action:'wholeFaceRayPick', previewRevision:2, input:faceRay })
+    expect(s.getPanelState().busy).toBe(false)
+    expect(s.getSnapshot().gesture).toBe('idle')
+    t.worker.reply(request.id, faceRayReply)
+    const receipt = await pending
+    expect(receipt.direction).toEqual([expect.closeTo(0,12),expect.closeTo(1,12),expect.closeTo(0,12)])
+    expect(s.beginVerifiedWholeFaceGesture({...receipt})).toBe(false)
+    expect(s.beginVerifiedWholeFaceGesture(receipt)).toBe(true)
+    expect(s.beginVerifiedWholeFaceGesture(receipt)).toBe(false)
+    expect(() => s.previewPoles(net.poles.map(([x,y,z]): Point => [x+.2,y,z]))).toThrow(/direzione CAD locale/)
+    const moved = net.poles.map(p => p.map((x,i) => x + .2*receipt.direction[i]) as Point)
+    s.finishPoleGesture(moved)
+    expect(s.getSnapshot().historyRevision).toBe(history+1)
+    await ready(t, 3)
+    expect(s.getPanelState().net!.poles).toEqual(moved)
+    s.undo()
+    expect(s.getPanelState().net).toEqual(net)
+    await s.dispose('cancelled')
+  })
+
+  it('invalidates a verified whole-face receipt after changing the axis and accepts a fresh receipt', async () => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    s.setWholeFaceDrag(true)
+    s.setAxis(0)
+    const net = s.getPanelState().net!, history = s.getSnapshot().historyRevision
+    const verify = () => {
+      const pending = s.prepareWholeFacePick(net, faceRay)
+      t.worker.reply(t.worker.sent.at(-1)!.id, faceRayReply)
+      return pending
+    }
+    const old = await verify()
+    expect(old.direction).toEqual([expect.closeTo(1,12),expect.closeTo(0,12),expect.closeTo(0,12)])
+    s.setAxis(2)
+    expect(s.beginVerifiedWholeFaceGesture(old)).toBe(false)
+    expect(s.getSnapshot().gesture).toBe('idle')
+    expect(s.getSnapshot().historyRevision).toBe(history)
+    const current = await verify()
+    expect(current.direction).toEqual([expect.closeTo(0,12),expect.closeTo(0,12),expect.closeTo(1,12)])
+    expect(s.beginVerifiedWholeFaceGesture(current)).toBe(true)
+    s.finishPoleGesture(null)
+    await s.dispose('cancelled')
+  })
+
+  it.each(['cancel','axis','mode','strength','lock','undo','source'] as const)('refuses a Local whole-face pick superseded by %s', async change => {
+    const t = await setup({sheet:true})
+    await selectFace(t)
+    const s = t.session
+    s.setFreeBoundary(true)
+    await ready(t, 2)
+    s.setWholeFaceDrag(true)
+    const net = s.getPanelState().net!
+    if (change === 'lock') s.selectPoints([12], false)
+    const pending = s.prepareWholeFacePick(net, faceRay), request = t.worker.sent.at(-1)!
+    const rejected = expect(pending).rejects.toThrow()
+    if (change === 'cancel') s.cancelPreparedWholeFacePick()
+    if (change === 'axis') s.setAxis((s.getPanelState().axis + 1) % 3)
+    if (change === 'mode') s.setDragMode('screen')
+    if (change === 'strength') s.setDragStrength(.5)
+    if (change === 'lock') s.lockSelected(true)
+    if (change === 'undo') s.undo()
+    if (change === 'source') t.invalidate()
+    t.worker.reply(request.id, faceRayReply)
+    await rejected
+    expect(s.getSnapshot().gesture).toBe('idle')
+    expect(s.getPanelState().net!.poles).toEqual(net.poles)
+    await s.dispose('cancelled')
+  })
+
+  it('keeps native verification read-only and consumes only the original current receipt once',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2);t.session.setWholeBoundaryDrag('U0')
+    const net=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    const pending=t.session.prepareWholeBoundaryPicks(net,[{side:'U1',seed:[4,2,0],segment:31}],[10,2,10])
+    expect(t.worker.sent.at(-1)?.action).toBe('verifyBoundaryVisibility')
+    expect(t.session.getPanelState().busy).toBe(false);expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    t.worker.reply(t.worker.sent.at(-1)!.id,nativeReply());const picks=await pending
+    expect(t.session.beginVerifiedWholeBoundaryGesture({...picks[0]})).toBe(false)
+    expect(t.session.beginVerifiedWholeBoundaryGesture(picks[0])).toBe(true)
+    t.session.finishPoleGesture(null)
+    expect(t.session.beginVerifiedWholeBoundaryGesture(picks[0])).toBe(false)
+    expect(t.session.getPanelState().net).toEqual(net);expect(t.session.getSnapshot().historyRevision).toBe(history)
+    await t.session.dispose('cancelled')
+  })
+  it.each(['cancel','selection','source'] as const)('refuses native receipts superseded by %s',async change=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2);t.session.setWholeBoundaryDrag('U0')
+    const net=t.session.getPanelState().net!
+    const pending=t.session.prepareWholeBoundaryPicks(net,[{side:'U1',seed:[4,2,0],segment:31}],[10,2,10])
+    const rejection=expect(pending).rejects.toThrow()
+    if(change==='cancel')t.session.cancelPreparedWholeBoundaryPicks()
+    if(change==='selection')t.session.selectPoints([12],false)
+    if(change==='source')t.invalidate()
+    t.worker.reply(t.worker.sent.at(-1)!.id,nativeReply());await rejection
+    expect(t.session.getPanelState().net).toBe(net)
+    await t.session.dispose('cancelled')
+  })
+  it('adopts a directly picked different side and restores its full-row move with one Undo',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.setWholeBoundaryDrag('U0')
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    expect(t.session.beginWholeBoundaryGesture('U1')).toBe(true)
+    expect(t.session.getPanelState().wholeBoundaryDrag).toBe('U1')
+    const ids=Array.from({length:before.nv},(_,i)=>(before.nu-1)*before.nv+i)
+    expect(t.session.getPanelState().selected).toEqual(ids)
+    const poles=structuredClone(before.poles);for(const id of ids)poles[id][2]+=.2
+    t.session.previewPoles(poles);t.session.finishPoleGesture(poles);await ready(t,3)
+    expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    expect(t.session.getPanelState().net!.poles).toEqual(poles)
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    expect(t.session.getPanelState().wholeBoundaryDrag).toBe('U1')
+    await t.session.dispose('cancelled')
+  })
+  it('does not adopt a directly picked side containing a manual lock',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.setWholeBoundaryDrag('U0')
+    t.session.selectPoints([20],false);t.session.lockSelected(true);await ready(t,3)
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    expect(()=>t.session.beginWholeBoundaryGesture('U1')).toThrow(/bloccato/)
+    expect(t.session.getPanelState().wholeBoundaryDrag).toBe('U0')
+    expect(t.session.getPanelState().net).toBe(before)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    await t.session.dispose('cancelled')
+  })
+  it('previews the complete natural boundary without history and commits one cancellable drag',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.setWholeBoundaryDrag('U0')
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    expect(t.session.beginWholeBoundaryGesture('U0')).toBe(true)
+    const moved=structuredClone(before.poles);for(let i=0;i<before.nv;i++)moved[i][2]+=.3
+    t.session.previewPoles(moved)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getPanelState().net!.poles).toEqual(moved)
+    t.session.finishPoleGesture(moved)
+    expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    await ready(t,3);t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    await ready(t,4);expect(t.session.beginWholeBoundaryGesture('U0')).toBe(true)
+    t.session.previewPoles(moved);t.session.finishPoleGesture(null)
+    expect(t.session.getPanelState().net).toEqual(before)
+    await t.session.dispose('cancelled')
+  })
+  it('rejects partial or unrelated pole edits and restores the last committed net after an invalid drag commit',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.setWholeBoundaryDrag('U0');const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    t.session.beginWholeBoundaryGesture('U0')
+    const partial=structuredClone(before.poles);partial[0][2]=.2
+    expect(()=>t.session.previewPoles(partial)).toThrow(/tutto il bordo/)
+    const valid=structuredClone(before.poles);for(let i=0;i<before.nv;i++)valid[i][2]=.2
+    t.session.previewPoles(valid)
+    const unrelated=structuredClone(valid);unrelated[12][2]=.1
+    expect(()=>t.session.finishPoleGesture(unrelated)).toThrow(/altri poli/)
+    expect(t.session.getPanelState().net).toEqual(before)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    await t.session.dispose('cancelled')
+  })
+  it.each(['U0','U1','V0','V1'] as const)('moves every pole of %s once, with no added strip and one geometry Undo step',async side=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)
+    t.session.setFreeBoundary(true);await ready(t,2)
+    const before=t.session.getPanelState().net!
+    t.session.moveWholeBoundary(side,[0,0,.2])
+    const after=t.session.getPanelState().net!
+    const ids=before.poles.flatMap((_,i)=>((side==='U0' && i<before.nv)||(side==='U1' && i>=before.poles.length-before.nv)||
+      (side==='V0' && i%before.nv===0)||(side==='V1' && i%before.nv===before.nv-1))?[i]:[])
+    after.poles.forEach((p,i)=>expect(p).toEqual(ids.includes(i)?[before.poles[i][0],before.poles[i][1],.2]:before.poles[i]))
+    expect(t.session.getPanelState().selected).toEqual(ids)
+    expect(t.session.getPanelState().strip).toBeNull()
+    expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await ready(t,3)
+    expect(t.worker.sent.filter(r=>r.action==='evaluate').at(-1)).toMatchObject({action:'evaluate',net:after})
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    t.session.redo();expect(t.session.getPanelState().net).toEqual(after)
+    await t.session.dispose('cancelled')
+  })
+  it('refuses a locked corner rather than moving only the unblocked part of a whole boundary',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    t.session.selectPoints([0],false);t.session.lockSelected(true);await ready(t,3)
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    expect(()=>t.session.moveWholeBoundary('U0',[0,0,.2])).toThrow(/nessuno spostamento parziale/)
+    expect(t.session.getPanelState().net).toBe(before)
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    await t.session.dispose('cancelled')
+  })
+  it('refuses protected mode, solids, symmetry, malformed motion and pending CAD',async()=>{
+    const solid=await setup();await selectFace(solid)
+    expect(()=>solid.session.moveWholeBoundary('U0',[0,0,.2])).toThrow()
+    await solid.session.dispose('cancelled')
+    const t=await setup({sheet:true});await selectFace(t)
+    expect(()=>t.session.moveWholeBoundary('U0',[0,0,.2])).toThrow()
+    t.session.setFreeBoundary(true)
+    expect(()=>t.session.moveWholeBoundary('U0',[0,0,.2])).toThrow()
+    await ready(t,2)
+    for(const delta of [[0,0,0],[0,0,Infinity],[1001,0,0]] as Point[])expect(()=>t.session.moveWholeBoundary('U0',delta)).toThrow()
+    expect(()=>t.session.moveWholeBoundary('invalid' as never,[0,0,.1])).toThrow()
+    t.session.setSymmetry(true);expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)
+    expect(()=>t.session.moveWholeBoundary('U0',[0,0,.2])).toThrow()
+    await t.session.dispose('cancelled')
+  })
+  it('keeps CAD-refused whole-boundary movement invalid and recoverable with Undo',async()=>{
+    const t=await setup({sheet:true});await selectFace(t);t.session.setFreeBoundary(true);await ready(t,2)
+    const before=t.session.getPanelState().net!
+    t.session.moveWholeBoundary('V1',[0,0,.2]);await vi.advanceTimersByTimeAsync(90)
+    t.worker.fail(t.worker.sent.at(-1)!.id,'Bordo CAD non valido.');await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('invalid')
+    expect(t.session.getPanelState().canMoveWholeBoundary).toBe(false)
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    await t.session.dispose('cancelled')
+  })
+})
+
+describe('rendered face selection state',()=>{
+  it('disables face selection while calculating and re-enables it when validation finishes',async()=>{
+    const {createElement}=await import('react'),{renderToStaticMarkup}=await import('react-dom/server')
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const t=await setup();await selectFace(t)
+    const s=t.session
+    const render=()=>renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:s}))
+    s.selectPoints([12],false);s.moveSelected(.1)
+    expect(s.getPanelState().calculating).toBe(true)
+    expect(render()).toMatch(/<select[^>]*data-test="surface-face"[^>]*disabled/)
+    await vi.advanceTimersByTimeAsync(90)
+    const request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('evaluate')
+    t.worker.reply(request.id,preview(2));await flush()
+    expect(s.getPanelState().calculating).toBe(false)
+    expect(render()).toMatch(/<select[^>]*data-test="surface-face"(?![^>]*disabled)/)
+    await s.dispose('cancelled')
+  })
+})
+
+describe('experimental simultaneous surface-point controller',()=>{
+  const pins=()=>[[.3,.4],[.7,.6]].map(([u,v])=>({anchor:{face:0,selectionRevision:1,u,v},
+    at:targetSurfacePoint(plane(),{u,v,target:[0,0,0],editablePoles:Array.from({length:25},(_,i)=>i),maxPoleDisplacement:10,minInfluence:.01,residualTolerance:1e-9}).before,normal:[0,0,1]}))
+  it('collects and reviews real target pairs without geometry, removes a point and applies the remaining pairs atomically',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    const resolve=(at:Point)=>({point:[at[0],at[1],.02] as Point,kind:'scan' as const,label:'Scan QA',current:()=>true})
+    const collect=async(pin:typeof points[number])=>{
+      const pending=t.session.pickSurfaceTarget(pin.at,resolve)
+      expect(t.worker.sent.at(-1)?.action).toBe('notePick');t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    }
+    t.session.beginSurfaceTarget('scan',1,true)
+    await collect(points[0]);await collect(points[1])
+    expect(t.session.getPanelState().surfaceTargetBatch).toHaveLength(2)
+    expect(t.session.getPanelState().surfaceTargetBatch![0]).toEqual({at:points[0].at,target:[...points[0].at.slice(0,2),.02],label:'Scan QA'})
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getSnapshot().historyRevision).toBe(history)
+    t.session.removeSurfaceTarget(0);expect(t.session.getPanelState().surfaceTargetBatch).toHaveLength(1)
+    await collect(points[0])
+    const pending=t.session.applySurfaceTargets()
+    for(const pin of [points[1],points[0]]){expect(t.worker.sent.at(-1)?.action).toBe('noteResolve');t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()}
+    await pending
+    expect(t.session.getPanelState().surfaceTargetBatch).toBeNull();expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid');t.session.undo()
+    expect(t.session.getPanelState().net).toEqual(before);expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it('retains a current collection after a precommit budget refusal and permits review and cancellation without history',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    t.session.beginSurfaceTarget('scan',.001,true)
+    for(const pin of points){
+      const pending=t.session.pickSurfaceTarget(pin.at,at=>({point:[at[0],at[1],.02],kind:'scan',label:'Scan QA',current:()=>true}))
+      t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    }
+    const count=t.worker.sent.length,pairs=t.session.getPanelState().surfaceTargetBatch
+    await expect(t.session.applySurfaceTargets()).rejects.toThrow(/limite autorizzato/)
+    expect(t.worker.sent).toHaveLength(count) // no CAD resolve/evaluation/commit happened
+    expect(t.session.getPanelState().surfaceTargetBatch).toEqual(pairs)
+    expect(t.session.getPanelState().surfaceTarget).toBe('scan');expect(t.session.getPanelState().busy).toBe(false)
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getPanelState().canUndo).toBe(false)
+    t.session.removeSurfaceTarget(0);expect(t.session.getPanelState().surfaceTargetBatch).toHaveLength(1)
+    t.session.cancelSurfaceTarget();expect(t.session.getPanelState().surfaceTargetBatch).toBeNull()
+    expect(t.session.getPanelState().net).toBe(before);await t.session.dispose('cancelled')
+  })
+  it.each(['cancel','reference'] as const)('discards collected pairs on %s without changing geometry or Undo',async mode=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!
+    let current=true;t.session.beginSurfaceTarget('cad',1,true)
+    for(const pin of points){
+      const pending=t.session.pickSurfaceTarget(pin.at,at=>({point:[at[0],at[1],.02],kind:'cad',label:'CAD QA',current:()=>current}))
+      t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    }
+    if(mode==='cancel')t.session.cancelSurfaceTarget()
+    else{current=false;await expect(t.session.applySurfaceTargets()).rejects.toThrow(/riferimenti/)}
+    expect(t.session.getPanelState().surfaceTargetBatch).toBeNull();expect(t.session.getPanelState().net).toBe(before)
+    expect(t.session.getPanelState().canUndo).toBe(false);await t.session.dispose('cancelled')
+  })
+  it('does not restore a cancelled collection when its CAD pick returns late',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const before=t.session.getPanelState().net!,pin=pins()[0];t.session.beginSurfaceTarget('scan',1,true)
+    const pending=t.session.pickSurfaceTarget(pin.at,at=>({point:[at[0],at[1],.02],kind:'scan',label:'Scan QA',current:()=>true})).catch(e=>e as Error)
+    t.session.cancelSurfaceTarget();t.worker.reply(t.worker.sent.at(-1)!.id,pin)
+    expect(await pending).toBeInstanceOf(Error);expect(t.session.getPanelState().surfaceTargetBatch).toBeNull()
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it('announces collection counts and Apply availability in the rendered panel after additions and removal',async()=>{
+    const {createElement}=await import('react'),{renderToStaticMarkup}=await import('react-dom/server')
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false);t.session.beginSurfaceTarget('scan',1,true)
+    const render=()=>renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:t.session}))
+    expect(render()).toMatch(/aria-live="polite"[^>]*aria-atomic="true"/)
+    expect(render()).toContain('Punti raccolti: 0 di 8. Servono almeno due punti')
+    for(const pin of pins()){
+      const pending=t.session.pickSurfaceTarget(pin.at,at=>({point:[at[0],at[1],.02],kind:'scan',label:'Scan QA',current:()=>true}))
+      t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    }
+    const complete=render();expect(complete).toContain('Punti raccolti: 2 di 8. Puoi applicare')
+    expect(complete).toMatch(/data-test="surface-point-apply">/)
+    t.session.removeSurfaceTarget(1)
+    const removed=render();expect(removed).toContain('Punti raccolti: 1 di 8. Servono almeno due punti')
+    expect(removed).toMatch(/data-test="surface-point-apply" disabled/)
+    await t.session.dispose('cancelled')
+  })
+  it('uses CAD picks and current external references for one batch commit and one Undo',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    const resolve=vi.fn((at:Point)=>({point:[at[0],at[1],.02] as Point,kind:'scan' as const,label:'scan QA',current:()=>true}))
+    const pending=t.session.targetSurfacePointsExperimental('scan',1,points.map(p=>p.at),resolve)
+    for(const pin of points){expect(t.worker.sent.at(-1)?.action).toBe('notePick');t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()}
+    for(const pin of points){expect(t.worker.sent.at(-1)?.action).toBe('noteResolve');t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()}
+    await pending
+    expect(resolve).toHaveBeenCalledTimes(2);expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before);expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it.each(['reference','cancel','source'] as const)('refuses an obsolete batch after %s changes while CAD resolves anchors',async mode=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const points=pins(),before=t.session.getPanelState().net!
+    let current=true
+    const pending=t.session.targetSurfacePointsExperimental('cad',1,points.map(p=>p.at),at=>({point:[at[0],at[1],.02],kind:'cad',label:'external CAD',current:()=>current})).catch(e=>e as Error)
+    for(const pin of points){t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()}
+    t.worker.reply(t.worker.sent.at(-1)!.id,points[0]);await flush()
+    const last=t.worker.sent.at(-1)!
+    if(mode==='reference')current=false
+    if(mode==='cancel')t.session.cancelSurfaceTarget()
+    if(mode==='source')t.invalidate()
+    t.worker.reply(last.id,points[1]);expect(await pending).toBeInstanceOf(Error)
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+})
+
+describe('hidden control-point protection',()=>{
+  it('excludes hidden poles from select-all and numeric movement',async()=>{
+    const t=await setup({hiddenPoles:[12]});await selectFace(t)
+    const s=t.session;s.setContinuity('G0');await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    s.selectAllFree()
+    expect(s.getPanelState().selected).not.toContain(12)
+    expect(s.getPanelState().selected).toContain(13)
+    s.selectPoints([12],false)
+    const {createElement}=await import('react'),{renderToStaticMarkup}=await import('react-dom/server')
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const html=renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:s}))
+    expect(html).toMatch(/<button[^>]*data-test="surface-move"[^>]*disabled/)
+    s.selectPoints([12,13],false)
+    const before=s.getPanelState().net!
+    s.moveSelected(.2)
+    const after=s.getPanelState().net!
+    expect(after.poles[12]).toEqual(before.poles[12])
+    expect(after.poles[13]).not.toEqual(before.poles[13])
+    await s.dispose('cancelled')
+  })
+  it('does not move a hidden opposite pole through symmetry',async()=>{
+    const t=await setup({hiddenPoles:[17]});await selectFace(t)
+    const s=t.session;s.setContinuity('G0');await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    s.setMirrorAxis(0);s.setMirrorOffset(2);s.setSymmetry(true);s.selectPoints([7],false)
+    expect(s.getPanelState().symmetryBlocked).toBe(true)
+    const before=s.getPanelState().net!
+    expect(()=>s.moveSelected(.2)).toThrow(/speculare/)
+    expect(s.getPanelState().net).toEqual(before)
+    await s.dispose('cancelled')
+  })
+})
+
+describe('selected-pole tangent plane projection',()=>{
+  const pin={anchor:{face:0,selectionRevision:1,u:.45,v:.5},at:[1.8,2,0],normal:[1,0,1]}
+  it.each(['G0','G1'] as const)('projects only selected authorized poles under %s and creates one Undo',async continuity=>{
+    const t=await setup({trimLocks:[7],hiddenPoles:[18]});await selectFace(t)
+    if(continuity==='G0'){
+      t.session.setContinuity('G0')
+      await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    }
+    t.session.selectPoints([6],false);t.session.lockSelected(true)
+    t.session.selectPoints([0,6,7,12,13,18,24],false)
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    t.session.beginTangentPlane()
+    const pending=t.session.pickTangentPlane([1.8,2,0])
+    expect(t.worker.sent.at(-1)?.action).toBe('notePick')
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    const after=t.session.getPanelState().net!
+    const changed=after.poles.flatMap((p,i)=>p.some((x,d)=>x!==before.poles[i][d])?[i]:[])
+    expect(changed).toEqual(continuity==='G0'?[12,13]:[12])
+    changed.forEach(i=>expect(after.poles[i][0]+after.poles[i][2]).toBeCloseTo(1.8,12))
+    expect(t.session.getSnapshot().historyRevision).toBe(history+1)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await vi.advanceTimersByTimeAsync(90)
+    expect(t.worker.sent.at(-1)?.action).toBe('evaluate')
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(3));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(before)
+    await t.session.dispose('cancelled')
+  })
+  it.each(['cancel','source','other face','degenerate normal'] as const)('refuses tangent plane pick after %s without a commit',async mode=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+    t.session.beginTangentPlane()
+    const pending=t.session.pickTangentPlane([1.8,2,0]).catch(error=>error)
+    if(mode==='cancel')t.session.cancelSurfaceTarget()
+    if(mode==='source')t.invalidate()
+    t.worker.reply(t.worker.sent.at(-1)!.id,{...pin,anchor:{...pin.anchor,face:mode==='other face'?1:0},normal:mode==='degenerate normal'?[0,0,0]:pin.normal})
+    expect(await pending).toBeInstanceOf(Error)
+    expect(t.session.getPanelState().net).toBe(before);expect(t.session.getSnapshot().historyRevision).toBe(history)
+    expect(t.session.getPanelState().surfaceTarget).toBeNull();await t.session.dispose('cancelled')
+  })
+})
+
+it('discards a reviewed UV span when its pole selection changes',async()=>{
+  const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+  const before=t.session.getPanelState().net!,history=t.session.getSnapshot().historyRevision
+  t.session.beginTangentPlane('span')
+  const pending=t.session.pickTangentPlane([1.5,1.6,0])
+  t.worker.reply(t.worker.sent.at(-1)!.id,{anchor:{face:0,selectionRevision:1,u:.3,v:.4},at:[1.5,1.6,0],normal:[0,0,1]})
+  await pending
+  expect(t.session.getPanelState().tangentSpanReview).toMatchObject({u:[0,.5],v:[0,.5],supportCount:16,movedCount:0})
+  t.session.clearSelection()
+  expect(t.session.getPanelState().tangentSpanReview).toBeNull()
+  expect(()=>t.session.applyTangentSpan()).toThrow(/selezione/)
+  expect(t.session.getPanelState().net).toBe(before);expect(t.session.getSnapshot().historyRevision).toBe(history)
+  await t.session.dispose('cancelled')
+})
+
+describe('explicit surface-point reference alignment',()=>{
+  const pin={anchor:{face:0,selectionRevision:1,u:.5,v:.5},at:[2,2,0],normal:[0,0,1]}
+  it('keeps pole snapping independent, resolves a clicked surface point, and commits one validated Undo step',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false);t.session.setSnap(false)
+    expect(t.session.getPanelState().canTargetPoint).toBe(true)
+    t.session.beginSurfaceTarget('scan',2)
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    const resolve=vi.fn(()=>({point:[2,2,.2] as Point,kind:'scan' as const,label:'Scansione',current:()=>true}))
+    const pending=t.session.pickSurfaceTarget([2,2,0],resolve),pick=t.worker.sent.at(-1)!
+    expect(pick.action).toBe('notePick');t.worker.reply(pick.id,pin);await flush()
+    expect(resolve).toHaveBeenCalledWith([2,2,0],[0,0,1],1,'scan')
+    expect(t.worker.sent.at(-1)?.action).toBe('noteResolve')
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
+    expect(t.session.getPanelState().snap).toBe(false)
+    expect(t.session.getPanelState().notes).toHaveLength(0)
+    expect(t.session.getPanelState().surfaceTarget).toBeNull()
+    expect(t.session.getSnapshot().validation.kind).toBe('pending')
+    await vi.advanceTimersByTimeAsync(90);t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    expect(t.session.getPanelState().net!.poles[12][2]).toBeCloseTo(.8,12)
+    t.session.undo();expect(t.session.getPanelState().net).toEqual(plane())
+    expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it.each(['reference','cancel','source'] as const)('does not commit a result when %s changes during resolution',async change=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false);t.session.beginSurfaceTarget('cad',2)
+    let current=true
+    const pending=t.session.pickSurfaceTarget([2,2,0],()=>({point:[2,2,.2],kind:'cad',label:'Corpo CAD 7',current:()=>current})).catch(e=>e as Error)
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin);await flush()
+    expect(t.worker.sent.at(-1)?.action).toBe('noteResolve')
+    if(change==='reference') current=false
+    if(change==='cancel') t.session.cancelSurfaceTarget()
+    if(change==='source') t.invalidate()
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin)
+    expect(await pending).toBeInstanceOf(Error)
+    expect(t.session.getPanelState().net).toEqual(plane())
+    expect(t.session.getPanelState().canUndo).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it('refuses missing references and budgets and disables unsupported symmetry without altering geometry',async()=>{
+    const t=await setup();await selectFace(t);t.session.selectPoints([12],false)
+    expect(()=>t.session.beginSurfaceTarget('scan',0)).toThrow()
+    t.session.beginSurfaceTarget('scan',1)
+    const pending=t.session.pickSurfaceTarget([2,2,0],()=>null)
+    t.worker.reply(t.worker.sent.at(-1)!.id,pin)
+    await expect(pending).rejects.toThrow(/Nessun riferimento/)
+    expect(t.session.getPanelState().net).toEqual(plane())
+    t.session.setSymmetry(true)
+    expect(t.session.getPanelState().canTargetPoint).toBe(false)
+    expect(()=>t.session.beginSurfaceTarget('scan',1)).toThrow()
+    await t.session.dispose('cancelled')
+  })
+})
+
 describe('WorkspaceSurfaceSession',()=>{
+  it('keeps the navigation control visible while editing a free edge',async()=>{
+    const {createElement}=await import('react')
+    const {renderToStaticMarkup}=await import('react-dom/server')
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const t=await setup({sheet:true});await selectFace(t);await enterStrip(t)
+    t.session.setNavigationOnly(true)
+    const html=renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:t.session}))
+    expect(html).toContain('data-test=\"surface-strip-panel\"')
+    expect(html).toContain('data-test=\"surface-navigation-only\"')
+    expect(html).toMatch(/data-test=\"surface-navigation-only\"[^>]*checked/)
+    t.session.setNavigationOnly(false)
+    expect(t.session.getViewState().navigationOnly).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it('switches between navigation and reticle editing without changing the draft',async()=>{
+    const t=await setup();await selectFace(t)
+    const before=t.session.getViewState().net
+    expect(t.session.getPanelState().navigationOnly).toBe(false)
+    t.session.setNavigationOnly(true)
+    expect(t.session.getPanelState().navigationOnly).toBe(true)
+    expect(t.session.getViewState().navigationOnly).toBe(true)
+    expect(t.session.getViewState().net).toBe(before)
+    t.session.setNavigationOnly(false)
+    expect(t.session.getViewState().navigationOnly).toBe(false)
+    await t.session.dispose('cancelled')
+  })
+  it('does not silently retain a legacy selection when adaptive selection fails on the same face',async()=>{
+    const t=await setup();await selectFace(t)
+    const choosing=t.session.chooseFace(0,true,true)
+    expect(t.worker.sent.at(-1)?.action).toBe('selectAdaptiveExperimental')
+    t.worker.fail(t.worker.sent.at(-1)!.id,'risposta persa')
+    await expect(choosing).rejects.toThrow('risposta persa')
+    expect(t.context.reportFatal).toHaveBeenCalledOnce()
+    expect(t.worker.terminate).toHaveBeenCalledOnce()
+  })
+  it('keeps adaptive selection explicitly opt-in and routes its history recipe',async()=>{
+    const t=await setup({blockedPlane:true}), choosing=t.session.chooseFace(0,false,true)
+    const request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('selectAdaptiveExperimental')
+    const selection={face:0,refinements:[{axis:'U',value:.25,count:1}],trimPolicy:'circular-fine-v1',generation:1,trimLocks:[6],hiddenPoles:[]}
+    t.worker.reply(request.id,{net:plane(),selection})
+    await choosing
+    expect(t.session.getViewState().locked).toContain(6)
+    await vi.advanceTimersByTimeAsync(90)
+    expect(t.worker.sent.at(-1)?.action).toBe('evaluateAdaptiveExperimental')
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(1));await flush()
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    expect(t.session.getPanelState().canRefineNet).toBe(true)
+    expect(t.session.getPanelState().canLoadG1).toBe(false)
+    expect(t.session.getPanelState().canFreeBoundary).toBe(false)
+    const marker={version:8,source:{bodyId:t.binding.bodyKey}} as never
+    const save=vi.spyOn(SurfaceDraft.prototype,'createAdaptiveLockedRecipe').mockResolvedValueOnce(marker)
+    const prepared=await t.session.prepareHistoryRecipe()
+    expect(save).toHaveBeenCalledWith(t.binding.bodyKey)
+    expect(prepared.recipe).toBe(marker)
+    save.mockRestore()
+    await t.session.dispose('cancelled')
+  })
+  it('installs a protected refined plane with its trim locks and recipe preparation',async()=>{
+    const t=await setup({blockedPlane:true}), selecting=t.session.chooseFace(0)
+    const request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('selectDenseTrimmedPlane')
+    const refinements=[{axis:'U',value:.25,count:1}]
+    t.worker.reply(request.id,{net:plane(),refinements,trimLocks:[6],hiddenPoles:[]})
+    await selecting
+    expect(t.session.getPanelState().net).toEqual(plane())
+    expect(t.session.getViewState().locked).toContain(6)
+    expect(t.session.getPanelState().message).toMatch(/contorni restano protetti/)
+    expect(t.runtime.history.current?.preparation?.refinements).toEqual(refinements)
+    await t.session.dispose('cancelled')
+  })
+  it('accepts the fractional body IDs used by multi-part STEP imports',async()=>{
+    const t=await setup({bodyId:1.0009765625})
+    await selectFace(t)
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    expect(t.session.getSnapshot().current.sourceEpoch).toBe(t.binding.sourceEpoch)
+    await t.session.dispose('cancelled')
+  })
+  it('prepares a history recipe only for the same live source and validated draft', async()=>{
+    const t=await setup(); await selectFace(t)
+    const marker={version:2,source:{bodyId:t.binding.bodyKey}} as never
+    let release!: (value: never) => void
+    const pendingRecipe = new Promise<never>(resolve => { release=resolve })
+    const create=vi.spyOn(SurfaceDraft.prototype,'createRecipe').mockReturnValueOnce(pendingRecipe)
+    const pending=t.session.prepareHistoryRecipe()
+    expect(create).toHaveBeenCalledWith(t.binding.bodyKey)
+    expect(t.session.getPanelState().busy).toBe(true)
+    expect(()=>t.session.selectPoints([12],false)).toThrow()
+    release(marker)
+    const result=await pending
+    expect(result.recipe).toBe(marker)
+    expect(result.sourceKey).toContain(t.binding.bodyKey)
+    expect(t.session.getPanelState().busy).toBe(false)
+    expect(t.session.isHistoryRecipeStampCurrent(result)).toBe(true)
+    expect(()=>t.session.freezeHistory({...result})).toThrow('non corrisponde')
+    const held=t.session.freezeHistory(result)
+    expect(held.isCurrent()).toBe(true)
+    expect(t.session.getPanelState().busy).toBe(true)
+    expect(()=>t.session.selectPoints([12],false)).toThrow('congelata')
+    expect(()=>t.session.freezeHistory(result)).toThrow()
+    held.release(); held.release()
+    expect(held.isCurrent()).toBe(false)
+    expect(t.session.isHistoryRecipeStampCurrent(result)).toBe(true)
+    expect(t.session.isHistoryRecipeStampCurrent({ ...result, sessionId: 'other-session' })).toBe(false)
+    t.session.selectPoints([12],false)
+    expect(t.session.isHistoryRecipeStampCurrent(result)).toBe(false)
+    create.mockRestore()
+    await t.session.dispose('cancelled')
+  })
+
+  it('rejects a history recipe if its source is revoked while preparation is pending', async()=>{
+    const t=await setup(); await selectFace(t)
+    let release!: (value: never) => void
+    const pendingRecipe = new Promise<never>(resolve => { release=resolve })
+    const create=vi.spyOn(SurfaceDraft.prototype,'createRecipe').mockReturnValueOnce(pendingRecipe)
+    const pending=t.session.prepareHistoryRecipe()
+    t.invalidate(); release({version:2} as never)
+    await expect(pending).rejects.toThrow('source changed')
+    expect(t.session.getPanelState().busy).toBe(false)
+    create.mockRestore()
+    await t.session.dispose('cancelled')
+  })
+
+  it('invalidates a history lock when the host revokes its CAD source', async()=>{
+    const t=await setup(); await selectFace(t)
+    const create=vi.spyOn(SurfaceDraft.prototype,'createRecipe').mockResolvedValueOnce({version:2} as never)
+    const prepared=await t.session.prepareHistoryRecipe()
+    const held=t.session.freezeHistory(prepared)
+    expect(held.isCurrent()).toBe(true)
+    t.invalidate()
+    expect(held.isCurrent()).toBe(false)
+    held.release()
+    create.mockRestore()
+    await t.session.dispose('cancelled')
+  })
+
+  it('releases a history lock if a listener throws before the host receives it', async()=>{
+    const t=await setup(); await selectFace(t)
+    const create=vi.spyOn(SurfaceDraft.prototype,'createRecipe').mockResolvedValueOnce({version:2} as never)
+    const prepared=await t.session.prepareHistoryRecipe()
+    const unsubscribe=t.session.subscribe(()=>{
+      if(t.session.getPanelState().busy) throw Error('subscriber failure')
+    })
+    expect(()=>t.session.freezeHistory(prepared)).toThrow('subscriber failure')
+    unsubscribe()
+    expect(t.session.getPanelState().busy).toBe(false)
+    expect(t.session.isHistoryRecipeStampCurrent(prepared)).toBe(true)
+    expect(()=>t.session.selectPoints([12],false)).not.toThrow()
+    create.mockRestore()
+    await t.session.dispose('cancelled')
+  })
   it('starts by moving a point along the normal of a rotated surface', async()=>{
     const t=await setup(), net=plane()
     net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
@@ -124,11 +983,46 @@ describe('WorkspaceSurfaceSession',()=>{
     await t.session.dispose('cancelled')
   })
 
+  it('stretches along the selected local direction on a rotated surface', async()=>{
+    const t=await setup(), net=plane()
+    net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
+    await selectFace(t,net)
+    t.session.setContinuity('G0');t.session.setAxis(0);t.session.selectPoints([6],false)
+    t.session.stretchSelected(1.2)
+    expect(t.session.getPanelState().net!.poles[6][0]).toBeCloseTo(0)
+    expect(t.session.getPanelState().net!.poles[6][1]).toBeCloseTo(.8)
+    expect(t.session.getPanelState().net!.poles[6][2]).toBeCloseTo(1)
+    t.session.undo()
+    expect(t.session.getPanelState().net!.poles[6]).toEqual([0,1,1])
+    t.session.redo()
+    expect(t.session.getPanelState().net!.poles[6][1]).toBeCloseTo(.8)
+    await t.session.dispose('cancelled')
+  })
+
+  it('stretches a curved surface along its local tangent and preserves locked poles', async()=>{
+    const t=await setup(), net=plane()
+    net.poles=net.poles.map(([u,v]):Point=>[u,v,.1*u*u])
+    await selectFace(t,net)
+    t.session.setContinuity('G0');t.session.selectPoints([7],false);t.session.lockSelected(true)
+    t.session.selectPoints([6],false);t.session.setAxis(0)
+    t.session.stretchSelected(1.2)
+    const result=t.session.getPanelState().net!
+    // Independent derivative of this cubic B-spline at pole 6's Greville
+    // parameter: dZ/dX = 12/65. The centre is the mean of all 25 poles.
+    const expectedX=1-(.2*71*65)/4369, expectedZ=.1-(.2*71*12)/4369
+    expect(result.poles[6][0]).toBeCloseTo(expectedX, 8)
+    expect(result.poles[6][1]).toBeCloseTo(1, 8)
+    expect(result.poles[6][2]).toBeCloseTo(expectedZ, 8)
+    expect(result.poles[7]).toEqual(net.poles[7])
+    t.session.undo();expect(t.session.getPanelState().net!.poles[6]).toEqual(net.poles[6])
+    await t.session.dispose('cancelled')
+  })
+
   it('preserves a changed draft if switching faces is cancelled, and switches only after confirmation', async()=>{
     const t=await setup();await selectFace(t)
     t.session.selectPoints([12],false);t.session.moveSelected(.2)
     const before=structuredClone(t.session.getPanelState().net!.poles)
-    const decline=vi.fn(()=>false)
+    const decline=vi.fn((_message:string)=>false)
     await expect(t.session.requestFaceSelection(1,decline)).rejects.toThrow('Attendi la verifica CAD')
     expect(decline).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(90)
@@ -166,12 +1060,35 @@ describe('WorkspaceSurfaceSession',()=>{
     await t.session.dispose('cancelled')
   })
 
-  it('keeps draft notes and refuses a face switch before asking to discard changes', async()=>{
+  it('discards draft notes only after confirmation and successful face loading', async()=>{
     const t=await setup({annotated:true});await selectFace(t)
     await addNote(t,'Nota da conservare',.5)
-    const confirm=vi.fn(()=>true)
-    await expect(t.session.requestFaceSelection(1,confirm)).rejects.toThrow('note')
-    expect(confirm).not.toHaveBeenCalled()
+    const decline=vi.fn((_message:string)=>false)
+    await t.session.requestFaceSelection(1,decline)
+    expect(decline).toHaveBeenCalledOnce()
+    expect(decline.mock.calls[0][0]).toMatch(/note/)
+    expect(t.session.getPanelState().notes).toMatchObject([{text:'Nota da conservare'}])
+    expect(t.session.getPanelState().face).toBe(0)
+    const failed=t.session.requestFaceSelection(1,()=>true), request=t.worker.sent.at(-1)!
+    expect(request.action).toBe('select')
+    t.worker.fail(request.id,'Caricamento non riuscito')
+    await expect(failed).rejects.toThrow('Caricamento non riuscito')
+    expect(t.session.getPanelState().notes).toMatchObject([{text:'Nota da conservare'}])
+    expect(t.session.getPanelState().face).toBe(0)
+    const accepted=t.session.requestFaceSelection(1,()=>true), next=t.worker.sent.at(-1)!
+    t.worker.reply(next.id,plane());await accepted
+    expect(t.session.getPanelState().face).toBe(1)
+    expect(t.session.getPanelState().notes).toHaveLength(0)
+    await t.session.dispose('cancelled')
+  })
+
+  it('retains draft notes if the CAD source changes while another face loads', async()=>{
+    const t=await setup({annotated:true});await selectFace(t)
+    await addNote(t,'Nota da conservare',.5)
+    const pending=t.session.requestFaceSelection(1,()=>true), request=t.worker.sent.at(-1)!
+    t.invalidate()
+    t.worker.reply(request.id,plane())
+    await expect(pending).rejects.toThrow()
     expect(t.session.getPanelState().notes).toMatchObject([{text:'Nota da conservare'}])
     expect(t.session.getPanelState().face).toBe(0)
     await t.session.dispose('cancelled')
@@ -239,16 +1156,21 @@ describe('WorkspaceSurfaceSession',()=>{
       const p=k.pointOnSurface(face,u,v), seed:[number,number,number]=[p.x,p.y,p.z]
       const outward=[p.x-10,p.y-15,p.z-5], length=Math.hypot(...outward)
       class KernelWorker extends FakeWorker {
+        constructor(private readonly target: SurfaceEditorKernel = editor) { super() }
         postMessage(message: Msg) {
           this.sent.push(message)
-          void Promise.resolve().then(()=>{
+          void Promise.resolve().then(async()=>{
             try {
-              const m=message as Msg & {step:string;face:number;continuity:'G0'|'G1';freeBoundary:boolean;previewRevision:number;point:Point;anchor:Parameters<SurfaceEditorKernel['resolveAnchor']>[0]}
-              const value=m.action==='open' ? editor.open(m.step) : m.action==='select' ? editor.select(m.face) :
-                m.action==='evaluate' ? editor.evaluate(m.net!,m.continuity,!!m.exportStep,m.freeBoundary) :
-                m.action==='notePick' ? editor.anchorFromPick(m.point,m.previewRevision) :
-                m.action==='noteResolve' ? editor.resolveAnchor(m.anchor,m.previewRevision) :
-                m.action==='finalFaceWitness' ? editor.finalFaceWitness(m.previewRevision) : (()=>{throw Error(`unexpected worker action: ${m.action}`)})()
+              const m=message as Msg & {step:string;face:number;continuity:'G0'|'G1';freeBoundary:boolean;previewRevision:number;point:Point;bodyId:string;recipe:unknown;lockedPoles:number[];anchor:Parameters<SurfaceEditorKernel['resolveAnchor']>[0]}
+              const e=this.target
+              const value=m.action==='open' ? e.open(m.step) : m.action==='select' ? e.select(m.face) :
+                m.action==='evaluate' ? e.evaluate(m.net!,m.continuity,!!m.exportStep,m.freeBoundary) :
+                m.action==='createRecipe' ? await e.createRecipe(m.net!,m.continuity,m.lockedPoles,m.bodyId,m.freeBoundary) :
+                m.action==='restoreRecipe' ? await e.restoreRecipe(m.step,m.recipe,m.bodyId) :
+                m.action==='replayRecipe' ? await e.replayRecipe(m.step,m.recipe,m.bodyId) :
+                m.action==='notePick' ? e.anchorFromPick(m.point,m.previewRevision) :
+                m.action==='noteResolve' ? e.resolveAnchor(m.anchor,m.previewRevision) :
+                m.action==='finalFaceWitness' ? e.finalFaceWitness(m.previewRevision) : (()=>{throw Error(`unexpected worker action: ${m.action}`)})()
               this.reply(m.id,value)
             } catch(error) { this.onmessage?.({data:{id:message.id,error:String((error as Error).message)}} as MessageEvent<unknown>) }
           })
@@ -264,12 +1186,206 @@ describe('WorkspaceSurfaceSession',()=>{
       await session.chooseFace(index)
       await vi.advanceTimersByTimeAsync(90);await flush()
       expect(session.getSnapshot().validation.kind).toBe('valid')
+      session.selectAllFree(); session.moveSelected(.1)
+      await vi.advanceTimersByTimeAsync(90);await flush()
+      expect(session.getSnapshot().validation.kind).toBe('valid')
+      const recipe=await session.prepareHistoryRecipe()
+      expect(recipe.recipe.source.bodyId).toBe('box')
+      expect(recipe.recipe.faceIndex).toBe(index)
+      const replay=await editor.replayRecipe(source,recipe.recipe,'box')
+      const netBeforeReplay=session.getPanelState().net?.poles.map(point=>[...point])
+      const replayEditor=new SurfaceEditorKernel(k), replayWorker=new KernelWorker(replayEditor)
+      try {
+        const independent=await replaySurfaceHistory({bodyKey:'box',stepSha256:sha(context.step),step:context.step,assertCurrent:()=>{}},
+          JSON.parse(JSON.stringify(recipe.recipe)),undefined,()=>replayWorker as unknown as Worker)
+        expect(independent.valid).toBe(true)
+        expect(independent.step).toBeTruthy()
+        const independentSolid=k.importStep(independent.step)
+        try {
+          expect(k.isValid(independentSolid)).toBe(true)
+          expect(k.getVolume(independentSolid)).toBeCloseTo(replay.volume,7)
+          const shapes=k.getSubShapes(independentSolid,'solid')
+          try { expect(shapes).toHaveLength(1) } finally { shapes.forEach(shape=>k.release(shape)) }
+        } finally { k.release(independentSolid) }
+        expect(replayWorker.terminate).toHaveBeenCalledOnce()
+        expect(session.getPanelState().net?.poles).toEqual(netBeforeReplay)
+      } finally { replayEditor.dispose() }
+      const staleEditor=new SurfaceEditorKernel(k), staleWorker=new KernelWorker(staleEditor)
+      try {
+        let checks=0
+        await expect(replaySurfaceHistory({bodyKey:'box',stepSha256:hash,step:context.step,
+          assertCurrent:()=>{if(++checks===3)throw Error('source changed')}},recipe.recipe,
+          undefined,()=>staleWorker as unknown as Worker)).rejects.toThrow('source changed')
+        expect(staleWorker.terminate).toHaveBeenCalledOnce()
+        expect(session.getPanelState().net?.poles).toEqual(netBeforeReplay)
+      } finally { staleEditor.dispose() }
+      expect(replay.valid).toBe(true)
+      expect(Math.abs(replay.volume - k.getVolume(box))).toBeGreaterThan(.001)
+      await vi.advanceTimersByTimeAsync(90);await flush()
+      expect(session.getSnapshot().validation.kind).toBe('valid')
+      expect(session.isHistoryRecipeStampCurrent(recipe)).toBe(true)
+      expect(session.isHistoryRecipeStampCurrent({...recipe})).toBe(false)
+      const originalFace=recipe.recipe.faceIndex
+      recipe.recipe.faceIndex=(originalFace+1)%faces.length
+      expect(session.isHistoryRecipeStampCurrent(recipe)).toBe(false)
+      recipe.recipe.faceIndex=originalFace
+      expect(session.isHistoryRecipeStampCurrent(recipe)).toBe(true)
+      await expect(session.restoreHistoryRecipe(recipe.recipe)).rejects.toThrow('nuova sessione vuota')
+      const restoredEditor=new SurfaceEditorKernel(k), restoredWorker=new KernelWorker(restoredEditor)
+      const restoredRuntime=new SurfaceRuntime(()=>restoredWorker as unknown as Worker)
+      const restoredContext={...context,sessionId:'restored-session'}
+      let restored:WorkspaceSurfaceSession | undefined
+      try {
+        restored=await createWorkspaceSurfaceSession(restoredContext as never,vi.fn() as never,{runtime:restoredRuntime,sha256:async bytes=>sha(bytes)})
+        await expect(restored.waitRestoredHistoryReady()).rejects.toThrow('Nessuna ricetta')
+        const wrongBody=JSON.parse(JSON.stringify(recipe.recipe))
+        wrongBody.source.bodyId='another-body'
+        await expect(restored.restoreHistoryRecipe(wrongBody)).rejects.toThrow('altro corpo CAD')
+        expect(restored.getPanelState().face).toBe(-1)
+        await restored.restoreHistoryRecipe(JSON.parse(JSON.stringify(recipe.recipe)))
+        const cancelled=new AbortController();cancelled.abort()
+        await expect(restored.waitRestoredHistoryReady(cancelled.signal)).rejects.toMatchObject({name:'AbortError'})
+        const ready=restored.waitRestoredHistoryReady()
+        await vi.advanceTimersByTimeAsync(90);await flush()
+        await expect(ready).resolves.toBeUndefined()
+        expect(restored.getPanelState().face).toBe(index)
+        expect(restored.getPanelState().net?.poles).toEqual(session.getPanelState().net?.poles)
+        expect(restored.getSnapshot().validation.kind).toBe('valid')
+        expect(restored.isHistoryRecipeStampCurrent(recipe)).toBe(false)
+        const revision=restored.getViewState().preview?.previewRevision
+        if(revision===undefined)throw Error('restored preview missing revision')
+        const picked=restoredEditor.anchorFromPick(seed,revision)
+        const savedNote={id:'note-1',text:'Controlla la faccia',faceIndex:index,u:picked.anchor.u,v:picked.anchor.v}
+        const noteAbort=new AbortController(), originalPost=restoredWorker.postMessage.bind(restoredWorker)
+        restoredWorker.postMessage=(message:Msg)=>{
+          if(message.action==='finalFaceWitness')noteAbort.abort()
+          originalPost(message)
+        }
+        await expect(restored.restoreHistoryNotes([savedNote],noteAbort.signal)).rejects.toMatchObject({name:'AbortError'})
+        expect(restored.getPanelState().notes).toHaveLength(0)
+        restoredWorker.postMessage=originalPost;await flush()
+        await expect(restored.restoreHistoryNotes([savedNote,{...savedNote,id:'bad',u:1e9}])).rejects.toThrow()
+        expect(restored.getPanelState().notes).toHaveLength(0)
+        await restored.restoreHistoryNotes([savedNote])
+        expect(restored.getPanelState().notes).toHaveLength(1)
+        expect(restored.getPanelState().notes[0]).toMatchObject({id:'note-1',text:'Controlla la faccia'})
+        expect(restored.getPanelState().notes[0].at).toEqual(picked.at)
+        restored.selectAllFree();restored.moveSelected(.2)
+        await vi.advanceTimersByTimeAsync(90);await flush()
+        expect(restored.getSnapshot().validation.kind).toBe('valid')
+        expect(restored.getPanelState().notes[0].text).toBe('Controlla la faccia')
+        expect(restored.getPanelState().notes[0].at).not.toEqual(picked.at)
+      } finally { if(restored)await restored.dispose('cancelled');restoredEditor.dispose() }
+      const changedEditor=new SurfaceEditorKernel(k),changedWorker=new KernelWorker(changedEditor)
+      const changedRuntime=new SurfaceRuntime(()=>changedWorker as unknown as Worker)
+      let changed:WorkspaceSurfaceSession | undefined
+      try {
+        changed=await createWorkspaceSurfaceSession({...context,sessionId:'changed-restore'} as never,vi.fn() as never,
+          {runtime:changedRuntime,sha256:async bytes=>sha(bytes)})
+        await changed.restoreHistoryRecipe(JSON.parse(JSON.stringify(recipe.recipe)))
+        const waiting=changed.waitRestoredHistoryReady()
+        const rejection=expect(waiting).rejects.toThrow('superficie è cambiata')
+        changed.selectPoints([12],false)
+        await rejection
+      } finally { if(changed)await changed.dispose('cancelled');changedEditor.dispose() }
+      const closedEditor=new SurfaceEditorKernel(k),closedWorker=new KernelWorker(closedEditor)
+      const closedRuntime=new SurfaceRuntime(()=>closedWorker as unknown as Worker)
+      let closed:WorkspaceSurfaceSession | undefined
+      try {
+        closed=await createWorkspaceSurfaceSession({...context,sessionId:'closed-restore'} as never,vi.fn() as never,
+          {runtime:closedRuntime,sha256:async bytes=>sha(bytes)})
+        await closed.restoreHistoryRecipe(JSON.parse(JSON.stringify(recipe.recipe)))
+        const waiting=closed.waitRestoredHistoryReady()
+        const rejection=expect(waiting).rejects.toMatchObject({name:'AbortError'})
+        await closed.dispose('cancelled')
+        await rejection
+      } finally { if(closed)await closed.dispose('cancelled');closedEditor.dispose() }
+      const failedEditor=new SurfaceEditorKernel(k), failedWorker=new KernelWorker(failedEditor)
+      const failedRuntime=new SurfaceRuntime(()=>failedWorker as unknown as Worker), fatal=vi.fn()
+      const failedContext={...context,sessionId:'failed-restore',reportFatal:fatal}
+      let failed:WorkspaceSurfaceSession | undefined
+      try {
+        failed=await createWorkspaceSurfaceSession(failedContext as never,vi.fn() as never,{runtime:failedRuntime,sha256:async bytes=>sha(bytes)})
+        const corrupted=JSON.parse(JSON.stringify(recipe.recipe))
+        corrupted.baseNetSha256='0'.repeat(64)
+        await expect(failed.restoreHistoryRecipe(corrupted)).rejects.toThrow()
+        expect(fatal).toHaveBeenCalledOnce()
+        expect(failedRuntime.active).toBe(false)
+        expect(session.getSnapshot().validation.kind).toBe('valid')
+      } finally { if(failed)await failed.dispose('cancelled');failedEditor.dispose() }
       session.setStripes({orientation:'horizontal',width:3,color:'#5288b2'})
       session.setPlacingNote(true);await session.placeNote(seed)
       const note=session.getPanelState().notes[0]
       session.setNoteText(note.id,'Controlla la faccia inversa')
+      expect(session.isHistoryRecipeStampCurrent(recipe)).toBe(false)
+      await expect(session.prepareHistoryRecipe()).rejects.toThrow('senza note')
+      const annotated=await session.prepareAnnotatedHistory()
+      expect(annotated.notes).toHaveLength(1)
+      expect(annotated.notes[0]).toMatchObject({id:note.id,text:'Controlla la faccia inversa',faceIndex:index})
+      await vi.advanceTimersByTimeAsync(90);await flush()
+      expect(session.isAnnotatedHistoryStampCurrent(annotated)).toBe(true)
+      const heldHistory=session.freezeHistory(annotated)
+      expect(heldHistory.isCurrent()).toBe(true)
+      expect(()=>session!.setNoteText(note.id,'Altra nota')).toThrow('congelata')
+      annotated.recipe.faceIndex=(index+1)%faces.length
+      expect(heldHistory.isCurrent()).toBe(false)
+      annotated.recipe.faceIndex=index
+      expect(heldHistory.isCurrent()).toBe(true)
+      heldHistory.release()
+      expect(heldHistory.isCurrent()).toBe(false)
+      expect(session.isAnnotatedHistoryStampCurrent({...annotated})).toBe(false)
+      annotated.recipe.faceIndex=(annotated.recipe.faceIndex+1)%faces.length
+      expect(session.isAnnotatedHistoryStampCurrent(annotated)).toBe(false)
+      annotated.recipe.faceIndex=index
+      expect(session.isAnnotatedHistoryStampCurrent(annotated)).toBe(true)
+      const annotatedEditor=new SurfaceEditorKernel(k), annotatedWorker=new KernelWorker(annotatedEditor)
+      const annotatedRuntime=new SurfaceRuntime(()=>annotatedWorker as unknown as Worker)
+      let reopened:WorkspaceSurfaceSession | undefined
+      try {
+        reopened=await createWorkspaceSurfaceSession({...context,sessionId:'annotated-reopen'} as never,vi.fn() as never,
+          {runtime:annotatedRuntime,sha256:async bytes=>sha(bytes)})
+        await reopened.restoreHistoryRecipe(JSON.parse(JSON.stringify(annotated.recipe)))
+        await vi.advanceTimersByTimeAsync(90);await flush()
+        await reopened.restoreHistoryNotes(JSON.parse(JSON.stringify(annotated.notes)))
+        expect(reopened.getPanelState().notes[0]).toMatchObject({id:note.id,text:'Controlla la faccia inversa'})
+        expect(reopened.getPanelState().notes[0].at).toEqual(note.at)
+      } finally { if(reopened)await reopened.dispose('cancelled');annotatedEditor.dispose() }
+      const bundleEditor=new SurfaceEditorKernel(k),bundleWorker=new KernelWorker(bundleEditor)
+      const bundleRuntime=new SurfaceRuntime(()=>bundleWorker as unknown as Worker),bundleFatal=vi.fn()
+      let bundleSession:WorkspaceSurfaceSession | undefined
+      try {
+        bundleSession=await createWorkspaceSurfaceSession({...context,sessionId:'bundle-reopen',reportFatal:bundleFatal} as never,
+          vi.fn() as never,{runtime:bundleRuntime,sha256:async bytes=>sha(bytes)})
+        const operation=bundleSession.restoreHistoryBundle({recipe:annotated.recipe,notes:annotated.notes})
+        let settled=false;void operation.then(()=>{settled=true},()=>{settled=true})
+        for(let i=0;i<20&&!settled;i++){await flush();await vi.advanceTimersByTimeAsync(90)}
+        expect(settled).toBe(true);await operation
+        expect(bundleSession.getSnapshot().validation.kind).toBe('valid')
+        expect(bundleSession.getPanelState().notes[0]).toMatchObject({id:note.id,text:'Controlla la faccia inversa'})
+        expect(bundleFatal).not.toHaveBeenCalled()
+      } finally { if(bundleSession)await bundleSession.dispose('cancelled');bundleEditor.dispose() }
+      const rejectedEditor=new SurfaceEditorKernel(k),rejectedWorker=new KernelWorker(rejectedEditor)
+      const rejectedRuntime=new SurfaceRuntime(()=>rejectedWorker as unknown as Worker),rejectedFatal=vi.fn()
+      let rejectedSession:WorkspaceSurfaceSession | undefined
+      try {
+        rejectedSession=await createWorkspaceSurfaceSession({...context,sessionId:'bundle-reject',reportFatal:rejectedFatal} as never,
+          vi.fn() as never,{runtime:rejectedRuntime,sha256:async bytes=>sha(bytes)})
+        const operation=rejectedSession.restoreHistoryBundle({recipe:annotated.recipe,notes:[{...annotated.notes[0],u:1e9}]})
+        const rejection=expect(operation).rejects.toThrow()
+        let settled=false;void operation.then(()=>{settled=true},()=>{settled=true})
+        for(let i=0;i<20&&!settled;i++){await flush();await vi.advanceTimersByTimeAsync(90)}
+        expect(settled).toBe(true);await rejection
+        expect(rejectedFatal).toHaveBeenCalledOnce()
+        expect(rejectedRuntime.active).toBe(false)
+        expect(session.getSnapshot().validation.kind).toBe('valid')
+      } finally { if(rejectedSession)await rejectedSession.dispose('cancelled');rejectedEditor.dispose() }
+      await vi.advanceTimersByTimeAsync(90);await flush()
+      session.setNoteText(note.id,'Testo cambiato')
+      expect(session.isAnnotatedHistoryStampCurrent(annotated)).toBe(false)
+      session.setNoteText(note.id,'Controlla la faccia inversa')
       session.selectAllFree();expect(session.getPanelState().selected.length).toBeGreaterThan(0)
       session.moveSelected(.2)
+      expect(session.isAnnotatedHistoryStampCurrent(annotated)).toBe(false)
       await vi.advanceTimersByTimeAsync(90);await flush()
       expect(session.getSnapshot().validation.kind).toBe('valid')
       expect(session.getViewState().stripes).toMatchObject({orientation:'horizontal'})
@@ -455,6 +1571,104 @@ describe('WorkspaceSurfaceSession',()=>{
     expect(t.runtime.active).toBe(false)
     expect(t.worker.terminate).toHaveBeenCalledTimes(1)
     expect(t.session.getSnapshot().validation.kind).toBe('none')
+  })
+
+  it('prepares only the explicitly selected CAD face through the ordinary frozen copy contract', async()=>{
+    const t=await setup({duplicateFace:true});await selectFace(t)
+    const before=ticket(t), history=t.session.getSnapshot().historyRevision
+    expect(t.session.getSnapshot().dirty).toBe(false)
+    t.session.setDuplicateCadFace(true)
+    expect(t.session.getSnapshot()).toMatchObject({dirty:true,canUndo:false,validation:{kind:'valid'}})
+    expect(t.session.getPanelState()).toMatchObject({duplicateCadFace:true,duplicateCadFaceStale:false,canExportStep:false})
+    const {WorkspaceSurfaceParameters}=await import('../WorkspaceSurfaceParameters')
+    const {renderToStaticMarkup}=await import('react-dom/server')
+    const {createElement}=await import('react')
+    const html=renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:t.session}))
+    expect(html).toContain('data-test="surface-duplicate-cad-face"')
+    expect(html).toContain('Con Applica, la faccia della preview')
+    expect(()=>t.session.freeze(before as never)).toThrow(/ticket/)
+    const value=ticket(t), release=t.session.freeze(value as never)
+    const pending=t.session.prepareApply(value as never,new AbortController().signal)
+    const request=t.worker.sent.at(-1)!
+    expect(request).toMatchObject({action:'duplicateCadFace',selection:{face:0,refinements:[]},previewRevision:1})
+    expect(()=>t.session.setDuplicateCadFace(false)).toThrow(/congelata/)
+    expect(()=>t.session.undo()).toThrow(/congelata/)
+    t.worker.reply(request.id,{face:0,selectionRevision:2,previewRevision:1,step:'DETACHED FACE STEP'})
+    const output=await pending
+    expect(output).toMatchObject({kind:'cad-copy',source:t.binding,stamp:value.stamp,name:'faccia-duplicata.step',draftNoteCount:0})
+    expect(new TextDecoder().decode(output.step)).toBe('DETACHED FACE STEP')
+    expect(t.session.getSnapshot().historyRevision).toBe(history)
+    release()
+    await t.session.dispose('applied')
+  })
+
+  it('confirms loss of a duplicate-only draft and clears the choice only after a successful face switch', async()=>{
+    const t=await setup({duplicateFace:true});await selectFace(t)
+    t.session.setDuplicateCadFace(true)
+    const selected=ticket(t), sent=t.worker.sent.length
+    const decline=vi.fn(()=>false)
+    await t.session.requestFaceSelection(0,decline)
+    expect(decline).not.toHaveBeenCalled()
+    await t.session.requestFaceSelection(1,decline)
+    expect(decline).toHaveBeenCalledWith(expect.stringContaining('Duplica faccia CAD'))
+    await expect(t.session.chooseFace(1)).rejects.toThrow(/conferma/)
+    expect(t.worker.sent).toHaveLength(sent)
+    expect(t.session.getPanelState()).toMatchObject({face:0,duplicateCadFace:true,duplicateCadFaceStale:false})
+    expect(ticket(t)).toEqual(selected)
+
+    const failed=t.session.requestFaceSelection(1,()=>true)
+    const rejected=expect(failed).rejects.toThrow('selezione rifiutata')
+    t.worker.fail(t.worker.sent.at(-1)!.id,'selezione rifiutata')
+    await rejected
+    expect(t.session.getPanelState()).toMatchObject({face:0,duplicateCadFace:true})
+    expect(t.session.getSnapshot().dirty).toBe(true)
+
+    const accepted=t.session.requestFaceSelection(1,()=>true)
+    const selecting=t.worker.sent.at(-1)!
+    expect(selecting).toMatchObject({action:'select',face:1})
+    t.worker.reply(selecting.id,plane())
+    await accepted
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    expect(t.session.getPanelState()).toMatchObject({face:1,duplicateCadFace:false,duplicateCadFaceStale:false})
+    expect(t.session.getSnapshot()).toMatchObject({dirty:false,validation:{kind:'valid'}})
+    expect(()=>t.session.freeze(selected as never)).toThrow(/ticket/)
+    await t.session.dispose('cancelled')
+  })
+
+  it('invalidates the duplicate intent after draft Undo without falling back to an entire-body copy', async()=>{
+    const t=await setup({duplicateFace:true});await selectFace(t)
+    t.session.selectPoints([12],false);t.session.moveSelected(.2)
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(2));await flush()
+    t.session.setDuplicateCadFace(true)
+    const old=ticket(t)
+    t.session.undo()
+    await vi.advanceTimersByTimeAsync(90)
+    t.worker.reply(t.worker.sent.at(-1)!.id,preview(3));await flush()
+    expect(t.session.getPanelState()).toMatchObject({duplicateCadFace:true,duplicateCadFaceStale:true})
+    expect(t.session.getSnapshot().validation.kind).toBe('invalid')
+    expect(()=>t.session.freeze(old as never)).toThrow(/ticket/)
+    expect(t.worker.sent.some(item=>item.action==='duplicateCadFace')).toBe(false)
+    t.session.setDuplicateCadFace(false)
+    expect(t.session.getSnapshot().validation.kind).toBe('valid')
+    await t.session.dispose('cancelled')
+  })
+
+  it.each(['wrong preview', 'source changed', 'apply aborted', 'freeze released'])('rejects a detached STEP reply when %s', async(reason)=>{
+    const t=await setup({duplicateFace:true});await selectFace(t)
+    t.session.setDuplicateCadFace(true)
+    const value=ticket(t), release=t.session.freeze(value as never), abort=new AbortController()
+    const pending=t.session.prepareApply(value as never,abort.signal)
+    const rejected=expect(pending).rejects.toThrow()
+    if(reason==='source changed')t.invalidate()
+    if(reason==='apply aborted')abort.abort()
+    if(reason==='freeze released')release()
+    t.worker.reply(t.worker.sent.at(-1)!.id,{face:0,selectionRevision:2,previewRevision:reason==='wrong preview'?2:1,step:'LATE'})
+    await rejected
+    expect(t.worker.sent.some(item=>item.exportStep)).toBe(false)
+    release()
+    await t.session.dispose('cancelled')
   })
 
   it('rejects stale tickets and cancels pointer capture before leaving a gesture', async()=>{
@@ -886,6 +2100,40 @@ describe('workspace free-edge strip',()=>{
     expect(t.session.getPanelState().strip?.axis).toBe(1)
     t.session.cancelStrip()
     await t.session.dispose('cancelled')
+  })
+
+  it('fences a direct CAD pick by selection and consumes its receipt only once',async()=>{
+    const t=await setup({sheet:true});await selectFace(t)
+    t.worker.reply(t.worker.sent.at(-1)!.id,structuredClone(stripPaths));await flush()
+    const s=t.session, direct=s.getViewState().directStrip!, history=s.getSnapshot().historyRevision
+    const candidates=[{edge:0,path:direct.paths[0],seed:[0,0,0] as Point}]
+    const prepare=()=>s.prepareDirectStripPick(direct.revision,candidates,[0,0,10],[0,0,-1])
+    const clipping={partToWorld:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+      planes:[{normal:[0,0,1] as Point,constant:1}],margins:{planeClearanceMm:.001,startGuardMm:.001,
+        endpointExtensionMm:.0001,minimumVisibleLengthMm:.003,minimumCrossingCosine:.01}}
+    const clipped=s.prepareDirectStripPick(direct.revision,candidates,[0,0,10],[0,0,-1],clipping)
+    const request=t.worker.sent.at(-1)!
+    expect(request).toMatchObject({action:'verifySheetEdgeVisibility',clipping})
+    expect((request as unknown as {clipping:unknown}).clipping).not.toBe(clipping)
+    t.worker.reply(request.id,{face:0,previewRevision:1,pick:null})
+    expect(await clipped).toBeNull()
+    const reply={face:0,previewRevision:1,pick:{edge:0,point:[0,0,0]}}
+    const old=prepare(), rejected=expect(old).rejects.toThrow(/scaduta/)
+    expect(t.worker.sent.at(-1)).toMatchObject({action:'verifySheetEdgeVisibility',selection:{face:0,refinements:[]},previewRevision:1})
+    s.selectPoints([12],false)
+    t.worker.reply(t.worker.sent.at(-1)!.id,reply)
+    await rejected
+    const verified=prepare()
+    t.worker.reply(t.worker.sent.at(-1)!.id,reply)
+    const pick=(await verified)!
+    expect(Object.isFrozen(pick)).toBe(true)
+    expect(s.beginVerifiedDirectStripGesture(structuredClone(pick))).toBe(false)
+    expect(s.beginVerifiedDirectStripGesture(pick)).toBe(true)
+    expect(s.getSnapshot().gesture).toBe('strip')
+    expect(s.beginVerifiedDirectStripGesture(pick)).toBe(false)
+    await s.finishStripGesture(null)
+    expect(s.getSnapshot().historyRevision).toBe(history)
+    await s.dispose('cancelled')
   })
 
   it('commits direct D through the existing validated strip history',async()=>{

@@ -1,0 +1,99 @@
+{
+  "status": "PASS",
+  "cadSha256": "9278dbf72e5b148d4f9027053867caae40e35a28836f8f629759aab899ff7b22",
+  "scanSha256": "fa9f320db3b776c2b6298ba6f7608456cc6e37826a330cccf40e85e3edd898a7",
+  "reportSha256": "bcfb71b025e0886f6a55d07208cb72af1355bacae147c1c673460de62a132ee0",
+  "manifestSha256": "5ea1d57337bcbe806ca41844fe73be954cf2c87c1b6379126b7b43f27f6678c5",
+  "scanBytes": 13391784,
+  "alignment": "Identity, as recorded in the hash-matched R01 report; no fitting, translation, rotation or scaling applied",
+  "scale": "Millimetres assumed by the source report; no independent physical scale verification",
+  "case": "One fixed semantic face: planar face with minimum centre Y, midpoint UV. No alternate face/pole after refusal.",
+  "browser": "NOT_RUN; no launch attempted",
+  "transport": "Simulated host and in-memory structuredClone; real session, dispatcher, OCCT, STLLoader, MeshBVH and snapAlong",
+  "faceIndex": 0,
+  "sourceMidpoint": [
+    7.890000000000001,
+    0.049999999999999996,
+    4.765000000000001
+  ],
+  "midpointClassification": "in",
+  "scanBounds": {
+    "min": [
+      -0.05690613016486168,
+      -0.08031921088695526,
+      -4.430534362792969
+    ],
+    "max": [
+      15.821351051330566,
+      15.881004333496094,
+      11.385537147521973
+    ]
+  },
+  "scanTriangles": 267834,
+  "faceInfo": {
+    "index": 0,
+    "trimLocks": [],
+    "hiddenPoles": [],
+    "openSheet": false,
+    "freeBoundary": false,
+    "kind": "plane",
+    "reason": null,
+    "converted": true,
+    "enriched": false,
+    "experimentalCylinder": false
+  },
+  "selectedPoles": [
+    12
+  ],
+  "before": [
+    7.890000000000001,
+    0.049999999999999996,
+    4.765000000000001
+  ],
+  "after": [
+    7.890000000000001,
+    0.02175920975506376,
+    4.765
+  ],
+  "actualScanIntersection": [
+    7.890000000000001,
+    0.021759209755063767,
+    4.765000000000001
+  ],
+  "pointResidualMm": 8.882055243408597e-16,
+  "distanceToScanBeforeMm": 0.02824079024493623,
+  "protectedPolesUnchanged": true,
+  "changedPoles": [
+    12
+  ],
+  "reimport": {
+    "valid": true,
+    "solids": 1,
+    "faces": 51,
+    "sourceVolumeMm3": 1205.5405497440622,
+    "volumeMm3": 1206.4904604811247
+  },
+  "undo": [
+    7.890000000000001,
+    0.049999999999999996,
+    4.765000000000001
+  ],
+  "undoResidualMm": 0,
+  "cadSha256After": "9278dbf72e5b148d4f9027053867caae40e35a28836f8f629759aab899ff7b22",
+  "scanSha256After": "fa9f320db3b776c2b6298ba6f7608456cc6e37826a330cccf40e85e3edd898a7",
+  "actions": [
+    "open",
+    "select",
+    "evaluate",
+    "notePick",
+    "finalFaceWitness",
+    "notePick",
+    "noteResolve",
+    "evaluate",
+    "finalFaceWitness",
+    "evaluate",
+    "evaluate",
+    "finalFaceWitness"
+  ],
+  "inputsUnchanged": true
+}

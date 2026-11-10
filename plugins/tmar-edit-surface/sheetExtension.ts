@@ -4,7 +4,7 @@ import type { Point } from './brep'
 
 // Count incidences across all face wires, including inner loops. A seam
 // has two incidences and cannot be selected again as a free outer edge.
-function withBoundary<T>(k:OcctKernel,shape:ShapeHandle,read:(edges:ShapeHandle[],incidences:number[])=>T):T {
+export function withBoundary<T>(k:OcctKernel,shape:ShapeHandle,read:(edges:ShapeHandle[],incidences:number[])=>T):T {
   const owned:ShapeHandle[]=[], unique:ShapeHandle[]=[], counts:number[]=[], outerFlags:boolean[]=[]
   try {
     const faces=k.getSubShapes(shape,'face');owned.push(...faces)

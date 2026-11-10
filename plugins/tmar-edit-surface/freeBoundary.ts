@@ -23,6 +23,17 @@ export function rebuildFreeBoundary(k: OcctKernel, support: ShapeHandle, net: Ne
     const raw = keep(k.makeFaceOnSurface(support, wire))
     // Materialize missing edge pcurves and verify the exact support afterwards.
     result = k.fixShape(raw)
+    // Building a face on an existing support creates a forward face even when
+    // the selected open sheet was reversed. Preserve that topological choice;
+    // changing it would invert every oriented normal without changing geometry.
+    const orientation=k.shapeOrientation(support)
+    if(orientation!=='forward'&&orientation!=='reversed')throw new Error('Orientamento della faccia libera non supportato.')
+    if(k.shapeOrientation(result)!==orientation){
+      const previous=result
+      result=k.reverseShape(previous)
+      k.release(previous)
+    }
+    if(k.shapeOrientation(result)!==orientation)throw new Error('Orientamento della faccia libera non conservato.')
     const faces = k.getSubShapes(result, 'face'), wires = k.getSubShapes(result, 'wire'), edges = k.getSubShapes(result, 'edge')
     try {
       if (!k.isValid(result) || faces.length !== 1 || wires.length !== 1 || edges.length !== 4)

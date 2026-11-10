@@ -1,0 +1,15 @@
+{
+  "scope": "Preserve a reviewable collection on a mathematical candidate refusal before CAD verification or geometry commit",
+  "guiObservation": {
+    "report": "D:/TMAR-QA/edit-surface-whole-boundary-gui-20261107/workspace-multi-anchor-gui-545HuV/result.json",
+    "targetOffsetMm": 0.25,
+    "error": "Spostamento dei poli oltre il limite autorizzato.",
+    "cadState": "Valid, unchanged; batch was previously discarded unconditionally",
+    "exactRequiredPoleBudget": "NOT_MEASURED: report does not retain accepted UVs/authorized pole coefficients"
+  },
+  "fix": "Typed precommit candidate refusal; keep batch only when exact draft snapshot and source/operation/reference lifetime still pass",
+  "safety": ["No budget/tolerance/iteration-limit change", "No geometry or history on refusal", "CAD/anchor failures and stale ownership continue to discard", "Success still commits once and clears the collection"],
+  "targetedTests": {"passed": 5, "checks": ["Successful collect/review/remove/apply/Undo", "Budget refusal retains same pairs with no CAD request or history", "Review removal and cancellation after refusal", "Reference invalidation discards", "Late pick cannot revive cancelled collection"]},
+  "browser": "NOT_RUN",
+  "limitations": ["Original GUI Apply did not succeed and remains unqualified", "Near-boundary influence may amplify point movement into larger pole movement", "This UX correction does not make an out-of-budget geometric request feasible"]
+}

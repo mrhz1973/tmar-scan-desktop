@@ -46,7 +46,7 @@ export class WorkspacePreview {
   }
 
   /** Replace the preview with owned meshes; `userData.face` keeps face picking stable. */
-  setPreview(preview: Preview | null, activeFace = this.activeFace): void {
+  setPreview(preview: Pick<Preview,'faceMeshes'> | null, activeFace = this.activeFace): void {
     this.assertActive()
     if (!preview) {
       this.activeFace = activeFace

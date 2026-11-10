@@ -1,0 +1,63 @@
+{
+  "checkpoint": "8c708fc",
+  "fixture": "Synthetic 20 x 30 x 10 mm box, STEP export/import",
+  "transport": "In-memory structuredClone dispatcher; real editor.worker and OCCT; simulated host and reference resolver",
+  "browser": "NOT_RUN: no browser launch attempted",
+  "inputSha256": "8bb55f64b11c3eba7856eb4c40642802b74298e42e57fc0c208de37c3f2f9c63",
+  "before": [
+    10.000000000000002,
+    15,
+    10
+  ],
+  "target": [
+    10,
+    15,
+    10.2
+  ],
+  "after": [
+    10.000000000000004,
+    15.000000000000004,
+    10.199999999999998
+  ],
+  "pointResidualMm": 5.329070518200751e-15,
+  "stepPointResidualMm": 0,
+  "undo": [
+    10.000000000000002,
+    15,
+    10
+  ],
+  "undoResidualMm": 0,
+  "changedPoles": [
+    12
+  ],
+  "maxBoundaryGapMm": 4.351167857633658e-15,
+  "minimumBoundaryNormalDot": 1,
+  "boundarySamples": 68,
+  "sourceVolumeMm3": 6000,
+  "changedVolumeMm3": 6030.000779997741,
+  "undoVolumeMm3": 6000,
+  "reimport": {
+    "valid": true,
+    "solids": 1,
+    "faces": 6
+  },
+  "manualLockRefusal": true,
+  "budgetRefusal": true,
+  "inputBytesUnchanged": true,
+  "actions": [
+    "open",
+    "select",
+    "evaluate",
+    "notePick",
+    "finalFaceWitness",
+    "notePick",
+    "noteResolve",
+    "evaluate",
+    "finalFaceWitness",
+    "evaluate",
+    "evaluate",
+    "finalFaceWitness",
+    "evaluate",
+    "notePick"
+  ]
+}

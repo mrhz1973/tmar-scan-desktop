@@ -2,6 +2,136 @@
 
 2026-11-03. Plugin-owned API for the coordinator's proposed `surfaceEdit` feature. Existing Apply-copy behavior remains available. No host feature registration is included here.
 
+## Current integration boundary (2026-11-05)
+
+The worker and `SurfaceDraft` also support version 5 for eligible planar G1
+constraints and opt-in version 6 for compatible curved B-spline G1 constraints.
+Version 6 uses the separate `createCurvedRecipe`, `restoreCurvedRecipe` and
+`replayCurvedRecipe` worker actions; legacy recipe readers do not accept it.
+See `G1-WORKSPACE-CHECKPOINT.md` for the qualified topology and test limits.
+
+The main-viewport `WorkspaceSurfaceSession.prepareHistoryRecipe()` exposes a
+preliminary, plugin-owned preparation API. It selects the v2–v5 or v6 path,
+uses the session's stable body key, checks the source and epochs before return,
+and rejects active gestures, notes, strips, provisional cylinders and unverified
+drafts. It is not a freeze/restore transaction and does not publish a feature.
+Preparing a legacy recipe may invalidate its CAD preview temporarily; the host
+must wait for a new validated preview and check the current source and epochs at
+its commit boundary. The method explicitly refuses drafts with notes until an
+atomic host contract can preserve and revalidate them.
+`isHistoryRecipeStampCurrent()` checks the original prepared object, unchanged
+recipe contents, session and source/epoch freshness, active editor state and a
+revalidated preview. This local guard does not replace replay/validation within
+the host's atomic commit; the host must snapshot and recheck at its boundary.
+
+For a draft with nonempty, currently resolved notes, the separate
+`prepareAnnotatedHistory()` returns the CAD recipe and `{id,text,faceIndex,u,v}`
+records as one bundle. `isAnnotatedHistoryStampCurrent()` requires the same
+session, source, face, net and note contents and a current valid preview; it
+permits an unchanged note to be re-resolved after the serializer refreshes the
+preview. Its local guard also detects changes to the prepared recipe, but it is
+not a transaction. The host must independently replay, validate, bind and
+atomically commit the bundle.
+
+`freezeHistory(prepared)` now provides a synchronous edit lock for either the
+original prepared recipe or annotated bundle. It rejects stale or copied
+preparations; while held, user edits and competing freezes are refused. Its
+`isCurrent()` checks the source, original prepared object and content, net,
+notes, and validated preview. `release()` is idempotent and must be called in
+the host transaction's `finally` path. The host must snapshot inputs, perform
+independent CAD/annotation validation, recheck `isCurrent()` immediately at
+the atomic commit boundary, and handle invalidation or cancellation without
+publishing. This is a plugin-side primitive, not a host history integration.
+
+On 2026-11-06, `TEST_HISTORY_FREEZE=1` passed in the isolated source host on
+the owner's `lego mod qs.stp` with a visible-face mouse note and Zebra. The
+prepared annotated recipe was locked; competing note edits and altered recipe
+contents were rejected, and release restored editing. The subsequent ordinary
+annotated-copy Apply and save/reopen passed, with the original STEP SHA-256
+unchanged. Evidence: `%TEMP%/scanruler-history-freeze-lego-qa/run-v5wAqD/result.json`.
+This does not prove a host history transaction, editable feature persistence,
+the exact coordinator host, or installed-app behavior.
+
+The follow-up `TEST_HISTORY_REPLAY=1` replayed the locked annotated LEGO
+draft in an independent worker using the host-exported source STEP. OCCT
+reported a valid result with the same volume as the live draft
+(1084.2683646894266 mm³); the lock remained current and the original file
+hash was unchanged. The ordinary annotated-copy flow also saved and reopened.
+Evidence: `%TEMP%/scanruler-history-replay-lego-qa/run-waxJ5O/result.json`.
+Equal volume alone is not proof of geometric identity. This test does not
+publish a parametric history feature or restore an editable feature from the
+saved project; note persistence was exercised through ordinary copy Apply.
+
+An additional `TEST_HISTORY_REPLAY=1` run compared the live and replayed
+tessellations face by face on the same real LEGO STEP: all 81 face index lists
+matched, and the maximum distance of 20,776 corresponding tessellation vertices
+was 0 mm. The volume also matched and the original file hash was unchanged.
+Evidence: `%TEMP%/scanruler-history-geometry-lego-qa/run-ZPRSHX/result.json`.
+This compares one tessellation of one result, not exact B-rep equivalence or
+every point of the continuous surfaces. Parametric project reopen remains a
+separate host integration and qualification task.
+
+`WorkspaceSurfaceSession.restoreHistoryRecipe(value)` restores a validated
+recipe into a fresh, empty workspace session only. It rejects another body or
+changed STEP bytes; a failed worker restore reports a fatal error to the host
+and closes the session. A real OCCT
+test restores an edited reversed STEP face and validates the resulting solid.
+This API does not by itself restore notes or implement host project persistence.
+
+After `restoreHistoryRecipe`, the host may await
+`waitRestoredHistoryReady(signal?)` before rebinding notes. It resolves only
+when that same restored net has a valid CAD preview; it rejects on draft or
+source change, abort, session disposal, invalid preview, or a 60-second
+timeout. It does not itself prevent edits, publish a feature, or replace the
+host's source and transaction checks. Session tests cover a real OCCT restore,
+an already-aborted signal, session disposal and a changed draft while waiting; installed-app and
+host history reopening remain unqualified.
+
+`restoreHistoryBundle({recipe, notes}, signal?)` composes fresh-session recipe
+restore, preview validation and note rebinding. It snapshots its inputs. If
+rebinding or waiting fails after adoption, it reports a fatal error and closes
+that fresh session rather than leaving a partially restored draft. Session tests
+using OCCT cover both successful restoration and an invalid UV that closes the
+new session while leaving the original session valid. The first test attempt
+timed out because its simulated timer did not advance after asynchronous work;
+the corrected bounded timer-driving test passed. The host must still bind the
+bundle to its persisted feature and preserve the saved CAD copy on failure.
+
+`TEST_HISTORY_RESTORE=1` additionally passed in an isolated source UI on the
+owner's LEGO STEP: a fresh independent session restored the serialized recipe,
+the same control-point coordinates, and the note at the same measured position.
+The ordinary annotated-copy Apply and saved-project reopen then passed; the
+original STEP hash was unchanged. Evidence:
+`%TEMP%/scanruler-history-restore-lego-qa/run-6tcV01/result.json`. The fresh
+session was opened by the test, not by a host history feature, and the saved
+project held a CAD copy rather than a re-editable parametric history feature.
+
+After the restored draft has a fresh valid preview,
+`WorkspaceSurfaceSession.restoreHistoryNotes()` can rebind a host-provided
+array of `{id, text, faceIndex, u, v}` on that restored face. It resolves each
+UV through OCCT, including trimmed-face classification, and installs all notes
+only if every one resolves and the source/draft remains current. It does not
+produce or persist the host's note records: an atomic host recipe-and-note
+transaction and an authenticated association with the recipe are required.
+An optional abort signal is linked to the session lifetime during rebinding;
+an aborted worker request discards its late reply and adopts no partial notes.
+The active OCCT computation itself cannot be interrupted until its worker ends.
+
+`replaySurfaceHistory()` in `historyReplay.ts` provides independent worker
+replay for a host transaction. It snapshots the recipe and STEP, verifies the
+body key and STEP SHA-256, checks the host's source guard before and after async
+boundaries, requires a valid CAD result and STEP, and disposes its worker. The
+host must check the same source again at its own atomic commit boundary; this
+helper does not publish a feature or preserve notes.
+
+Worker and draft APIs alone therefore do not
+make a saved project feature editable. An integration needs a versioned host
+contract that binds the recipe to the upstream body and validated draft stamp,
+commits it atomically with the CAD result and notes, and refuses stale sources.
+Reopening must restore and revalidate note anchors against the restored face;
+an existing saved CAD copy must remain intact if restore fails. The existing
+copy-based Apply path remains available until this is implemented and qualified.
+
 ## Worker requests
 
 All requests carry an `id`; replies carry `{id, result}` or `{id, error}`. The worker processes requests sequentially.

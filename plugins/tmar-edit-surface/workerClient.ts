@@ -4,6 +4,11 @@ import type { Request } from './editor.worker'
 /** Preserve the worker's action-specific request fields while the client owns ids. */
 export type SurfaceWorkerPayload = Request extends infer R ? R extends Request ? Omit<R, 'id'> : never : never
 
+/** An explicit CAD refusal, distinct from transport failure or cancellation. */
+export class SurfaceWorkerRequestError extends Error {
+  constructor(message: string) { super(message); this.name = 'SurfaceWorkerRequestError' }
+}
+
 interface Pending {
   resolve(value: unknown): void
   reject(error: Error): void
@@ -31,7 +36,7 @@ export class SurfaceWorkerClient {
       if (!entry) return
       this.pending.delete(reply.id)
       entry.cleanup()
-      if (typeof reply.error === 'string') entry.reject(new Error(reply.error))
+      if (typeof reply.error === 'string') entry.reject(new SurfaceWorkerRequestError(reply.error))
       else entry.resolve(reply.result)
     }
     worker.onerror = (event: ErrorEvent) => {

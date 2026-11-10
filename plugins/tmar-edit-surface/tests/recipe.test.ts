@@ -1,10 +1,72 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SurfaceEditorKernel } from '../editorKernel'
 import { readRecipe } from '../recipe'
 import { readFileSync } from 'node:fs'
 
 describe('Surface Edit persistent CAD recipe', () => {
+  it('does not overwrite a newer preview when hashing a recipe is delayed', async () => {
+    const editor=await SurfaceEditorKernel.load(),k=editor.kernel,box=k.makeBox(20,30,10),step=k.exportStep(box)
+    k.release(box)
+    let release!:()=>void
+    const gate=new Promise<void>(resolve=>{release=resolve}),digest=crypto.subtle.digest.bind(crypto.subtle)
+    try {
+      const opened=editor.open(step),net=editor.select(opened.faces.find(f=>!f.reason)!.index)
+      const spy=vi.spyOn(crypto.subtle,'digest').mockImplementation(async (...args)=>{await gate;return digest(...args)})
+      try {
+        const pending=editor.createRecipe(net,'G0',[],'race-qa')
+        editor.evaluate(net,'G0')
+        release()
+        await expect(pending).rejects.toThrow(/anteprima cambiata/)
+      } finally {release();spy.mockRestore()}
+    } finally {editor.dispose()}
+  })
+  const schemaBase = {
+    schema: 'tmar.surface-edit', version: 2, engine: 'occt-wasm-5.7.1/brep-v3',
+    units: 'mm', coordinateFrame: 'imported-step',
+    source: { bodyId: 'schema-fixture', brepSha256: 'a'.repeat(64), faceCount: 1, solidCount: 0 },
+    faceIndex: 0, preparation: 'native-nurbs', baseNetSha256: 'b'.repeat(64), continuity: 'G0',
+    edits: [{ index: 12, point: [1, 2, 3] }], lockedPoles: [12],
+  }
+  it('validates ordered v4 refinement recipes without changing legacy recipes', () => {
+    const legacy = [schemaBase, { ...schemaBase, version: 3, boundaryMode: 'free-natural' }]
+    for (const recipe of legacy) {
+      expect(readRecipe(recipe)).toEqual(recipe)
+      for (const refinements of [undefined, [], [{ axis: 'U', value: 0.5, count: 1 }]])
+        expect(() => readRecipe({ ...recipe, refinements })).toThrow(/non supportata/)
+    }
+    for (const boundaryMode of ['locked', 'free-natural']) {
+      const recipe = { ...schemaBase, version: 4, boundaryMode,
+        refinements: [{ axis: 'V', value: -10, count: 2 }, { axis: 'U', value: 0.5, count: 1 }, { axis: 'V', value: -10, count: 1 }] }
+      const parsed = readRecipe(JSON.parse(JSON.stringify(recipe)))
+      expect(parsed).toEqual(recipe)
+      expect(parsed).not.toBe(recipe)
+      if (parsed.version !== 4) throw new Error('Expected v4')
+      parsed.refinements[0].value = 100
+      parsed.edits[0].point[0] = 99
+      expect(recipe.refinements[0].value).toBe(-10)
+      expect(recipe.edits[0].point[0]).toBe(1)
+    }
+    // Free boundaries keep the single-open-face requirement, also in v4.
+    for (const source of [{ ...schemaBase.source, faceCount: 2 }, { ...schemaBase.source, solidCount: 1 }]) {
+      const recipe = { ...schemaBase, version: 4, source, refinements: [{ axis: 'U', value: 0.5, count: 1 }] }
+      expect(() => readRecipe({ ...recipe, boundaryMode: 'free-natural' })).toThrow(/non supportata/)
+      expect(readRecipe({ ...recipe, boundaryMode: 'locked' }).version).toBe(4)
+    }
+  })
+  it('rejects malformed refinement plans before replay', () => {
+    const recipe = { ...schemaBase, version: 4, boundaryMode: 'locked', refinements: [{ axis: 'U', value: 0.5, count: 1 }] }
+    for (const refinements of [undefined, null, {}, [], new Array(1), Array(129).fill(recipe.refinements[0]),
+      [null], [{ axis: 'u', value: 0.5, count: 1 }], [{ axis: 'X', value: 0.5, count: 1 }],
+      ...[NaN, Infinity, -Infinity, '0.5', null, undefined].map(value => [{ axis: 'U', value, count: 1 }]),
+      ...[0, -1, 1.5, 26, Infinity, '1', undefined].map(count => [{ axis: 'U', value: 0.5, count }]),
+      [{ axis: 'U', value: 0.5, count: 1, automatic: true }],
+    ]) expect(() => readRecipe({ ...recipe, refinements })).toThrow(/Raffinamenti/)
+    for (const boundaryMode of [undefined, 'free', true])
+      expect(() => readRecipe({ ...recipe, boundaryMode })).toThrow(/non supportata/)
+    expect(() => readRecipe({ ...recipe, freeBoundary: false })).toThrow(/non supportata/)
+    expect(() => readRecipe({ ...recipe, version: 5 })).toThrow(/non supportata/)
+  })
   it('serializes, reopens and replays on upstream STEP; refuses changed sources and invalid edits', async () => {
     const editor = await SurfaceEditorKernel.load(), k = editor.kernel
     const box = k.makeBox(20, 30, 10), step = k.exportStep(box)

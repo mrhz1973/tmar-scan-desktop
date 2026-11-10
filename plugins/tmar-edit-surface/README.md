@@ -1,5 +1,319 @@
 # Edit Surface — CAD prototype checkpoint
 
+### Experimental cylindrical faces — scope clarification
+
+The shared workspace has a separate experimental path for certain simple
+cylindrical STEP faces identified as `experimentalCylinder`. It prepares a
+periodic B-spline control net, with CAD and sampled geometry checks, and
+supports a local draft, preview and explicit CAD verification. After a
+successful verification the session can attach notes and export or apply a
+CAD copy. Added G1 tangency and whole-natural-boundary movement are not
+available in this mode. Unsupported source topology is refused; sampled
+checks do not certify arbitrary STEP cylinders or global geometry. Existing
+tests include `cylinder-preparation.test.ts`, `cylinder-evaluation.test.ts`
+and `cylinder-notes.test.ts`; their presence does not establish integrated
+desktop GUI acceptance or QuickSurface parity. Statements later in this file
+about cylinders outside the original prototype describe that earlier scope.
+
+### Section-aware free-edge picking — plugin checkpoint
+
+The direct D-handle edge picker now sends the current world-space section planes
+and part transform through the workspace session and serialized CAD worker.
+For supported straight and sampled open nonperiodic B-spline sheet edges, the
+native query distinguishes visible edges from occluders removed by the section.
+It verifies the precise anchor at the cursor and rechecks camera, source,
+references, preview and section state before and during the drag. A changed
+state cancels the gesture. Unsupported paths retain their previous fallback;
+the CAD proof rejects ambiguous intersections and non-rigid transforms.
+
+A real OCCT worker test on a STEP shell with front and back rims 0.02 mm apart
+selected the remaining rim after clipping; both candidate orders were tested
+in the lower-level CAD query. Session tests check worker payload and stale
+selection; workspace tests exercise pointer handling and changes to section or
+reference state, including during drag. The source-app working tree had other
+experimental edits: only the two relevant lines of editorKernel.ts were staged
+in commit 1a18002, preserving that WIP. Focused checks: 156 layer tests passed,
+2 skipped; 130 session/CAD tests passed; TypeScript passed. These are native
+CAD and simulated workspace/transport checks, not an integrated host, packaged
+application, real GUI acceptance, unrestricted STEP support or QS parity.
+Host integration, merge and release remain subject to coordinator HOLD.
+
+
+### Move an entire natural CAD boundary without duplicating it
+
+The workspace panel now offers **Sposta intero bordo senza duplicarlo** on a
+single open face with four natural boundaries. First explicitly allow free
+boundary movement, then choose U initial/final or V initial/final, a body XYZ
+direction and a signed displacement. The command moves every pole of that
+boundary by the same vector, keeping weights and knots unchanged; its endpoints
+also change the adjacent boundaries. One locked, trim-protected or hidden pole
+refuses the entire operation. Solids, multi-face sheets, non-natural trims,
+active notes, symmetry, adaptive/cylinder preparation and added tangencies are
+excluded. CAD validation and the existing natural-rim reconstruction run after
+one geometry Undo commit; no strip or second face is created.
+
+This addresses the documented QS observation below: with Edges only and the
+DUPLICATE handle disabled, moving the top edge changed the existing surface,
+and Undo restored it. The numeric checkpoint `60757f8` uses an explicit panel
+command and does not by itself establish the same direct gesture or QS parity.
+The existing control-net segment operation still moves its two endpoint poles;
+the new operation translates the complete natural boundary curve.
+
+Seven focused session tests cover all four sides, lock refusal without partial
+movement, protected/solid/pending/symmetry refusal and recovery from a CAD
+rejection. A separate real session/dispatcher/OCCT test on a synthetic imported
+STEP sheet moved the complete U0 edge by 0.2 mm. At 33 samples, maximum
+translation error was 2.50e-15 mm; independent STEP reimport measured at most
+2.66e-15 mm. The result remained valid with one face and four edges; Undo
+restored all poles and sampled edge positions exactly in this case.
+Evidence: `evidence/whole-boundary/kernel-session/result.json`; test:
+`tests/wholeBoundary-session-occt.test.ts`. Host/transport are simulated in
+memory, and no browser was launched. Arbitrary curved/rational sheets, trimmed
+boundaries, shared edges, solid faces and the packaged UI are not qualified by
+this new command's test. Earlier `freeBoundaryProof.test.ts`,
+`freeBoundaryRational.test.ts` and `e2e-free-boundary.mjs` establish separate
+reconstruction foundations and do not replace this command's GUI acceptance.
+
+The optional **Trascina un bordo naturale nella vista** mode now picks any of
+the four natural NURBS boundary curves, each sampled at 65 positions for
+display-space picking, and moves its entire outer control row. It uses the existing viewport capture,
+drag threshold, direction/strength, preview queue, cancellation and geometry
+Undo. The controller rejects nonuniform movement of the row or any change to
+unrelated poles. Off-edge input remains available for navigation; navigation-only
+mode still takes precedence. Click without a drag, Escape, pointer cancellation
+and a camera change restore the previous committed draft. This gesture has no
+magnet; the ordinary pole-drag magnet is unchanged. The D handle is not offered
+while the whole-boundary tool is armed.
+
+Seven new layer cases and two controller cases passed, covering perspective and
+rotated-part input, second-pointer exclusion, lock refusal, cancellation and
+restoration after a malformed commit. Four independent Bernstein tests compare
+all rational boundary pick paths with their actual curves. With
+`WHOLE_BOUNDARY_QA_DRAG=1`, the existing real session/dispatcher/OCCT test also
+passed through boundary preview/commit, with the same measured complete-edge
+translation and one-face/four-edge STEP readback described above. Evidence:
+`evidence/whole-boundary/direct-drag-kernel/result.json`. Layer pointer input is
+simulated and host/transport remain in memory; no browser, exact-host GUI or
+physical-pointer qualification is claimed. General trimmed/shared/solid edges
+remain excluded. This is the first bounded direct-drag checkpoint.
+
+Direct-side selection follow-up: the viewport no longer requires selecting the
+same U/V side in the panel before grabbing it. The existing edge picker compares
+all four curves; the controller adopts the hit side only after its complete row
+passes the lock checks. A locked hit is refused without falling back to another
+side. The panel's displayed side and numeric command follow the viewport choice.
+Five new layer tests cover all four sides with a rotated perspective view and
+the locked-hit refusal; two session tests cover a direct U0-to-U1 choice, one
+Undo and refusal without changing the previous side or history. These tests use
+simulated pointer input and host/transport; they do not qualify an actual GUI,
+shared/trimmed/solid edges or complete QS behavior. Outside the four rims the
+tool leaves navigation available, retaining the preceding scope and guards.
+
+The multi-edge picker now requires a depth confirmation against the owned CAD
+preview before admitting each candidate. A ray through the candidate's projected
+3D anchor must hit a non-clipped preview triangle at matching depth; an occluded
+anchor, missing hit or unresolved depth discrepancy is refused. Only then does
+the existing picker choose among confirmed curves. Depth is computed in the
+part frame using detached wrappers over the actual stored preview triangles.
+The camera's relative pose is formed before rotating its translation, avoiding
+cancellation from large world offsets. The allowance covers double arithmetic
+only, with a 1e-7 mm floor and the unchanged 0.00001 mm cap; an unknown
+CAD/Float32/tessellation discrepancy is refused rather than treated as
+visibility evidence. The former Float32 estimate proportional to whole-part
+extent was removed: it had incorrectly blocked parts above roughly 42 mm.
+The kernel's 0.08 mm tessellation deflection is not a visibility allowance.
+
+Five additional layer cases cover overlapping front/back rims of one folded
+face, missing depth evidence and mismatches in either depth direction. The
+orthographic fold chooses the visible front rim and rejects the hidden one.
+The perspective fold intentionally refuses the gesture where Float32 rounding
+leaves no reliable boundary hit; ordinary visible perspective/rotated-part
+cases still pass. Curved boundary/tessellation discrepancies can conservatively
+refuse a visible edge. This checks self-occlusion within the owned CAD preview,
+not occlusion by arbitrary external host objects or physical GUI interaction.
+
+Four further layer cases pass for a 100 mm sheet at the origin and at a world
+offset of `[1e12, -1e12, 1e12]`, including a nearer occluder 0.01 mm away and a
+100 mm folded sheet with overlapping front/back rims. Confirmed visible rims
+remain selectable; the hidden rim is refused or the front rim chosen. These
+are synthetic geometry and simulated pointer tests, not a global coordinate-
+accuracy, renderer or production-host qualification.
+
+The single opt-in curved/oblique OCCT probe did not reach picking: kernel
+evaluation of its synthetic curved-sheet preparation refused with
+`Deformazione troppo forte: normale ribaltata o superficie singolare.`
+No curve-to-tessellation or depth distance was measured, and no alternate
+fixture or retry was attempted. Receipt:
+`evidence/whole-boundary/curved-oblique-once/result.json`; opt-in test:
+`SURFACE_QA_CURVED_BOUNDARY_PROBE=1` in `workspaceLayer.test.ts`.
+This does not establish the refusal's cause or prove a picking defect.
+Curved-boundary support and publication of multi-edge picking remain on hold;
+the occlusion guard was not relaxed.
+
+A subsequent single probe used the already qualified curved artifact
+`evidence/free-boundary/compiled-20261103/moved.step`, unchanged SHA-256
+`61e1e624a432089e613cc9b744a7c883ccee3cd79ba459f0ef1c5c159419741f`.
+Current OCCT checks confirmed valid CAD, one natural open face, zero solids and
+`freeBoundary=true`; no new deformation or fixture search was performed.
+The fixed U1 point at 37% of V was tested from an oblique camera on its exterior
+side. With production tessellation (0.08 mm / 0.15 rad), its distance to the
+stored triangles was 0.0114742182 mm; the pick anchor's distance was
+0.0110213842 mm. The first triangle hit lay 0.0273744848 mm behind the anchor
+along the ray, rather than occluding it. The picker refused and the controller
+did not start. This demonstrates a false rejection of this qualified curved
+boundary, not a safe reason to widen the occlusion tolerance.
+
+Receipt: `evidence/whole-boundary/prequalified-curved-oblique-once/result.json`;
+opt-in test: `SURFACE_QA_CURVED_EXISTING_PROBE=1` in `workspaceLayer.test.ts`.
+The test fails its visible-boundary acceptance assertion and remains opt-in.
+No retry, browser, host modification or visibility-guard change was made.
+Publication of multi-edge picking remains on hold pending a visibility method
+that supports this case while retaining the hidden-edge refusals.
+
+An isolated native-CAD prototype is now in `boundaryVisibilityCad.ts`, not
+connected to the worker, controller or viewport. It copies the source BREP,
+identifies the natural edge, projects onto its native curve and sections the
+camera-to-edge segment against the CAD face. A separate distance query checks
+the segment ending 1e-5 mm before the anchor. Elevated source tolerances,
+ambiguous/non-point intersections, grazing views and uncertain results refuse.
+The prototype uses a 1e-6 mm CAD threshold, never a meshing-deflection allowance.
+
+Two focused real-OCCT tests in `tests/boundaryVisibilityCad.test.ts` passed.
+The qualified curved fixture produced one intersection at the anchor (depth
+difference about 5e-14 mm) and front clearance 7.22e-6 mm. A folded native
+surface with rims separated by 0.02 mm returned two intersections for the
+hidden rim, which was refused; its front rim returned one intersection and
+approximately 1e-5 mm front clearance, which passed. Source BREP text stayed
+unchanged in both cases. Receipts: `evidence/whole-boundary/native-cad-query/`.
+These two cases do not certify general intersection completeness, imported
+tolerance conventions, worker revision/gesture races or browser interaction.
+Independent review and a guarded asynchronous integration remain required;
+the existing viewport occlusion guard has not been changed by this prototype.
+
+The prototype now constructs the exact natural isocurve from the NURBS support
+instead of treating the imported 3D edge parameter as a surface UV coordinate.
+The caller must identify the segment of the same 65-sample curve used by the
+picker; the seed must lie on that declared chord. Native projection is restricted
+to the corresponding parameter interval, with the result checked on the surface
+and actual topological edge. This removes the arbitrary 0.005 mm seed-to-curve
+limit without permitting a jump to another curve interval.
+
+Four focused CAD tests pass: the qualified curved rim; front/hidden rims 0.02 mm
+apart; a geometrically identical edge parameterized 100..160 while its surface
+coordinate remains 0..30; and a seed from the actual 65-sample polyline of the
+fixture scaled by 20. The latter lies 0.008993814 mm from the precise curve and
+is accepted in its own interval; a false segment declaration is refused.
+Receipts: `evidence/whole-boundary/native-cad-query-v2/`. `attempt-1.json` records
+an implementation variable-shadowing failure and overly exact UV-bound equality
+before correction; it is not a geometry success receipt. This remains an
+isolated prototype. A future viewport adapter must pass authentic segment and
+camera data, recheck the precise anchor against the pointer/view and revisions,
+and handle asynchronous cancellation. No synchronous UI integration or new
+viewport authorization has been introduced.
+
+### Surface-point alignment, source integration checkpoint
+
+The shared-workspace panel offers **Punto sulla scansione** and **Punto sul CAD
+esterno**. Select unlocked poles, set the maximum movement allowed for each
+pole, then click a point on the selected CAD face. The worker resolves its UV
+and CAD normal; the layer searches in both normal directions for the nearest
+visible external reference within the displayed magnet reach. The operation
+targets the actual NURBS point rather than moving a pole onto the reference.
+The existing pole-drag magnet remains independent, including when disabled.
+
+Only selected poles permitted by manual, trim, hidden and G0/G1 protection may
+move. Added tangency constraints, adaptive/cylindrical preparations and symmetry
+are refused. Reference identity, visibility, geometry, transform, session source
+and the exact draft are checked before commit. CAD destinations exclude the
+source body and its preview neighbours. Escape or the panel's cancel command
+cancels point selection. A successful proposal adds one local Undo operation
+and then goes through ordinary CAD validation; a rejected candidate remains
+unverified and can be undone.
+
+New session/layer tests cover normal-direction targeting, part coordinates with
+a rotated host, independence from pole snapping, reference lifetime, cancellation,
+source changes and exclusion of the edited body. Controller and independent
+Bernstein/OCCT tests cover the mathematical point and protected geometry.
+These are source-level tests with simulated host/transport, not browser-pointer,
+packaged desktop or project save/reopen qualification. Targets use displayed
+triangles; the numerical point residual is not an accuracy claim for the scan,
+the entire surface or its continuous boundary. No QuickSurface parity is claimed.
+
+Real-kernel follow-up for plugin checkpoint `8c708fc`:
+`tests/surfacePointTarget-session-occt.test.ts` passed on a synthetic 20 × 30 ×
+10 mm box exported and reimported as STEP. The real workspace session and real
+`editor.worker` dispatcher resolved a clicked CAD anchor, targeted Z=10.2 mm
+from Z=10 mm, validated the result, exported STEP and performed one Undo.
+The CAD point residual was 5.33e-15 mm; independent STEP reimport measured
+zero point-to-target distance, a valid one-solid/six-face result and volume
+6030.000779997741 mm³ (source 6000 mm³). Only the authorized centre pole moved.
+At 68 boundary samples the maximum point difference was 4.36e-15 mm and the
+minimum source/result normal dot product was 1. Undo restored the sampled
+anchor with zero difference and reimported a valid 6000 mm³ solid. A manual
+point lock and an insufficient movement budget both refused the operation.
+These finite checks do not prove continuous boundary conditions.
+
+Evidence and the three synthetic STEP files are in
+`evidence/surface-point-target/kernel-session-8c708fc/`. The kernel and worker
+dispatcher are real; transport, host and target-reference resolver are simulated
+in memory. No browser was launched or retried. This does not qualify physical
+pointer picking, real reference-ray intersection, arbitrary trimmed/rational
+models, project persistence or the packaged app. No user file was opened.
+
+The subsequent opt-in `tests/realSurfacePointTarget.test.ts` passed on the
+owner's read-only `lego mod qs.stp`: second solid (index 1), fixed face 19,
+central UV point classified inside the trim, with no alternate face or point
+attempted. Input SHA-256 before and after was
+`f47e9d2ff01ed35f392c762edd860fba5b6c90514de68d9cbc29951537931243`.
+A real THREE plane 0.02 mm along the CAD normal and the real `snapAlong`
+intersection supplied the destination. The measured CAD point moved from
+`[7.886113137365499, 0.008399430415251, 4.664286500000001]` to
+`[7.8861131373655, -0.011600569584748994, 4.664286500000001]`; target residual
+was approximately 8.88e-16 mm. Only pole 12 changed; G1-protected pole coordinates did not.
+The exported STEP reimported valid with one solid and 81 faces; volume changed
+from 1084.0807603212954 to 1084.7248970380479 mm³. Undo restored the entire net
+and the measured point exactly in this case, and the CAD preview was valid.
+
+Evidence: `evidence/surface-point-target/lego-fixed-face19/result.json`.
+The input was read only; no copy of its STEP or derived STEP was written.
+Session, dispatcher, kernel and THREE ray intersection were real, while the
+host and worker transport were simulated in memory; reference lifetime was
+fixed for this immutable synthetic plane. This face had no trim/manual locks:
+it does not qualify edits near holes or other LEGO faces, all other-face
+geometry, a real scan, the workspace layer's target lifetime, browser input,
+project persistence or the packaged app. No browser launch was attempted.
+
+One real-scan follow-up passed with `tests/realScanSurfacePointTarget.test.ts`:
+`lego.stl` (267,834 triangles, SHA-256
+`fa9f320db3b776c2b6298ba6f7608456cc6e37826a330cccf40e85e3edd898a7`)
+and the matching `lego_CAD_R01.step` (SHA-256
+`9278dbf72e5b148d4f9027053867caae40e35a28836f8f629759aab899ff7b22`).
+Their live hashes and the report hash matched `lego_R01_manifest.json`. That
+report records identity alignment in the original scan frame; this test applied
+no transform, fit or scaling. Millimetres remain the source report's assumption,
+without independent physical scale verification. This pairing does not assert
+that the separate `lego mod qs.stp` file has the same verified provenance.
+
+A single fixed case used the minimum-Y planar wall (R01 face 0), its UV midpoint
+and its one free G1 pole. The real `snapAlong` resolver intersected the real STL
+using THREE and MeshBVH. It found the scan 0.02824079024493623 mm along the CAD
+normal from `[7.89, 0.05, 4.765]`, at approximately
+`[7.89, 0.021759209755063767, 4.765]`. The measured edited CAD point differed
+from that intersection by 8.88e-16 mm; only pole 12 moved and protected pole
+coordinates remained unchanged. Exported STEP reimported valid with one solid
+and 51 faces; volume changed from 1205.5405497440622 to 1206.4904604811247 mm³.
+Undo restored the entire net and the measured point with zero difference.
+Both original file hashes remained unchanged; no original or derived STEP/mesh
+was written. No alternate candidate or retry was attempted.
+
+Evidence: `evidence/surface-point-target/lego-R01-real-scan-once/result.json`.
+The session, dispatcher, CAD kernel, scan loader and reference intersection were
+real. Host/transport were simulated, and reference lifetime stayed fixed in
+memory. This is one point on one planar face, with no trim/manual locks; it does
+not establish global scan deviation, physical accuracy, all other faces,
+dynamic workspace-reference behavior, browser interaction or project save/load.
+No browser was launched and no active project was accessed.
+
 ### Shared workspace: normal drag and integration, 2026-11-04
 
 Pole movement starts on the surface's local normal N. U/V and world axes remain
@@ -93,7 +407,55 @@ Revo Design Pro 8.0.123, QA document `modified-solid`: the imported solid displa
 
 ## Limits / next acceptance
 
-- Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Periodic cylinders, arbitrary trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
+### Owner STEP kernel inspection, 2026-11-06
+
+The opt-in `tests/realStepInspection.test.ts` reads a STEP provided via
+`SURFACE_QA_STEP`; it does not write the source. On the owner's `lego mod
+qs.stp`, OCCT found two solids. The first has 10 faces and none eligible for
+the standard editor; the second has 81 faces, of which 21 were eligible.
+Editing one interior pole of face 5 on the second solid by 0.05 mm produced a
+STEP that reimported as valid (volume 1084.0807603 to 1083.9916541 mm³).
+The source file SHA-256 was unchanged. This is a kernel-only check of one
+face, not an app/UI test, preservation proof for all faces or QS parity.
+Follow-up: on that same edit, nine parameter-space positions on each of the
+other 80 faces matched after STEP reimport (maximum sampled gap 0 mm). The
+serialized recipe replayed to a valid STEP with the same measured volume.
+These are finite position and volume checks, not exhaustive topology or
+normal-continuity certification.
+
+Isolated workspace UI on that same STEP exposed a genuine multi-part import
+issue: ScanRuler assigns positive fractional body IDs, which the plugin had
+incorrectly rejected. The plugin now accepts positive finite IDs as the host
+does. With this fix, automated UI interaction opened body 1.0009765625,
+selected face 19 and passed normal move, pointer drag and local Undo/Redo.
+Apply did not complete: this QA host separately rejects the same fractional ID
+when hiding the source. The coordinator owns that host correction. The source
+file was unchanged and full app/project acceptance remains pending.
+With a provisional finite-positive ID fix in the isolated QA host, a further
+run passed on the same file: selecting face 19, numeric and pointer moves,
+Undo/Redo, Apply, original visibility and reimport of all three resulting STEP
+bodies. The imported file hash remained unchanged. Evidence is the local QA
+`scanruler-owner-lego-qa/run-mTZJAV/result.json`. This does not mean the host
+fix is merged or the released app is updated; project save/reopen and physical
+user input were not verified by this run.
+An opt-in follow-up (`TEST_PROJECT_ROUNDTRIP=1`) also saved and reopened the
+Lego project in a fresh browser page. The edited solid remained valid with
+the expected volume, and the source visibility persisted. Evidence:
+`scanruler-owner-lego-qa/run-5UFK36/result.json`. This remains a CAD-copy
+feature, not editable parametric history, and uses the provisional QA host fix.
+An annotated follow-up (`TEST_ZEBRA_NOTES=1`, `TEST_ANNOTATED_APPLY=1`)
+resolved a note on the real Lego face with Zebra active, changed the surface,
+applied the annotated CAD copy and reopened the saved project with the verified
+note still attached. Note placement used the controller with a mesh-derived
+point; it was not a physical pointer placement test. The source STEP hash was
+unchanged. Evidence: `scanruler-owner-lego-qa/run-ZNM9El/result.json`.
+An additional real-file UI run (`TEST_HISTORY_RECIPE=1`) prepared a current
+v2 recipe together with the resolved note on face 19; Apply still published
+an annotated CAD copy, not that recipe as parametric history. The project
+reopened with the copy and note. Evidence: `run-i7IkaX/result.json` in the
+same local QA folder. The source STEP hash was unchanged.
+
+- Eligible clamped, nonperiodic NURBS have at most 1600 poles. Some planar and curved faces with internal or external trims are supported with conservative protection, as detailed below. Certain simple cylindrical faces have a separate experimental preparation path described above; arbitrary periodic cylinders, trims and some mixed STEP/BREP representations remain unsupported or deliberately refused.
 - One face at a time. Apply creates a new body, not an in-place feature-history edit. A versioned control-net recipe and strict replay API are available in the plugin worker; host feature-history persistence is not yet connected by this plugin checkpoint.
 - OCCT validity, face/solid counts, positive volume, original boundary preservation, sampled normals and face intersections are checked. This is not exhaustive certification against every possible self-intersection; intersection edges and normals have sampled checks.
 - No qualification yet on arbitrary production STEP parts, touch input, multi-face continuity creation or full QUICKSURFACE equivalence. Project save/reopen is qualified on the recorded fixture only.
@@ -455,9 +817,9 @@ These checks use a small test net; responsiveness on large control nets,
 parity of every QS gesture and the direct D handle for duplicating a free edge
 remain unqualified. The prior separate free-edge command remains available.
 
-### Direct D handle for one-face open sheets
+### Direct D handle for open sheets
 
-For a compatible, validated one-face STEP sheet, the editor now prepares its
+For a compatible, validated open STEP sheet, including a multi-face shell, the editor prepares its
 free CAD edges. Click a free edge and drag its D handle along the selected
 world X/Y/Z axis: the new strip is previewed during the drag and validated as
 CAD on release. A click without movement or a pointer cancellation returns to
@@ -468,9 +830,12 @@ is not offered for solid faces or while a note is being placed.
 This reuses the existing ruled-strip extrusion and sewing operation; it does
 not refit the original surface and does not guarantee tangent continuity. After
 the first extension the existing strip workflow permits further edge drags,
-Undo/Redo and an explicit Apply as a separate CAD body. The direct D handle is
-currently limited to the initial one-face sheet; it is not yet offered on
-multi-face sheets or a solid. QS interaction parity remains unverified.
+Undo/Redo and an explicit Apply as a separate CAD body. On a synthetic imported
+two-face shell, simulated pointer tests exercised a first extension, project
+save/reopen and a second extension; shared seams were not offered as free
+edges and preceding sources were preserved. Details and limits are in
+`MULTIFACE-D-CHECKPOINT.md`. The handle is not offered on solid faces. Physical
+input, packaged-desktop behavior and QS interaction parity remain unverified.
 
 On a synthetic imported STEP sheet, the source and compiled UI tests exercised
 edge click, D drag, live preview, click-without-drag, pointer cancellation,
@@ -510,3 +875,13 @@ The current Apply path can still enqueue a host import after its last source che
 The existing dialog now uses `SurfaceDraft` as the sole authority for geometry, local history and CAD-preview scheduling. A session retains that controller outside the panel; it is not yet the host workspace session. `SurfaceGesture` handles the prototype's point drag, including pointer identity, the drag threshold, Alt and cancellation. `WorkspacePreview` prepares owned face meshes for the eventual shared viewport; it does not create a camera or renderer and is not yet connected to the host. Its source-mask callback must be atomic and restore only the host's temporary mask.
 
 On isolated synthetic STEP fixtures, the integrated source dialog passed history, locks, protected boundaries, failure recovery, point/edge/cell selection, drag and scan snap; the compiled prototype passed CAD-reference snap, Alt and disabled snap. A source test with Zebra and a note observed a successful `noteResolve` for the new surface revision after STEP export; the note remained a draft and annotated Apply remained disabled. TypeScript and 33 focused controller/gesture/preview tests passed. Results are in `evidence/main-view-preparation/`; a perspective error found and corrected in the CAD-snap test is documented in `evidence/snap/cad-perspective-qa-20261103.md`. These results do not demonstrate shared-viewport integration, persistence of notes, arbitrary STEP support or QuickSurface parity.
+
+### Native boundary capture integration checkpoint · 2026-11-07
+
+Whole-boundary capture now requests an asynchronous native CAD visibility proof through the serialized editor worker. The session returns single-use receipts bound to the exact draft snapshot and preview revision. The layer starts geometry changes only after consuming a current receipt and reprojecting its precise CAD anchor within the pick radius. Pointer motion is buffered during the request; release, Escape, camera/part/viewport changes, source/draft changes and disposal cancel the pending capture. Off-edge and other-pointer navigation remain available. There is no mesh-depth fallback or directional deflection allowance.
+
+The narrow layer/session selection passed 43 tests, including stale responses and failed requests. A real session/dispatcher/OCCT test passed native proof, a 0.2 mm complete-boundary gesture, valid one-face/four-edge STEP export and one Undo (maximum sampled STEP displacement error 2.66e-15 mm; Undo error zero). The existing qualified curved STEP in one oblique view also passed the native-backed layer pick despite its 0.01147 mm curve-to-render-mesh gap. Its pointer/host/controller lease is simulated; the separate session test exercises the real controller. Synthetic measurements and the unchanged input SHA are in `evidence/whole-boundary/native-async-integration/result.json`.
+
+This remains plugin WIP pending independent integration review and GUI acceptance. No host, browser or user project was changed. Support stays limited to the previously qualified single natural open face; trim/shared solids, clipping, grazing or ambiguous native intersections refuse. These checks do not establish general occlusion correctness or QuickSurface parity.
+
+The isolated GUI preparation subsequently exposed an unchanged-face refusal when the synthetic fixture selected the box's first 600 mm² face: that face is topologically reversed, whereas `makeFaceOnSurface`/`fixShape` rebuilt it forward. The native regression reproduced the -Z to +Z normal flip before the fix. `rebuildFreeBoundary` now preserves the support's forward/reversed orientation explicitly; the original normal-validation threshold remains unchanged. The regression and three existing free-boundary support/refusal checks passed (4/4), including valid STEP reimport with preserved orientation. Receipt: `evidence/whole-boundary/native-async-integration/reversed-free-boundary.json`. No browser rerun or integrated GUI acceptance is implied.

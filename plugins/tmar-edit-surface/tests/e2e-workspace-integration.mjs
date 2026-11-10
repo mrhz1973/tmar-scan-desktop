@@ -3,7 +3,7 @@
 // means a synthetic box. Never connects to an existing user browser profile.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { readFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { readFileSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 if (process.env.SCANRULER_ISOLATED !== '1') throw Error('Set SCANRULER_ISOLATED=1 for an isolated test app.')
@@ -13,12 +13,27 @@ if (url.protocol !== 'http:' || !['localhost','127.0.0.1','[::1]'].includes(url.
   throw Error('APP_URL must be an isolated local HTTP origin with an explicit port.')
 const sourceFile = process.env.STEP_FILE
 const testAlignedDepth = process.env.TEST_ALIGNED_DEPTH === '1'
+const annotatedApply = process.env.TEST_ANNOTATED_APPLY === '1'
+if(process.env.TEST_ADAPTIVE_NOTE==='1' && (process.env.TEST_ADAPTIVE_APPLY!=='1' || process.env.TEST_PROJECT_ROUNDTRIP!=='1')) throw Error('TEST_ADAPTIVE_NOTE requires adaptive Apply and project roundtrip.')
+if(annotatedApply && (process.env.TEST_ZEBRA_NOTES!=='1' || process.env.TEST_PROJECT_ROUNDTRIP!=='1'))
+  throw Error('TEST_ANNOTATED_APPLY requires Zebra notes and project roundtrip.')
+if(process.env.TEST_HISTORY_RECIPE==='1' && !annotatedApply)
+  throw Error('TEST_HISTORY_RECIPE requires annotated Apply.')
+if(process.env.TEST_HISTORY_FREEZE==='1' && process.env.TEST_HISTORY_RECIPE!=='1')
+  throw Error('TEST_HISTORY_FREEZE requires TEST_HISTORY_RECIPE.')
+if(process.env.TEST_HISTORY_REPLAY==='1' && process.env.TEST_HISTORY_FREEZE!=='1')
+  throw Error('TEST_HISTORY_REPLAY requires TEST_HISTORY_FREEZE.')
+if(process.env.TEST_HISTORY_RESTORE==='1' && process.env.TEST_HISTORY_REPLAY!=='1')
+  throw Error('TEST_HISTORY_RESTORE requires TEST_HISTORY_REPLAY.')
 if (sourceFile && (!isAbsolute(sourceFile) || !['.step','.stp'].includes(extname(sourceFile).toLowerCase())))
   throw Error('STEP_FILE must be an absolute STEP path.')
 if (sourceFile && process.env.TEST_FACE_SWITCH === '1')
   throw Error('TEST_FACE_SWITCH uses only its synthetic box fixture.')
 if (sourceFile && testAlignedDepth) throw Error('TEST_ALIGNED_DEPTH uses only its synthetic box fixture.')
 const requestedFace = process.env.FACE_INDEX
+const requestedBody = process.env.BODY_INDEX ?? '0'
+if (!/^\d+$/.test(requestedBody) || !Number.isSafeInteger(Number(requestedBody)))
+  throw Error('BODY_INDEX must be a non-negative integer.')
 if (requestedFace !== undefined && (!/^\d+$/.test(requestedFace) || !Number.isSafeInteger(Number(requestedFace))))
   throw Error('FACE_INDEX must be a non-negative integer.')
 const outputRoot = process.env.EDIT_SURFACE_QA_OUT
@@ -51,9 +66,16 @@ try {
   const launched = await launchApp({ url: url.href, width: 1440, height: 1000, agentDataOk: false,
     userDataDir: join(out, 'owned-browser-profile'), protocolTimeout: 120000 })
   browser = launched.browser; page = launched.page; report.consoleErrors = launched.consoleErrors
+  if(process.env.TEST_PROJECT_ROUNDTRIP==='1') {
+    const downloads=join(out,'downloads');mkdirSync(downloads)
+    const cdp=await page.createCDPSession()
+    await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:downloads,eventsEnabled:true})
+  }
+  const supportClose = await page.$('[data-test="support-card"] button[aria-label="Close"]')
+  if (supportClose) await supportClose.click()
   const dialogChoices = []
   page.on('dialog', dialog => { void (dialogChoices.shift() === false ? dialog.dismiss() : dialog.accept()) })
-  await page.evaluate(async step => {
+  await page.evaluate(async ({step, bodyIndex}) => {
     const { runCommand } = await import('/src/commands/registry.ts')
     const { useShell } = await import('/src/state/shellStore.ts')
     const { useReverse } = await import('/plugins/reverse/state/reStore.ts')
@@ -68,20 +90,35 @@ try {
     await reverseSession().startKernel(); await reverseSession().settled()
     await runCommand('reverse.import.step', { bytes: new TextEncoder().encode(step), name: 'workspace-test.step' })
     await reverseSession().settled()
-    const scene = sceneOf(), id = useReverse.getState().bodies[0]?.id
+    const scene = sceneOf(), id = useReverse.getState().bodies[bodyIndex]?.id
     if (!scene || !id) throw Error('Imported CAD body unavailable')
     scene.fitToView()
     window.surfaceQa = { runCommand, useReverse, reverseSession, scene, reScene: reSceneOf(scene), useWorkspaceEditor, history, id }
-  }, input.toString('utf8'))
+  }, {step:input.toString('utf8'),bodyIndex:Number(requestedBody)})
   await page.waitForFunction(() => !!window.surfaceQa.reScene.bodyMeshes.get(window.surfaceQa.id), { timeout: 60000 })
   await page.evaluate(() => {
     const q = window.surfaceQa, cam = q.scene.layerHost().camera()
     q.before = { canvas: q.scene.layerHost().canvas, camera: cam, pose: JSON.stringify([cam.position.toArray(),cam.quaternion.toArray()]),
       geometry: q.reScene.bodyMeshes.get(q.id).geometry, history: q.history.useHistory.getState().past.length,
+      bodyCount:q.useReverse.getState().bodies.length,
       canvasCount: document.querySelectorAll('.viewport canvas').length }
   })
   await page.waitForSelector('[data-test=feature-edit-surface]:enabled', { timeout: 60000 })
   await page.click('[data-test=feature-edit-surface]')
+  await page.waitForFunction(()=>!!document.querySelector('[data-test=surface-source-body], [data-test=workspace-surface-parameters]'),{timeout:120000})
+  const chooser=await page.$('[data-test=surface-source-body]')
+  if(chooser){
+    const id=await page.evaluate(()=>String(window.surfaceQa.id))
+    await page.select('[data-test=surface-source-body]',id)
+    await page.waitForFunction(()=>[...document.querySelectorAll('[role=dialog][aria-label="Scegli corpo CAD"] button')].some(b=>b.textContent.trim()==='Continua'&&!b.disabled))
+    await page.evaluate(()=>[...document.querySelectorAll('[role=dialog][aria-label="Scegli corpo CAD"] button')].find(b=>b.textContent.trim()==='Continua').click())
+    await page.waitForFunction(async()=>{
+      const {useStore}=await import('/src/state/store.ts')
+      return !!document.querySelector('[data-test=workspace-surface-parameters]') || !!useStore.getState().errorText
+    },{timeout:120000})
+    const error=await page.evaluate(async()=>{const {useStore}=await import('/src/state/store.ts');return useStore.getState().errorText})
+    if(error)throw Error(`Apertura Edit Surface rifiutata: ${error}`)
+  }
   await page.waitForSelector('[data-test=workspace-surface-parameters]', { timeout: 120000 })
   const entered = await page.evaluate(() => {
     const q = window.surfaceQa, cam = q.scene.layerHost().camera(), state = q.useWorkspaceEditor.getState()
@@ -133,6 +170,203 @@ try {
     const s = window.surfaceQa.useWorkspaceEditor.getState()
     return s.snapshot?.validation.kind === 'valid' && !s.controller?.getPanelState().calculating
   }, { timeout: 120000 })
+  if (process.env.TEST_ADAPTIVE_WITNESS === '1') {
+    if (!sourceFile || Number(requestedBody)!==0) throw Error('Adaptive witness QA requires LEGO body 0')
+    const witness=await page.evaluate(async()=>{
+      const c=window.surfaceQa.useWorkspaceEditor.getState().controller,worker=c.runtime.worker,original=worker.ask.bind(worker)
+      let captured=null;worker.ask=async function(req,...rest){const result=await original(req,...rest);if(req.action==='selectAdaptiveExperimental')captured=result.witnessPole;return result}
+      try {await c.chooseFace(7,false,true)} finally {worker.ask=original}
+      return captured
+    })
+    assert(Number.isInteger(witness) && witness>=0,'Adaptive witness not returned')
+    await page.waitForFunction(()=>{const s=window.surfaceQa.useWorkspaceEditor.getState();return s.snapshot?.validation.kind==='valid'&&!s.controller?.getPanelState().calculating},{timeout:120000})
+    const before=await page.evaluate(i=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller,s=c.getViewState();c.setDragMode('local');c.setAxis(2);c.selectPoints([i],false);return [...s.net.poles[i]]},witness)
+    if(process.env.TEST_ADAPTIVE_DRAG==='1') {
+      await page.evaluate(()=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller;c.setSelectionMode('points');c.setSnap(false);const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Inquadra reticolo');if(b&&!b.disabled)b.click()})
+      await new Promise(r=>setTimeout(r,300))
+      const projection=()=>page.evaluate(i=>{const q=window.surfaceQa,h=q.scene.layerHost(),c=q.useWorkspaceEditor.getState().controller,cam=h.camera(),p=c.getViewState().net.poles[i],r=h.canvas.getBoundingClientRect();h.partGroup.updateWorldMatrix(true,true);cam.updateMatrixWorld(true);const v=cam.position.clone().set(...p).applyMatrix4(h.partGroup.matrixWorld).project(cam);return {x:r.left+(v.x+1)*r.width/2,y:r.top+(1-v.y)*r.height/2,visible:Math.abs(v.z)<1}},witness)
+      let pt=await projection();assert(pt.visible,'Adaptive witness offscreen before zoom')
+      await page.mouse.move(pt.x,pt.y);await page.mouse.wheel(0,-1000);await new Promise(r=>setTimeout(r,350));pt=await projection()
+      check(await page.evaluate(p=>document.elementFromPoint(p.x,p.y)===window.surfaceQa.scene.layerHost().canvas,pt),'adaptive witness is reachable in the viewport')
+      await page.mouse.move(pt.x,pt.y);await page.mouse.down({button:'left'})
+      await page.waitForFunction(()=>window.surfaceQa.useWorkspaceEditor.getState().snapshot?.gesture==='pole',{timeout:10000})
+      await page.mouse.move(pt.x,pt.y-15,{steps:5});await page.mouse.up({button:'left'})
+    } else await page.click('[data-test=surface-move]')
+    await page.waitForFunction(({i,before})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[i];return s.snapshot?.validation.kind==='valid'&&!s.controller?.getPanelState().calculating&&p?.some((x,j)=>Math.abs(x-before[j])>1e-6)}, {timeout:120000},{i:witness,before})
+    const edited=await page.evaluate(async()=> (await window.surfaceQa.useWorkspaceEditor.getState().controller.exportStep()).step)
+    const source=kernel.importStep(input.toString('utf8')),solids=kernel.getSubShapes(source,'solid'),faces=kernel.getSubShapes(solids[0],'face'),result=kernel.importStep(edited),resultFaces=kernel.getSubShapes(result,'face')
+    let samples=0,maximum=0
+    try {check(kernel.isValid(result),'adaptive edited STEP is valid');assert(resultFaces.length===faces.length,'Face count changed');const a=faces[7],b=resultFaces[7],u=kernel.uvBounds(a)
+      for(let i=0;i<=128;i++)for(let j=0;j<=128;j++){const x=u.uMin+(u.uMax-u.uMin)*i/128,y=u.vMin+(u.vMax-u.vMin)*j/128;if(kernel.classifyPointOnFace(a,x,y)!=='in')continue;const p=kernel.pointOnSurface(a,x,y),q=kernel.pointOnSurface(b,x,y);const d=Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z);if(!Number.isFinite(d))throw Error('Invalid witness distance');maximum=Math.max(maximum,d);samples++}
+      check(samples>0&&maximum>0.001,'adaptive edit changes sampled interior of the original face')
+    } finally {faces.forEach(x=>kernel.release(x));resultFaces.forEach(x=>kernel.release(x));solids.forEach(x=>kernel.release(x));kernel.release(source);kernel.release(result)}
+    if(process.env.TEST_ADAPTIVE_NOTE==='1') {
+      await page.click('[data-test=surface-zebra]')
+      await page.waitForFunction(()=>{const root=window.surfaceQa.scene.layerHost().partGroup.getObjectByName('tmar-edit-surface-preview');let count=0;root?.traverse(n=>{if(n.userData.tmarZebra)count++});return count>0},{timeout:10000})
+      await page.click('[data-test=surface-note-add]')
+      await page.evaluate(()=>window.surfaceQa.scene.viewFrom('bottom'));await new Promise(r=>setTimeout(r,350))
+      const hit=await page.evaluate(async()=>{const THREE=await import('/node_modules/three/build/three.module.js'),q=window.surfaceQa,c=q.useWorkspaceEditor.getState().controller,host=q.scene.layerHost(),rect=host.canvas.getBoundingClientRect(),root=host.partGroup.getObjectByName('tmar-edit-surface-preview'),camera=host.camera(),ray=new THREE.Raycaster();root.updateWorldMatrix(true,true);camera.updateMatrixWorld(true)
+        for(const mesh of root.children){if(mesh.userData.face!==c.getViewState().face||!mesh.geometry?.index)continue;const pos=mesh.geometry.attributes.position,idx=mesh.geometry.index
+          for(let i=0;i+2<idx.count;i+=3){const p=new THREE.Vector3();for(let j=0;j<3;j++)p.add(new THREE.Vector3().fromBufferAttribute(pos,idx.getX(i+j)));p.multiplyScalar(1/3).applyMatrix4(mesh.matrixWorld).project(camera);const x=rect.left+(p.x+1)*rect.width/2,y=rect.top+(1-p.y)*rect.height/2;if(p.z< -1||p.z>1||x<rect.left+10||x>rect.right-10||y<rect.top+10||y>rect.bottom-10||document.elementFromPoint(x,y)!==host.canvas)continue;ray.setFromCamera(new THREE.Vector2(p.x,p.y),camera);if(ray.intersectObjects(root.children,true)[0]?.object===mesh)return {x,y}}
+        }throw Error('No visible face triangle for note')})
+      await page.mouse.click(hit.x,hit.y);await page.waitForSelector('[data-test=surface-note-text]',{timeout:15000});await page.type('[data-test=surface-note-text]','Nota Zebra adattiva')
+      const note=await page.evaluate(()=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller;return {notes:c.getPanelState().notes.length,pins:c.getViewState().notePins.length,text:c.getPanelState().notes[0]?.text}})
+      check(note.notes===1&&note.pins===1&&note.text==='Nota Zebra adattiva','note is anchored while Zebra is enabled')
+    }
+    if(process.env.TEST_ADAPTIVE_APPLY==='1') {
+      if(process.env.TEST_PROJECT_ROUNDTRIP!=='1')throw Error('Adaptive apply QA requires project roundtrip')
+      await page.waitForSelector('[data-test=workspace-editor-apply]:enabled',{timeout:120000})
+      await page.click('[data-test=workspace-editor-apply]')
+      await page.waitForFunction(()=>{const s=window.surfaceQa.useWorkspaceEditor.getState();return s.phase==='closed'||!!s.error},{timeout:120000})
+      const status=await page.evaluate(()=>{const s=window.surfaceQa.useWorkspaceEditor.getState();return {phase:s.phase,error:s.error}})
+      assert(status.phase==='closed',`Apply refused: ${status.error}`)
+      const after=await page.evaluate(async()=>{const q=window.surfaceQa,s=q.useReverse.getState(),receipt=q.useWorkspaceEditor.getState().receipt,created=receipt?.createdBodyIds?.[0];if(!created)throw Error('No CAD copy');const answer=await q.runCommand('reverse.body.edit_source',{body:created});return {created,original:q.id,count:s.bodies.length,step:new TextDecoder().decode(answer.file.bytes)}})
+      if(process.env.TEST_ADAPTIVE_NOTE==='1') {const savedNote=await page.evaluate(async id=>{const {useNotes}=await import('/plugins/reverse/state/noteStore.ts');return useNotes.getState().notes.find(n=>n.text==='Nota Zebra adattiva'&&n.on[0]?.body===id)},after.created);check(!!savedNote&&savedNote.attachment?.status==='verified','Apply keeps the note on the adaptive CAD copy');report.note={uuid:savedNote.attachment.noteUuid,text:savedNote.text,at:savedNote.at}}
+      const shape=kernel.importStep(after.step),solids=kernel.getSubShapes(shape,'solid');let volume
+      try {volume=kernel.getVolume(shape);check(kernel.isValid(shape)&&solids.length===1,'Apply publishes a valid adaptive CAD copy')} finally {solids.forEach(x=>kernel.release(x));kernel.release(shape)}
+      await page.waitForSelector('[data-test=save-project]:enabled');await page.click('[data-test=save-project]')
+      let saved;for(let i=0;i<400&&!saved;i++){const f=readdirSync(join(out,'downloads')).find(n=>n.endsWith('.scanruler'));if(f)saved=join(out,'downloads',f);else await new Promise(r=>setTimeout(r,100))}
+      assert(saved,'No saved project')
+      const reopened=await browser.newPage();reopened.on('dialog',d=>void d.accept());reopened.on('pageerror',e=>report.consoleErrors.push('reopen: '+e.message))
+      await reopened.goto(url.href,{waitUntil:'domcontentloaded'});await reopened.waitForSelector('[data-test=project-input]');await(await reopened.$('[data-test=project-input]')).uploadFile(saved);await reopened.click('[data-test=workspace-reverse]')
+      await reopened.waitForFunction(async({count,original,created})=>{const {useReverse}=await import('/plugins/reverse/state/reStore.ts');const s=useReverse.getState();return !s.building&&s.bodies.length===count&&s.bodies.some(b=>b.id===original)&&s.bodies.some(b=>b.id===created)}, {timeout:120000},{count:after.count,original:after.original,created:after.created})
+      if(process.env.TEST_ADAPTIVE_NOTE==='1') {await reopened.waitForFunction(async({body,uuid})=>{const {useNotes}=await import('/plugins/reverse/state/noteStore.ts');return useNotes.getState().notes.some(n=>n.on[0]?.body===body&&n.text==='Nota Zebra adattiva'&&n.attachment?.noteUuid===uuid&&n.attachment?.status==='verified')},{timeout:120000},{body:after.created,uuid:report.note.uuid});check(true,'saved project reopens the verified adaptive surface note')}
+      const reopenedStep=await reopened.evaluate(async id=>{const {reverseSession}=await import('/plugins/reverse/app/reSession.ts');return (await reverseSession().client().bodyEditSource(id)).text},after.created)
+      const restored=kernel.importStep(reopenedStep),rs=kernel.getSubShapes(restored,'solid');try {check(kernel.isValid(restored)&&rs.length===1&&Math.abs(kernel.getVolume(restored)-volume)<1e-6,'saved project reopens the valid adaptive CAD copy')} finally {rs.forEach(x=>kernel.release(x));kernel.release(restored)}
+      await reopened.close();report.adaptiveApply={bodyIndex:0,faceIndex:7,witnessPole:witness,interiorSamples:samples,maximumDisplacementMm:maximum,volume,savedSha256:sha(readFileSync(saved))}
+      check(report.consoleErrors.length===0,'no browser console errors');report.inputHashAfter=sha(readFileSync(sourceFile));report.sourceUnchanged=report.inputHashAfter===inputHash;check(report.sourceUnchanged,'original STEP unchanged')
+      report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
+    }
+    if(process.env.TEST_ADAPTIVE_DRAG==='1') {
+      await page.click('[data-test=surface-undo]')
+      await page.waitForFunction(({i,before})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[i];return s.snapshot?.validation.kind==='valid'&&p&&p.every((v,j)=>Math.abs(v-before[j])<1e-8)}, {timeout:120000},{i:witness,before})
+      check(true,'Undo restores the adaptive pole after a mouse drag')
+    }
+    report.adaptive={faceIndex:7,witnessPole:witness,interiorSamples:samples,maximumDisplacementMm:maximum,method:process.env.TEST_ADAPTIVE_DRAG==='1'?'mouse':'numeric'}
+    check(report.consoleErrors.length===0,'no browser console errors');report.inputHashAfter=sha(readFileSync(sourceFile));report.sourceUnchanged=report.inputHashAfter===inputHash;check(report.sourceUnchanged,'original STEP unchanged')
+    report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
+  }
+  if (process.env.TEST_NAV_ONLY === '1') {
+    await page.evaluate(async () => {
+      const {useStore}=await import('/src/state/store.ts');useStore.getState().setNavScheme('cnckitchen')
+      const c=window.surfaceQa.useWorkspaceEditor.getState().controller
+      c.setSelectionMode('points');const s=c.getViewState();const i=s.net.poles.findIndex((_,i)=>!s.hiddenPoles.includes(i))
+      if(i<0)throw Error('No visible control point');c.selectPoints([i],false);window.navQaPole=i
+    })
+    await page.waitForSelector('[data-test=surface-navigation-only]')
+    await page.click('[data-test=surface-navigation-only]')
+    const before=await page.evaluate(()=>{
+      const q=window.surfaceQa,h=q.scene.layerHost(),c=q.useWorkspaceEditor.getState().controller,cam=h.camera(),p=c.getViewState().net.poles[window.navQaPole]
+      h.partGroup.updateMatrixWorld(true);cam.updateMatrixWorld(true)
+      const projected=cam.position.clone().set(...p).applyMatrix4(h.partGroup.matrixWorld).project(cam),r=h.canvas.getBoundingClientRect()
+      return {x:r.left+(projected.x+1)*r.width/2,y:r.top+(1-projected.y)*r.height/2,rotation:cam.quaternion.toArray(),position:cam.position.toArray(),net:JSON.stringify(c.getViewState().net)}
+    })
+    await page.mouse.move(before.x,before.y);await page.mouse.down({button:'left'});await page.mouse.move(before.x+90,before.y+50,{steps:8});await page.mouse.up({button:'left'});await new Promise(r=>setTimeout(r,200))
+    const after=await page.evaluate(()=>{const q=window.surfaceQa,c=q.useWorkspaceEditor.getState().controller,cam=q.scene.layerHost().camera();return {rotation:cam.quaternion.toArray(),position:cam.position.toArray(),net:JSON.stringify(c.getViewState().net)}})
+    check(after.rotation.some((v,i)=>Math.abs(v-before.rotation[i])>1e-7),'navigation mode rotates the host camera over a selected point')
+    check(after.net===before.net,'navigation does not alter the selected CAD draft')
+    await page.mouse.move(before.x,before.y);await page.mouse.down({button:'right'});await page.mouse.move(before.x+60,before.y+30,{steps:8});await page.mouse.up({button:'right'});await new Promise(r=>setTimeout(r,200))
+    const pan=await page.evaluate(()=>{const cam=window.surfaceQa.scene.layerHost().camera();return {position:cam.position.toArray(),rotation:cam.quaternion.toArray()}})
+    check(pan.position.some((v,i)=>Math.abs(v-after.position[i])>1e-7) && !pan.rotation.some((v,i)=>Math.abs(v-after.rotation[i])>1e-7),'navigation mode pans the host camera')
+    await page.click('[data-test=surface-navigation-only]')
+    check(await page.$eval('[data-test=surface-navigation-only]',e=>!e.checked),'navigation toggle can be turned off')
+    await page.evaluate(()=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller;c.setDragMode('screen');c.setSnap(false)})
+    if(process.env.TEST_DENSE_NEXT==='1') {
+      if (!sourceFile) throw Error('TEST_DENSE_NEXT requires STEP_FILE')
+      await page.waitForSelector('[data-test=surface-next-free]:enabled');await page.click('[data-test=surface-next-free]')
+      const before=await page.evaluate(()=>{const c=window.surfaceQa.useWorkspaceEditor.getState().controller,s=c.getViewState(),i=s.selected[0];c.setDragMode('local');c.setAxis(2);return {i,point:[...s.net.poles[i]],locked:s.locked.includes(i),hidden:s.hiddenPoles.includes(i),volume:s.preview.volume}})
+      check(!before.locked&&!before.hidden,'next control selects one unlocked visible pole')
+      await page.click('[data-test=surface-move]')
+      await page.waitForFunction(({i,point})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),v=s.controller?.getViewState();return s.snapshot?.validation.kind==='valid'&&!s.controller?.getPanelState().calculating&&v?.net?.poles[i].some((x,j)=>Math.abs(x-point[j])>1e-6)}, {timeout:120000},before)
+      const after=await page.evaluate(()=>window.surfaceQa.useWorkspaceEditor.getState().controller.getViewState().preview.volume)
+      report.dense={pole:before.i,volumeBefore:before.volume,volumeAfter:after,volumeDelta:after-before.volume}
+      check(true,'numeric move validates after selecting the next free pole')
+      await page.click('[data-test=surface-undo]')
+      await page.waitForFunction(({i,point})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[i];return s.snapshot?.validation.kind==='valid'&&p&&p.every((v,j)=>Math.abs(v-point[j])<1e-8)}, {timeout:120000},before)
+      check(true,'Undo restores the selected pole')
+      check(report.consoleErrors.length===0,'no browser console errors')
+      report.inputHashAfter=sha(readFileSync(sourceFile));report.sourceUnchanged=report.inputHashAfter===inputHash;check(report.sourceUnchanged,'original STEP unchanged')
+      report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
+    }
+    const target=await page.evaluate(()=>{
+      const q=window.surfaceQa,h=q.scene.layerHost(),c=q.useWorkspaceEditor.getState().controller,state=c.getViewState(),cam=h.camera(),r=h.canvas.getBoundingClientRect()
+      h.partGroup.updateWorldMatrix(true,true);cam.updateMatrixWorld(true)
+      const points=state.net.poles.map((p,id)=>{const v=cam.position.clone().set(...p).applyMatrix4(h.partGroup.matrixWorld).project(cam);return {id,x:r.left+(v.x+1)*r.width/2,y:r.top+(1-v.y)*r.height/2,visible:Math.abs(v.z)<1}})
+      const free=points.filter(p=>p.visible && !state.locked.includes(p.id) && !state.hiddenPoles.includes(p.id) && p.x>r.left+12 && p.x<r.right-12 && p.y>r.top+12 && p.y<r.bottom-12 && document.elementFromPoint(p.x,p.y)===h.canvas)
+      free.forEach(p=>p.separation=Math.min(...points.filter(q=>q.id!==p.id).map(q=>Math.hypot(p.x-q.x,p.y-q.y))))
+      return free.sort((a,b)=>b.separation-a.separation)[0]??null
+    })
+    assert(target && target.separation>8,'No visible free control point after navigation')
+    const original=await page.evaluate(i=>[...window.surfaceQa.useWorkspaceEditor.getState().controller.getViewState().net.poles[i]],target.id)
+    await page.mouse.move(target.x,target.y);await page.mouse.down({button:'left'});await page.mouse.move(target.x+15,target.y+8,{steps:4});await page.mouse.up({button:'left'})
+    await page.waitForFunction(({id,original})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[id];return s.snapshot?.validation.kind==='valid' && s.snapshot.gesture==='idle' && p?.some((v,i)=>Math.abs(v-original[i])>1e-6)}, {timeout:120000},{id:target.id,original})
+    check(true,'a free control point can be edited after navigation')
+    await page.click('[data-test=surface-undo]')
+    await page.waitForFunction(({id,original})=>{const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller?.getViewState().net?.poles[id];return s.snapshot?.validation.kind==='valid' && p && p.every((v,i)=>Math.abs(v-original[i])<1e-8)}, {timeout:120000},{id:target.id,original})
+    check(true,'Undo restores the edited point after navigation')
+    await page.screenshot({path:join(out,'navigation-mode.png')})
+    check(report.consoleErrors.length===0,'no browser console errors')
+    report.bodyIndex=Number(requestedBody)
+    if(sourceFile) {report.inputHashAfter=sha(readFileSync(sourceFile));report.sourceUnchanged=report.inputHashAfter===inputHash;check(report.sourceUnchanged,'original STEP is unchanged')}
+    report.verdict='PASS';writeFileSync(join(out,'result.json'),JSON.stringify(report,null,2));await browser.close();process.exit(0)
+  }
+  if (process.env.TEST_FUSION_NAVIGATION === '1') {
+    // Test the actual shared camera, with a CAD face and its control net active.
+    // Use Fusion's configured chords, not the standalone prototype's controls.
+    await page.evaluate(async () => {
+      const { useStore } = await import('/src/state/store.ts')
+      useStore.getState().setNavScheme('fusion')
+    })
+    await new Promise(resolve => setTimeout(resolve, 250))
+    const bounds = await page.evaluate(() => {
+      const r = window.surfaceQa.scene.layerHost().canvas.getBoundingClientRect()
+      return { x: r.left + r.width * 0.7, y: r.top + r.height * 0.3 }
+    })
+    const camera = () => page.evaluate(() => {
+      const c = window.surfaceQa.scene.layerHost().camera()
+      return { position: c.position.toArray(), rotation: c.quaternion.toArray(), zoom: c.zoom }
+    })
+    const changed = (a, b) => a.some((v, i) => Math.abs(v - b[i]) > 1e-7)
+    const beforeOrbit = await camera()
+    await page.mouse.move(bounds.x, bounds.y)
+    await page.keyboard.down('Shift')
+    await page.mouse.down({ button: 'middle' })
+    await page.mouse.move(bounds.x + 90, bounds.y + 50, { steps: 8 })
+    await page.mouse.up({ button: 'middle' })
+    await page.keyboard.up('Shift')
+    await new Promise(resolve => setTimeout(resolve, 200))
+    const afterOrbit = await camera()
+    check(changed(beforeOrbit.rotation, afterOrbit.rotation), 'Fusion Shift+middle rotates the shared view with the control net active')
+    await page.mouse.move(bounds.x, bounds.y)
+    await page.mouse.down({ button: 'middle' })
+    await page.mouse.move(bounds.x + 70, bounds.y + 35, { steps: 8 })
+    await page.mouse.up({ button: 'middle' })
+    await new Promise(resolve => setTimeout(resolve, 200))
+    const afterPan = await camera()
+    check(changed(afterOrbit.position, afterPan.position) && !changed(afterOrbit.rotation, afterPan.rotation),
+      'Fusion middle drag pans without rotating the shared view')
+    await page.mouse.wheel(0, -250)
+    await new Promise(resolve => setTimeout(resolve, 200))
+    const afterZoom = await camera()
+    check(Math.abs(afterPan.zoom - afterZoom.zoom) > 1e-7 || changed(afterPan.position, afterZoom.position),
+      'Fusion wheel changes the shared view zoom')
+  }
+  if (process.env.TEST_REFINE === '1') {
+    const net = () => page.evaluate(() => structuredClone(window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().net))
+    const ready = () => page.waitForFunction(() => {
+      const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller.getPanelState()
+      return s.snapshot?.validation.kind==='valid' && !p.calculating && !p.busy
+    }, {timeout:120000})
+    const before=await net()
+    await page.waitForSelector('[data-test=surface-refine-both]:enabled',{timeout:60000})
+    await page.click('[data-test=surface-refine-both]'); await ready()
+    const refined=await net()
+    check(refined.nu>before.nu && refined.nv>before.nv,'UI refines both control-net directions')
+    await page.click('[data-test=surface-undo]'); await ready()
+    check(JSON.stringify(await net())===JSON.stringify(before),'Undo restores original net after refinement')
+    await page.click('[data-test=surface-redo]'); await ready()
+    check(JSON.stringify(await net())===JSON.stringify(refined),'Redo restores the refined net')
+  }
   if (process.env.TEST_FACE_SWITCH === '1') {
     const waitDialog = () => new Promise((resolve,reject) => {
       const handler = dialog => { clearTimeout(timer); resolve(dialog.message()) }
@@ -225,6 +459,47 @@ try {
     return { poles: s.net.poles.map(p => [...p]), locked: s.locked, volume: c.getViewState().preview.volume }
   })
   check(first.poles.length > first.locked.length, 'selected imported CAD face has an editable control point')
+  if (process.env.TEST_LOCAL_STRETCH === '1') {
+    await page.select('[data-test=surface-continuity]', 'G0')
+    await page.waitForFunction(()=>window.surfaceQa.useWorkspaceEditor.getState().snapshot?.validation.kind==='valid',{timeout:120000})
+    await page.select('[data-test=surface-drag-mode]', 'local')
+    await page.click('[data-test=surface-axis-0]')
+    const target=await page.evaluate(async()=>{
+      const {dragDirection}=await import('/plugins/tmar-edit-surface/localFrame.ts')
+      const c=window.surfaceQa.useWorkspaceEditor.getState().controller,s=c.getPanelState(),net=s.net
+      let best=null
+      for(let i=0;i<net.poles.length;i++) {
+        if(s.locked.includes(i))continue
+        const d=dragDirection(net,i,'local',0);if(!d)continue
+        const dot=p=>p.reduce((sum,x,j)=>sum+x*d[j],0)
+        const delta=dot(net.poles[i])-net.poles.reduce((sum,p)=>sum+dot(p),0)/net.poles.length
+        if(!best||Math.abs(delta)>Math.abs(best.delta))best={i,d,delta,point:[...net.poles[i]]}
+      }
+      if(best)c.selectPoints([best.i],false)
+      return best
+    })
+    assert(target&&Math.abs(target.delta)>1e-5,'No eligible pole for local stretch')
+    await page.$eval('[data-test=surface-stretch-factor]', e=>{
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'1.1')
+      e.dispatchEvent(new Event('input',{bubbles:true}))
+    })
+    check((await page.$eval('[data-test=surface-stretch]',e=>e.textContent)).includes(' U'),
+      'local stretch button identifies the chosen U direction')
+    await page.click('[data-test=surface-stretch]')
+    await page.waitForFunction(({i,p})=>{
+      const s=window.surfaceQa.useWorkspaceEditor.getState(),v=s.controller?.getPanelState().net?.poles[i]
+      return s.snapshot?.validation.kind==='valid'&&v?.some((x,j)=>Math.abs(x-p[j])>1e-7)
+    },{timeout:120000},{i:target.i,p:target.point})
+    const after=await page.evaluate(i=>[...window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().net.poles[i]],target.i)
+    const expected=target.point.map((x,j)=>x+target.d[j]*target.delta*.1)
+    check(Math.hypot(...after.map((x,j)=>x-expected[j]))<1e-6,'local U stretch moves the real STEP pole in its local direction')
+    await page.click('[data-test=surface-undo]')
+    await page.waitForFunction(p=>{
+      const s=window.surfaceQa.useWorkspaceEditor.getState()
+      return s.snapshot?.validation.kind==='valid'&&JSON.stringify(s.controller?.getPanelState().net?.poles)===JSON.stringify(p)
+    },{timeout:120000},first.poles)
+    check(true,'Undo restores the real STEP surface after local stretch')
+  }
   if (testAlignedDepth) {
     // The QA helper places the real camera on the normal; the edit itself is
     // made with real pointer events in the shared viewport.
@@ -417,7 +692,7 @@ try {
         visible: vector.z >= -1 && vector.z <= 1 }
     })
     const candidates = locations.filter(p => p.visible && !state.locked.includes(p.id) && !state.hiddenPoles.includes(p.id) &&
-      p.x > rect.left+12 && p.x < rect.right-12 && p.y > rect.top+12 && p.y < rect.bottom-12)
+      p.x > rect.left+12 && p.x < rect.right-12 && p.y > rect.top+12 && p.y < rect.bottom-12 && document.elementFromPoint(p.x,p.y)===canvas)
     candidates.forEach(p => { p.distance = Math.min(...locations.filter(other => other.id !== p.id).map(other => Math.hypot(p.x-other.x,p.y-other.y))) })
     candidates.sort((a,b) => b.distance-a.distance)
     return candidates[0] ?? null
@@ -445,24 +720,66 @@ try {
     }, { timeout: 10000 })
     await page.click('[data-test=surface-note-add]')
     check(await page.$eval('[data-test=workspace-editor-apply]', button => button.disabled), 'arming note placement disables Apply')
-    // Exercise the real CAD anchor/resolve and note UI. The point is taken from
-    // the selected face's display triangle; viewport clicking has separate tests.
-    await page.evaluate(async () => {
-      const controller = window.surfaceQa.useWorkspaceEditor.getState().controller
-      const view = controller.getViewState(), mesh = view.preview.faceMeshes[view.face]
-      const ids = [...mesh.indices.slice(0,3)], point = [0,1,2].map(axis =>
-        ids.reduce((sum,id) => sum + mesh.positions[id*3+axis], 0)/3)
-      await controller.placeNote(point)
-    })
+    if (process.env.TEST_NOTE_MOUSE === '1') {
+      // Choose a visible triangle of the selected face and click the shared
+      // viewport, exercising its actual picking and note-placement path.
+      const hit = await page.evaluate(async () => {
+        const THREE = await import('/node_modules/.vite/deps/three.js')
+        const q = window.surfaceQa, c = q.useWorkspaceEditor.getState().controller
+        const face = c.getViewState().face, host = q.scene.layerHost(), rect = host.canvas.getBoundingClientRect()
+        const root = host.partGroup.getObjectByName('tmar-edit-surface-preview'), camera = host.camera()
+        root.updateWorldMatrix(true, true); camera.updateMatrixWorld(true)
+        const ray = new THREE.Raycaster()
+        for (const mesh of root.children) {
+          if (mesh.userData.face !== face || !mesh.geometry?.index) continue
+          const pos = mesh.geometry.attributes.position, idx = mesh.geometry.index
+          for (let i = 0; i + 2 < idx.count; i += 3) {
+            const p = new THREE.Vector3()
+            for (let j = 0; j < 3; j++) p.add(new THREE.Vector3().fromBufferAttribute(pos, idx.getX(i + j)))
+            p.multiplyScalar(1 / 3).applyMatrix4(mesh.matrixWorld).project(camera)
+            const x = rect.left + (p.x + 1) * rect.width / 2, y = rect.top + (1 - p.y) * rect.height / 2
+            if (p.z < -1 || p.z > 1 || x < rect.left + 10 || x > rect.right - 10 || y < rect.top + 10 || y > rect.bottom - 10 || document.elementFromPoint(x,y) !== host.canvas) continue
+            ray.setFromCamera(new THREE.Vector2(p.x,p.y), camera)
+            if (ray.intersectObjects(root.children, true)[0]?.object === mesh) return { x, y }
+          }
+        }
+        throw Error('No visible selected-face triangle is available for a physical note click')
+      })
+      await page.mouse.click(hit.x, hit.y)
+    } else {
+      // Separate controller-level path retained for cases without viewport picking.
+      await page.evaluate(async () => {
+        const controller = window.surfaceQa.useWorkspaceEditor.getState().controller
+        const view = controller.getViewState(), mesh = view.preview.faceMeshes[view.face]
+        const ids = [...mesh.indices.slice(0,3)], point = [0,1,2].map(axis =>
+          ids.reduce((sum,id) => sum + mesh.positions[id*3+axis], 0)/3)
+        await controller.placeNote(point)
+      })
+    }
     await page.waitForSelector('[data-test=surface-note-text]', { timeout: 15000 })
     await page.type('[data-test=surface-note-text]', 'Nota durante Zebra')
     const note = await page.evaluate(() => {
       const s = window.surfaceQa.useWorkspaceEditor.getState(), v = s.controller.getViewState()
       return { count: s.snapshot.draftNoteCount, text: s.controller.getPanelState().notes[0]?.text,
-        pins: v.notePins.length, blocked: document.querySelector('[data-test=workspace-editor-apply]').disabled }
+        pins: v.notePins.length, annotated: s.controller.getPanelState().annotatedCopyAvailable,
+        blocked: document.querySelector('[data-test=workspace-editor-apply]').disabled }
     })
-    check(note.count === 1 && note.text === 'Nota durante Zebra' && note.pins === 1 && note.blocked,
-      'note text and resolved pin coexist with Zebra and prevent an unannotated Apply')
+    check(note.count === 1 && note.text === 'Nota durante Zebra' && note.pins === 1 && (note.annotated || note.blocked),
+      'note text and resolved pin coexist with Zebra; plain Apply is blocked where annotations are unavailable')
+    if (process.env.TEST_REFINE_NOTES === '1') {
+      const before=await page.evaluate(() => structuredClone(window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().notes[0]))
+      const waitResolved=() => page.waitForFunction(() => {
+        const s=window.surfaceQa.useWorkspaceEditor.getState(),p=s.controller.getPanelState(),v=s.controller.getViewState()
+        return s.snapshot?.validation.kind==='valid' && !p.busy && !p.calculating && p.notes[0]?.revision===v.preview?.previewRevision && v.notePins.length===1
+      },{timeout:120000})
+      await page.waitForSelector('[data-test=surface-refine-both]:enabled',{timeout:60000})
+      await page.click('[data-test=surface-refine-both]'); await waitResolved()
+      await page.click('[data-test=surface-undo]'); await waitResolved()
+      await page.click('[data-test=surface-redo]'); await waitResolved()
+      const after=await page.evaluate(() => window.surfaceQa.useWorkspaceEditor.getState().controller.getPanelState().notes[0])
+      check(before.id===after.id && before.text===after.text && Math.hypot(...before.at.map((v,i)=>v-after.at[i]))<1e-6,
+        'note identity and position survive exact refinement and Undo/Redo')
+    }
     await page.screenshot({ path: join(out, 'zebra-note.png') })
     await page.select('[data-test=surface-drag-mode]', 'local')
     await page.click('[data-test=surface-axis-2]')
@@ -478,12 +795,101 @@ try {
         note.revision === view.preview?.previewRevision && view.notePins.length === 1 && !!view.stripes
     }, { timeout: 120000 })
     check(true, 'draft note is resolved again after CAD deformation with Zebra still active')
-    const removeNote = await page.evaluateHandle(() => [...document.querySelectorAll('[data-test=workspace-surface-parameters] button')].find(e => e.textContent === 'Rimuovi nota'))
-    await removeNote.asElement().click()
-    await page.waitForFunction(() => window.surfaceQa.useWorkspaceEditor.getState().snapshot?.draftNoteCount === 0)
-    check(true, 'removing the draft note restores the possibility of a plain CAD copy')
+    if(process.env.TEST_HISTORY_RECIPE==='1') {
+      const prepared=await page.evaluate(async()=>{
+        const controller=window.surfaceQa.useWorkspaceEditor.getState().controller
+        const value=await controller.prepareAnnotatedHistory()
+        window.surfaceQa.historyPreparation=value
+        return {version:value.recipe.version,face:value.recipe.faceIndex,notes:value.notes.length,text:value.notes[0]?.text}
+      })
+      await page.waitForFunction(()=>{
+        const q=window.surfaceQa,s=q.useWorkspaceEditor.getState()
+        return s.controller?.isAnnotatedHistoryStampCurrent(q.historyPreparation)
+      },{timeout:120000})
+      check(prepared.face===faceIndex&&prepared.notes===1&&prepared.text==='Nota durante Zebra',
+        'the real edited face and its note prepare a current history recipe together')
+      report.historyPreparation=prepared
+      if(process.env.TEST_HISTORY_FREEZE==='1') {
+        const held=await page.evaluate(()=>{
+          const q=window.surfaceQa,c=q.useWorkspaceEditor.getState().controller,p=q.historyPreparation
+          const lock=c.freezeHistory(p),note=c.getPanelState().notes[0]
+          let refused=false
+          try { c.setNoteText(note.id,'Modifica concorrente') } catch { refused=true }
+          const stillCurrent=lock.isCurrent(), busy=c.getPanelState().busy
+          const before=p.recipe.faceIndex; p.recipe.faceIndex=before+1
+          const rejectsAltered=!lock.isCurrent(); p.recipe.faceIndex=before
+          const acceptsRestored=lock.isCurrent()
+          lock.release();lock.release()
+          return {refused,stillCurrent,busy,rejectsAltered,acceptsRestored,released:!lock.isCurrent(),
+            editable:!c.getPanelState().busy, text:c.getPanelState().notes[0]?.text}
+        })
+        check(held.refused&&held.stillCurrent&&held.busy&&held.rejectsAltered&&held.acceptsRestored&&held.released&&
+          held.editable&&held.text==='Nota durante Zebra',
+          'history lock protects the real CAD draft and its note, then releases cleanly')
+      }
+      if(process.env.TEST_HISTORY_REPLAY==='1') {
+        const replay=await page.evaluate(async()=>{
+          const q=window.surfaceQa,c=q.useWorkspaceEditor.getState().controller,p=q.historyPreparation
+          const answer=await q.runCommand('reverse.body.edit_source',{body:q.id})
+          const step=new Uint8Array(answer.file.bytes)
+          const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',step)),x=>x.toString(16).padStart(2,'0')).join('')
+          const {replaySurfaceHistory}=await import('/plugins/tmar-edit-surface/historyReplay.ts')
+          const live=c.getViewState().preview,expected=live.volume,lock=c.freezeHistory(p)
+          try {
+            const value=await replaySurfaceHistory({bodyKey:p.recipe.source.bodyId,stepSha256:digest,step,
+              assertCurrent:()=>{if(!lock.isCurrent())throw Error('Locked draft or source changed')}},p.recipe)
+            let matchingTopology=value.faceMeshes.length===live.faceMeshes.length,maxVertexDistance=0,vertexCount=0
+            if(matchingTopology) for(let f=0;f<live.faceMeshes.length;f++) {
+              const a=live.faceMeshes[f],b=value.faceMeshes[f]
+              if(a.positions.length!==b.positions.length || a.indices.length!==b.indices.length ||
+                 a.indices.some((index,i)=>index!==b.indices[i])) {matchingTopology=false;break}
+              for(let i=0;i<a.positions.length;i+=3) {
+                const distance=Math.hypot(a.positions[i]-b.positions[i],a.positions[i+1]-b.positions[i+1],a.positions[i+2]-b.positions[i+2])
+                if(!Number.isFinite(distance))throw Error('Non-finite tessellation coordinate')
+                maxVertexDistance=Math.max(maxVertexDistance,distance);vertexCount++
+              }
+            }
+            return {valid:value.valid,volume:value.volume,expected,current:lock.isCurrent(),step:!!value.step,
+              matchingTopology,maxVertexDistance,vertexCount}
+          } finally {lock.release()}
+        })
+        check(replay.valid&&replay.step&&replay.current&&Math.abs(replay.volume-replay.expected)<1e-5&&
+          replay.matchingTopology&&replay.vertexCount>0&&replay.maxVertexDistance<1e-5,
+          'independent history replay reproduces the real STEP draft tessellation and volume')
+        report.historyReplay=replay
+      }
+      if(process.env.TEST_HISTORY_RESTORE==='1') {
+        const restored=await page.evaluate(async()=>{
+          const q=window.surfaceQa,original=q.useWorkspaceEditor.getState().controller,base=original.context
+          const {createWorkspaceSurfaceSession}=await import('/plugins/tmar-edit-surface/workspaceSession.ts')
+          const abort=new AbortController(),fatals=[]
+          const context={...base,sessionId:'independent-history-restore',step:base.step.slice(),signal:abort.signal,
+            own:fn=>{let active=true;return ()=>{if(active){active=false;fn()}}},reportFatal:message=>fatals.push(message)}
+          const restored=await createWorkspaceSurfaceSession(context,()=>{throw Error('No viewport required')})
+          try {
+            await restored.restoreHistoryBundle(JSON.parse(JSON.stringify({recipe:q.historyPreparation.recipe,notes:q.historyPreparation.notes})))
+            const a=original.getPanelState(),b=restored.getPanelState()
+            return {valid:restored.getSnapshot().validation.kind,face:b.face,
+              samePoles:JSON.stringify(a.net.poles)===JSON.stringify(b.net.poles),
+              noteId:b.notes[0]?.id,noteText:b.notes[0]?.text,
+              noteDistance:Math.hypot(...b.notes[0].at.map((v,i)=>v-a.notes[0].at[i])),fatals}
+          } finally {await restored.dispose('cancelled');abort.abort()}
+        })
+        check(restored.valid==='valid'&&restored.face===faceIndex&&restored.samePoles&&
+          restored.noteText==='Nota durante Zebra'&&restored.noteDistance<1e-5&&restored.fatals.length===0,
+          'a fresh independent session restores real STEP control points and the CAD note')
+        report.historyRestore=restored
+      }
+    }
+    if(!annotatedApply){
+      const removeNote = await page.evaluateHandle(() => [...document.querySelectorAll('[data-test=workspace-surface-parameters] button')].find(e => e.textContent === 'Rimuovi nota'))
+      await removeNote.asElement().click()
+      await page.waitForFunction(() => window.surfaceQa.useWorkspaceEditor.getState().snapshot?.draftNoteCount === 0)
+      check(true, 'removing the draft note restores the possibility of a plain CAD copy')
+    }
   }
   await page.waitForSelector('[data-test=workspace-editor-apply]:enabled', { timeout: 120000 })
+  const hideSource=await page.$eval('[data-test=workspace-editor-hide-source]',e=>e.checked)
   await page.click('[data-test=workspace-editor-apply]')
   await page.waitForFunction(() => window.surfaceQa.useWorkspaceEditor.getState().phase === 'closed', { timeout: 120000 })
   const after = await page.evaluate(async () => {
@@ -494,20 +900,69 @@ try {
       steps.push({ id: body.id, text: new TextDecoder().decode(answer.file.bytes) })
     }
     return { steps, receipt, historyDelta: q.history.useHistory.getState().past.length - q.before.history,
-      originalVisible: q.reScene.bodyMeshes.get(q.id)?.material.visible, noOverlay: !document.querySelector('[data-slot="workspace.editor.overlay"]') }
+      originalVisible: !!q.reScene.bodyMeshes.get(q.id)?.visible && !!q.reScene.bodyMeshes.get(q.id)?.material.visible,
+      hiddenBodies:state.hiddenBodies, noOverlay: !document.querySelector('[data-slot="workspace.editor.overlay"]') }
   })
-  check(after.steps.length === 2 && after.receipt?.createdBodyIds?.length === 1 && after.historyDelta === 1,
+  const originalId=await page.evaluate(()=>window.surfaceQa.id), createdId=after.receipt?.createdBodyIds?.[0]
+  const original=after.steps.find(step=>step.id===originalId),copy=after.steps.find(step=>step.id===createdId)
+  check(after.steps.length === (await page.evaluate(()=>window.surfaceQa.before.bodyCount)) + 1 && !!original && !!copy && after.receipt?.createdBodyIds?.length === 1 && after.historyDelta === 1,
     'Apply publishes one CAD copy and one project history step')
-  check(after.originalVisible && after.noOverlay, 'source render mask and editor overlay are released')
+  check(after.originalVisible === !hideSource && after.noOverlay, 'source visibility follows Apply option and editor overlay is released')
+  if(annotatedApply){
+    const savedNote=await page.evaluate(async body=>{const {useNotes}=await import('/plugins/reverse/state/noteStore.ts')
+      return useNotes.getState().notes.find(n=>n.text==='Nota durante Zebra'&&n.on[0]?.body===body)},createdId)
+    check(!!savedNote && savedNote.attachment?.status==='verified','Apply preserves the note on the modified CAD copy')
+    report.note={text:savedNote.text,at:savedNote.at,noteUuid:savedNote.attachment.noteUuid}
+  }
   report.geometry = []
   for (const step of after.steps) {
     const shape = kernel.importStep(step.text), solids = kernel.getSubShapes(shape, 'solid'), faces = kernel.getSubShapes(shape, 'face')
     try { report.geometry.push({ id: step.id, valid: kernel.isValid(shape), solids: solids.length, faces: faces.length, volume: kernel.getVolume(shape) }) }
     finally { solids.forEach(item => kernel.release(item)); faces.forEach(item => kernel.release(item)); kernel.release(shape) }
   }
-  check(report.geometry.every(item => item.valid && item.solids === 1) && report.geometry[0].faces === report.geometry[1].faces,
-    'both exported STEP bodies reimport as valid solids with the same face count')
-  check(Math.abs(report.geometry[0].volume - report.geometry[1].volume) > 1e-7, 'the copy differs geometrically from the source')
+  const sourceGeometry=report.geometry.find(item=>item.id===originalId),copyGeometry=report.geometry.find(item=>item.id===createdId)
+  check(report.geometry.every(item => item.valid && item.solids === 1) && sourceGeometry.faces === copyGeometry.faces,
+    'exported STEP bodies reimport as valid solids and source/copy retain the same face count')
+  check(Math.abs(sourceGeometry.volume - copyGeometry.volume) > 1e-7, 'the copy differs geometrically from the source')
+  if(process.env.TEST_PROJECT_ROUNDTRIP==='1') {
+    await page.waitForSelector('[data-test=save-project]:enabled');await page.click('[data-test=save-project]')
+    let saved
+    for(let i=0;i<400&&!saved;i++){
+      const filename=readdirSync(join(out,'downloads')).find(name=>name.endsWith('.scanruler'))
+      if(filename)saved=join(out,'downloads',filename)
+      else await new Promise(resolve=>setTimeout(resolve,100))
+    }
+    if(!saved)throw Error('Salvataggio progetto non disponibile')
+    report.savedSha256=sha(readFileSync(saved))
+    const reopened=await browser.newPage()
+    reopened.on('dialog',dialog=>void dialog.accept())
+    reopened.on('pageerror',error=>report.consoleErrors.push('reopen: '+error.message))
+    await reopened.goto(url.href,{waitUntil:'domcontentloaded'})
+    await reopened.waitForSelector('[data-test=project-input]')
+    await (await reopened.$('[data-test=project-input]')).uploadFile(saved)
+    await reopened.click('[data-test=workspace-reverse]')
+    await reopened.waitForFunction(async({count,original,copy,hidden})=>{
+      const {useReverse}=await import('/plugins/reverse/state/reStore.ts')
+      const state=useReverse.getState()
+      return !state.building && state.bodies.length===count && state.bodies.some(b=>b.id===copy && b.visible) &&
+        state.bodies.some(b=>b.id===original && b.visible===!hidden)
+    },{timeout:120000},{count:after.steps.length,original:originalId,copy:createdId,hidden:hideSource})
+    const reopenedStep=await reopened.evaluate(async id=>{
+      const {reverseSession}=await import('/plugins/reverse/app/reSession.ts')
+      return (await reverseSession().client().bodyEditSource(id)).text
+    },createdId)
+    if(annotatedApply){
+      await reopened.waitForFunction(async({body,uuid})=>{const {useNotes}=await import('/plugins/reverse/state/noteStore.ts')
+        return useNotes.getState().notes.some(n=>n.on[0]?.body===body&&n.text==='Nota durante Zebra'&&n.attachment?.noteUuid===uuid&&n.attachment?.status==='verified')},
+        {timeout:120000},{body:createdId,uuid:report.note.noteUuid})
+      check(true,'saved project reopens with the verified surface note')
+    }
+    const shape=kernel.importStep(reopenedStep), solids=kernel.getSubShapes(shape,'solid')
+    try {check(kernel.isValid(shape)&&solids.length===1&&Math.abs(kernel.getVolume(shape)-copyGeometry.volume)<1e-6,
+      'saved project reopens with the valid edited body, expected volume and source visibility')}
+    finally {solids.forEach(s=>kernel.release(s));kernel.release(shape)}
+    await reopened.close()
+  }
   check(report.consoleErrors.length === 0, 'no browser application errors')
   report.entered = entered; report.beforeVolume = first.volume; report.afterVolume = changed.volume
   report.verdict = 'PASS'
