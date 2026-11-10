@@ -7,6 +7,10 @@
 // where there are no workers, a client talks to the same service in its own
 // thread (reLocal.ts), so a test or a script builds exactly as the page does.
 
+import type { DraftCopyFaceNoteV1 } from '../../../src/plugins/annotatedCopyTypes'
+import type { VerifiedCopyFace } from './kernelAnnotatedNotes'
+import type { FaceFingerprint } from './topo'
+import type { BodyEditSource } from './buildTypes'
 import type { Vec3 } from '../../../src/core/types'
 import type { Rigid } from '../../../src/core/deviation/rigid'
 import type { NominalSurface } from '../../../src/core/deviation/surface'
@@ -27,6 +31,9 @@ import type { Sketch } from './sketch'
 export type ReWorkerRequest =
   /** Load the kernel. Answered once it is ready to build. */
   | { type: 'init'; requestId: number }
+  /** Explicit current-body read; independent of general STEP export. */
+  | { type: 'body-edit-source'; requestId: number; bodyId: number; expectedKey: string }
+  | {type:'annotated-face';requestId:number;bodyId:number;expectedKey:string;brep:string;notes:DraftCopyFaceNoteV1[]}
   /** Build the feature list — see build.ts — taking up from the steps it
    *  shares with the build standing or the one before it (stepKeys). The
    *  sketches come along by id for what the build has to know about their
@@ -87,6 +94,8 @@ export type ReWorkerRequest =
 
 export type ReWorkerResponse =
   | { type: 'init-ok'; requestId: number; version: string }
+  | { type: 'body-edit-source-ok'; requestId: number; source: BodyEditSource }
+  | {type:'annotated-face-ok';requestId:number;verified:VerifiedCopyFace & {face:FaceFingerprint}}
   /** `bodies`: the ones the page did not hold, whole; `all`: every body
    *  standing, in brief, in order. `crashed`: every step the kernel has
    *  crashed on, by key, with what it said — for the page to keep. */
@@ -320,6 +329,8 @@ export function createReService(loadKernel: () => Promise<ReKernel>, loadManifol
         }
         return answer({ type: 'stage-ok', requestId: msg.requestId, stage }, transfer)
       }
+      if(msg.type==='annotated-face')return answer({type:'annotated-face-ok',requestId:msg.requestId,verified:b.verifyAnnotatedNotes(msg.bodyId,msg.expectedKey,msg.brep,msg.notes)})
+      if (msg.type === 'body-edit-source') return answer({ type: 'body-edit-source-ok', requestId: msg.requestId, source: b.bodyEditSource(msg.bodyId, msg.expectedKey) })
       if (msg.type === 'scan') {
         if (msg.positions === null) scan = null
         else if (msg.positions) {

@@ -1,463 +1,504 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/scanruler-logo-horizontal-on-dark.svg" />
-  <img src="docs/brand/scanruler-logo-horizontal.svg" alt="ScanRuler by CNC Kitchen" width="420" />
-</picture>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+# TMAR Scan Desktop
 
-# ScanRuler by CNC Kitchen
+**An open-source ScanRuler fork with modular Zebra analysis, local notes and navigation, category-scoped feature multi-selection, workspace labels and unified CAD-body export. A Windows/macOS desktop application is planned separately.**
 
-**Use it live at <https://scanruler.com/>** — nothing to install.
+## ScanRuler 0.11.1 + TMAR integration — 10 November 2026
 
-> **Open source under the AGPL, with commercial licenses available.** Want to
-> build ScanRuler into closed-source software, or host a modified version
-> without publishing its source? Write to <stefan@cnckitchen.com>, see
-> [COMMERCIAL.md](COMMERCIAL.md).
+**Versione 4 · Anteprima** combines the complete official **ScanRuler 0.11.1**
+base, including its mesh-worker CSP and fitting-project recovery fixes, with
+our extensions. The integration carries forward the workspace editor host, current Edit
+Surface plugin, navigation and gizmo changes, CAD face duplication, thin-face
+annotation matching and saved parametric edits. Supported edits expose
+**Mantieni la modifica riapribile** when applying and **Riprendi modifica** after
+opening the saved `.scanruler` project. Length inputs and feedback follow the
+selected mm/in unit.
 
-Check a 3D scan against what it should have been, entirely in your browser:
-fit spheres, cylinders and planes to the scan and measure between them, paint
-its deviation from the CAD part, map its wall thickness, or measure a flatbed
-scan the way a measuring microscope would. You can also model the scan into a
-solid STEP body and clean up or reduce the mesh.
+[Integration, source composition and verification](docs/tmar-host-integration-20261110.md)
+· [Saved-edit workflow](plugins/tmar-surface-history/README.md).
+The validation record distinguishes native checks, browser checks and the
+installed Windows build. This migration uses the upstream-pinned
+**occt-wasm 5.15.0**. Its new verification record is
+[Upstream 0.11.1 integration](docs/tmar-upstream-0.11.1-integration-20261110.md);
+prior Versione 3 results remain historical. T2/Tubo qualification and a desktop
+installer remain separate work. Existing user sessions do not update automatically.
 
-**Everything runs locally.** Your files are processed in your browser and
-never leave your computer, unless you connect an [AI agent](#agents).
+[![Zebra inspection on the imported Tubo Finale mesh — user review ongoing](docs/images/zebra-tubo-finale-review-20261102.png)](docs/images/zebra-tubo-finale-review-20261102.png)
 
-![The 3D Measure workspace: a scan of a ball bar with a sphere fitted to each ball and the centre distance between them](docs/images/measure.png)
+*Martino's original Zebra screenshot, published unchanged. The file is an imported STL shown as Scan, not a CAD continuity certificate. **Work in progress — user review ongoing; not final acceptance.***
 
-- [What it does](#what-it-does)
-- [Getting started](#getting-started)
-- [Files in and out](#files-in-and-out)
-- [Good to know](#good-to-know)
-- [Agents](#agents)
-- [Automatic reverse engineering](#automatic-reverse-engineering)
-- [Development](#development)
-- [License](#license)
+## Screenshot overview
 
-The full reference, with every option and how each measurement is computed,
-is the [manual](docs/manual.md), and for the two modelling and mesh workspaces
-[Reverse engineer](plugins/reverse/README.md) and
-[Mesh Tools](plugins/mesh-tools/README.md).
+**Click any thumbnail to open the full-size image.** The eleven new UI screenshots
+use generated demo geometry in the actual app, with the Dark interface; the real-part
+Zebra example above is separately owner-supplied. They illustrate available controls,
+not approval of the reconstructed geometry. [Full gallery and captions](docs/tmar-ui-gallery.md).
 
-## What it does
+| Zebra on a real part | CAD edges with Zebra | STEP reference inspection |
+| --- | --- | --- |
+| [<img src="docs/images/ui/thumb-zebra-real-part.png" alt="Zebra on a real part" width="260">](docs/images/zebra-tubo-finale-review-20261102.png) | [<img src="docs/images/ui/thumb-cad-edges-zebra.png" alt="CAD edges with Zebra" width="260">](docs/images/ui/cad-edges-zebra.png) | [<img src="docs/images/ui/thumb-step-reference-zebra.png" alt="STEP reference inspection" width="260">](docs/images/ui/step-reference-zebra.png) |
 
-All workspaces work on the same loaded scan.
+| Category-scoped feature selection | Local notes and Go to note | Workspace label controls |
+| --- | --- | --- |
+| [<img src="docs/images/ui/thumb-feature-categories.png" alt="Category-scoped feature selection" width="260">](docs/images/ui/feature-categories.png) | [<img src="docs/images/ui/thumb-notes-focus.png" alt="Local notes and Go to note" width="260">](docs/images/ui/notes-focus.png) | [<img src="docs/images/ui/thumb-label-controls.png" alt="Workspace label controls" width="260">](docs/images/ui/label-controls.png) |
 
-### 3D Measure
+| One STEP/STL export dialog | Mesh Tools Zebra inspection | Repeatable regional Smooth |
+| --- | --- | --- |
+| [<img src="docs/images/ui/thumb-unified-export.png" alt="One STEP/STL export dialog" width="260">](docs/images/ui/unified-export.png) | [<img src="docs/images/ui/thumb-mesh-zebra.png" alt="Mesh Tools Zebra inspection" width="260">](docs/images/ui/mesh-zebra.png) | [<img src="docs/images/ui/thumb-regional-smooth.png" alt="Repeatable regional Smooth" width="260">](docs/images/ui/regional-smooth.png) |
 
-Click a feature on the scan and get a fitted **sphere, cylinder, cone,
-torus, plane or circle**: a Gaussian best fit with its σ and form error,
-with the surface around your click picked automatically. You can also mark
-the surface by hand with a brush, a window or a lasso. Build **points, lines
-and planes** from the fits, then add the **distance and angle dimensions** you
-need between them, the way GOM Inspect or PC-DMIS does it. Each dimension
-can be held to a nominal ± tolerance, and **GD&T** checks flatness,
-parallelism, perpendicularity, coaxiality and the rest.
+| Hold Shift to navigate | Dark by default | Review workflow settings |
+| --- | --- | --- |
+| [<img src="docs/images/ui/thumb-shift-navigation.png" alt="Hold Shift to navigate" width="260">](docs/images/ui/shift-navigation.png) | [<img src="docs/images/ui/thumb-dark-settings.png" alt="Dark by default" width="260">](docs/images/ui/dark-settings.png) | [<img src="docs/images/ui/thumb-review-settings.png" alt="Review workflow settings" width="260">](docs/images/ui/review-settings.png) |
 
-- **Align the part** with a guided 3-2-1 datum alignment, an **Auto-align**
-  read off the scan's own faces, or its **symmetry plane**.
-- **Cut a section** across any element and measure the cut on the 2D
-  sheet. A **shadow** section gives the part's widest outline instead, as
-  lines and arcs with clearance all round, for drawing a bin, a foam cutout
-  or a pocket.
-- **Export STEP** of what you measured as analytic geometry (faces, solid
-  cylinders and balls, the section curves, the shadow as a solid), ready to
-  build on in CAD.
+## Default appearance
 
-![A shadow section of a bracket: its outline projected onto the XY plane and extruded through the part as a block](docs/images/shadow.png)
+**Dark is the default**, from the first paint, regardless of the operating system's
+light/dark setting. An explicit saved **Light**, **Dark** or **System** choice is
+still respected. Change it in **Settings > Appearance > Interface**. Existing
+previews do not update automatically. [Verification](docs/tmar-dark-gallery-validation.md).
 
-### Deviation
+An independent fork of [ScanRuler by CNC Kitchen](https://github.com/CNCKitchen/ScanRuler), maintained at [mrhz1973/tmar-scan-desktop](https://github.com/mrhz1973/tmar-scan-desktop). This is not an official CNC Kitchen distribution.
 
-Load the nominal part as a mesh or as a **STEP file** straight from CAD,
-press **Align automatically**, and the scan is best-fitted onto it and
-painted with the signed deviation. Hover for a reading, click to pin one.
-If the scan carries a fixture, spray or supports that pull the fit off,
-**align by picking points** or run a **local fine fit** on the surface you
-mark. **Find volume errors** lists whole regions of extra or missing
-material, such as a boss that was never modelled or a pocket that was never
-cut. **Animate the deformation** plays the map as exaggerated motion, like
-an FE deformed-shape plot. Instead of a reference model, the map can also be
-measured against **one fitted element**: is this face flat, is this bore
-round?
+> **Status as of November 3, 2026: web-source usability extensions implemented.**
+> This source includes Zebra, local notes with a configurable shortcut and Go to note, feature/note multi-selection, collapsible lists, lower-bar Labels controls and one Export body dialog for STEP/STL. **No installable desktop release is provided.** The original site and already open previews do not update automatically. Desktop recovery, AI pause/resume, managed updates and GPU compute remain separate goals.
 
-![The Deviation workspace: a bracket scan best-fitted onto its CAD part and coloured by signed deviation, with the scale and statistics beside it](docs/images/deviation.png)
+**Documentation language:** English is the primary language of this README. Italian localization of the application and documentation is planned for a later stage; it is not available yet.
 
-### Wall thickness
+[Available now](#web-extensions-available-on-main) | [Body STL](#cad-body-stl-export) | [Status and roadmap](#status-and-roadmap) · [Benefits and limitations](#why-a-desktop-application) · [Updates](#updates-without-manual-builds) · [Multi-selection](#model-tree-multi-selection-and-bulk-actions) · [Quick notes](#quick-notes-on-the-model) · [Deviation notes](#notes-directly-in-deviation) · [Settings and display](#settings-collapsible-panels-and-per-workspace-labels) · [Languages](#languages-and-future-italian-localization) · [Try it today](#how-to-try-it-today) · [Original documentation](README.upstream.md)
 
-Load one file and press **Measure wall thickness**. There is no reference and
-no alignment: a ray (or a sphere) is cast across the material from every
-point, and the thin walls light up red.
+## Latest: regional Smooth and Shift navigation
 
-![The Wall thickness workspace: a scanned hood coloured by its wall thickness, thin walls red and thick ones blue, with a histogram beside the scale](docs/images/thickness.png)
+**Marked region only** snapshots the exact selection and never silently falls
+back to the whole object. **Smooth whole part** is separately and explicitly
+labeled. Smooth retains both the selected area and Brush/Window/Lasso so the next
+application needs no extra stroke. Clear marking still removes it deliberately.
 
-### 2D Measure
+Hold **Shift** for temporary Navigate using the current control scheme's normal
+left/right mouse functions. Release it to return to the same selection tool;
+navigation does not add or erase selected surface.
 
-Drop in a **flatbed scan** of a flat part (PNG or JPEG) or pick a
-**section** cut through the 3D scan. Edges are detected to subpixel
-accuracy. Fit **points, lines, circles, arcs and splines** to them with a
-click, a box or picked points, dimension between them, and export the sheet
-at true scale as **SVG, DXF or CSV**. A flatbed image stays flagged
-**UNCALIBRATED** until you calibrate it against something of known size on
-the glass. Its scale can be saved as a scanner profile.
+[Checks and unresolved real-project reproduction](docs/tmar-smooth-brush-validation.md).
+User review remains open; this is an updated web build, not a desktop release.
 
-![The 2D Measure workspace: a section through the bracket scan with three edge-fitted lines, two fitted holes and the dimensions between them](docs/images/section.png)
+## Latest: Mesh Tools review and repeatable Smooth
 
-### Reverse engineer
+**Mesh Tools** now offers local **Note** and **Zebra** controls, shared note
+selection/navigation and inspection of the actual scan or edited/reduced preview.
+New notes anchor to the scan in use; unsupported preview insertion is explicitly
+guarded instead of labeling a different mesh as the target.
 
-**Reverse engineer** turns the scan into a **solid body** in a STEP file that
-CAD opens as a part, not just datums. Sketch on a section through the scan:
-**Fit all chains** reads the slice as lines and arcs, and constraints and
-dimensions hold it. Then **extrude** or **revolve** it, and add **fillets,
-chamfers, shells, holes, threads, drafts, mirrors, patterns, lofts and
-sweeps**. Freeform parts are modelled from **surfaces fitted to the scan**,
-or a network of B-spline patches drawn over it. **Compare in Deviation**
-checks the bodies against the scan. No scan is needed to model: on a blank
-stage it works like a small parametric CAD tool.
+**Smooth** keeps a marked region selected after a successful application, so it
+can be applied again without reselecting. **Intensity (0–100%)** adjusts the share
+of full smoothing; changing the slider alone does not edit geometry. Size, sharp
+edge protection and movement limit remain separate. The movement limit is per
+application, so repeated passes accumulate. The original scan changes only when
+the edited copy is explicitly taken into use.
 
-![The Reverse engineer workspace: a Joy-Con modelled as a solid body over its scan, with the feature tools in the panel](docs/images/reverse-engineer.png)
+[Mesh review](plugins/tmar-mesh-review/README.md) |
+[Smooth controls](plugins/tmar-smooth-controls/README.md) |
+[Actual validation](docs/tmar-mesh-review-validation.md).
+**Visual review remains open; this is web source, not a desktop release.**
 
-### Mesh Tools
+## Latest: STEP-as-Scan borders and visible TMAR version
 
-**Mesh Tools** works on the mesh itself:
-- **Clean it up**: remove islands, delete marked surface, flip normals, cut
-  at a plane, fill holes, smooth, shrink or expand, booleans with measured
-  cylinders or modelled bodies, shell or hollow.
-- **Edited copy**: every edit lands on a copy of the scan, which you can
-  measure against the original before every workspace takes it into use.
-- **Reduce mesh** makes a light mesh for CAD, held within a tolerance of the
-  scan.
-- A modelled replacement piece can be cut to fit the break of a broken part.
+**STEP opened as Scan now keeps its CAD face boundaries with Zebra.** The
+reported import route is supported without reimporting the file as a CAD body.
+The separate **TMAR Versione 1** badge starts a chronological delivery sequence:
+**1, 2, 3…**. A clearly marked **Anteprima** is still a preview, not a stable release.
+Click the badge for Settings; the source commit remains under **Dettagli tecnici**,
+not in the main label. Numbers identify delivered versions, never page loads or
+Git commit counts. Original ScanRuler version and attribution are preserved.
+[Numbering policy and versions](docs/tmar-versions.md). [Follow-up validation](docs/tmar-step-scan-validation.md).
 
-![The Mesh Tools workspace: the bracket scan with its holes filled, the edited copy coloured by its distance from the scan and the new patches shown grey](docs/images/mesh.png)
+## CAD face edges with Zebra
 
-## Getting started
+Use **CAD edges** on the lower bar in Reverse engineer or single-view Surface
+Deviation. **Show CAD edges**, color and 1–6 px thickness are available in the
+linked panel. Editable bodies reuse their topology; STEP scans/references retain face
+boundaries without internal triangle wireframe. Set **Tangent / fillet edges:
+Drawn** for the CAD-body fillet rims. A mesh-only STL cannot supply CAD face topology.
 
-1. **Open a scan**: drag it anywhere into the window, or press **Load**.
-   An STL has no units, so you are asked what it is in.
-2. In **3D Measure**, press **Sphere**, **Cylinder** or **Plane** and click
-   that feature on the scan. The fit previews in grey; press **Create** (or
-   `Enter`, or the middle mouse button). If the feature is broken into
-   patches, click each one.
-3. Press **New dimension**, choose the type and pick the two elements.
-   **Copy summary** puts every result on the clipboard.
-4. Everything stays editable: the **✎** key on any row reopens it, and
-   **Undo / Redo** (`Ctrl+Z`, `Ctrl+Shift+Z`) work across all workspaces.
-5. **Save** writes the whole session to one `.scanruler` project file.
+Zebra now also offers the single-view reference target. Notes remain local;
+Deviation insertion is still scan-side. [Usage and limits](plugins/tmar-cad-edges/README.md)
+| [Actual validation](docs/tmar-cad-edges-validation.md). **User review remains open.**
 
-New here? An amber ring points to the control to press next and retires once
-you have used a workspace twice. You can switch it off under **⚙ Settings**.
-**⚙ Settings → Units** shows and takes lengths in millimetres or inches;
-files, projects and agent answers stay in millimetres.
+## Latest: category-scoped feature controls
 
-## Files in and out
+**Select All / Hide in Sketches no longer acts on the completed body.**
+Features are grouped into **Sketches / profiles**, **Sketches from sections**,
+**Surface operations**, **Solid-body operations** and **Other features** when
+present. Every group has its own large collapse header and selection; known
+categories have type-scoped visibility buttons. The native **Bodies** list remains separate; **Build history / rollback**
+retains the original chronological controls.
 
-| | Formats |
+Save Project preserves active feature/note selections. Replacing a project or
+Undo/Redo clears transient selections. No geometry or project format is changed.
+The model-centred Zebra improvement already integrated by PR #6 is included
+unchanged, with its lower-bar button and local notes. Existing previews do not
+update when the source changes.
+
+See [category validation](docs/tmar-feature-categories-validation.md) for the
+Windows/Chrome checks and limits. This remains a web build, not a desktop release.
+
+## Latest usability follow-up
+
+The saved-note target now receives a large, high-contrast viewport reticle and a
+visible navigation message. Hidden or changed CAD references no longer prevent
+locating the **saved annotation coordinates**; warnings distinguish that marker
+from a verified current surface. Valid stored normals turn the view towards the
+annotated surface, without changing geometry or visibility.
+
+**Features** and **Notes** have full-width disclosure headers. Drag the vertical
+divider beside the left column to resize it, or use **Settings > Panel layout**.
+Width is remembered in this browser. In **Reverse engineer**, the lower **Zebra**
+button opens/toggles the analysis without searching through a long feature list.
+With only a scan loaded, it selects the scan automatically.
+
+See [the follow-up validation](docs/tmar-note-focus-validation.md) for actual
+production-build UI checks and limitations. These changes still do not constitute
+a native desktop release.
+
+## Web extensions available on main
+
+These are **implemented web-source features**, not just roadmap entries. They run in the browser without an Electron shell or native installation.
+
+| Extension | Available now | Current boundary |
+| --- | --- | --- |
+| [Unified CAD body export](plugins/tmar-body-export/README.md) | One **Export body...** button, then STEP/STL, visible/selected body scope and STL chord. | CAD bodies, not the source scan. No automatic Boolean union or manufacturing certificate. |
+| [Mesh Tools review](plugins/tmar-mesh-review/README.md) | Local scan notes and Zebra on the displayed scan/edited/reduced mesh; shared note selection and navigation. | Close active editing tools first. Preview note insertion and split view remain guarded. |
+| [Repeatable Smooth](plugins/tmar-smooth-controls/README.md) | Retained marked region and 0–100% intensity, persisted settings and per-application Undo. | Marking is transient; repeated per-application movement is cumulative. |
+| [Local notes and navigation](plugins/tmar-quick-notes/README.md) | Note button and configurable single-letter shortcut; Ctrl/Cmd/Shift selection; target button/double-click Go to note; previous view; bulk actions. | Deviation placement is scan-side/single-view. CAD-note navigation is in Reverse engineer. No agent connection is required. |
+| [Feature-list selection](plugins/tmar-model-tree/README.md) | Independent categorized Ctrl/Cmd/Shift/Select All, type-scoped Show/Hide, large collapse headers and chronological rollback history. | Not batch feature deletion/suppression or an extension of every construction-element list. Unavailable independent outputs are reported. |
+| [Workspace display controls](plugins/tmar-display-controls/README.md) | **Labels** on the lower 3D bar; separate note-pin visibility and per-workspace browser preferences. | Advanced category controls in Settings and a separate 2D display policy remain planned. |
+| [CAD face edges](plugins/tmar-cad-edges/README.md) | Lower-bar Show CAD edges, color/pixel width, native tangent rims and STEP scan/reference boundaries, compatible with Zebra. | No triangle wireframe substitute, no reference-side note insertion or split-view claim. |
+| [TMAR build identification](plugins/tmar-build-info/README.md) | Visible source revision and build details, distinct from upstream ScanRuler. | Identifies the loaded bundle; no automatic update or desktop release. |
+| [Zebra](plugins/tmar-zebra/README.md) | Visual analysis of supported scan/CAD targets, adjustable bands and local pinned notes. | Visual aid; not a numerical G1/G2 continuity certificate. Real-part and macOS qualification remain open. |
+
+**Validation:** see [the Brush/Shift follow-up](docs/tmar-smooth-brush-validation.md) for the latest checks and [the Mesh Tools/Smooth record](docs/tmar-mesh-review-validation.md) for its original revision, [the STEP-as-Scan follow-up](docs/tmar-step-scan-validation.md) for its tested revision and [the category record](docs/tmar-feature-categories-validation.md) for its original scope. The [earlier usability record](docs/tmar-usability-validation.md) documents its original revision. The [initial web record](docs/tmar-web-validation.md) remains historical evidence for PR #1; its counts are not a substitute for retesting the new UI. Automated checks use synthetic fixtures and isolated browser profiles; the user-provided screenshot is a separate work-in-progress example, not additional test qualification. No macOS, desktop package, full upstream suite or real-part qualification is claimed.
+
+Use [this fork's web build](#how-to-try-it-today), not `scanruler.com`, to see these controls. Save your active project before opening it in a separate test instance. Existing user sessions are never reloaded by these source changes. No prebuilt desktop package or managed updater is implied.
+
+## Why this fork exists
+
+The goal is to make long reverse-engineering sessions more practical: save work reliably, pause deliberately and resume without reconstructing the operational state from scratch. We also want to follow ScanRuler's frequent updates without requiring users to compile the application or maintain a fork manually.
+
+The chosen direction is **a Windows and macOS application with a desktop shell separate from the ScanRuler web bundle**, together with project-management, update and AI-integration services. Customizations should remain modular wherever possible, so the project can continue benefiting from upstream development.
+
+This project is intended for personal use and community sharing. Modification sources will be public, and future releases should include prebuilt packages, not only source code intended for developers.
+
+## Is this repository right for you?
+
+| Your need | Recommended choice today |
 | --- | --- |
-| **Scan** | STL, PLY, OBJ (with its `.mtl` and texture, in colour), 3MF, STEP |
-| **Reference part** | STL, PLY, OBJ, 3MF, STEP (tessellated in the browser by [meshStep](https://github.com/CNCKitchen/meshStep)) |
-| **Flatbed image** | PNG, JPEG (the file's dpi is read as a working scale) |
-| **Project** | `.scanruler`: a plain zip of the input files and `project.json` |
-| **Elements** | STEP (AP214) as analytic geometry: solids and faces, or construction surfaces |
-| **Scan** | STL or 3MF mesh; PLY or XYZ point cloud with normals, in the pose it is aligned to |
-| **2D sheet** | SVG and DXF at 1:1, CSV of elements and dimensions |
-| **Reports** | Plain text to the clipboard (*Copy summary*, *Copy report*) |
+| Use ScanRuler immediately without installing anything | Use the [original application](https://scanruler.com/) and its documentation. |
+| Use body STL export and scan-side Deviation notes now | Run this fork's web source; see the instructions and explicit limits below. |
+| Follow or contribute to a desktop edition with persistent workflow management | The web plugins are already in `main`; the desktop application remains planned. |
+| Install a stable TMAR application on Windows or Mac today | No installer is available yet. Wait for an explicitly qualified release. |
+| Obtain CUDA or Metal acceleration immediately | Not implemented: this is a later phase, subject to benchmarks. |
+| Modify a TMAR extension | The TMAR plugins have dedicated source, English README files and tests. |
 
-## Good to know
+## Why a desktop application
 
-- **Activity status** (bottom left): **READY** means no tracked work is active;
-  **WORKING** names the active phase and shows a percentage only when measured.
-  **ERROR** retains priority. See [activity status](docs/activity-status.md) for
-  coverage, examples and limitations.
+**These are benefits we intend to deliver**, not results of an already completed performance comparison.
 
-- **Navigation**: left-drag rotates about the point under the cursor,
-  right-drag pans, the wheel zooms. Number keys give the standard views
-  (`0` iso, `1` top, `3` front …). The button above the axis gizmo fits the
-  part back into view. **⚙ Settings → Mouse controls** switches to the mouse
-  scheme of your CAD tool. A 3Dconnexion **SpaceMouse** works in Chrome and
-  Edge, and touch screens work too. SpaceMouse navigation only affects a
-  visible, focused ScanRuler page; switching to another window stops background
-  motion. Save your work and reload existing tabs after updating.
-- **View bar** (bottom left): show or hide the scan, reference and elements,
-  make them transparent, show the mesh or the back faces. **Section** cuts
-  everything open at a plane to look inside.
-- **Recovery**: work is checkpointed in your browser every few seconds, and
-  a later visit offers to restore it. Use **Save** for a portable copy.
-- **Open from a link**: `https://scanruler.com/?open=<url-of-a-file>` opens
-  any file the hosting server allows the app to read (CORS), and
-  `&workspace=deviation` picks where to land.
-- **Accuracy**: on a real structured-light scan of a ball bar, the centre
-  distance agrees with GOM Inspect to its last digit (148.639 mm against
-  148.64 mm). A scan displaced at random comes back to within 0.9 µm of
-  its fitted pose.
+| Desktop goal | Expected benefit | Limitation to consider |
+| --- | --- | --- |
+| Dedicated window | Separate CAD work from the browser used for browsing and chat | A desktop window can still crash: verified saving and recovery are necessary. |
+| Projects and snapshots on disk | Locate files, retain revisions and recover the last valid state | Backups need testing; autosave cannot prevent every possible loss. |
+| Operational pause and resume | Continue from the last completed operation and saved work plan | This does not freeze any arbitrary calculation at its exact internal execution point. |
+| Managed updates | Receive verified packages without manual compilation | Incompatible upstream changes may delay a TMAR release. |
+| Windows and macOS | Share a workflow and portable project files | Local paths, dependencies and compatibility require validation on both platforms. |
+| Resource controls | Make consumption, budgets and compute activity visible | More memory or a GPU does not automatically accelerate every operation. |
 
-## Agents
+Original ScanRuler **already processes scans locally**, saves `.scanruler` projects, and provides browser recovery and MCP integration. These are not inventions of this fork. Our goal is to add desktop management and operational continuity around those capabilities. Inherited documentation is preserved in [README.upstream.md](README.upstream.md).
 
-An AI agent on your computer can drive the ScanRuler tab you have open:
-Claude Code, Codex, Claude Desktop, Cursor or anything else that speaks the
-[Model Context Protocol](https://modelcontextprotocol.io). For example: *"Open
-ballbar.stl, fit both spheres, measure the centre distance and give me the
-report."* It works the panels step by step in front of you, and every step
-can be undone. It can also
-[model a scan into a solid](#automatic-reverse-engineering) in Reverse
-engineer and clean up a scan in Mesh Tools.
+The planned shell uses Electron: it remains a web engine embedded in an application, not a complete native rewrite of the CAD system. Installation, disk space, shell memory use and security maintenance are trade-offs. **Moving to desktop does not by itself guarantee better speed, geometric accuracy or privacy.**
 
-You need [Node.js](https://nodejs.org/) 22 or newer and Chrome, Edge or
-Firefox. Add the helper to your agent once:
+## Status and roadmap
+
+The source baseline verified for this plan declares **ScanRuler 0.9.4** in [package.json](package.json), at upstream commit [`5c1f2f9`](https://github.com/CNCKitchen/ScanRuler/commit/5c1f2f96b7ac336d5c2bad64148ae19790b0443c). This identifies the inherited baseline, not a TMAR desktop release.
+
+**Status key:** **Implemented in web source** means code is merged and the documented checks exist; it does not mean a desktop installer or hosted deployment exists. **Partial** identifies delivered subfeatures with remaining work. **Planned/assigned** is not an availability claim. PR #1 introduced the first web extensions; PR #3 integrated Zebra at `0b26d51`. This usability increment builds on that baseline. The inherited package version is not a TMAR release identifier; consult the tested commit and validation record.
+
+| Area | Status | Intended outcome |
+| --- | --- | --- |
+| Public fork and English project overview | Available | Provenance, goals and limitations are visible before choosing the project. |
+| ScanRuler web capabilities | Present in inherited source | Measurement, comparison, reverse engineering, mesh tools, projects and MCP; no new desktop qualification is implied. |
+| Desktop application | Planned | Windows x64 and macOS Apple Silicon packages, with declared requirements and platform testing. |
+| Disk saves and recovery | Planned | Explicit saves, configurable autosave, snapshots and verified restoration. |
+| AI workflow pause and resume | Planned | Persistent checkpoints, operation state and reconstruction of operational context. |
+| Updates and rollback | Planned | Automated builds and tests, versioned packages, stable/fast channels and safe activation. |
+| Resources and backend selection | Planned | Monitoring, RAM/GPU-memory budgets, controlled concurrency and a CPU execution path. |
+| GPU computation on Windows and Mac | Later investigation | Evaluate WebGPU and CUDA/Metal modules where a benefit can be demonstrated. |
+| Zebra surface analysis plugin | Implemented; user result review ongoing | View-only bands and local notes. The published example is WIP, not final acceptance; broader qualification remains open. |
+| [Zebra result review](docs/tmar-review-backlog.md#zebra-review-001) | Open | Record remaining feedback and explicit acceptance separately from feature implementation and screenshot publication. |
+| [Split view with Zebra and local notes](docs/tmar-review-backlog.md#zebra-split-002) | Planned | Two-pane review, explicit camera/focus behavior, per-pane labels and shared local note records. |
+| [UI screenshot gallery](docs/tmar-ui-gallery.md) | Original WIP Zebra hero and eleven synthetic UI examples published | Clickable thumbnails show implemented changes. Broader real-part validation and final visual acceptance remain open. |
+| Model-tree multi-selection and bulk-actions plugin | Implemented, initial feature-list scope | Ctrl/Cmd/Shift/Select All and undoable output visibility. Original body-list selection is retained; broader list coverage and destructive operations remain future work. |
+| Quick-note access and navigation plugin | Implemented, initial web scope | Settings-configurable letter (default N), local Note action, note multi-selection, double-click/target Go to note and Return to previous view. |
+| Notes directly in Deviation | Implemented in web source; scan-side scope | Add/edit/save notes in the single scan-side comparison view; shared IDs and project round trips verified. Reference-side/split-view anchors and comparison metadata remain planned. |
+| CAD body export UI | Implemented in web source | One Export body dialog chooses STEP or STL and visible/selected CAD bodies; adjustable STL chord, no source scan. |
+| Collapsible Features and Notes panels | Implemented, initial web scope | Independent header controls, browser-remembered state, preserved selection and note draft. Column width is draggable and configurable in Settings; broader layout presets remain future work. |
+| Per-workspace labeling and annotation visibility plugin | Implemented lower-bar controls | Labels and Notes visibility per 3D workspace; no annotation deletion. Advanced Settings categories remain planned. |
+| Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
+| Customizations and contributions | Partial | Six TMAR plugins with English documentation and reusable host hooks. Dynamic package management and automated upstream updates remain planned. |
+
+There are two tracks: **web plugins can be implemented and used now**, independently of the desktop shell; the desktop track remains **shell -> persistence and recovery -> pause/resume -> verified updates -> measured optimization**. Follow-up work includes reference/split-view notes, captured comparison metadata, richer Settings categories, generalized construction-list actions and broader platform/real-part qualification. Tasks can proceed in isolated branches; reliability takes priority over speed. This README does not set delivery dates.
+
+## Saves, pause and resume
+
+Projects should support disk saves with periodic snapshots and checkpoints before critical operations. Writes must avoid replacing the last valid copy with an incomplete save and must handle failures such as a full disk or an unexpected shutdown.
+
+Saving an AI workflow requires more than the model: its goal, requirements, notes, completed operations, outstanding work, performed checks and component versions must also be retained. Resuming must verify the project's actual state before issuing further commands, avoiding duplicate operations.
+
+**The initial pause mechanism will stop between safe operations.** A running geometric calculation may need to finish, or be cancelled and repeated from the last checkpoint. Arbitrary resumption at an internal instruction of a CAD operation is not promised.
+
+A project checkpoint does not automatically preserve a conversation or an AI model's internal memory. It does not remove AI-service limits, network interruptions or the need to start a new agent session. These conditions must be detected and handled explicitly.
+
+Windows/Mac portability does not mean automatic cloud synchronization: project transfer and external-file references need a verified procedure. Uncoordinated concurrent edits to the same project should not be allowed.
+
+## Updates without manual builds
+
+**Approved architecture, not yet implemented:**
+
+1. **Desktop shell:** an initial installation for each platform and independent updates, including security maintenance.
+2. **ScanRuler web bundle:** a separately downloadable local version, without rebuilding the entire installer for every upstream change.
+3. **Services and native modules:** MCP components, project management and possible GPU backends, versioned and checked together with the web bundle.
+4. **GitHub pipeline:** detect upstream releases, integrate customizations, build, test and publish only approved candidates.
+
+Even with several upstream releases in one day, users should not have to follow each one manually. The pipeline may consolidate updates onto the latest candidate. The **stable** channel should favor consolidated versions; the **fast** channel should make versions available sooner after checks pass. Instant upstream-update availability is not guaranteed.
+
+An update must be downloaded and verified without replacing components used by an active job. Activation should happen with the project saved and compatibility checked across the application, MCP, modules and project schema. Packages and manifests must have authenticity and integrity checks rather than come from arbitrary downloads.
+
+**If an update fails checks, the last verified version stays in use.** Projects may pin their working version. Preserve a copy before migration: rolling back the application does not guarantee that an already migrated project will open in an older version.
+
+The goal is offline work with installed components. Update downloads and remote AI services still require connectivity. Users will not need their own fork to use future public packages.
+
+## GPU and memory: optimize where it helps
+
+Using the GPU to display a scene and using it for geometric computation are different things. There is no planned switch that automatically turns the entire CAD system into GPU code.
+
+Performance work will begin with reproducible bottleneck measurements. Initial candidates include distance calculations, deviation maps, nearest-point searches and parts of alignment. We will evaluate WebGPU for cross-platform operations and dedicated **CUDA backends on Windows with NVIDIA** and **Metal backends on macOS Apple Silicon**, retaining a CPU path when a GPU backend is unavailable or not beneficial.
+
+RAM and GPU-memory budgets should guide caches, batch sizes and concurrency. They are not promises of exclusive physical allocation or an automatically enforced hard limit on the entire application. Mac memory management requires its own qualification rather than a copy of settings intended for a discrete Windows GPU.
+
+An optimization will be accepted only after measuring **end-to-end time, memory use, result correctness and failure behavior**. No TMAR benchmarks demonstrating acceleration are available yet. No speed multipliers or automatic accuracy improvements are promised.
+
+## Customization without losing updates
+
+**The TMAR extensions, including `tmar-quick-notes`, `tmar-body-export` and `tmar-zebra`, are separate, community-editable plugins. Future additions follow the same approach**, rather than scattering their implementation throughout the application core. Use existing extension points and keep desktop-shell services in separate modules. Core changes remain possible when required, but must be minimal, justified, documented and covered by tests. See the [upstream plugin architecture](plugins/README.md).
+
+### TMAR plugin requirements
+
+Each extension should make it easy to identify where a change belongs and how to verify it:
+
+| Requirement | Expected outcome |
+| --- | --- |
+| Dedicated source directory under `plugins/<id>/` | Find plugin logic, UI and resources without searching for scattered core modifications; register through upstream extension points. |
+| A README for the plugin | Explain purpose, source layout, development and test instructions, configuration, examples and known limitations. |
+| Explicit interfaces and dependencies | Document access to the host and other plugins, supported versions and compatibility; avoid undeclared coupling. |
+| Dedicated tests and reproducible cases | Contributors can modify a plugin, verify its behavior and submit a focused pull request. |
+| Optional activation and separate state | The rest of the application remains usable without the plugin; saved preferences/data have distinct namespaces and a compatibility strategy. |
+
+The initial model follows upstream plugins included at build time: **a separate directory does not automatically mean hot installation of an external package**. Source changes require rebuilding and testing the affected bundle; the TMAR pipeline should provide prebuilt packages to end users. A manager for independently installable/updatable plugins would need a separate compatibility, authenticity and security design and is not available.
+
+A new upstream version must not erase a customization just to install successfully. If it introduces a conflict or changes an interface, distribution of that candidate must stop until integration is verified. Automation reduces users' manual maintenance; it does not eliminate all project-maintenance work.
+
+General fixes may also be proposed upstream under its contribution rules. A fork does not imply that CNC Kitchen accepts or supports those changes.
+
+## Zebra analysis — initial web plugin
+
+> **User review ongoing - not final acceptance.** The workflow is usable, but
+> Martino is still reviewing the result and is not fully satisfied. The example
+> below is published as work in progress, not as a final visual or CAD approval.
+
+[View the lead Zebra image and clickable screenshots](#screenshot-overview).
+
+`Tubo Finale-body.stl`, **Analyze: Scan**. This illustrates the current overlay
+on an imported mesh, not an editable CAD body being certified. See the
+[example gallery and limits](docs/tmar-zebra-examples.md) and
+[open review / future split-view backlog](docs/tmar-review-backlog.md).
+
+The initial plugin visually inspects displayed surfaces and their joins, helping identify unwanted waviness and discontinuities. It is a browser rendering aid, not a numerical continuity test or desktop release.
+
+The [tmar-zebra plugin](plugins/tmar-zebra/README.md) uses a removable display layer and an independent analysis slot in Reverse engineer. It supports local pinned notes while active, without enabling an agent connection. The [coordination handoff](docs/tmar-zebra-handoff.md) records its integration boundaries.
+
+- [x] Implement the separate plugin and document its interfaces; the host was smoke-tested with plugins disabled.
+- [x] Display zebra stripes on visible or selected CAD bodies, or the scan, with an on/off control.
+- [x] Provide adjustable stripe orientation, width and color.
+- [ ] Capture views with reproducible parameters for verification reports and AI review.
+- [ ] Test reference surfaces with smooth joins, known discontinuities and intentional sharp edges; check tessellation and displayed-normal effects on Windows and macOS.
+
+Zebra analysis must complement, not replace, quantitative CAD/mesh comparison and dimensional/topological checks. A regular-looking display is not by itself proof of geometric continuity or agreement with the real part. Intentional sharp edges must be distinguished from defects.
+
+## Model-tree multi-selection and bulk actions
+
+**Implemented in `tmar-model-tree`: separate category lists, not a mixed global
+Select All.** Sketches / profiles, section-based sketches, surface operations,
+solid-body operations and unclassified feature types are grouped independently.
+Click selects; Ctrl/Cmd toggles rows; Shift and focused Ctrl/Cmd+A are limited to
+that category, including off-screen rows. New AI-created rows are not implicitly
+added to the selection. Each group and the complete Features area can collapse.
+
+**Sketch Hide keeps all bodies. Surface Hide keeps solids. Solid-operation Hide
+keeps surfaces and sketches.** The action rechecks membership and current output
+type before changing visibility; stale, suppressed and incompatible outputs are
+reported. Shared output body IDs are deduplicated. It is one Undo step, not feature
+suppression, deletion or a change to the CAD build order. The separate Bodies list
+controls actual body/component selection, including the scope used by Zebra and
+CAD export.
+
+**Build history / rollback** keeps native chronological diagnostics and controls;
+playback follows that chronology, not category order. Native row edit, delete and
+suppression buttons remain explicit actions. Right-click history menus stay in
+the original chronological area. Save Project keeps current feature/note selections;
+project replacement and Undo/Redo clear them. UI selections are not saved in the
+project. Category collapse preferences remain local to this browser.
+
+These groups classify feature records. They do not add saved face selections,
+classify every measured construction element or change source-section visibility.
+Dependency-safe destructive batch operations and broader construction-element
+lists remain future work.
+
+See [plugin usage](plugins/tmar-model-tree/README.md) and
+[the category validation](docs/tmar-feature-categories-validation.md).
+
+## CAD body STL export
+
+**The body exporter now has one entry point: Export body...** Choose STEP or STL in the dialog, then visible bodies or an explicit body-list selection, and Save. The historical section title remains for existing links.
+
+STEP retains CAD geometry (including supported sheets); STL triangulates solid CAD bodies through the existing kernel backend. Neither option exports the source scan. The chord field is shown only for STL and follows Settings display units; the file coordinates remain millimetres. Selected components expand to their bodies; empty/stale selections never become export-all. Multiple STL bodies are not automatically Boolean-unioned.
+
+The host's original STEP key is the fallback when no export extension is installed. See [the plugin README](plugins/tmar-body-export/README.md) for scope, validation and limitations.
+
+## Quick notes on the model
+
+**Implemented in `tmar-quick-notes`: local note access, selection and navigation.** No Zebra or agent-connection prerequisite is needed. The existing note data, editor and project records are reused.
+
+**Note -> click the actual surface -> write -> Save.** The Note action is available in the list and on the lower viewport bar. **Settings > Shortcuts > Add note** selects one unmodified A-Z letter or Disabled; the default is **N**, with Reset. Typing, dialogs and active CAD editors retain their keys. Arbitrary modifier combinations are not offered in this first binding UI.
+
+Single-click selects without opening the editor. Ctrl/Cmd adds or removes notes; Shift selects a range; Select All/focused Ctrl/Cmd+A selects the full list. Delete selected requires confirmation and removes only those records; it is not undoable. Mark handled/Reopen applies only to selected notes and preserves imported provenance. Handling a note does not certify a geometry correction.
+
+The pencil opens editing/answering; the target button locates; the check and X keep separate meanings. Collapsing Notes keeps the editor mounted and does not save or discard its draft. Notes are saved with the project, while row selections and focus are session-only.
+
+An explicitly connected agent can use the existing note API. Creating or locating local notes never enables an agent, changes credentials or automatically authorizes imported note text. See [the plugin README](plugins/tmar-quick-notes/README.md).
+
+### Notes directly in Deviation
+
+**Implemented for the visible scan-side, single Deviation viewport.** Inspect the map, activate Note, click a mismatch, write and save without switching workspace. The same ID, text, anchor and handled state appear in Reverse engineer and survive project save/reopen.
+
+Placement does not recompute the map or create a measurement pin. Busy operations, surface marking, deformation animation, alignment picking, hidden scans and clipped/missing picks are guarded. Stop those modes before writing a note.
+
+- [x] Local Note/list, configured shortcut, selection and Go to note in the supported view.
+- [x] Shared records and project persistence; no automatic agent connection.
+- [ ] Generic reference/CAD-side and split-view placement.
+- [ ] Optional captured deviation value, tolerance, target/revision and explicit stale-context refresh. Missing readings must never be inferred from colors.
+- [ ] Native macOS and real-part qualification.
+
+See [the implementation limits](plugins/tmar-quick-notes/README.md).
+
+### Locate an existing note on the model
+
+**Implemented: double-click a note row or use its crosshair/target button (Go to note).** The camera frames the saved anchor with surrounding geometry; the corresponding row and marker are highlighted. **Return to previous view** restores the prior target, orientation, zoom and framing. No geometry, note position, text or handled state is changed.
+
+Single-click remains selection; the pencil is editing. With labels or pins hidden, only the focused note is temporarily revealed without modifying saved visibility preferences. Changing workspace or the focused record clears that temporary focus.
+
+A valid saved position remains locatable even when its target is hidden, clipped, removed or changed by rebuilding. Such cases show an explicit warning: the marker is the saved annotation position, not a newly verified surface match. No body is revealed and no anchor is silently remapped. Invalid coordinates, an open editor or conflicting active operations still block navigation with visible feedback. The stored surface normal supplies the viewing direction where available; full occlusion-aware path planning and automatic target remapping remain future work.
+
+The synthetic browser regression exercises 40 notes, long ranges, both navigation entry points, hidden labels, camera return, unchanged drafts and save/reopen. Its exact results are in [the validation record](docs/tmar-usability-validation.md).
+
+## Settings, collapsible panels and per-workspace labels
+
+**Implemented initial web controls:** Note key binding in Settings; independent Features/Notes collapse controls; lower-bar Labels and Notes visibility. The complete advanced Settings design remains a roadmap item.
+
+### Independently collapsible Features and Notes panels
+
+Each list has its own header control and item count. Collapsing retains selection and keeps any note draft mounted. New AI-created rows do not force a list open. Expanded/collapsed state is remembered in this browser. Collapsing changes layout only, not geometry or pin visibility.
+
+The disclosure header spans the full list width and has a large chevron. **Settings > Panel layout** and the draggable vertical divider control column width (260–720 px, constrained to leave model space). Width persists in this browser. Double-click the divider to reset it; arrow keys resize it. Phone layouts remain stacked. Workspace-specific collapse preferences and a general reset-all remain future work.
+
+### Labeling and annotation visibility in each workspace
+
+The **Labels** key on the lower 3D view bar shows/hides text in Reverse engineer, Deviation, Mesh Tools and other supported 3D views. **Notes** controls note markers and their text separately. Reverse retains its existing Notes key; other 3D workspaces receive one while notes exist.
+
+The display plugin remembers label/pin preferences per workspace and browser. Hiding does not delete notes or change their availability to an explicitly connected agent. Hidden pin markers do not intercept clicks. Creating/editing a note can reveal its pins, consistent with the host; Go to note uses a temporary focus instead.
+
+Advanced **Settings > Display** category controls, a global reset and a separate 2D annotation policy remain planned. See [display source and tests](plugins/tmar-display-controls/README.md).
+
+## Languages and future Italian localization
+
+**English README now; Italian application and documentation localization later.** Localization is a planned addition, not a second fork or a separate CAD implementation.
+
+- [ ] Extract user-facing strings into translation resources with stable keys, including labels, tooltips, errors and plugin UI; use English as the fallback.
+- [ ] Add an Italian language resource and an in-app language selector, remembering the preference.
+- [ ] Let each plugin own its translation resources through a shared localization contract, so contributors can improve wording without changing geometric code.
+- [ ] Provide maintained Italian documentation, including a future `README.it.md` linked to the primary English README once it exists.
+- [ ] Test longer translated labels, numeric presentation and platform shortcuts. Changing language must not change model units, stored numeric values, object IDs or MCP command identifiers.
+
+Existing developer documentation retains its original language unless explicitly translated. Neither Italian UI support nor a translated README is declared delivered by this roadmap.
+
+## Quality, security and personal data
+
+Before qualifying a desktop release, provide evidence for opening, saving, reopening, STEP export, pause/resume and crash recovery on the declared platforms. Test updates against existing projects and pre-migration snapshots as well.
+
+Geometry changes require tests with declared data, tolerances and results: solid validity, coverage and deviations such as RMS, P95 and maximum where relevant. Comparing CAD with a scan does not by itself certify the real part's accuracy. Tolerances are contextual, not a universal number imposed by this fork.
+
+Public pipelines must use synthetic or shareable fixtures. **Private scans, photographs, credentials, tokens, personal paths and non-anonymized logs must not be published in the repository or test artifacts.**
+
+A desktop application does not make a remote AI service local: what an agent reads may be transmitted to its provider. Agent connections must be explicit and controlled; accounts, models and their costs remain separate from the application. See the [upstream agent privacy warning](README.upstream.md#agents).
+
+## How to try it today
+
+**To use the new TMAR controls, run this fork's web application.** The original [ScanRuler website](https://scanruler.com/) is still an option for upstream-only use, but publishing these changes does not add them to that site. No prebuilt TMAR release or desktop installer is published yet.
+
+With Git and Node.js 22 or later, as declared in [package.json](package.json):
 
 ```bash
-claude mcp add --scope user scanruler -- npx -y scanruler-mcp@latest   # Claude Code
-codex mcp add scanruler -- npx -y scanruler-mcp@latest                 # Codex
+git clone https://github.com/mrhz1973/tmar-scan-desktop.git
+cd tmar-scan-desktop
+git switch main
+npm ci
+npm run dev -- --host 127.0.0.1 --port 5197 --strictPort
 ```
 
-For Claude Desktop, Cursor and others, add `"command": "npx", "args": ["-y",
-"scanruler-mcp@latest"]` to their MCP settings. Then say *"Connect to
-ScanRuler"*. It opens the app paired with the agent. The first time, ScanRuler
-warns you what connecting means for your data (below) and connects only once
-you accept; then the browser asks whether the site may reach *apps and services
-on this device*; click **Allow**. After that, ask for what you want measured,
-naming files by their full path.
+Open the local address printed by Vite. This explicit port avoids silently selecting an unknown port; choose another unused port if it is occupied. Use a separate browser tab/profile for testing and save active projects before intentionally reloading or replacing their app version. These commands do not update an already running upstream session.
 
-**With an agent connected, your data no longer stays on your computer.** The
-helper runs on your own machine and the tab talks to it on `127.0.0.1`, so
-ScanRuler itself sends nothing anywhere. But what the agent reads (measurements,
-reports, pictures of the part, file names, notes and any file it opens itself)
-is processed by the agent and goes to its model's provider, unless the model
-runs on your computer. Setup per agent, troubleshooting and every option are in
-[mcp/README.md](mcp/README.md).
+In the fork, use **Reverse engineer > Export body...** and choose STEP or STL. **Note** is available locally in Reverse engineer and scan-side Deviation; its shortcut is in **Settings > Shortcuts** (default N). Double-click a note row or its target icon to locate it. Use Ctrl/Cmd/Shift for list selection and the lower **Labels** control for text visibility. **Reverse engineer > Zebra surface analysis** retains the integrated Zebra tool. Connecting an agent is optional and retains its privacy warning. See each plugin's README for restrictions.
 
-## Automatic reverse engineering
+For an existing clone, preserve any local changes and check its branch before updating; do not reset or overwrite an active worktree to follow these instructions. A production web bundle can be built with `npm run build` and served locally with `npm run preview`. This is still a web application, not a desktop package or public deployment.
 
-An AI agent can drive Reverse engineer from start to finish: give it a scan
-and it hands back a solid STEP body, an editable project and a report of how
-well the two agree. Connect an agent [as above](#agents) and
-ask, for example: *"Reverse engineer C:\parts\bracket.stl into a solid STEP.
-Ask me what you need to know before you start."*
+Development/test details are in [docs/development.md](docs/development.md), and the precise recorded test scope is in [docs/tmar-web-validation.md](docs/tmar-web-validation.md). The complete upstream test suite has not been qualified by the targeted checks. Some tests require additional fixtures or prerequisites.
 
-Expect a long working session rather than a button. ScanRuler measures and
-builds; your agent, on your own model subscription, makes the decisions.
+Future prebuilt packages will appear in [this repository's releases](https://github.com/mrhz1973/tmar-scan-desktop/releases), identifying the upstream baseline, tested platforms, known limits and corresponding source. Desktop signing, distribution and automatic updates remain to be implemented. Windows/Chrome is the recorded test environment, not a declaration of macOS qualification.
 
-### How it works
+## Contributing and references
 
-The app serves the agent a guide for the job, so the instructions always match
-the build in the tab. Following it, the agent:
+Suggestions and pull requests are welcome. Describe the concrete problem, desired outcome, effect on upstream updates and required tests. For performance improvements, include hardware, shareable data, timings and correctness checks.
 
-1. **Checks the scan**: open rims, noise, faces that should be parallel but
-   are not. Then it looks at the part from every side and lists its regions
-   and features.
-2. **Classifies the part.** How it was made sets the tolerance, from about
-   ±0.02 mm for a machined face to ±0.5 mm for a sand casting, and never finer
-   than three times the scan's noise. The part type sets how to build it. The
-   guide knows plates, turned, machined and sheet-metal parts, shelled and
-   faceted housings, moulded housings with keys, castings with machined
-   features, smooth solid castings, rotationally patterned parts such as fans,
-   volutes, and freeform shells and surfaces.
-3. **Asks you once**, in the chat, before the first feature: its defaults
-   (one continuous body, lettering left off and so on) and its approach. It
-   also sets a target: by default 90 % of the scan within tolerance on
-   analytic parts, 85 % on castings and mouldings, 75 % on freeform shapes.
-4. **Builds the way a designer would**: aligned to the faces the part mates
-   on, sketches fitted to sections through the scan, relations the design
-   means held as constraints, and round numbers where the measurement allows.
-5. **Loops on the deviation.** After each group of features it reads the
-   deviation map and the volume error, works on the worst place and measures
-   again.
-6. **Hands over** a STEP file, a `.scanruler` project with every feature
-   editable, deviation pictures and a report marking each feature as measured,
-   partly supported or inferred. The run ends when the target is met and every
-   listed region is built or named as skipped, or when you accept less.
-   Otherwise the agent is told to say "not done".
+Fork documentation must track releases: a capability moves from **planned** to **available** only with implementation and documented verification. Instructions and workflows in [CONTRIBUTING.md](CONTRIBUTING.md) are inherited from upstream; differences in the TMAR contribution process must be made explicit before applying them to new contributions.
 
-### Where it reaches its limits
+| Reference | Content |
+| --- | --- |
+| [README.upstream.md](README.upstream.md) | Full copy of the original README at baseline `5c1f2f9`, retained for attribution and documentation; not a list of new TMAR capabilities. |
+| [docs/manual.md](docs/manual.md) | Manual for inherited features. |
+| [mcp/README.md](mcp/README.md) | Upstream MCP connection and tools. |
+| [plugins/README.md](plugins/README.md) | Plugin catalog, upstream extension points and implemented TMAR host hooks. |
+| [Body STL plugin](plugins/tmar-body-export/README.md) | Available UI, selection/units rules, source layout and tests. |
+| [Deviation notes plugin](plugins/tmar-quick-notes/README.md) | Available scan-side annotation workflow, dependencies and remaining scope. |
+| [Web validation](docs/tmar-web-validation.md) | Recorded implementation checks, baseline and explicit qualification limits. |
+| [Zebra handoff](docs/tmar-zebra-handoff.md) | Coordination, source baseline, integration boundaries and contribution delivery. |
+| [plugins/reverse/README.md](plugins/reverse/README.md) | Inherited Reverse engineer behavior, including existing body-list selection. |
+| [docs/development.md](docs/development.md) | Web-baseline development and testing. |
+| [CHANGELOG.md](CHANGELOG.md) | Merged TMAR source changes and inherited upstream history; no desktop release is implied. |
 
-Four real runs, on different builds of the app, so examples and not a
-benchmark. The fan, the rumble pak and the scooter cover also took notes from
-a person along the way.
+## License and acknowledgements
 
-| Part | Part type | Scan within tolerance | RMS |
-| --- | --- | --- | --- |
-| Die-cast fan wheel | Rotationally patterned | 96.3 % within ±0.3 mm | 0.117 mm |
-| Moulded rumble pak | Moulded housing | 86.1 % within ±0.2 mm | 0.173 mm |
-| Die-cast mirror holder | Smooth solid casting | 72.5 % within ±0.2 mm, reported as "not done" | 0.387 mm |
-| Scooter head cover | Freeform thin shell | 68.9 % within ±0.4 mm (outer skin about 81 %) | 0.85 mm |
+Code derived from ScanRuler remains under **AGPL-3.0-only**; see [LICENSE](LICENSE). Preserve attribution, notices and dependency licenses. The original project is by **CNC Kitchen / Stefan Hermann and its contributors**; TMAR Scan Desktop is an independent initiative.
 
-- **The numbers compare the model with the scan, not with the real part.** A
-  high share says the surfaces are close. It does not say a bore has the right
-  nominal or that the part will fit. Check the dimensions that matter yourself.
-- **Freeform is the weakest case.** Grips, blades, fairings and organic shapes
-  come out as a skin of patches fitted to the scan, not as a designer's
-  parametric model.
-- **It cannot model what the scan does not show**: deep pockets, whether a hole
-  goes through, the inside of an assembly wrapped into one skin. It infers
-  those, and the report says where.
-- **A poor scan limits everything.** Nothing is trustworthy finer than about
-  three times the scan's noise, and a warped or tilted scan can read as the
-  shape of the part.
-- **Design intent is a judgement.** Round numbers, symmetry and relations are
-  the agent's choices, and they can be wrong.
-- **Some features will not build.** Rounds are a common failure, and getting
-  one to build can mean rebuilding what lies under it.
-- **Agents cut corners.** Results differ from run to run and from model to
-  model. An agent can skip a step of the guide or sum up too kindly, so read
-  the report's numbers and look at the maps.
-- **It costs time and tokens.** The fan wheel took 106 minutes and 284 tool
-  calls. A run like that can use up a good part of your agent's usage limit.
+Future TMAR distributions must make their corresponding source available and comply with dependency obligations, including any GPU components. Commercial licenses described in [COMMERCIAL.md](COMMERCIAL.md) concern the original project's rights holder; they are not a TMAR commercial offering. The personal/community purpose of this fork adds no restrictions to the license.
 
-### When your part does not come out right
+CNC Kitchen/ScanRuler names and trademarks are not presented as this fork's branding. Original documentation is retained for provenance and reference; the desktop distribution must have its own identity.
 
-Work down this list, cheapest first:
+---
 
-1. **Look at the scan.** Ask the agent what its scan check found. Rescan if the
-   scan is warped or tilted. Mesh Tools can remove islands and fill holes.
-2. **Tell it what the scan cannot**: what the part is, how it was made, what it
-   mates with and which dimensions matter. Correct the part type if it chose
-   the wrong one: *"This is a sand-cast pump housing at ±0.5 mm, build it as a
-   volute. The bearing seat is machined."*
-3. **Say how such parts are designed**: what the form grows from, and which
-   features share lines and planes. A pump housing modelled from the scan's
-   shapes was withdrawn twice; the third, based on how such pumps are designed,
-   stood.
-4. **Point at the problem on the part.** With the agent connection on
-   (**⚙ Settings → Agents**), the Reverse engineer panel has **Notes for the
-   agent**: press **Note**, click the place and say what is wrong. Fixing place
-   by place usually beats starting over.
-5. **Take over by hand.** Everything the agent built is an ordinary feature you
-   can edit, suppress or undo.
-6. **Keep what worked.** Your own first message or agent instructions
-   (`CLAUDE.md`, `AGENTS.md`) go on top of the guide the app serves on every
-   run: your part types, your tolerances, your order of work.
-
-### Help improve the guide
-
-Most of the guide was written from runs that went wrong, so a part that fails
-is useful to us. Open a
-[feature request](https://github.com/CNCKitchen/scanruler/issues/new?template=feature_request.yml),
-and we write what it teaches into the guide, as a refinement or a new part
-type. It helps to include:
-
-- what the part is, how it was made and how you would have modelled it
-- the report and deviation pictures, and where the run went wrong
-- the scan or the `.scanruler` project, if you are allowed to share it. Issues
-  are public, so a similar part you can share works too.
-- a trace of the run, written when the helper is started with
-  `--trace <dir> --trace-args`. It holds your file paths, so read it first.
-
-Pull requests are welcome too: the measuring guides in
-[src/commands/guides/](src/commands/guides/), the Reverse engineer guides in
-[plugins/reverse/guides/](plugins/reverse/guides/), and the code underneath.
-They need the CLA, see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Development
-
-```bash
-npm install
-npm --prefix mcp ci # the agent server's dependencies: its tests and the agent browser checks
-npm run dev       # local dev server
-npm test          # unit tests, plus acceptance tests on the local scans if present
-npm run build     # type-check + production build to dist/
-npm run e2e:ci    # browser tests on generated fixtures; run after building
-```
-
-The app is a static Vite + React + three.js build, with heavy geometry in a
-Web Worker. Tests, the browser checks, releases and deployment are described
-in [docs/development.md](docs/development.md). Reverse engineer and Mesh Tools
-are plugins, in [plugins/](plugins/README.md).
-`node scripts/readme-shots.mjs` and `node plugins/readme-shots.mjs` retake the
-pictures above.
-
-### Docker
-
-The app and the agent helper both run in containers, so neither Node nor a
-local build is needed:
-
-```bash
-docker compose up -d --build              # the app, on http://localhost:8080
-docker compose --profile mcp build        # the agent helper: built, not started
-
-# add it to the agent once, with the compose file's full path
-claude mcp add --scope user scanruler -- docker compose \
-  -f "$PWD/docker-compose.yml" run --rm -T --service-ports scanruler-mcp
-
-docker compose run --rm scanruler-mcp --pair   # pair the tab once: open the link
-```
-
-Then restart the agent (in Claude Code: `/mcp`, reconnect). From then on the
-agent starts the helper container itself whenever it needs it.
-
-How it fits together:
-
-```
- agent ──stdin/stdout (MCP)──▶ scanruler-mcp container
-                                   │  WebSocket on :7317, published to 127.0.0.1 only
- ScanRuler tab ──WebSocket + pairing token──┘
-     │
-     └─ loading, measuring and exporting all happen in the browser
-```
-
-- **The `scanruler` container** is nginx serving the static build. It only
-  hands out files: scans never reach it, everything runs in the browser.
-- **The `scanruler-mcp` container** is the bridge. The agent starts it
-  (`docker compose run` in place of `npx`) and speaks MCP over stdin/stdout,
-  where `-T` keeps a terminal from getting in the way. The ScanRuler tab
-  connects to its WebSocket on port 7317 with the pairing token
-  (`#agent=7317:<token>` in the pairing link). An agent's tool call goes to the
-  tab, the tab carries it out, and the result goes back to the agent.
-- Inside the container the helper listens on all interfaces
-  (`SCANRULER_MCP_HOST=0.0.0.0`), but the port is published to the host's
-  `127.0.0.1` only, so only this computer can reach it. The token is kept in
-  the `scanruler-mcp` volume and survives `--rm`. `~/ScanRuler` is mounted at
-  the same path (`SCANRULER_FILES` picks another folder): exports land there,
-  and it is the only place the helper can read files from.
-
-Unlike with `npx`:
-
-- **Only one copy can run.** With `npx`, a second copy joins the first through
-  the port. Each container has a network of its own, so a second one gets
-  `port is already allocated` and the agent reports *Connection closed*. A
-  leftover container causes the same thing: find it with
-  `docker ps --filter name=scanruler-mcp` and `docker stop` it.
-- `scanruler_open` fails, since a container cannot open your browser. Open
-  ScanRuler yourself.
-- The image does not update itself. Run `docker compose --profile mcp build`
-  again to get a new version.
-
-More options, such as your own domain, a file store for short links, HTTPS,
-or running without Compose, are in [docs/docker.md](docs/docker.md).
-
-## Roadmap
-
-- Minimum-zone, minimum-circumscribed and maximum-inscribed fits
-- Slots as elements, in 3D and on the 2D sheet; rectangles in 2D
-- GD&T position and runout
-- Point clouds (PLY with no faces) as scans
-- The coloured deviation map exported, and carried onto sections
-
-## License
-
-**AGPL-3.0-only**, see [LICENSE](LICENSE). Free to use, modify, self-host
-and redistribute. If you distribute it or offer it over a network (and a
-browser app on a web server counts), your version's complete source must be
-available under the same terms.
-
-Want it inside closed-source software, or hosted without publishing your
-changes? **Commercial exceptions are available**, see
-[COMMERCIAL.md](COMMERCIAL.md). Contributions require the CLA in
-[CONTRIBUTING.md](CONTRIBUTING.md), which also sets the dependency license
-policy: no third-party copyleft in the app, enforced in CI by
-[license-check.yml](.github/workflows/license-check.yml). The STEP importer
-[meshStep](https://github.com/CNCKitchen/meshStep) is AGPL and is allowed
-only because it is ours too, so a commercial exception for this app covers
-it as well. The one third-party exception is Reverse engineer's CAD kernel,
-[Open CASCADE Technology](https://dev.opencascade.org/) (LGPL-2.1 with the Open
-CASCADE exception): it is loaded as a separate, replaceable file, not linked,
-and keeps its own license.
-
-scanruler.com also carries a workspace in beta that is not in this repository
-and not under this license.
-
-The bundled fonts are under SIL OFL 1.1 (license files in
-[public/fonts/](public/fonts/)). The colour maps other than jet are the tables
-of [viridisLite](https://github.com/sjmgarnier/viridisLite), MIT, © 2015 Simon
-Garnier; the notice is in
-[src/core/field/colormapData.ts](src/core/field/colormapData.ts). The project
-name and the CNC Kitchen name and logo are trademarks and not covered by the
-code license.
-
-By [CNC Kitchen](https://www.cnckitchen.com).
+**Project principle:** preserve work before accelerating it; automate updates without interrupting it; publish only demonstrated benefits, always distinguishing them from future goals.

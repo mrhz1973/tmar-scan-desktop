@@ -15,6 +15,7 @@
 // tests. Owns the kernel handles: a build's shapes are released once no
 // kept build holds them.
 
+import type { BodyEditSource } from './buildTypes'
 import type { NominalSurface } from '../../../src/core/deviation/surface'
 import { emptyHit } from '../../../src/core/deviation/surface'
 import type { Vec3 } from '../../../src/core/types'
@@ -4757,6 +4758,28 @@ export class Builder {
     }
     if (!shared || (2 * shared.volume) / shared.area < OVERLAP_MIN_THICKNESS) return null
     return { volume: shared.volume, mesh: shared.mesh }
+  }
+
+  /** Read exactly ONE current body, ordinary sheets included. No alias
+   * fallback, deliverable filter, solidification or exportStepMended repair. */
+  verifyAnnotatedNotes(id:number,expectedKey:string,brep:string,notes:readonly import('../../../src/plugins/annotatedCopyTypes').DraftCopyFaceNoteV1[]) {
+    const body=this.bodies.get(id),shown=body&&this.shown.get(body)
+    if(!body||!shown||shown.key!==expectedKey)throw new KernelError('Stale body for annotated publication.')
+    const verified=this.kernel.verifyAnnotationFace(body.shape,brep,notes)
+    const face=this.topology(body,meshDeflection(this.diagonal(body))).faces.find(f=>f.hash===verified.hash)
+    if(!face)throw new KernelError('Verified face is not in destination topology.')
+    return {...verified,face:face.fingerprint}
+  }
+  bodyEditSource(id: number, expectedKey: string): BodyEditSource {
+    const body = this.bodies.get(id)
+    if (!body) throw new KernelError(`There is no current CAD body ${id}.`)
+    const shown = this.shown.get(body)
+    if (!shown || shown.id !== id || shown.key !== expectedKey)
+      throw new KernelError('The CAD body changed before its editor source was read.')
+    return {
+      bodyId: id, bodyKey: shown.key, text: this.kernel.exportStep([body.shape]),
+      surface: Boolean(body.surface), faces: shown.faces, closed: shown.closed,
+    }
   }
 
   /** One STEP file of the given bodies — the solids, and a patch network's

@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.tmar-panel-resizer { display: none; }
+@media (min-width: 641px) {
+  .mid.tmar-resizable-panel > .panel { width: var(--tmar-panel-width, 336px); min-width: var(--tmar-panel-width, 336px); flex: 0 0 var(--tmar-panel-width, 336px); }
+  .tmar-panel-resizer { display: flex; flex: 0 0 12px; align-items: center; justify-content: center; cursor: col-resize; touch-action: none; user-select: none; background: var(--well); color: var(--dim); border-right: 1px solid var(--line); }
+  .tmar-panel-resizer:hover, .tmar-panel-resizer:focus-visible { background: var(--accent-soft); color: var(--accent-d); outline: 2px solid var(--accent-d); outline-offset: -2px; }
+  .tmar-panel-dragging, .tmar-panel-dragging * { cursor: col-resize !important; user-select: none !important; }
+}

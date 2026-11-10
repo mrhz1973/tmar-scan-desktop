@@ -35,3 +35,15 @@ export function reverseHelpers(page) {
     },
   }
 }
+
+/** Use the optional unified dialog, or the inherited STEP key when absent. */
+export async function exportBodyStep(page) {
+  if (await page.$('[data-test=export-body]')) {
+    await page.click('[data-test=export-body]')
+    await page.waitForSelector('[data-test=body-export-format]')
+    await page.select('[data-test=body-export-format]', 'step')
+    await page.select('[data-test=body-stl-scope]', 'visible')
+    await page.waitForFunction(() => !document.querySelector('[data-test=export-body-save]')?.disabled)
+    await page.click('[data-test=export-body-save]')
+  } else await page.click('[data-test=export-body-step]')
+}

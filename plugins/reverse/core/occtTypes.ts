@@ -11,6 +11,8 @@ export type FilletRadius = number | { readonly start: number; readonly end: numb
  *  type: the package's own class type is not imported here so a version
  *  bump that reshapes something unused cannot break the build. */
 export interface OcctLike {
+  fromBREP(text:string): number
+  shapeOrientation(shape:number): string
   makeLineEdge(a: XYZ, b: XYZ): number
   makeArcEdge(a: XYZ, m: XYZ, b: XYZ): number
   makeCircleEdge(center: XYZ, normal: XYZ, radius: number): number

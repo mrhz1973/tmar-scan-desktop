@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <!-- The page never zooms: on a phone a pinch belongs to the 3D viewport,
@@ -28,8 +28,8 @@
       /* pre-CSS paint: chassis gray instead of a white flash — and the dark
          chassis where that is what was chosen (the same key the settings
          store keeps it under; the figures match --chassis in styles.css). */
-      html { background: #e7e6e1; }
-      html[data-theme='dark'] { background: #1b1d20; }
+      html { background: #1b1d20; }
+      html[data-theme='light'] { background: #e7e6e1; }
     </style>
     <!-- A file, not an inline script, so the Content-Security-Policy in
          public/_headers needs no hash or 'unsafe-inline' for it. Classic and

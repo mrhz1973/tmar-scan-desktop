@@ -1,0 +1,22 @@
+.es-back { z-index: 1500; }
+.es-dialog { width: min(1400px, 96vw); height: 90vh; display: flex; flex-direction: column; background: var(--bg, #252a2e); color: var(--text, #edf1f4); border: 1px solid #71828c; border-radius: 8px; overflow: hidden; }
+.es-dialog header, .es-dialog footer { display: flex; align-items: center; gap: 12px; padding: 12px; flex-shrink: 0; }
+.es-dialog header strong, .es-dialog footer span { flex: 1; }
+.es-dialog footer span { font-size: 12px; }
+.es-content { display: flex; flex: 1; min-height: 0; }
+.es-content aside { width: 295px; flex-shrink: 0; padding: 12px; overflow-y: auto; border-right: 1px solid #566875; }
+.es-content aside label { display: flex; flex-direction: column; gap: 5px; margin: 12px 0 6px; }
+.es-content aside label.es-inline-check { flex-direction: row; align-items: center; gap: 7px; }
+.es-inline-check input { flex: none; width: auto; margin: 0; }
+.es-content aside > button, .es-content aside > select { width: 100%; margin: 4px 0; min-height: 30px; }
+.es-content p { font-size: 12px; line-height: 1.4; }
+.es-row { display: flex; gap: 4px; margin: 8px 0; }.es-row button { flex: 1; }
+.es-row button[aria-pressed=true] { background: #286483; border-color: #7cd4ff; color: white; }
+.es-content main { position: relative; flex: 1; min-width: 0; }
+.es-viewport { position: absolute; inset: 0; }.es-viewport canvas { display: block; }
+.es-snap-feedback { position: absolute; z-index: 6; transform: translate(9px, -115%); padding: 4px 7px; color: #13252c; background: #a9ffbe; border: 1px solid #0b7a42; border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none; }
+.es-direct-handle { position: absolute; z-index: 5; width: 28px; height: 28px; padding: 0; transform: translate(-50%, -50%); color: #17222f; background: #ffcf35; border: 2px solid #fff; border-radius: 5px; font-weight: bold; cursor: grab; box-shadow: 0 1px 5px #000a; }
+.es-direct-leader { position: absolute; z-index: 4; height: 2px; background: #ffcf35; transform-origin: left center; pointer-events: none; }
+.es-status { position: absolute; bottom: 8px; left: 8px; right: 8px; padding: 10px; color: #fff; background: #17222fee; pointer-events: none; font-size: 12px; }
+.es-hint { color: #a8c5d5; }
+@media (max-width: 720px) { .es-content aside { width: 235px; }.es-dialog footer { flex-wrap: wrap; }.es-dialog footer span { flex-basis: 100%; } }

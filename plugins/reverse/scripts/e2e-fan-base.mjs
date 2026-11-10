@@ -189,7 +189,7 @@ await page.screenshot({ path: shotPath('fan-base-fillet.png') })
 
 // ---- out as a closed STEP solid ----------------------------------------------------------
 // The surface bodies are cutters and stay behind; the solid alone goes out.
-await click(page, '[data-test=export-body-step]')
+await (await import('./lib.mjs')).exportBodyStep(page)
 let stepFile = null
 for (let i = 0; i < 150 && !stepFile; i++) {
   await sleep(200)

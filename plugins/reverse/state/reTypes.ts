@@ -470,6 +470,10 @@ export type NetworkStart = { node: number } | { at: Vec3 }
 export type PlacedCorner = { node: number } | { at: Vec3 } | { curve: number; at: Vec3 } | { curve: number; grip: number; at: Vec3 }
 
 export interface NetworkDraft extends NetworkData {
+  /** View-only interaction choice; offsets live in nodes, curves, cells and history. */
+  pointMotion?: import('../core/networkPointMotion').NetworkPointMode
+  pointPicked?: import('../core/networkPointMotion').NetworkPointRef
+  motionActive?: boolean
   /** The next id a node or a curve takes. */
   nextId: number
   /** The patch being placed: its corners clicked so far, in order. */

@@ -289,11 +289,15 @@ export type WorkerResponse =
       texture?: TextureNote
       /** How a STEP file opened as the scan was converted. */
       step?: StepInfo
+      /** Display-only original CAD face boundaries; never triangle wireframe. */
+      cadEdges?: Float32Array
     }
   | { type: 'fit-ok'; requestId: number; result: FitOutput }
   | {
       type: 'nominal-loaded'
       requestId: number
+      /** STEP face boundaries for display only; absent for STL/mesh references. */
+      cadEdges?: Float32Array
       positions: Float32Array
       indices: Uint32Array
       normals: Float32Array

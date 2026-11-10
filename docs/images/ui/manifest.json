@@ -1,0 +1,107 @@
+{
+  "capturedAt": "2026-11-02T23:13:51.211Z",
+  "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+  "platform": "win32",
+  "browser": "Chrome/156.0.8078.74",
+  "images": [
+    {
+      "name": "cad-edges-zebra",
+      "title": "CAD edges with Zebra",
+      "description": "Face and fillet boundaries over reflected stripes on a synthetic CAD block; no triangle wireframe.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "2534aa7822ad7522f87983d634849b40988ae19afffac5d098b85e3f32f9fc39",
+      "bytes": 201332
+    },
+    {
+      "name": "step-reference-zebra",
+      "title": "STEP reference inspection",
+      "description": "Surface Deviation with Zebra and CAD boundaries on a STEP reference; reference-side note placement is not claimed.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "33b9ffd94f7981261e5793b77e65a3ab215a3ee75e82456eecb3de216b91e64a",
+      "bytes": 214011
+    },
+    {
+      "name": "feature-categories",
+      "title": "Category-scoped feature selection",
+      "description": "Sketches, section profiles, surfaces and solid operations have separate selection and visibility controls.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "01e61676b6d22788a1c1657c30128f67bd2b8ef7148a1b98b3d0d5d9e8f43416",
+      "bytes": 169765
+    },
+    {
+      "name": "notes-focus",
+      "title": "Local notes and Go to note",
+      "description": "Multi-selection, large collapse header and a visible target reticle for a saved scan note; no agent connection.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "091e336cd772c210fab5fbd56a3b0e21968725c30f15552464b548b239ed2e4e",
+      "bytes": 148262
+    },
+    {
+      "name": "label-controls",
+      "title": "Workspace label controls",
+      "description": "Text labels hidden with the lower-bar Labels control; saved note records and marker visibility remain independent.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "352b667112a31e9dff71fc7a385427a71d9d39de358798f2bc8cf49eb50868e5",
+      "bytes": 149697
+    },
+    {
+      "name": "unified-export",
+      "title": "One STEP/STL export dialog",
+      "description": "The same Export body command offers a file-format choice, body scope and STL tessellation tolerance.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "eafca9cb9576104558915799f61092f4aac3fcfc49c6702a4014847ea79e2890",
+      "bytes": 171066
+    },
+    {
+      "name": "mesh-zebra",
+      "title": "Mesh Tools Zebra inspection",
+      "description": "Reflected-stripe inspection on a generated noisy scan; numerical Deviation is a separate tool.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "34e57d2dcc692364abaa081965cace00bab65cb086bb09703c2123bb7760e8e3",
+      "bytes": 181629
+    },
+    {
+      "name": "regional-smooth",
+      "title": "Repeatable regional Smooth",
+      "description": "Two actual Smooth applications at 45% intensity retain the painted area and keep Brush selected.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "d6451577cb0e74d08af1126f83fe39ce7cc770713645c4b6a552250baa0a4a20",
+      "bytes": 241517
+    },
+    {
+      "name": "shift-navigation",
+      "title": "Hold Shift to navigate",
+      "description": "Temporary Navigate feedback while Brush is selected; releasing Shift returns to the same marking tool.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "d030e57c8e38a1b821fa89e1ff7a014cc14dcfbc59e54228c077f5c600942f2d",
+      "bytes": 240885
+    },
+    {
+      "name": "dark-settings",
+      "title": "Dark by default",
+      "description": "The default Dark interface is selected even with a light OS preference. Manual Light and System choices remain available.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "12134f916383b6109cfd15f19d646b827a9c65987eeae7964895338d343be90e",
+      "bytes": 271687
+    },
+    {
+      "name": "review-settings",
+      "title": "Review workflow settings",
+      "description": "Configurable Note shortcut, left-panel width and the exact TMAR build identification in Settings.",
+      "source": "08150a0ba2eecb914a91095192ec29e31c55ea64",
+      "synthetic": true,
+      "sha256": "cad75aa554a3437e9cd829d97fc1de746c69bd0bc03066d6b82a955abe659b38",
+      "bytes": 258800
+    }
+  ]
+}

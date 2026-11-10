@@ -8,6 +8,7 @@
 // finish (playing). Under Node the requests go to the same service in this
 // thread instead (reLocal.ts).
 
+import type { BodyEditSource } from './buildTypes'
 import type { Vec3 } from '../../../src/core/types'
 import { WorkerRpc } from '../../../src/core/workerRpc'
 import type { Rigid } from '../../../src/core/deviation/rigid'
@@ -385,6 +386,30 @@ export class ReClient {
     const res = await this.request<Extract<ReWorkerResponse, { type: 'overlaps-ok' }>>({ type: 'overlaps', requestId, bodyIds, budget }, [], READ_MS)
     if (this.latestBuild !== build) return null
     return { overlaps: res.overlaps, done: res.done }
+  }
+
+  /** Read one current solid or sheet for an editor. A rebuild, replacement
+   * or kernel restart must not silently hand the editor another body. */
+  async verifyAnnotatedNotes(bodyId:number,brep:string,notes:readonly import('../../../src/plugins/annotatedCopyTypes').DraftCopyFaceNoteV1[]) {
+    const body=this.held.get(bodyId),build=this.latestBuild
+    if(!body)throw new Error('Missing staged CAD body.')
+    const res=await this.request<Extract<ReWorkerResponse,{type:'annotated-face-ok'}>>({type:'annotated-face',requestId:this.nextId++,bodyId,expectedKey:body.key,brep,notes:[...notes]},[],HEAVY_MS)
+    if(this.latestBuild!==build||this.held.get(bodyId)?.key!==body.key)throw new Error('Staged CAD changed during note verification.')
+    return res.verified
+  }
+  async bodyEditSource(bodyId: number, expectedKey?: string): Promise<BodyEditSource> {
+    const body = this.held.get(bodyId)
+    if (!body) throw new Error(`There is no current CAD body ${bodyId}.`)
+    if (expectedKey !== undefined && expectedKey !== body.key)
+      throw new Error('The CAD body changed before its editor source was read.')
+    const build = this.latestBuild, bodyKey = body.key
+    const res = await this.request<Extract<ReWorkerResponse, { type: 'body-edit-source-ok' }>>({
+      type: 'body-edit-source', requestId: this.nextId++, bodyId, expectedKey: bodyKey,
+    }, [], HEAVY_MS)
+    if (this.latestBuild !== build || this.held.get(bodyId)?.key !== bodyKey ||
+        res.source.bodyId !== bodyId || res.source.bodyKey !== bodyKey)
+      throw new Error('The CAD body changed while its editor source was being read.')
+    return res.source
   }
 
   /** The bodies as one STEP file — each a part under its label's name and

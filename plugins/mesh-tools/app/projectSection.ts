@@ -51,7 +51,7 @@ export interface MeshPart {
     mode: 'whole' | 'symmetric'
   }
   fill?: { size: number; sizeAuto: boolean; mode: 'curved' | 'flat' }
-  smooth?: { size: number; sizeAuto: boolean; limit: number; limitAuto: boolean; keepEdges: boolean; scope?: 'all' | 'marked' }
+  smooth?: { size: number; sizeAuto: boolean; limit: number; limitAuto: boolean; keepEdges: boolean; scope?: 'all' | 'marked'; strength?: number }
   /** Densify's longest edge. Absent before the tool existed. */
   densify?: { edge: number; edgeAuto: boolean }
   /** What Boolean does with the solid. Absent before the tool existed. */
@@ -85,7 +85,7 @@ export type ScanEditJson =
   | { kind: 'cut'; plane: string; removed: number; capped: number; open: number }
   | { kind: 'mirror'; mode: 'whole' | 'symmetric'; plane: string; triangles: number }
   | { kind: 'fill'; maxSize: number; mode: 'curved' | 'flat'; holes: number; triangles: number }
-  | { kind: 'smooth'; size: number; limit: number; maxMove: number; region?: number }
+  | { kind: 'smooth'; size: number; limit: number; maxMove: number; region?: number; strength?: number }
   | { kind: 'densify'; maxEdge: number; added: number; triangles: number }
   | { kind: 'boolean'; op: 'subtract' | 'add' | 'intersect'; solid: string; removed: number; added: number; volume: number }
   | { kind: 'offset'; distance: number; maxMove: number; region?: number }
@@ -165,6 +165,7 @@ function validateMeshPart(raw: unknown): MeshPart {
     fields(s, 'sizeAuto limitAuto keepEdges', 'boolean', 'mesh.smooth')
     if ((s.size as number) <= 0 || (s.limit as number) <= 0) invalid('mesh.smooth')
     if (s.scope !== undefined && s.scope !== 'all' && s.scope !== 'marked') invalid('mesh.smooth.scope')
+    if (s.strength !== undefined && (typeof s.strength !== 'number' || !Number.isFinite(s.strength) || s.strength < 0 || s.strength > 1)) invalid('mesh.smooth.strength')
   }
   if (x.densify !== undefined) {
     const d = object(x.densify, 'mesh.densify')
@@ -225,6 +226,7 @@ function validateMeshPart(raw: unknown): MeshPart {
         if (edit.mode !== 'curved' && edit.mode !== 'flat') invalid(`${where}.mode`)
       } else if (edit.kind === 'smooth') {
         fields(edit, 'size limit maxMove', 'number', where)
+        if (edit.strength !== undefined && (typeof edit.strength !== 'number' || !Number.isFinite(edit.strength) || edit.strength < 0 || edit.strength > 1)) invalid(`${where}.strength`)
         if (edit.region !== undefined && typeof edit.region !== 'number') invalid(`${where}.region`)
       } else if (edit.kind === 'densify') {
         fields(edit, 'maxEdge added triangles', 'number', where)
@@ -277,7 +279,7 @@ function scanEditOf(e: ScanEditJson): ScanEdit {
     case 'fill':
       return { kind: e.kind, maxSize: e.maxSize, mode: e.mode, holes: e.holes, triangles: e.triangles }
     case 'smooth':
-      return { kind: e.kind, size: e.size, limit: e.limit, maxMove: e.maxMove, ...(e.region !== undefined ? { region: e.region } : {}) }
+      return { kind: e.kind, size: e.size, limit: e.limit, maxMove: e.maxMove, ...(e.region !== undefined ? { region: e.region } : {}), ...(e.strength !== undefined ? { strength: e.strength } : {}) }
     case 'densify':
       return { kind: e.kind, maxEdge: e.maxEdge, added: e.added, triangles: e.triangles }
     case 'boolean':
@@ -328,6 +330,7 @@ function meshPartState(p: MeshPart): Partial<ReturnType<typeof useMeshTools.getS
           smoothLimit: p.smooth.limit,
           smoothLimitAuto: p.smooth.limitAuto,
           smoothEdges: p.smooth.keepEdges,
+          smoothStrength: p.smooth.strength ?? 1,
           ...(p.smooth.scope ? { smoothScope: p.smooth.scope } : {}),
         }
       : {}),
@@ -364,6 +367,7 @@ export const meshSection: ProjectSection<MeshPart> = {
         limit: x.smoothLimit,
         limitAuto: x.smoothLimitAuto,
         keepEdges: x.smoothEdges,
+        ...(x.smoothStrength !== 1 ? { strength: x.smoothStrength } : {}),
         scope: x.smoothScope,
       },
       densify: { edge: x.densifyEdge, edgeAuto: x.densifyEdgeAuto },

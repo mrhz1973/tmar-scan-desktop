@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.workspace-editor-dock { flex: 0 0 320px; width: 320px; min-width: 260px; max-width: 42vw; min-height: 0; display: flex; flex-direction: column; background: var(--panel); color: var(--ink); border-left: 1px solid var(--line-strong); }
+.workspace-editor-dock > header { padding: 14px; display: flex; flex-direction: column; gap: 5px; border-bottom: 1px solid var(--line); }
+.workspace-editor-dock > header span { font-size: 11px; color: var(--dim); }
+.workspace-editor-parameters { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+.workspace-editor-dock > footer { padding: 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; font-size: 12px; }
+.workspace-editor-dock .keys { display: flex; gap: 8px; }
+.workspace-editor-dock .keys button { flex: 1; min-height: 34px; }
+/* Initial safety: model tree stays visible but cannot start competing tools. */
+.app[data-editor-open='true'] .mid > .panel { pointer-events: none; }
+@media (max-width: 900px) { .workspace-editor-dock { flex-basis: 270px; min-width: 220px; } }
+
+.workspace-editor-copy-visibility { display: flex; align-items: flex-start; gap: 7px; line-height: 1.35; }
+.workspace-editor-copy-visibility input { flex: 0 0 auto; margin: 2px 0 0; }
+.workspace-editor-copy-visibility span { min-width: 0; overflow-wrap: anywhere; }

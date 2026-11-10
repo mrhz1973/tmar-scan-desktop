@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "originalVolume": 6075.247994550057,
+  "editedVolume": 6192.107966783208,
+  "roundtripVolume": 6192.107966783208,
+  "maxError": 0,
+  "editedStatus": "CAD valido · volume 6192.108 mm³ · scarto bordo 2.0e-14 mm",
+  "project": "project.scanruler",
+  "consoleErrors": [],
+  "elapsedMs": 8612.37
+}

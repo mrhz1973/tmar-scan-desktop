@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Sets the dark theme before the first paint, from the same key the settings
-// store keeps it under, so a dark chassis never flashes light on load.
+// TMAR's first paint matches prefsStore while retaining upstream's external
+// script, so the page needs neither inline script permission nor a CSP hash.
+var t = 'dark'
 try {
-  var t = localStorage.getItem('scanruler.uitheme')
-  if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches))
-    document.documentElement.dataset.theme = 'dark'
+  var saved = localStorage.getItem('scanruler.uitheme')
+  if (saved === 'light' || saved === 'dark' || saved === 'system') t = saved
 } catch (e) {}
+var dark = t === 'dark' || (t === 'system' && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches)
+document.documentElement.dataset.theme = dark ? 'dark' : 'light'

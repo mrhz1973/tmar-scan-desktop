@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.noterow.tmar-selected { background: var(--accent-soft); outline: 1px solid var(--accent-d); outline-offset: -1px; }
+.noterow.tmar-focused { box-shadow: inset 3px 0 var(--accent-d); }
+.noterow .notebody { cursor: pointer; user-select: none; }
+.noterow .notekeys { flex-wrap: wrap; max-width: 64px; justify-content: flex-end; }
+.noterow:focus-visible { outline: 2px solid var(--accent-d); }
+.nolabels .note-label.focused:not(:empty) { display: block !important; }
+.notes [hidden] { display: none !important; }
+.notes .toolrow { flex-wrap: wrap; }
+
+.tmar-notes-heading { display: flex; align-items: center; gap: 8px; }
+.tmar-note-summary { font-size: 11px; color: var(--dim); }
+.tmar-focus-feedback { margin: 3px 0; padding: 8px; font-size: 12px; border-left: 3px solid var(--accent-d); background: var(--accent-soft); }
+.noterow .notekeys [data-test="note-locate"] { min-width: 30px; min-height: 30px; color: var(--accent-d); border: 1px solid var(--line); }
+.noterow.tmar-focused .notekeys [data-test="note-locate"] { background: var(--accent-soft); outline: 2px solid var(--accent-d); }

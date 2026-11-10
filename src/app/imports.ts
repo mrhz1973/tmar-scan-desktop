@@ -6,6 +6,7 @@
 // was; and busy and errors are reported for the import as a whole
 // (runImport), not member by member.
 
+import { workspaceEditors } from '../plugins/workspaceEditors'
 import type { MeshWorkerClient, LoadedScan, LoadedNominal } from '../core/workerClient'
 import type { CreaseSetting } from '../core/geometry/crease'
 import type { Rigid } from '../core/deviation/rigid'
@@ -48,6 +49,7 @@ export function runImport(
   shouldStart: () => boolean = () => true,
 ): Promise<void> {
   return queue.run(async () => {
+    if (workspaceEditors.active()) { useStore.getState().setError('Concludi Edit Surface prima di aprire un altro file.'); return }
     if (!shouldStart()) return
     const previousStatus = useStore.getState().statusText
     useStore.setState({ busy: true, errorText: null, statusText })
@@ -85,7 +87,7 @@ export async function prepareScan(client: MeshWorkerClient, scene: SceneManager 
   const companions = await scanCompanions(file.name, new Uint8Array(buffer), extras)
   const { id, mesh } = await client.prepareScan(file.name, buffer, crease, transform, units, companions, scale)
   try {
-    const view = scene ? scene.prepareMesh(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots, mesh.copyOf, mesh.colors ?? null) : NO_VIEW
+    const view = scene ? scene.prepareMesh(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots, mesh.copyOf, mesh.colors ?? null, mesh.cadEdges ?? null) : NO_VIEW
     return { id, mesh, source, view }
   } catch (e) {
     await client.discardImport([id])
@@ -100,7 +102,7 @@ export async function prepareNominal(client: MeshWorkerClient, scene: SceneManag
   const source = { name: file.name, file: keptSource(file, buffer), units }
   const { id, mesh } = await client.prepareNominal(file.name, buffer, units)
   try {
-    const view = scene ? scene.prepareNominal(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots) : NO_VIEW
+    const view = scene ? scene.prepareNominal(mesh.positions, mesh.indices, mesh.normals, mesh.wireSlots, mesh.cadEdges) : NO_VIEW
     return { id, mesh, source, view }
   } catch (e) {
     await client.discardImport([id])

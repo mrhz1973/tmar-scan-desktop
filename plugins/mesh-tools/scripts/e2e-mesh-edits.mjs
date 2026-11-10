@@ -13,7 +13,7 @@
 // Prereqs: dev server running (npm run dev), Chrome installed.
 //   node plugins/mesh-tools/scripts/e2e-mesh-edits.mjs
 // Env: CHROME (chrome.exe path), APP_URL, SHOT_DIR.
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { canvasRect, check, colouredFraction, drag, fieldSetter, finish, launchApp, loadScan, MOD, OUT_DIR, setViewTheme, shotPath, sleep } from '../../../scripts/e2e-lib.mjs'
 import { noisyBoxScan } from '../../../scripts/e2e-fixtures.mjs'
@@ -26,7 +26,7 @@ const fixture = noisyBoxScan({ seed: 11, noise: 0.03, holes: true, header: 'Scan
 const SCAN = join(OUT_DIR, 'mesh-edits-box.stl')
 writeFileSync(SCAN, fixture.bytes)
 
-const { browser, page, consoleErrors } = await launchApp({ width: 1600, height: 1000, protocolTimeout: 600_000 })
+const { browser, page, consoleErrors } = await launchApp({ width: 1600, height: 1000, protocolTimeout: 600_000, userDataDir: mkdtempSync(join(OUT_DIR, 'mesh-edits-profile-')) })
 const count = (text) => Number(String(text).replace(/[^\d]/g, ''))
 const text = (sel) => page.$eval(sel, (el) => el.textContent.replace(/\s+/g, ' ').trim())
 const scanCount = async () => count((await page.$eval('.file-info span', (el) => el.textContent)).split('·')[0])
@@ -429,7 +429,8 @@ const movedPoints = count(regional.match(/region — ([\d,]+) points/)?.[1] ?? '
 check(movedPoints > 0 && movedPoints <= region, 'no more points moved than were marked')
 check((await copyCount()) === beforeRegion, 'and every triangle kept')
 check(/in a marked region/.test((await page.$$eval('[data-test=pending-edit]', (els) => els.map((el) => el.textContent))).join(' | ')), 'the list says it was regional')
-check(count(await text('[data-test=mark-count]')) === 0, 'and the marking goes, leaving the result in view')
+check(count(await text('[data-test=mark-count]')) === region, 'the marked region remains selected for another Smooth application')
+check(await page.$eval('[data-test=smooth-scan]', e => !e.disabled), 'Smooth can be reapplied without selecting the region again')
 await page.screenshot({ path: shotPath('mesh-edits-regional.png') })
 // A region marked to smooth is not a marking to delete.
 await page.click('[data-test=mark-window]')

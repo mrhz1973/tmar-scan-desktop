@@ -102,7 +102,7 @@ try {
   check((await rows()).every((t) => /From the project file/.test(t)), 'each row in the panel says it is from the project file')
   check(!(await rows())[1].includes('The agent asks'), 'and the one dressed as a question does not say the agent asks')
   await page.screenshot({ path: shotPath('note-from-file.png') })
-  const open = await page.$$('[data-test=note-open]')
+  const open = await page.$$('[data-test=note-edit], [data-test=note-open]')
   await open[2].click()
   await page.waitForSelector('[data-test=note-keep]')
   await page.click('[data-test=note-keep]')

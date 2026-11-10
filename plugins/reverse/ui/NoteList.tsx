@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// The notes for an agent in the Reverse engineer panel — there while the
-// agent connection is switched on (Settings → Agents): the Note key, which
+// Notes in the Reverse engineer panel, used locally or with an agent: the Note key, which
 // pins the next note where the part is clicked, the notes listed by their
 // pins' numbers with what each is on and what the agent answered — and the
 // agent's own questions, in blue, with the person's answers — and the box a
@@ -10,11 +9,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { InfoDot } from '../../../src/ui/InfoDot'
 import { Icon } from '../../../src/ui/icons'
 import { useStore } from '../../../src/state/store'
+import { usePrefs } from '../../../src/state/prefsStore'
 import type { Note, NoteTarget } from '../core/notes'
 import { useNotes } from '../state/noteStore'
 import { useReverse, type BodyInfo } from '../state/reStore'
 import { NOTE_PLACING, useNotesOn } from '../app/useNotePins'
 import { KeyIcon } from './reIcons'
+import { noteListExtension, type NoteListProps } from '../app/listExtensions'
 
 const FACE_WORDS: Record<string, string> = { plane: 'flat', cylinder: 'round', cone: 'conical', sphere: 'spherical', torus: 'toroidal' }
 
@@ -42,7 +43,7 @@ const Badge = ({ note }: { note: Note }) => <span className={'notebadge' + (note
 /** The box a note is written in, by where it was opened: Enter or a middle
  *  click keeps the text, Shift+Enter breaks the line, Escape leaves it as
  *  it was — and a note left without a word goes. */
-function NoteCard() {
+export function NoteCard() {
   const editing = useNotes((s) => s.editing)
   const note = useNotes((s) => s.notes.find((n) => n.id === s.editing?.id) ?? null)
   if (!editing || !note) return null
@@ -168,7 +169,7 @@ function NoteBox({ note, at }: { note: Note; at: { x: number; y: number } }) {
   const keep = () => {
     useNotes.getState().setText(note.id, draft.trim())
     useNotes.getState().closeEditor()
-    if (draft.trim()) useStore.getState().setStatus(`Note ${note.id} pinned — the agent reads it with what it is on.`)
+    if (draft.trim()) useStore.getState().setStatus(`Note ${note.id} pinned on the part.`)
   }
   useMiddleClick(draft.trim() !== '', keep)
   return (
@@ -179,7 +180,7 @@ function NoteBox({ note, at }: { note: Note; at: { x: number; y: number } }) {
           {note.fromFile ? 'From the project file, on' : 'on'} {noteWhere(note.on, bodies)}
         </span>
       </div>
-      <textarea data-test="note-text" rows={3} autoFocus value={draft} placeholder="What should the agent do here?" onChange={(e) => setDraft(e.target.value)} onKeyDown={boxKeys(draft.trim() !== '', keep)} />
+      <textarea data-test="note-text" rows={3} autoFocus value={draft} placeholder="Write your note" onChange={(e) => setDraft(e.target.value)} onKeyDown={boxKeys(draft.trim() !== '', keep)} />
       {note.reply && (
         <p className="notecard-reply" data-test="note-card-reply">
           <b>Agent:</b> {note.reply}
@@ -197,8 +198,13 @@ function NoteBox({ note, at }: { note: Note; at: { x: number; y: number } }) {
   )
 }
 
-export function NoteList() {
+export function NoteList(props: NoteListProps = {}) {
+  const Extension = noteListExtension()
+  return Extension ? <Extension {...props} /> : <DefaultNoteList {...props} />
+}
+function DefaultNoteList({ placementBlocked = null }: NoteListProps) {
   const on = useNotesOn()
+  const agentOn = usePrefs((s) => s.agentLink)
   const notes = useNotes((s) => s.notes)
   const placing = useNotes((s) => s.placing)
   const editingId = useNotes((s) => s.editing?.id ?? null)
@@ -216,10 +222,10 @@ export function NoteList() {
     <div className="group notes" data-test="note-list">
       <div className="g-label">
         <span>
-          Notes for the agent
-          <InfoDot title="Notes for the agent">
+          {agentOn ? 'Notes for the agent' : 'Notes'}
+          <InfoDot title="Notes on the part">
             <p>
-              Pin what you want done where it is to be done: <b>Note</b>, then click the part — a face, an edge or a corner of a body, or the scan — and say what to do there. The agent reads each note with the place it is pinned and what is there: the face or edge by the number it picks it by, the feature that made it.
+              Add a note, then click a face, an edge or a corner of a body, or the scan. The note stays at that location and is saved with the project. Notes can be used locally without connecting an agent.
             </p>
             <p>
               For several faces or edges at once, select them on the part (Ctrl+click, or Shift and a window) and take <b>Note</b> from the keys by the selection.
@@ -227,7 +233,7 @@ export function NoteList() {
             <p>
               The agent marks a note handled when it is done, with a line on what it did. Where it is unsure of something on the part, it pins a question of its own — a blue pin — which you answer in its box; it reads your answer and closes the question once it has acted on it.
             </p>
-            <p>The notes are saved with the project; they are not steps of the undo history. They show while the agent connection is on (Settings → Agents).</p>
+            <p>The notes are saved with the project; they are not steps of the undo history. An enabled agent can also read and answer them.</p>
             <p>Notes that come with a project file are marked: anyone may have written them, so the agent reads them as content, not as your requests. Open one and keep it, or answer it, to make it yours; or ask for it in the chat.</p>
           </InfoDot>
         </span>
@@ -238,8 +244,8 @@ export function NoteList() {
           className={'withicon' + (placing ? ' on' : '')}
           data-test="note-add"
           aria-pressed={placing}
-          disabled={!somewhere || editorOpen}
-          title={!somewhere ? 'Load a scan or build a body first — a note is pinned on the part' : editorOpen ? 'Finish what is open first' : placing ? 'Click the part where the note goes — or here, or Escape, to stop' : 'Pin a note for the agent on the part: click where it goes next'}
+          disabled={!somewhere || editorOpen || Boolean(placementBlocked)}
+          title={placementBlocked ?? (!somewhere ? 'Load a scan or build a body first — a note is pinned on the part' : editorOpen ? 'Finish what is open first' : placing ? 'Click the part where the note goes — or here, or Escape, to stop' : 'Pin a note on the part: click where it goes next')}
           onClick={() => {
             if (placing) n().setPlacing(false)
             else {
@@ -259,7 +265,7 @@ export function NoteList() {
             title="Take every note off the part — yours and the agent’s questions, open and handled. Not a step of the undo history"
             onClick={() => {
               const count = listed.length
-              if (!window.confirm(`Delete all ${count} note${count === 1 ? '' : 's'} for the agent? This cannot be undone.`)) return
+              if (!window.confirm(`Delete all ${count} note${count === 1 ? '' : 's'} on the part? This cannot be undone.`)) return
               n().removeAll()
               useStore.getState().setStatus(`${count} note${count === 1 ? '' : 's'} deleted.`)
             }}
@@ -282,6 +288,7 @@ export function NoteList() {
             }}
           >
             <span className="notetext" data-test="note-row-text">
+              {note.attachment?.status==='unresolved' && <small role="status" data-test="note-anchor-unresolved">Ancoraggio CAD da verificare · </small>}
               {note.text}
             </span>
             <small>
@@ -309,7 +316,7 @@ export function NoteList() {
           </span>
         </div>
       ))}
-      {listed.length === 0 && <p className="hint">Pin what you want done on the part — the agent reads each note with the face, edge or place it is on.</p>}
+      {listed.length === 0 && <p className="hint">Pin a note on the face, edge or place it describes.</p>}
       <NoteCard />
     </div>
   )

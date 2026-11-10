@@ -37,7 +37,7 @@ function settingsOut(m: MeshState = useMeshTools.getState()) {
     cut: { plane: cutPlaneOut(m.cutRef), offset: m.cutOffsetAuto ? null : m.cutOffset, keep: m.cutKeep, cap: m.cutCap },
     mirror: { plane: cutPlaneOut(m.mirrorRef), offset: m.mirrorOffsetAuto ? null : m.mirrorOffset, mode: m.mirrorMode, keep: m.mirrorKeep },
     fillHoles: { size: m.holeSize, patch: m.fillMode },
-    smooth: { size: m.smoothSize, limit: m.smoothLimit, keepEdges: m.smoothEdges, scope: m.smoothScope },
+    smooth: { size: m.smoothSize, limit: m.smoothLimit, keepEdges: m.smoothEdges, scope: m.smoothScope, strength: m.smoothStrength },
     densify: { maxEdge: m.densifyEdge },
     offset: { direction: m.offsetDirection, distance: m.offsetDistance, scope: m.offsetScope },
     boolean: { op: m.boolOp, solids: m.boolSolids },

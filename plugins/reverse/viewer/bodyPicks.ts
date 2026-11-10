@@ -46,6 +46,9 @@ import { distToSegment2 } from '../../../src/core/flat/vec2'
  *  editor open — everything there is to select: faces, edges and corners. */
 export type BodyPickMode = 'faces' | 'edges' | 'all'
 
+/** Optional display style. Picking and selected-edge highlights stay separate. */
+export interface CadEdgeDisplay { visible: boolean; color: string; width: number }
+
 export interface BodyTopology {
   faces: FaceInfo[]
   edges: EdgeInfo[]
@@ -212,6 +215,13 @@ export class BodyPicks {
   private chainEdges = new Set<string>()
   /** Bodies a preview stands in for: their edges at rest are put away. */
   private replaced: ReadonlySet<number> = new Set()
+  private editorMasked: ReadonlySet<number> = new Set()
+  setEditorMasked(ids: readonly number[]): void {
+    this.editorMasked = new Set(ids)
+    this.rebuild()
+    this.silhouetteDirty = true
+    this.ctx.invalidate()
+  }
   /** The edges of the preview that stands in for them, what they are drawn
    *  from, and the map that carries them with the ghost. */
   private previewLines: { line: LineSegments2; geo: LineSegmentsGeometry }[] = []
@@ -253,6 +263,7 @@ export class BodyPicks {
   private resolution = new THREE.Vector2(1, 1)
   private clipping: THREE.Plane[] | null = null
   private lineScale = 1
+  private edgeDisplay: CadEdgeDisplay | null = null
 
   constructor(private ctx: BodyPicksContext) {
     ctx.partGroup.add(this.group)
@@ -765,6 +776,15 @@ export class BodyPicks {
     this.rebuildBodyLights()
   }
 
+  /** Display-only override; null restores the inherited style on plugin exit. */
+  setEdgeDisplay(style: CadEdgeDisplay | null): void {
+    const old = this.edgeDisplay
+    if (old === style || (old && style && old.visible === style.visible && old.color === style.color && old.width === style.width)) return
+    this.edgeDisplay = style ? { ...style } : null
+    this.sizeRestLines()
+    this.ctx.invalidate()
+  }
+
   setResolution(width: number, height: number): void {
     if (this.resolution.x === width && this.resolution.y === height) return
     this.resolution.set(width, height)
@@ -819,7 +839,7 @@ export class BodyPicks {
     // Each body's own, made for the camera as it stands when it is shown;
     // a body hidden keeps its own, hidden with it.
     for (const e of this.entries.values()) {
-      const shown = e.mesh.visible && !this.replaced.has(e.id) && e.round.length > 0
+      const shown = e.mesh.visible && !this.replaced.has(e.id) && !this.editorMasked.has(e.id) && e.round.length > 0
       let s = this.silhouettes.get(e.id)
       if (shown && s?.stamp !== this.silhouetteStamp) {
         drop(e.id)
@@ -851,8 +871,12 @@ export class BodyPicks {
   /** The edges at rest as wide as the line width and what is armed say. */
   private sizeRestLines(): void {
     const width = (this.mode === 'edges' || this.mode === 'all' ? EDGE_WIDTH_ARMED_PX : EDGE_WIDTH_PX) * this.lineScale
-    if (this.edgeMaterial) this.edgeMaterial.linewidth = width
-    if (this.dimmedMaterial) this.dimmedMaterial.linewidth = width
+    for (const material of [this.edgeMaterial, this.dimmedMaterial]) {
+      if (!material) continue
+      material.linewidth = this.edgeDisplay?.width ?? width
+      material.color.set(this.edgeDisplay?.color ?? EDGE_COLOR)
+      material.visible = this.edgeDisplay?.visible ?? true
+    }
   }
 
   /** The edges of every body on show, thin and behind what hides them —
@@ -889,7 +913,7 @@ export class BodyPicks {
     // Each body's block kept while its lines and their material stay.
     const wanted = new Set<string>()
     for (const e of this.entries.values()) {
-      const shown = e.mesh.visible && !this.replaced.has(e.id)
+      const shown = e.mesh.visible && !this.replaced.has(e.id) && !this.editorMasked.has(e.id)
       for (const [kind, segments, m] of [['sharp', e.lines.rest.sharp, this.edgeMaterial], ['tangent', e.lines.rest.tangent, tangentMaterial]] as const) {
         if (!m || segments.length < 6) continue
         const key = `${e.id}:${kind}`

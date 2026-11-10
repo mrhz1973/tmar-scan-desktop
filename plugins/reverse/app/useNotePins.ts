@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// The notes for an agent in the viewport: their pins kept with the notes
-// (viewer/notePins.ts), shown while the agent connection is switched on —
-// Settings → Agents — in every workspace the 3D view is in, so they stay on
+// The notes in the viewport: their pins kept with the notes
+// (viewer/notePins.ts), shown for local notes or an enabled agent, in every
+// workspace the 3D view is in, so they stay on
 // the part while the agent fits an element in 3D Measure; a note pinned
 // where the Note key's click lands, on the scan or on a face, an edge or a
 // corner of a body, whatever else is drawn there; and the pins taking
@@ -22,12 +22,17 @@ import { reEditorOpen, useReverse } from '../state/reStore'
 import { notePinsOf } from '../viewer/notePins'
 import { reSceneOf } from '../viewer/reScene'
 import { reverseSession } from './reSession'
+import { noteWorkspace } from './noteWorkspaces'
 
 /** What the status line says while the Note key is in hand. */
 export const NOTE_PLACING = 'Click the part where the note goes — a face, an edge or a corner of a body, or the scan. Escape stops.'
 
-/** Whether the notes are in play: the agent connection switched on. */
-export const useNotesOn = () => usePrefs((s) => s.agentLink)
+/** Notes can be used locally; their visibility never enables an agent link. */
+export const useNotesOn = () => {
+  const agent = usePrefs((s) => s.agentLink)
+  const local = useNotes((s) => s.localNotesVisible || s.notes.length > 0)
+  return agent || local
+}
 
 /** Which way a body faces at a point of it — see meshNormalAt. */
 function bodyNormal(bodyId: number, at: Vec3, faceHashes: readonly number[] = []): Vec3 | undefined {
@@ -65,7 +70,7 @@ export function pinNoteOnBody(
   const under = hit.type === 'vertex' ? null : scene ? reSceneOf(scene).bodyPicks.pointAt(clientX, clientY) : null
   const place = under && hit.type !== 'vertex' ? { at: under.point, normal: bodyNormal(hit.bodyId, under.point, hit.type === 'face' ? [hit.face.hash] : hit.edge.faces) } : placeOf(hit)
   useNotes.getState().addNote({ at: place.at, ...(place.normal ? { normal: place.normal } : {}), on: [targetOf(hit)] }, { x: clientX, y: clientY })
-  useStore.getState().setStatus('Say what to do there — Enter or a middle click keeps the note.')
+  useStore.getState().setStatus('Write your note — Enter or a middle click keeps it.')
 }
 
 /** A note pinned where a click with the Note key landed: on the corner, the
@@ -84,7 +89,7 @@ function pinNoteAt(scene: SceneManager, clientX: number, clientY: number): void 
 /** A note pinned on the scan where a click with the Note key landed. */
 export function pinNoteOnScan(hit: PickHit): void {
   useNotes.getState().addNote({ at: hit.point, normal: hit.normal, on: [{ kind: 'scan' }] }, { x: hit.clientX, y: hit.clientY })
-  useStore.getState().setStatus('Say what to do there — Enter or a middle click keeps the note.')
+  useStore.getState().setStatus('Write your note — Enter or a middle click keeps it.')
 }
 
 /** A note on what is selected on the bodies — several faces, edges and
@@ -98,7 +103,8 @@ export function pinNoteOnItems(items: readonly PickedItem[], screen: { x: number
 /** Keep the pins with the notes, and the Note key with the workspace. */
 export function useNotePins(sceneRef: RefObject<SceneManager | null>): void {
   const on = useNotesOn()
-  const onReverse = useShell((s) => s.workspace === 'reverse')
+  const workspace = useShell((s) => s.workspace)
+  const supported = workspace === 'reverse' || noteWorkspace(workspace) !== undefined
   const notes = useNotes((s) => s.notes)
   const editing = useNotes((s) => s.editing?.id ?? null)
   const placing = useNotes((s) => s.placing)
@@ -139,8 +145,8 @@ export function useNotePins(sceneRef: RefObject<SceneManager | null>): void {
 
   useEffect(() => {
     const scene = sceneRef.current
-    if (scene) notePinsOf(scene).setInteractive(!editorOpen && onReverse)
-  }, [sceneRef, editorOpen, onReverse])
+    if (scene) notePinsOf(scene).setInteractive(!editorOpen && supported)
+  }, [sceneRef, editorOpen, supported])
 
   useEffect(() => {
     const scene = sceneRef.current
@@ -151,18 +157,22 @@ export function useNotePins(sceneRef: RefObject<SceneManager | null>): void {
     const scene = sceneRef.current
     if (!scene) return
     notePinsOf(scene).onPinClick = (id, x, y) => useNotes.getState().edit({ id, at: { x, y } })
-    notePinsOf(scene).onPlaceClick = (x, y) => pinNoteAt(scene, x, y)
+    notePinsOf(scene).onPlaceClick = (x, y) => {
+      const workspace = useShell.getState().workspace
+      if (workspace === 'reverse') pinNoteAt(scene, x, y)
+      else noteWorkspace(workspace)?.place(scene, x, y)
+    }
   }, [sceneRef])
 
   // The Note key is let go — and a note's box shut — as an editor opens, as
   // the connection is switched off, or as the workspace is left.
   useEffect(() => {
-    if (editorOpen || !shown || !onReverse) {
+    if (editorOpen || !shown || !supported) {
       const n = useNotes.getState()
       if (n.placing) n.setPlacing(false)
       if (n.editing) n.closeEditor()
     }
-  }, [editorOpen, shown, onReverse])
+  }, [editorOpen, shown, supported])
 
   // While it is in hand the cursor is a crosshair over the part, whatever it
   // is over, and the status line says what to do.

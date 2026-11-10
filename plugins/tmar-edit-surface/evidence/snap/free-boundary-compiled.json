@@ -1,0 +1,19 @@
+{
+  "pass": true,
+  "actualPointerDrag": true,
+  "lockedPoles": true,
+  "undoRedo": true,
+  "closedSolidCount": 0,
+  "faceCount": 1,
+  "surface": "bspline",
+  "bounds": {
+    "xmin": -1.0000000088817842e-7,
+    "ymin": -1e-7,
+    "zmin": 9.999999899999999,
+    "xmax": 20.0000001,
+    "ymax": 30.0000001,
+    "zmax": 11.400517508232
+  },
+  "movedStatus": "CAD valido · superficie aperta · spostamento bordo 1.4e+0 mm",
+  "consoleErrors": []
+}

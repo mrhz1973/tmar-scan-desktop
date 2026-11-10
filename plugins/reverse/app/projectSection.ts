@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { readCentreOffset } from '../core/networkNormalMotion'
+import { validatePointOffsets, type PointNetwork } from '../core/networkPointMotion'
 // The Reverse engineer workspace's part of a project file, under the key
 // `reverse`: the feature list by reference — the sketches with their pieces
 // and relations, every pick as a fingerprint, every plane and axis by the id
@@ -10,6 +12,8 @@
 // holds a handful of members, and a project of a dozen bought-in parts
 // would have used them up.
 
+import { validateAnnotationSource } from '../core/annotationSchema'
+import { readStoredSurfaceHistory } from './surfaceEditHistory'
 import { strFromU8, strToU8 } from 'fflate'
 import type { CollectContext, ProjectSection, RestoreContext } from '../../../src/app/projectSections'
 import { array, entries, fields, indices, invalid, object, vector } from '../../../src/core/project/validation'
@@ -123,6 +127,7 @@ export function validateFeatureJson(e: Record<string, unknown>): void {
     fields(route, 'bendRadius', 'number', 'sweep.route')
   }
   if (e.kind === 'import') {
+    if(e.annotationSource!==undefined)validateAnnotationSource(e.annotationSource)
     const file = object(e.file, 'import.file')
     fields(file, 'key name', 'string', 'import.file')
     fields(file, 'size', 'number', 'import.file')
@@ -139,17 +144,21 @@ export function validateFeatureJson(e: Record<string, unknown>): void {
     entries(e.nodes, 'network.nodes', (n) => {
       fields(n, 'id', 'number', 'network.node')
       vector(n.at, 3, 'network.node.at')
+      if (n.offset !== undefined) readCentreOffset(n.offset)
     })
     entries(e.curves, 'network.curves', (c) => {
       fields(c, 'id from to', 'number', 'network.curve')
       for (const p of array(c.via, 'network.curve.via')) vector(p, 3, 'network.curve.via')
+      if (c.viaOffsets !== undefined) for (const value of array(c.viaOffsets, 'network.curve.viaOffsets')) { if (value !== null) readCentreOffset(value) }
     })
     for (const item of array(e.cells, 'network.cells')) {
       const c = object(item, 'network.cell')
       vector(c.seed, 3, 'network.cell.seed')
       if (c.centre !== undefined) vector(c.centre, 3, 'network.cell.centre')
+      if (c.centreOffset !== undefined) readCentreOffset(c.centreOffset)
       if (c.corners !== undefined) indices(c.corners, 'network.cell.corners')
     }
+    validatePointOffsets(e as unknown as PointNetwork)
     object(e.spans, 'network.spans')
     const fit = object(e.fit, 'network.fit')
     fields(fit, 'smoothness', 'number', 'network.fit')
@@ -167,6 +176,8 @@ export function validateReversePart(raw: unknown): ReversePart {
   if (r.version !== undefined && (typeof r.version !== 'number' || !Number.isFinite(r.version))) invalid('reverse.version')
   for (const n of Object.values(object(r.nextOfKind, 'reverse.nextOfKind'))) if (!Number.isSafeInteger(n)) invalid('reverse.nextOfKind')
   entries(r.features, 'reverse.features', validateFeatureJson)
+  const annotationIds=new Set<string>()
+  for(const f of r.features as Feature[]){if(f.kind==='import'&&f.annotationSource){if(annotationIds.has(f.annotationSource.featureUuid))invalid('duplicate annotated feature UUID');annotationIds.add(f.annotationSource.featureUuid)}}
   if (r.rolledTo !== undefined && (!Number.isSafeInteger(r.rolledTo) || (r.rolledTo as number) < 0 || (r.rolledTo as number) > (r.features as unknown[]).length)) invalid('reverse.rolledTo')
   if (r.parameters !== undefined) {
     // The shape only: a parameter whose expression no longer evaluates is
@@ -207,7 +218,20 @@ export function validateReversePart(raw: unknown): ReversePart {
 
 /** The keys of the STEP files the features import. */
 function importedKeys(features: readonly Feature[]): string[] {
-  return [...new Set(features.flatMap((f) => (f.kind === 'import' ? [f.file.key] : [])))]
+  return [...new Set(features.flatMap(f => {
+    if (f.kind !== 'import') return []
+    // Preserve the exact upstream STEP with a qualified history snapshot.
+    // Bad/unknown metadata may still round-trip, but never suppresses the
+    // ordinary saved copy nor causes project-open failure.
+    let sourceKey: string | null = null
+    if (f.surfaceEditHistory !== undefined) {
+      try { // Archival retention only: save upstream STEP for a structurally valid v8
+      // sidecar even while editing/reopen is disabled by the default host gate.
+      sourceKey = readStoredSurfaceHistory(f.surfaceEditHistory,{experimentalAdaptiveV8:true}).source.file.key }
+      catch { /* Static CAD import remains usable. */ }
+    }
+    return sourceKey ? [f.file.key, sourceKey] : [f.file.key]
+  }))]
 }
 
 /** The STEP member's bytes as last encoded, by their text. The snapshot that
@@ -369,7 +393,7 @@ export function applyReversePart(p: ReversePart | undefined, ctx?: RestoreContex
   if (prepared) useReverse.setState((s) => ({ ...prepared, buildVersion: s.buildVersion + 1 }))
 }
 
-const PERSISTED = ['features', 'rolledBack', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'overlapsShown', 'elementsShown', 'stepFiles'] as const
+const PERSISTED = ['features', 'rolledBack', 'nextFeatureId', 'nextOfKind', 'parameters', 'nextParameterId', 'bodyStyles', 'bodyFolders', 'scanSeeThrough', 'bodiesSeeThrough', 'overlapsShown', 'elementsShown', 'stepFiles', 'hiddenBodies'] as const
 const DRAFTS = ['sketchDraft', 'extrudeDraft', 'revolveDraft', 'featureDraft'] as const
 
 export const reverseSection: ProjectSection<ReversePart> = {

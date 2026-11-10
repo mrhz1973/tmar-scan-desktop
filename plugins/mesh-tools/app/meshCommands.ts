@@ -549,7 +549,7 @@ const fillHoles: Command<{ size?: number; patch?: FillMode; at?: Vec3 }> = {
     ),
 }
 
-const smooth: Command<{ size?: number; limit?: number; keepEdges?: boolean; region?: RegionIn }> = {
+const smooth: Command<{ size?: number; limit?: number; keepEdges?: boolean; region?: RegionIn; strength?: number }> = {
   name: 'smooth',
   title: 'Smooth the mesh',
   description:
@@ -558,10 +558,11 @@ const smooth: Command<{ size?: number; limit?: number; keepEdges?: boolean; regi
     size: sizeIn('Bumps smaller than this across are smoothed out, mm.'),
     limit: sizeIn('No point moves further than this, mm.'),
     keepEdges: bool('Keep sharp edges as scanned.'),
+    strength: num('Smoothing intensity 0..1: share of the full bounded displacement; default is the panel setting (initially 1). Repeated applications are cumulative.', { minimum: 0, maximum: 1 }),
     region: regionSchema('Smooth only this surface; absent, the whole mesh.'),
   }),
   history: false,
-  run: async ({ size, limit, keepEdges, region }) => {
+  run: async ({ size, limit, keepEdges, region, strength }) => {
     requireScan()
     const vertices = region !== undefined ? await regionVertices(region) : null
     return editAnswer(
@@ -571,6 +572,7 @@ const smooth: Command<{ size?: number; limit?: number; keepEdges?: boolean; regi
         if (size !== undefined) m().setSmoothSize(size)
         if (limit !== undefined) m().setSmoothLimit(limit)
         if (keepEdges !== undefined) m().setSmoothEdges(keepEdges)
+        if (strength !== undefined) m().setSmoothStrength(strength)
         return session().smoothScan(vertices, { inStep: true })
       }, true),
     )

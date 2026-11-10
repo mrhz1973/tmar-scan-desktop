@@ -376,6 +376,7 @@ describe('the commands hold to the panel’s rules', () => {
       'reverse.body.compare',
       'reverse.body.compare_in_deviation',
       'reverse.body.describe',
+      'reverse.body.edit_source',
       'reverse.body.fillet_read',
       'reverse.body.fillet_try',
       'reverse.body.probe',

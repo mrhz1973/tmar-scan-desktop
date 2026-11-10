@@ -1,0 +1,87 @@
+{
+  "mode": "cause-diagnostic",
+  "plugin": "b36bf5a195db8c711347ff34117fa40d3bc279c9",
+  "inputHash": "baf41153abbcb6b4b9343f3daa9aca2dd22af945d89da1e87d860c5844950747",
+  "initialVolume": 6192.107966783208,
+  "checks": [
+    "actual published plugin edits a pre-existing B-spline in the main view",
+    "Apply preserves original and creates one separate copy",
+    "red hatched object is the explicit CAD-interference overlay",
+    "disabling only Overlaps removes red overlay without hiding bodies or changing camera",
+    "hiding only original removes overlap while the analysis remains enabled",
+    "visibility switches leave CAD body volumes unchanged",
+    "input STEP remains byte-for-byte unchanged",
+    "zero application console errors"
+  ],
+  "consoleErrors": [],
+  "verdict": "PASS",
+  "after": [
+    {
+      "name": "Open CASCADE STEP translator 8.0 1",
+      "hidden": false
+    },
+    {
+      "name": "Open CASCADE STEP translator 8.0 1 (2)",
+      "hidden": false
+    }
+  ],
+  "hatchOn": {
+    "shown": true,
+    "bodies": [
+      {
+        "id": 1,
+        "visible": true,
+        "volume": 6192.107966783208
+      },
+      {
+        "id": 2,
+        "visible": true,
+        "volume": 6194.055651269608
+      }
+    ],
+    "overlays": [
+      {
+        "a": 1,
+        "b": 2,
+        "visible": true,
+        "color": 14702159,
+        "raycast": "() => {\n      }"
+      }
+    ],
+    "pose": "{\"p\":[110.2390620721403,-145.4543180118518,84.2103946384405],\"q\":[0.5109100628566136,0.17173326423232527,0.26837064143369055,0.7984082868084668]}"
+  },
+  "hatchOff": {
+    "shown": false,
+    "bodies": [
+      {
+        "id": 1,
+        "visible": true,
+        "volume": 6192.107966783208
+      },
+      {
+        "id": 2,
+        "visible": true,
+        "volume": 6194.055651269608
+      }
+    ],
+    "overlays": [],
+    "pose": "{\"p\":[110.2390620721403,-145.4543180118518,84.2103946384405],\"q\":[0.5109100628566136,0.17173326423232527,0.26837064143369055,0.7984082868084668]}"
+  },
+  "originalHidden": {
+    "shown": true,
+    "bodies": [
+      {
+        "id": 1,
+        "visible": false,
+        "volume": 6192.107966783208
+      },
+      {
+        "id": 2,
+        "visible": true,
+        "volume": 6194.055651269608
+      }
+    ],
+    "overlays": [],
+    "pose": "{\"p\":[110.2390620721403,-145.4543180118518,84.2103946384405],\"q\":[0.5109100628566136,0.17173326423232527,0.26837064143369055,0.7984082868084668]}"
+  }
+}

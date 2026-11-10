@@ -14,6 +14,9 @@
 // else is pending — a part is turned to see where the next pick goes, and
 // making the draft first stand down would defeat that.
 import { useEffect } from 'react'
+import { useWorkspaceEditor, workspaceEditors } from '../plugins/workspaceEditors'
+import { requestEditorCancel } from '../ui/WorkspaceEditorDock'
+import { usePrefs } from '../state/prefsStore'
 import { creationMethod, takesSurface } from '../core/elements/construct'
 import { evaluateDimension } from '../core/dimensions'
 import type { FitData } from '../core/types'
@@ -114,6 +117,15 @@ export function useGlobalShortcuts({
       // Settings (issue 34). The dialog's own keys are its own.
       if (dialogOpen()) return
       const target = e.target as HTMLElement | null
+      if (workspaceEditors.active()) {
+        if (e.defaultPrevented || e.repeat || usePrefs.getState().settingsOpen || target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && ['z','y'].includes(e.key.toLowerCase())) {
+          e.preventDefault(); e.stopImmediatePropagation()
+          if (e.key.toLowerCase() === 'y' || e.shiftKey) workspaceEditors.redo(); else workspaceEditors.undo()
+        } else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); requestEditorCancel() }
+        else if (VIEW_KEYS[e.key] && !e.ctrlKey && !e.metaKey && !e.altKey && useWorkspaceEditor.getState().snapshot?.gesture === 'idle') viewFrom(VIEW_KEYS[e.key])
+        return
+      }
       if (target && (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable)) {
         // Escape in a field of a box or a tool leaves the field and goes on
         // to close what it is in, as it does with the focus anywhere else —
@@ -280,6 +292,7 @@ export function useGlobalShortcuts({
       if (confirmable()) e.preventDefault()
     }
     const onPointerUp = (e: PointerEvent) => {
+      if (workspaceEditors.active()) { middleDown = null; return }
       const down = middleDown
       middleDown = null
       if (e.button !== 1 || !down) return

@@ -1,0 +1,105 @@
+{
+  "date": "2026-11-03",
+  "hostBaseline": "a28c747591e740d62f3b1f90330f145141c77de1",
+  "branch": "fix/workspace-apply-guard-20261103",
+  "units": 83,
+  "files": 11,
+  "newTests": 9,
+  "realControllerSource": "PASS 8",
+  "realControllerCompiled": "PASS 3 x 8",
+  "sourceAndCompiledBaseline": "FAIL reproduced",
+  "boundary": "one preexisting gallery import failure",
+  "filesSha256": {
+    "baseline-compiled-1.json": {
+      "bytes": 11226,
+      "sha256": "4c370d9125dce178422307c5d17d4c2f650c1ac27ba1cf927711458787ac5984"
+    },
+    "baseline-source-error.png": {
+      "bytes": 182557,
+      "sha256": "280e27b7c271c5be244113303aa0bba2e320c51b9f1b5b0a6fff0c7746c61fba"
+    },
+    "baseline-source.json": {
+      "bytes": 13124,
+      "sha256": "c9c2a4276492bb0b59ddadd8724b3519a6b25ab07a03be9c89f28fedc929dbb6"
+    },
+    "fixed-compiled-1.json": {
+      "bytes": 800,
+      "sha256": "d59ca25ea52eac8a1746e6afd9993cd3ab9e9093969902566ada6effe49f09d0"
+    },
+    "fixed-compiled-2.json": {
+      "bytes": 800,
+      "sha256": "e94cdf84d7ee4f91d37a0c293992078aef5f1e125b86fb7131032dfac5e71035"
+    },
+    "fixed-compiled-3.json": {
+      "bytes": 800,
+      "sha256": "0e21b052f8435d44a099bb731d0060072110414f2ddaad7c7b13f5dadecd2c43"
+    },
+    "fixed-compiled-applied.png": {
+      "bytes": 141810,
+      "sha256": "1bd2c924ce529db04d3e1da86da8ba1c4fdbcaaf139f2a784945bd0b3446e179"
+    },
+    "fixed-compiled-reopened.png": {
+      "bytes": 133156,
+      "sha256": "1ead7b2ee46f0cd0c7f726541a945d99482e72a51d7cee21f825b4e76d51e647"
+    },
+    "fixed-source-2.json": {
+      "bytes": 798,
+      "sha256": "4001b9e8a595f57db63a8ac18436b53e83e50d99dea9555aa5856bac62ba97d1"
+    },
+    "plugin-snapshot-hashes.json": {
+      "bytes": 12906,
+      "sha256": "e11b8479823bef99b2b4d33baab0333b2b426a69b32b1a1d306fe39aa41b842f"
+    }
+  },
+  "qaRuntimeSha256": {
+    "src/plugins/workspaceEditors.ts": "c66ea48362c70ea179f233c2872e9f7439a1e5788a884e5263ff5432b913921a",
+    "src/viewer/editorViewportLease.ts": "30449507038993694408e1af62062d7faac9d5ad4e7f7b4d90cd60b3c45b8729",
+    "src/plugins/editorReferenceNotifications.ts": "6d6bc2b77250d8a6019c07d5a7f71ad3b95c1f10c4843ba97ec01313a66e8f12"
+  },
+  "qaBundles": {
+    "baseline-dist": [
+      {
+        "name": "index-8KODeKre.js",
+        "bytes": 48965,
+        "sha256": "9fe54e8f4f8665d2fddd01e252567bc370bae7134136ef5eb185a4e1a2b33004"
+      },
+      {
+        "name": "index-BwDbKTK2.js",
+        "bytes": 48965,
+        "sha256": "60aed01c7e7b4a3683b80689176c30dcabfae069cdf7a8cc8ef298496bf2d11c"
+      },
+      {
+        "name": "index-BZ9tYvC1.js",
+        "bytes": 49203,
+        "sha256": "d93e937994b801abc35e03efc5896c8c9e9db46d0a81418c2502de598d3e3440"
+      },
+      {
+        "name": "index-CINHHQUo.js",
+        "bytes": 3870956,
+        "sha256": "41c6257ec51f07ed0d2e8a1711aae8809a559a4c002c6b774dec3b3d6e5c691e"
+      }
+    ],
+    "fixed-dist": [
+      {
+        "name": "index-8KODeKre.js",
+        "bytes": 48965,
+        "sha256": "9fe54e8f4f8665d2fddd01e252567bc370bae7134136ef5eb185a4e1a2b33004"
+      },
+      {
+        "name": "index-BcTbGbPy.js",
+        "bytes": 49203,
+        "sha256": "1c3ea4f37d25062a14b6603f45239ce36d8573afa09e80b3259d9e12bb7a95d7"
+      },
+      {
+        "name": "index-BwDbKTK2.js",
+        "bytes": 48965,
+        "sha256": "60aed01c7e7b4a3683b80689176c30dcabfae069cdf7a8cc8ef298496bf2d11c"
+      },
+      {
+        "name": "index-C1E8dyrL.js",
+        "bytes": 3871896,
+        "sha256": "27b792833e88b4053fd0699f25cceacd4cf31a6e8cf85fd13e1a8f45b2807e0c"
+      }
+    ]
+  }
+}

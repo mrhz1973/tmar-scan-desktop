@@ -14,6 +14,7 @@
 import type { ReactNode } from 'react'
 import type { Vec3 } from '../core/types'
 import type { PluginRuntime } from '../plugins/api'
+import { PluginPanelExtensions } from '../plugins/panelExtensions'
 import { mapHeld, useDeviation } from '../state/deviationStore'
 import { useSectionView } from '../state/sectionViewStore'
 import { useShell } from '../state/shellStore'
@@ -288,6 +289,7 @@ export function ViewBar({
           </div>
         )}
         {sideKeys}
+        {!hideModelKeys && <PluginPanelExtensions slot="view.tools" />}
         {!hideModelKeys && (
           <div className="keys">
             <button

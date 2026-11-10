@@ -1,0 +1,26 @@
+{
+  "scope": "Single natural open STEP sheet, complete U0 boundary moved without duplication",
+  "route": "Whole-boundary gesture controller preview/commit",
+  "transport": "Real session, editor.worker dispatcher and OCCT; in-memory transport and simulated host",
+  "browser": "NOT_RUN",
+  "deltaMm": [
+    0,
+    0,
+    0.2
+  ],
+  "samples": 33,
+  "movedPoles": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "maxEdgeTranslationErrorMm": 2.4980018054066022e-15,
+  "maxStepEdgeTranslationErrorMm": 2.651202354599825e-15,
+  "stepValid": true,
+  "faceCount": 1,
+  "edgeCount": 4,
+  "maxUndoErrorMm": 0,
+  "inputHash": "9f36372385933085b1d3e5a89b29723b7ad76b63de8097e96b5a44b2b7505e9b"
+}

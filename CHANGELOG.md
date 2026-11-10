@@ -5,6 +5,215 @@ bar and the imprint is the entry it belongs to; the `.scanruler` projects it
 saves carry the same number as `appVersion`. How a release is cut is in
 `docs/development.md` under "Releases".
 
+## Unreleased
+
+### TMAR Versione 4 — ScanRuler 0.11.1 integration — 2026-11-10
+
+- Use the complete official ScanRuler 0.11.1 source as the base, including all
+  intervening releases, project schema 2, fitting guides and mesh-worker CSP fixes.
+- Move with upstream from occt-wasm 5.7.1 to its pinned 5.15.0 and qualify the
+  ordinary Edit Surface/history paths on that runtime separately from prior builds.
+- Retain the TMAR workspace host, saved edit workflow, navigation, Zebra, notes,
+  CAD duplication, display units and regional Smooth alongside the new upstream
+  tools and project recovery behavior.
+- Keep the CSP check and external first-paint theme script while preserving
+  TMAR's dark default. The prior Versione 3 results remain historical.
+- See `docs/tmar-upstream-0.11.1-integration-20261110.md` for the migration
+  record; T2 research and full-Tubo qualification remain separate.
+
+### TMAR Versione 3 — integrated Edit Surface host — 2026-11-10
+
+- Consolidate the workspace host changes and the current ordinary Edit Surface
+  plugin in one reviewable source tree.
+- Connect Apply to independently replayed parametric history, `.scanruler`
+  persistence and the visible **Riprendi modifica** action. Preserve original
+  source identity, result viewport leases, atomic publication and Undo/Redo.
+- Expose supported history capability explicitly; adaptive v8 and CAD face
+  duplication do not claim a supported parametric history.
+- Make editor length inputs, budgets, areas, volumes and residuals respect
+  display units while preserving internal CAD values and conservative bounds.
+- Exercise native thin-face annotations and provide integrated browser checks
+  for navigation, gizmo, duplication and saved history in the repository CI.
+- Preserve the existing kernel, project format and upstream package version.
+  See `docs/tmar-host-integration-20261110.md` for measured scope and open gates.
+
+### TMAR Patch Network 3D point checkpoint ? 2026-11-04
+
+- Preserve recovered work and connect explicit node, shared-curve grip and derived-centre offsets to coupled fitting, preview and native project persistence.
+- Add part-frame XYZ and scan-normal controls, captured point drag and selective local/project Undo/Redo; protect active gestures from Ctrl+Z.
+- Keep on-scan projection and CAD constraints; do not claim an unimplemented 3D proximity magnet or near-parallel depth fallback.
+- Isolated Windows/web QA only; no release or preview counter change. See `docs/coordination/patch-network-3d-resume-20261104.md`.
+
+### TMAR Versione 1 — sequential preview numbering — 2026-11-03
+
+- Replace the prominent commit code with Versione 1 and an explicit Anteprima label.
+- Keep commit, build time and dirty-source status in technical details.
+- Start an explicit chronological delivery counter in tmar-version.json; builds and reloads do not advance it.
+- Preserve upstream version, project format and all CAD functionality. Existing QA limitations remain open.
+
+### TMAR Edit Surface feature tile - 2026-11-03
+
+- Move Edit Surface immediately after Patch network in the Create feature grid;
+  remove the old bottom-panel entry. Keep the original command name.
+- Draw a theme-aware quadrilateral control-net icon with nine pole markers,
+  using the existing icon frame, accent colours and feature-tile styling.
+- Keep the editor modal outside the grid through a portal so feature-button
+  styles and sidebar scrolling do not affect the editor. CAD logic is unchanged.
+
+### TMAR current CAD editor source - 2026-11-03
+
+- Add read-only `reverse.body.edit_source` for one explicitly named current
+  CAD body, including ordinary open and sewn sheets. Keep general STEP export
+  filtering unchanged; use built CAD rather than the original import file.
+- Reject mismatched body keys and results overtaken by document/build changes.
+  Do not create geometry, notes, or history entries during this read.
+- Document the editor integration contract in `plugins/reverse/EDITOR-SOURCE.md`.
+  The Edit Surface author owns its Load body wiring; annotated Apply and
+  parametric host persistence remain separate work, with no release implied.
+
+### TMAR Dark default and screenshot gallery - 2026-11-03
+
+- Start with Dark independently of the operating system, including first paint
+  and unavailable/invalid preference storage. Preserve explicit saved choices.
+- Keep Light and System available in Settings and clarify the default.
+- Move the authorized original Zebra screenshot to the top of README and add
+  twelve clickable thumbnails, eleven new synthetic UI captures, detailed
+  captions, provenance and a repeatable capture script.
+- Keep real-project/visual acceptance open. No geometry, kernel, dependencies,
+  project schema, previous preview or desktop release changes.
+
+### TMAR regional Smooth and held-Shift navigation - 2026-11-02
+
+- Snapshot marked-region intent and vertex IDs; reject empty/stale regional requests
+  instead of broadening the operation, and label whole-part smoothing explicitly.
+- Preserve the chosen marking tool as well as its exact selection after Smooth.
+- Expose temporary Navigate feedback while Shift is held; keep normal left/right
+  bindings and stop paint when navigation begins in the middle of a stroke.
+- Add real Brush/Window/Lasso UI regressions and strict unselected-vertex checks.
+  The reported whole-part behavior remains unconfirmed on the user's real project.
+
+### TMAR Mesh Tools review and Smooth controls - 2026-11-02
+
+- Add optional Mesh Tools notes/Zebra integration, with shared local note records,
+  focus/highlight and an explicit distinction between the scan and working previews.
+- Inspect edited/reduced meshes without adopting them or altering source buffers.
+- Retain a marked region through a successful Smooth result's exact vertex map.
+- Add optional 0–100% Smooth intensity, persisted settings and edit records;
+  preserve legacy full strength and explain cumulative per-application movement.
+- Recheck the original mesh-edit flow, existing TMAR regressions and compiled UI.
+  User visual acceptance, macOS and large-mesh qualification remain open.
+
+### TMAR STEP-as-Scan edges and build identity - 2026-11-02
+
+- Preserve original CAD face boundaries when STEP is opened in the Scan slot,
+  including Zebra, color/pixel width, clipping and scan-frame alignment.
+- Keep topology metadata across shading resplits/project reopen; discard it
+  for mesh replacements rather than drawing obsolete or internal triangle lines.
+- Explain the actual loaded target and hide body-only tangent options for scans.
+- Show TMAR web source revision beside upstream ScanRuler; expose build timestamp,
+  full revision and modified-source status in Settings. No appVersion/schema bump.
+- Retain local notes, focus and existing body/reference/category/export regressions.
+  See `docs/tmar-step-scan-validation.md`. User visual review remains open.
+
+### TMAR CAD edges with Zebra — 2026-11-02
+
+- Expose native CAD edges, tangent/fillet borders and silhouettes with a lower-bar
+  switch and color/1–6 px width controls in a dedicated optional plugin.
+- Correct Zebra fill/edge depth ordering without changing body geometry/picking.
+- Preserve STEP-reference face boundary metadata; never substitute triangle wireframe.
+- Extend Zebra to the single Deviation reference view, retaining scan-side notes
+  and explicit split/alignment/animation guards.
+- Keep the owner's result review open; tests and bounded native comparison are
+  recorded in `docs/tmar-cad-edges-validation.md`. No desktop release implied.
+
+
+### TMAR Zebra example and open review backlog - 2026-11-02
+
+- Publish the explicitly supplied Tubo Finale screenshot unchanged in the main
+  and Zebra READMEs, with a dedicated example page and image provenance.
+- Mark it as work in progress: the user is still reviewing the result and has
+  not given final visual or geometric acceptance.
+- Record open result review, future split view with local notes and gallery
+  expansion in `docs/tmar-review-backlog.md`; GitHub Issues is disabled.
+- Documentation and screenshot only: no runtime, shader, geometry, tests,
+  application preview, repository setting or release changes.
+
+### TMAR feature categories and selection persistence - 2026-11-02
+
+- Split feature selection into independent sketch/profile, section-sketch,
+  surface-operation and solid-operation groups; keep unknown types read-only
+  for bulk visibility and actual Bodies separate.
+- Recheck both category and current output type at the visibility write boundary:
+  hiding sketches cannot hide completed bodies; surface/solid scopes are isolated.
+- Preserve chronological rollback/playback and native feature actions.
+- Keep feature/note selections while saving; clear them only on replacement,
+  history travel or removed IDs, not on any use of the shared import queue.
+- Add category resolver, adapter/action and compiled-UI regression checks.
+  See `docs/tmar-feature-categories-validation.md` for actual results and limits.
+- Include the already integrated PR #6 model-centred Zebra reflection unchanged.
+  No desktop release, live-session reload or hosted deployment is implied.
+
+### TMAR note focus and panel follow-up — 2026-11-02
+
+- Center valid saved annotation positions even when CAD target validation fails,
+  with visible warnings rather than silently refusing the navigation.
+- Add a large viewport target reticle and stored-normal inspection direction;
+  preserve geometry, annotation data, provenance and visibility preferences.
+- Enlarge Features/Notes disclosure controls to full-width labeled headers.
+- Add optional resizable left-panel divider and remembered Settings width.
+- Add a lower-bar Zebra entry and scan-only automatic target choice.
+- Add production-only UI verification without development globals or agent access.
+  See `docs/tmar-note-focus-validation.md`; no desktop release is implied.
+
+### TMAR usability - 2026-11-02
+
+- Add local Note access from the viewport and a single-letter binding in Settings.
+- Add note multi-selection, scoped bulk actions, Go to note by double-click or
+  target button, and reversible camera focus with hidden-label handling.
+- Add feature-list Ctrl/Cmd/Shift selection and one-step Show/Hide of current
+  outputs without suppressing geometry; independently collapse Features/Notes.
+- Add lower-bar Labels and per-workspace pin preferences, including Mesh Tools.
+- Replace separate body export buttons with one STEP/STL dialog; keep original
+  STEP fallback when the export plugin is omitted. Reuse both CAD backends.
+- Retain integrated Zebra and local-note/import-provenance behavior. Tests and
+  limitations are recorded in `docs/tmar-usability-validation.md`.
+- Web-source increment only: no desktop package or real-part/macOS qualification.
+
+
+### TMAR documentation - 2026-11-02
+
+- Synchronize the main README, plugin catalog, plugin READMEs and development
+  references with the web features already merged by PR #1 at `496fe2e`.
+- Separate implemented scan-side notes/body STL UI from remaining shortcuts,
+  navigation, display controls, desktop packaging and platform qualification.
+- Record the isolated Zebra contributor handoff; no Zebra runtime is added.
+- Documentation-only change: no new runtime test results, version bump,
+  deployment or installer are implied.
+
+### TMAR web extensions (merged source; no packaged release)
+
+Integrated by [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1)
+at `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`. The entries below describe
+implemented web functionality; desktop features remain planned.
+
+- Add a modular body-STL export panel in Reverse engineer: visible or selected
+  CAD solids, adjustable chord, explicit millimetres and no source scan.
+  Reuses the existing `reverse.export.stl` backend; STEP is unchanged.
+- Add shared scan-side notes directly in Deviation, preserving the comparison
+  view and existing note IDs/project persistence. Unsupported reference-side
+  placement and conflicting interaction modes are explicitly guarded.
+- Add generic panel slots and an optional reverse-note workspace adapter,
+  plugin documentation, unit tests and a synthetic browser regression.
+- This does not deliver a desktop application, a hosted TMAR site or the
+  remaining quick-note/navigation/display roadmap features.
+
+
+### Upstream entries
+
+- **Contributors are credited** (2026-11-01). Each publish to this repository now
+  names the people whose work it brings as co-authors, starting with Jozkah and
+  Starzrng. CONTRIBUTING.md says how it works.
+
 ## 0.11.1 — 2026-11-09
 
 - **Mesh Tools' booleans, Hollow and Trim to scan work on scanruler.com

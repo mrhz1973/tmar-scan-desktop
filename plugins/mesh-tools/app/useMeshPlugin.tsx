@@ -302,7 +302,13 @@ export function useMeshPlugin(host: PluginHost): PluginRuntime {
         onCut={() => void cutScan({ units })}
         onMirror={() => void mirrorScan({ units })}
         onFillHoles={() => void fillScanHoles(undefined, { units })}
-        onSmooth={() => void smoothScan(undefined, { units })}
+        onSmooth={() => {
+          // Snapshot the actual painted vertices at the click. Regional intent
+          // travels with the request, so an empty/stale selection cannot widen it.
+          const scope = useMeshTools.getState().smoothScope
+          const region = scope === 'marked' ? (sceneRef.current?.paintedVertices() ?? new Uint32Array(0)).slice() : null
+          void smoothScan(region, { units, smoothScope: scope })
+        }}
         onDensify={() => void densifyScan({ units })}
         onOffset={() => void offsetScan(undefined, { units })}
         onShell={(mode) => void shellScan(mode, { units })}

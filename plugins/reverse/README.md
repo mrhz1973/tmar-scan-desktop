@@ -5,6 +5,28 @@ The Reverse engineer workspace, as a plugin — see [../README.md](../README.md)
 for what a plugin is. What follows is the workspace's chapter of the app's
 documentation.
 
+## TMAR fork additions
+
+Patch Network now has an isolated-review **Movimento 3D dei punti** panel for nodes, intermediate curve grips and derived split centres. Keep scan topology anchors separate from part-frame XYZ/scan-normal fitting offsets; saved projects preserve the offsets and their history. CAD-bound points stay protected. This is not Edit Surface pole editing and does not add its proximity magnet or depth-drag fallback. See [scope, interaction and validation](../../docs/coordination/patch-network-3d-resume-20261104.md).
+
+The TMAR feature list has independent categories. Hiding sketches cannot hide
+completed bodies; surface and solid output scopes are separate. The original
+chronological controls remain in Build history / rollback. Category visibility
+is not suppression. See [model-tree usage](../tmar-model-tree/README.md) and
+[category validation](../../docs/tmar-feature-categories-validation.md).
+
+
+This fork includes [unified STEP/STL body export](../tmar-body-export/README.md),
+[local notes, shortcuts and navigation](../tmar-quick-notes/README.md),
+[feature-list selection](../tmar-model-tree/README.md),
+[workspace labels](../tmar-display-controls/README.md) and
+[Zebra analysis](../tmar-zebra/README.md). These are optional build-time plugins,
+not a desktop release. Existing CAD and project backends are reused.
+
+The TMAR UI has one Export body dialog and separate note selection, locate and
+edit actions. The chapter below documents inherited behavior; where controls
+differ, the linked TMAR READMEs describe the fork. See [validation](../../docs/tmar-usability-validation.md).
+
 ## Reverse engineer: from scan to a solid STEP body
 
 The fourth workspace turns the scan into a **solid body** — a closed B-rep in
@@ -1020,9 +1042,10 @@ client).
 
 ### Notes for the agent
 
-What the person wants of the part, said where it is to be done. While the
-agent connection is switched on (Settings → Agents — `prefs.agentLink`;
-the tool is not there otherwise), the panel has **Notes for the agent**:
+Notes describe the part where an observation is made. The panel is available
+when notes are opened locally through Zebra, when a project already has notes,
+or when the optional agent connection is switched on (Settings → Agents).
+Local use does not enable an agent connection. In the panel,
 the **Note** key, then a click on the part — a face, an edge or a corner of
 a body, or the scan — pins a note there, and a box by the pin takes the
 sentence (Enter keeps it, or a middle click anywhere — pressed and let go

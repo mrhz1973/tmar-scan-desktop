@@ -1,0 +1,145 @@
+{
+  "base": "27c75c3364511dd77e2ec0c5b8f314f529df6291",
+  "archiveCommit": "c9a9f3453bb941d06e7e64d83df9b03344a9a299",
+  "zipSha256": "2d740932429b19d5fa719ebf7d37501095f289b13485cd87ff216e5578286220",
+  "reviewRunId": 41736875852,
+  "pluginSha": "130d12bf9b4150aa7349365b2200bda80e153feb",
+  "files": {
+    "docs/coordination/annotated-cad-copy-v1-runtime.md": {
+      "archiveSha256": "86a586470883f7ea08ac1c76652e570441057048e17b76b8653acf99da349d24",
+      "publishedFileSha256": "86a586470883f7ea08ac1c76652e570441057048e17b76b8653acf99da349d24"
+    },
+    "docs/coordination/annotated-cad-copy-v1-validation.md": {
+      "archiveSha256": "af61c077428a02fc163f0fa97a670558b8c6851d42d888d56ad9966762d4f1bf",
+      "publishedFileSha256": "af61c077428a02fc163f0fa97a670558b8c6851d42d888d56ad9966762d4f1bf"
+    },
+    "plugins/reverse/app/annotatedNoteDelta.ts": {
+      "archiveSha256": "c4219ef2015a0af3e4c0b1ddde1eb63887dc8fb41a1b95ba8d215eaee7f901dc",
+      "publishedFileSha256": "c4219ef2015a0af3e4c0b1ddde1eb63887dc8fb41a1b95ba8d215eaee7f901dc"
+    },
+    "plugins/reverse/app/annotationPersistence.ts": {
+      "archiveSha256": "1a9271f445edc9cf6dc7b66e02e5200d66ba99f824786c12464d3cc1b1073cc3",
+      "publishedFileSha256": "1a9271f445edc9cf6dc7b66e02e5200d66ba99f824786c12464d3cc1b1073cc3"
+    },
+    "plugins/reverse/app/notesSection.ts": {
+      "archiveSha256": "e65cf3e5c48a9d000a8785a117880d077cd2dcea7bebc429b993578e66e3542f",
+      "publishedFileSha256": "e65cf3e5c48a9d000a8785a117880d077cd2dcea7bebc429b993578e66e3542f"
+    },
+    "plugins/reverse/app/projectSection.ts": {
+      "archiveSha256": "26c146206c153dec863769c7971c8887726e031431326b7b53a576b7aa6715ae",
+      "publishedFileSha256": "26c146206c153dec863769c7971c8887726e031431326b7b53a576b7aa6715ae"
+    },
+    "plugins/reverse/app/reNoteCommands.ts": {
+      "archiveSha256": "567c285232fdda5403c46a8b40cd124c802d75498d042f411b1cbe5b80e85bf6",
+      "publishedFileSha256": "567c285232fdda5403c46a8b40cd124c802d75498d042f411b1cbe5b80e85bf6"
+    },
+    "plugins/reverse/app/reSession.ts": {
+      "archiveSha256": "d9476fe443cef2de20217d057d235aa31f8f98e12ed16af7055beb3a3953dda5",
+      "publishedFileSha256": "d9476fe443cef2de20217d057d235aa31f8f98e12ed16af7055beb3a3953dda5"
+    },
+    "plugins/reverse/app/useReversePlugin.tsx": {
+      "archiveSha256": "c255f8d70360f2d3120814a64e95e6d7ae5f87bc0ca0a38ce169b9bc754e18fb",
+      "publishedFileSha256": "c255f8d70360f2d3120814a64e95e6d7ae5f87bc0ca0a38ce169b9bc754e18fb"
+    },
+    "plugins/reverse/app/workspaceEditorHost.ts": {
+      "archiveSha256": "1866a1275c4c5753d825fe687aced4151127812dcfefee9253f14772a2a0b7e2",
+      "publishedFileSha256": "1866a1275c4c5753d825fe687aced4151127812dcfefee9253f14772a2a0b7e2"
+    },
+    "plugins/reverse/core/annotationSchema.ts": {
+      "archiveSha256": "edfef1204a22b8a5218851c07f51607d208f886140954309656a1fb6179a999a",
+      "publishedFileSha256": "edfef1204a22b8a5218851c07f51607d208f886140954309656a1fb6179a999a"
+    },
+    "plugins/reverse/core/build.ts": {
+      "archiveSha256": "5845b5fb058f6972f44ee8766b5b8ccac4ef04df17822a788885865da062afde",
+      "publishedFileSha256": "5845b5fb058f6972f44ee8766b5b8ccac4ef04df17822a788885865da062afde"
+    },
+    "plugins/reverse/core/features.ts": {
+      "archiveSha256": "c0aa5a4c820cdf7731f2b658adc722df92d0a75a4d6de66e2764d12ceb77582c",
+      "publishedFileSha256": "c0aa5a4c820cdf7731f2b658adc722df92d0a75a4d6de66e2764d12ceb77582c"
+    },
+    "plugins/reverse/core/kernel.ts": {
+      "archiveSha256": "06ecedad9695261ce9c49e0f85cb84cf9b0d7026395acd991314b953749d3c0e",
+      "publishedFileSha256": "06ecedad9695261ce9c49e0f85cb84cf9b0d7026395acd991314b953749d3c0e"
+    },
+    "plugins/reverse/core/kernelAnnotatedNotes.ts": {
+      "archiveSha256": "220d76ec0a2daa80a26408726acfa10430e3cea8b2c31aadafe7dac9c64458a9",
+      "publishedFileSha256": "220d76ec0a2daa80a26408726acfa10430e3cea8b2c31aadafe7dac9c64458a9"
+    },
+    "plugins/reverse/core/notes.ts": {
+      "archiveSha256": "540d792d910f4d6b3c949872e533073dc9cb12ade6eed0b9d8a39867ca586e2a",
+      "publishedFileSha256": "540d792d910f4d6b3c949872e533073dc9cb12ade6eed0b9d8a39867ca586e2a"
+    },
+    "plugins/reverse/core/occtTypes.ts": {
+      "archiveSha256": "5d3ed81dab0fac99dba64b8f7119fbd044e400bd23d3488eeba472ed722cefe8",
+      "publishedFileSha256": "5d3ed81dab0fac99dba64b8f7119fbd044e400bd23d3488eeba472ed722cefe8"
+    },
+    "plugins/reverse/core/reClient.ts": {
+      "archiveSha256": "15d607ac916410870b0b14ebb5a579b0884ee0373cc80bb72f79a431cbf26451",
+      "publishedFileSha256": "15d607ac916410870b0b14ebb5a579b0884ee0373cc80bb72f79a431cbf26451"
+    },
+    "plugins/reverse/core/reService.ts": {
+      "archiveSha256": "b92b95aeecf1489e459c5f0e28bb126ddfd7014a6fc64b24b469a841876b9d8c",
+      "publishedFileSha256": "b92b95aeecf1489e459c5f0e28bb126ddfd7014a6fc64b24b469a841876b9d8c"
+    },
+    "plugins/reverse/scripts/e2e-annotated-host.mjs": {
+      "archiveSha256": "945e185c999bb366da5d9638c733005c9cf7a092293c49ad138c46f2e00a8c34",
+      "publishedFileSha256": "945e185c999bb366da5d9638c733005c9cf7a092293c49ad138c46f2e00a8c34"
+    },
+    "plugins/reverse/scripts/e2e-annotated-reopen-compiled.mjs": {
+      "archiveSha256": "14b5026ffe21cedbc7a4bbc94598fa8f8100952ed007f12bb4326d5383daf3f0",
+      "publishedFileSha256": "14b5026ffe21cedbc7a4bbc94598fa8f8100952ed007f12bb4326d5383daf3f0"
+    },
+    "plugins/reverse/state/noteStore.ts": {
+      "archiveSha256": "d4d172a7f7b8a9237c2de32d4e25034ac518f867a6675bc1ebd2dfda4f2f1232",
+      "publishedFileSha256": "d4d172a7f7b8a9237c2de32d4e25034ac518f867a6675bc1ebd2dfda4f2f1232"
+    },
+    "plugins/reverse/state/reStore.ts": {
+      "archiveSha256": "07f2347a15c62f031a34e3361522b82b3143a4e8c6ae02f3a070e663eb714b74",
+      "publishedFileSha256": "07f2347a15c62f031a34e3361522b82b3143a4e8c6ae02f3a070e663eb714b74"
+    },
+    "plugins/reverse/tests/annotatedCopy.test.ts": {
+      "archiveSha256": "4f1824739f4737449846d3bfd19c1f9d7517385e4b777d9138d735351e1e19be",
+      "publishedFileSha256": "4f1824739f4737449846d3bfd19c1f9d7517385e4b777d9138d735351e1e19be"
+    },
+    "plugins/reverse/ui/NoteList.tsx": {
+      "archiveSha256": "167e01103b31466596c1c6212d73f5cdd2d5e3b34023f04109f804ddc8d45d00",
+      "publishedFileSha256": "167e01103b31466596c1c6212d73f5cdd2d5e3b34023f04109f804ddc8d45d00"
+    },
+    "src/plugins/annotatedCopyTypes.ts": {
+      "archiveSha256": "0b65631685de64a9a6b64ec717e972711942e88f79d712d217878f52c074310a",
+      "publishedFileSha256": "0b65631685de64a9a6b64ec717e972711942e88f79d712d217878f52c074310a"
+    },
+    "src/plugins/annotatedCopyValidation.ts": {
+      "archiveSha256": "718d554322417aa87241d25b91f464d1faca53361dbc3e71b1528daf2532e665",
+      "publishedFileSha256": "718d554322417aa87241d25b91f464d1faca53361dbc3e71b1528daf2532e665"
+    },
+    "src/plugins/workspaceEditorTypes.ts": {
+      "archiveSha256": "9aa5337b43966f51fdb52dbdd0c1474d5e2d211e3a8194ea5dad6aa7264b5046",
+      "publishedFileSha256": "9aa5337b43966f51fdb52dbdd0c1474d5e2d211e3a8194ea5dad6aa7264b5046"
+    },
+    "src/plugins/workspaceEditors.ts": {
+      "archiveSha256": "c559dc667ec437de2673e1a9da5304a1670b5b5ba921630547dc524f2661ac13",
+      "publishedFileSha256": "c559dc667ec437de2673e1a9da5304a1670b5b5ba921630547dc524f2661ac13"
+    },
+    "src/state/atomicNotifications.ts": {
+      "archiveSha256": "bd440160baac496b5b3787a9a2f51c9583016340fe180ee3cc72f6da80e40168",
+      "publishedFileSha256": "bd440160baac496b5b3787a9a2f51c9583016340fe180ee3cc72f6da80e40168"
+    },
+    "src/state/historyStore.ts": {
+      "archiveSha256": "7942c7205937bd44fb4b89d2080227b5b29d7584584108d187245fa8ae8b5a05",
+      "publishedFileSha256": "7942c7205937bd44fb4b89d2080227b5b29d7584584108d187245fa8ae8b5a05"
+    },
+    "src/ui/WorkspaceEditorDock.tsx": {
+      "archiveSha256": "e6d7493ec9ddefa02535d947a8c781079b9dd63ff94fd4a343a649a660d2f141",
+      "publishedFileSha256": "e6d7493ec9ddefa02535d947a8c781079b9dd63ff94fd4a343a649a660d2f141"
+    },
+    "tests/fixtures/annotatedEditorProbe.tsx": {
+      "archiveSha256": "e1a3ce824e7b58f641df03a1f1d45b2cb3cf70663b30bd71ef9c793d732cb69c",
+      "publishedFileSha256": "e1a3ce824e7b58f641df03a1f1d45b2cb3cf70663b30bd71ef9c793d732cb69c"
+    },
+    "tests/workspaceEditors.test.ts": {
+      "archiveSha256": "e878a34f3ea10a4c713d8a3aa1e1593284fa681402b59bac778c4e731a5f9371",
+      "publishedFileSha256": "e878a34f3ea10a4c713d8a3aa1e1593284fa681402b59bac778c4e731a5f9371"
+    }
+  }
+}

@@ -522,13 +522,11 @@ export function useSceneSync({
     )
   }, [sections, editingSectionId, showElements, elementsKeyHides, flatSubject, flatElements, flatSheets, peekSection])
 
-  // The name tags and readouts, the measure workspace's own switch: off, the
-  // bodies, the cuts and the callout lines stay and only the text goes.
-  // Elsewhere every label is left alone — the pinned readings of a map are
-  // labels too, and that workspace has no key for them.
+  // Respect text-label visibility in every 3D workspace. Optional view-bar
+  // controls remember it per workspace; geometry and callout lines stay.
   const showLabels = useStore((s) => s.showLabels)
   useEffect(() => {
-    sceneRef.current?.setLabelsVisible(!elementsWorkspace || showLabels)
+    sceneRef.current?.setLabelsVisible(showLabels)
   }, [elementsWorkspace, showLabels])
 
   // The section being made: its plane through the part, the cut so far, and

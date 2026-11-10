@@ -9,6 +9,7 @@
 // person answers here.
 
 import { create } from 'zustand'
+import { withAtomicNotifications } from '../../../src/state/atomicNotifications'
 import type { Rigid } from '../../../src/core/deviation/rigid'
 import { moveNote, type Note } from '../core/notes'
 
@@ -27,6 +28,10 @@ interface NotesState {
   /** The pins on the part: put away by the view bar's Notes key, or for a
    *  picture. The notes stay. A note being pinned or opened brings them back. */
   pinsShown: boolean
+  /** Notes explicitly opened by the person, independently of an agent link.
+   *  This is session state; saved notes themselves bring the list back. */
+  localNotesVisible: boolean
+  showLocalNotes: () => void
   setPinsShown: (on: boolean) => void
   setPlacing: (on: boolean) => void
   /** A new note, empty, its box opened at `screen` for the text. Returns
@@ -58,12 +63,14 @@ interface NotesState {
   load: (notes: Note[]) => void
 }
 
-export const useNotes = create<NotesState>((set, get) => ({
+export const useNotes = create<NotesState>()(withAtomicNotifications((set, get) => ({
   notes: [],
   nextId: 1,
   placing: false,
   editing: null,
   pinsShown: true,
+  localNotesVisible: false,
+  showLocalNotes: () => set({ localNotesVisible: true }),
   setPinsShown: (pinsShown) => set({ pinsShown }),
   setPlacing: (placing) => set({ placing, ...(placing ? { pinsShown: true } : {}) }),
   addNote: (note, screen) => {
@@ -118,4 +125,4 @@ export const useNotes = create<NotesState>((set, get) => ({
     }),
   moveAll: (m) => set((s) => (s.notes.length > 0 ? { notes: s.notes.map((n) => moveNote(n, m)) } : {})),
   load: (notes) => set({ notes, nextId: notes.reduce((m, n) => Math.max(m, n.id + 1), 1), placing: false, editing: null }),
-}))
+})))

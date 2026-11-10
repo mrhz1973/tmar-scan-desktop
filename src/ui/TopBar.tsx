@@ -21,6 +21,7 @@ import { bundleFiles } from '../app/scanFiles'
 import { PROJECT_ACCEPT, PROJECT_EXTENSION, projectStem } from '../core/project/manifest'
 import { holdsProject, isProjectFile } from '../app/useProject'
 import { APP_VERSION } from '../version'
+import { PluginPanelExtensions } from '../plugins/panelExtensions'
 import type { RecoveryStatus } from '../app/useRecovery'
 
 const GITHUB_URL = 'https://github.com/CNCKitchen/scanruler'
@@ -239,6 +240,7 @@ export function TopBar({
           </i>
         </span>
       </div>
+      <PluginPanelExtensions slot="topbar.identity" />
       {/* Both workspaces share the loaded scan, the scene and the camera, so
           switching is free and neither side loses what it had. */}
       <div className="modeswitch" role="tablist">

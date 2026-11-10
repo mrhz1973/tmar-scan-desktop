@@ -61,6 +61,8 @@ import { StatusStrip } from './ui/StatusStrip'
 import { BusyOverlay } from './ui/BusyOverlay'
 import { ImprintModal } from './ui/Imprint'
 import { SettingsModal } from './ui/SettingsModal'
+import { WorkspaceEditorDock } from './ui/WorkspaceEditorDock'
+import { useWorkspaceEditor } from './plugins/workspaceEditors'
 import { UnitsModal } from './ui/UnitsModal'
 import { SupportAsk, SupportCard } from './ui/SupportCard'
 import { ViewBar } from './ui/ViewBar'
@@ -94,6 +96,7 @@ import type { MeshFormat } from './core/exportMesh'
 import { PICK_MARK_TOOL_STATUS } from './app/deviationWorkspace'
 import { SceneSync } from './app/SceneSync'
 import { createSession, type AppSession } from './app/session'
+import { PluginPanelExtensions } from './plugins/panelExtensions'
 import { installCommandHost, type FlatHost, type FlatSheetView, type ProjectHost } from './commands/host'
 import { commandRunning } from './commands/activity'
 import { takePairingLink } from './commands/agentLink'
@@ -130,6 +133,16 @@ export default function App() {
 }
 
 function Workbench() {
+  const embeddedEditorOpen = useWorkspaceEditor(s => s.phase !== 'closed')
+  useEffect(() => {
+    if (!embeddedEditorOpen) return
+    const panels = [...document.querySelectorAll<HTMLElement>('.mid > .panel')]
+    const previous = panels.map(panel => panel.inert)
+    panels.forEach(panel => { panel.inert = true })
+    const leave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', leave)
+    return () => { panels.forEach((panel, i) => { panel.inert = previous[i] }); window.removeEventListener('beforeunload', leave) }
+  }, [embeddedEditorOpen])
   const clientRef = useRef<MeshWorkerClient | null>(null)
   if (!clientRef.current) clientRef.current = new MeshWorkerClient()
   const sceneRef = useRef<SceneManager | null>(null)
@@ -1588,7 +1601,7 @@ function Workbench() {
       .catch((e: unknown) => useStore.setState({ errorText: e instanceof Error ? e.message : String(e) }))
 
   return (
-    <div className="app">
+    <div className="app" data-editor-open={embeddedEditorOpen}>
       <TopBar
         recovery={recovery}
         onNewProject={() => void newProject()}
@@ -1676,6 +1689,7 @@ function Workbench() {
             onFindSymmetry={() => void handleFindSymmetry()}
           />
         )}
+        <PluginPanelExtensions slot="workspace.divider" />
         <div className={anySplit ? 'stage split' : 'stage'}>
           {/* The viewport stays mounted behind the picker: unmounting it would
               throw away the mesh and its BVH, and both are expensive. It keeps
@@ -1934,6 +1948,7 @@ function Workbench() {
             </div>
           )}
         </div>
+        <WorkspaceEditorDock />
       </div>
       <StatusStrip />
       {/* First of the windows: same height, so a question it comes up against

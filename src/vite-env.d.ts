@@ -4,3 +4,8 @@
 /** `version` from package.json, substituted at build time by vite.config.ts.
  *  Read it through src/version.ts rather than here. */
 declare const __APP_VERSION__: string
+/** Actual build provenance, independent of package/project versions. */
+declare const __BUILD_IDENTITY__: { revision: string; dirty: boolean; builtAt: string }
+
+/** Explicit chronological TMAR delivery number; not a project-format version. */
+declare const __TMAR_VERSION__: { schema: 1; number: number; channel: 'preview' | 'stable' }

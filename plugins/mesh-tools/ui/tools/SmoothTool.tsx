@@ -4,6 +4,7 @@
 
 import { useShallow } from 'zustand/react/shallow'
 import { useMark } from '../../../../src/state/markStore'
+import { PluginPanelExtensions } from '../../../../src/plugins/panelExtensions'
 import { InfoDot } from '../../../../src/ui/InfoDot'
 import { MarkTools } from '../../../../src/ui/MarkTools'
 import { NumberField } from '../../../../src/ui/NumberField'
@@ -33,6 +34,7 @@ export function SmoothTool({
       smoothLimit: s.smoothLimit,
       smoothScope: s.smoothScope,
       smoothSize: s.smoothSize,
+      smoothStrength: s.smoothStrength,
     })),
   )
   const marked = useMark((s) => s.count)
@@ -52,7 +54,7 @@ export function SmoothTool({
             part is not shrunk. Points move along the surface's normal only.
           </p>
           <p>
-            No point ever moves further than <b>Move at most</b> from where the scanner put it. It
+            No point moves further than <b>Move at most</b> from its position at the start of this application. Repeating Smooth is cumulative. It
             starts well past the scatter of a good scan, to hold back only a fit that has run off;
             set it lower to be sure of what the part's shape can lose.
           </p>
@@ -91,8 +93,13 @@ export function SmoothTool({
         </div>
       </div>
       {regional && (
-        <MarkTools escapeNote="The marking stays until it is smoothed or cleared." onClear={onClear} />
+        <MarkTools escapeNote="The marking stays after Smooth so it can be applied again. Clear removes it; switching marking tools or changing mesh topology can invalidate it." onClear={onClear} />
       )}
+
+      <p className="hint" data-test="smooth-scope-summary" role="status">{regional
+        ? `Marked region only: ${marked.toLocaleString('en-US')} selected vertices. Unselected vertices will not move.`
+        : 'Whole part: this will smooth the entire working mesh. Choose Marked region for a local edit.'}</p>
+      <PluginPanelExtensions slot="mesh.smooth.controls" />
 
       <NumberField
         label="Smooth bumps up to"
@@ -114,7 +121,7 @@ export function SmoothTool({
         kind="length"
         disabled={busy}
         onCommit={m.setSmoothLimit}
-        hint="No point moves further than this from where the scanner put it. It starts well past the scatter of a good scan of a part this size."
+        hint="Maximum movement per application, measured from the current copy. Repeated applications are cumulative; use the Deviation map to check total movement from the scan."
       />
       <label className="checkrow">
         <input
@@ -131,7 +138,7 @@ export function SmoothTool({
         className="primary block"
         data-test="smooth-scan"
         data-confirm={1}
-        disabled={!ready || busy || (regional && marked === 0)}
+        disabled={!ready || busy || m.smoothStrength === 0 || (regional && marked === 0)}
         onClick={onSmooth}
       >
         {m.editing ? (
@@ -142,7 +149,7 @@ export function SmoothTool({
         ) : regional ? (
           'Smooth the marked region'
         ) : (
-          'Smooth'
+          'Smooth whole part'
         )}
       </button>
       {regional && marked === 0 && (

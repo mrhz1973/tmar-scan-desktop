@@ -1,0 +1,33 @@
+{
+  "pass": true,
+  "scope": "compiled application, saved project and actual STEP downloads",
+  "results": [
+    {
+      "expectedFaces": 1,
+      "bounds": {
+        "xmin": 39.9999999,
+        "ymin": -1e-7,
+        "zmin": 9.9999999,
+        "xmax": 60.0000001,
+        "ymax": 30.0000001,
+        "zmax": 10.0000001
+      },
+      "area": 600.0000000000001,
+      "name": "Open CASCADE STEP translator 8.0 1"
+    },
+    {
+      "expectedFaces": 3,
+      "bounds": {
+        "xmin": 39.9999999,
+        "ymin": -1e-7,
+        "zmin": 9.9999999,
+        "xmax": 64.998653289776,
+        "ymax": 30.0000001,
+        "zmax": 13.999855078479
+      },
+      "area": 869.9552510476502,
+      "name": "Open CASCADE STEP translator 8.0 2"
+    }
+  ],
+  "consoleErrors": []
+}

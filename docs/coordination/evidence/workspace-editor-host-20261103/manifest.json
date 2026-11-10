@@ -1,0 +1,56 @@
+{
+  "date": "2026-11-03",
+  "base": "4a937825508c7a3ae8677821a00ba3b6e87e0873",
+  "branch": "feat/workspace-editor-host-20261103",
+  "scope": "SOURCE HOST + QA CONTROLLER; not the author Edit Surface integration",
+  "tests": {
+    "targeted": 74,
+    "testFiles": 10,
+    "occtIncluded": 7,
+    "browserChecks": 14,
+    "tsc": "PASS",
+    "productionBuild": "PASS",
+    "compiledEmbeddingBrowser": "NOT RUN",
+    "authorControllerIntegrated": false
+  },
+  "sourceSha256": {
+    "plugins/reverse/app/reSession.ts": "9a56be4d76dc9a7471aebf0fb3056c874fd49a15a435a545fd369084b6783f9f",
+    "plugins/reverse/app/workspaceEditorHost.ts": "9f2819d4944c406345ab8711d36232fd77498b79769d191d1e1cf57f0dabd060",
+    "plugins/reverse/plugin.ts": "b1eed925e243ee7b6932949ab3ce1b0120ed83131dc0ece576fc6c84c84264c2",
+    "plugins/reverse/scripts/e2e-workspace-editor-host.mjs": "006a9ce97996e098d250cb626941d4946ca3132ab065f562fef17f81d1f48231",
+    "plugins/reverse/state/reStore.ts": "5607a03c84376b5f23b1f936764e3ce6758ca91297131115542c2046221ec11a",
+    "plugins/reverse/tests/editorRenderMask.test.ts": "a0c193675006d3e4bb569cc2d31b27a6700e18d1e41e9c20b6897f66c59b284a",
+    "plugins/reverse/tests/workspaceEditorHost.test.ts": "7f32043ba8dec1f08442353bd56560450bce2d47bc0fb5bd3ade5602eb595d24",
+    "plugins/reverse/viewer/bodyPicks.ts": "82b7abd8c9387762ecc4d1087f93d85c8d457648f43006c3b888a2e76727ea95",
+    "plugins/reverse/viewer/reScene.ts": "d5c6fe12f4a862f5afba80e8f40ab542948504e516e98a870fda70206c141fe2",
+    "plugins/tmar-quick-notes/quickAccess.tsx": "e981d20b7679edbca65a90738b93acf19027b9dc20d562a2c105387049fb0be6",
+    "src/App.tsx": "e61807b25bde8dc49c41a74caea08180b6f135346ec0d38ec689629d582b7dbe",
+    "src/app/imports.ts": "2f7dc44dcea5ce77453adb670c6e3a3bc79cbddf4ae66bcdfb3233dfe42d006b",
+    "src/app/useGlobalShortcuts.ts": "d25405cc3988d9ba949541826d4797ee68c03289f27985c89dfceddf7cc74d06",
+    "src/app/useProject.ts": "e6a1d5b1b6b63a58a6c70d71048bfb42e02f10f33ede8394c93d4bc091e1879b",
+    "src/main.tsx": "f5b8bc43f64f68217c93e91064f94e7e6cf55fd46d7f8c2ad9619012df0d83d0",
+    "src/plugins/editorLifetime.ts": "56aa4066d53cb8635940d817e3fe6f5f6f10aaab177e5c3910d4e5bae9dee378",
+    "src/plugins/workspaceEditorIntegration.ts": "82ca08d51294c3fdd34a56583eb00bc6b43babbecc7fe925b838c85b46940d87",
+    "src/plugins/workspaceEditorTypes.ts": "d24d7f8933b81ac92323986c068327587688a595e2ad4be983352e9a1f2ff015",
+    "src/plugins/workspaceEditors.ts": "3adc2ffee6c244a86ebbed9d4ea15714db52f8b538a3e5f48498a20271725409",
+    "src/state/historyStore.ts": "5fd53febced64a2fa1839820c1c30cab54125fd8cf2607373cbc3a5d248fa7d2",
+    "src/state/shellStore.ts": "009e0198786117d01f59a49d2c39d1c678e7a1462143102e6e7803f532edefea",
+    "src/ui/WorkspaceEditorDock.tsx": "d3463df3ea5c65db4fd399a34ccc773d4b8be308a3c96ad49c419b5e13f6bc7c",
+    "src/ui/workspaceEditor.css": "3d564aa7a3a95d829198d33125a4f45caa1f8817033c1a7d12680cbede7468ab",
+    "src/viewer/SceneManager.ts": "1b4b5052786fe6f1f318b3ecca19e8b16a58aa3fa0b7b08f5197b5d88d498393",
+    "src/viewer/editorViewportLease.ts": "61409ea2ed55bf37087a144307a801677acc58d01dc2a8de45e39267bf629821",
+    "tests/editorViewportLease.test.ts": "0e35eccef23997d445a6402d330149d6f8c53d6c20bb30730a372f9c808e7036",
+    "tests/fixtures/workspaceEditorProbe.ts": "08012d58cd785c02d29c67b6a0610e5d20ea8fd9f74ce08ad32eae122ae41a1f",
+    "tests/workspaceEditors.test.ts": "2a28f7c4bbf5b112f1c8bd2d9b1bce5e77290c4f1c5c6f77858642c955bb46e9"
+  },
+  "evidenceSha256": {
+    "host-main-view.png": "2a2ba109283deb32328c8df8ad4ccea73bfd61fba080ee1f605f15334b333dc6",
+    "result.json": "58810b778ffbe4798d807e15ba9f4c571a3bc5bbb099d3933d41932ea6a341a2"
+  },
+  "localLogsSha256": {
+    "tsc-delivery.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build-delivery.log": "4d956883c3b7a30f9f7f9f49ae8e1441b44cf4eb4b26101e7569868fd045eadf",
+    "units-delivery.log": "6df150d745aa06b0dbdb3dc15e39dbcb79424a600f83b983235ec28cf59c032c",
+    "browser-delivery.log": "dba0c893b7003188b2e5ebc10ac0d07b6144adb266581a6762c7df2aa89adc95"
+  }
+}

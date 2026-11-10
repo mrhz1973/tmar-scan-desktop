@@ -1,14 +1,30 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Plugins
 
-Workspaces that sit beside the app rather than in `src/`, under the same
-licence. A build stands with any of them or none, and may carry others that are
-not in this repository.
+Workspaces and extensions that sit beside the app rather than in `src/`, under the same
+licence. Independent plugins can be omitted from a build; extensions with an explicit
+dependency must be included or omitted together with that dependency. In particular,
+the geometry/note TMAR extensions below require the `reverse` source; build
+identification has no Reverse engineer dependency. A build may also contain
+other plugins. These are build-time modules, not hot-installable packages.
 
-| Plugin | What it adds |
-|---|---|
-| [reverse/](reverse/) | The Reverse engineer workspace — scan to solid STEP body |
-| [mesh-tools/](mesh-tools/) | The Mesh Tools workspace — clean up and reduce a scan |
+| Plugin | Status in this fork | What it adds |
+| --- | --- | --- |
+| [reverse/](reverse/) | Inherited | The Reverse engineer workspace and existing CAD/note/export backends. |
+| [mesh-tools/](mesh-tools/) | Inherited | Tools to clean up and reduce a scan. |
+| [tmar-mesh-review/](tmar-mesh-review/) | Web implementation; user review open | Mesh Tools notes and Zebra on displayed scan/edited/reduced previews; reuses existing note/analysis plugins. |
+| [tmar-smooth-controls/](tmar-smooth-controls/) | Web implementation; user review open | Smooth intensity slider; Mesh Tools retains the selected region between successful Smooth applications. |
+| [tmar-body-export/](tmar-body-export/) | Implemented in `main` | One CAD-body export dialog for STEP/STL; requires Reverse engineer. |
+| [tmar-quick-notes/](tmar-quick-notes/) | Implemented in `main`, scan-side scope | Local notes, configurable shortcut, multi-selection and Go to note; scan-side Deviation adapter. |
+| [tmar-build-info/](tmar-build-info/) | Web implementation | Visible TMAR source revision and build provenance, independent of the upstream version. |
+| [tmar-cad-edges/](tmar-cad-edges/) | Web implementation; user review open | CAD face boundaries/silhouettes, color and thickness with Zebra; STEP opened as Scan or as a reference. |
+| [tmar-zebra/](tmar-zebra/) | Initial web implementation | Zebra stripes and local pinned observations in Reverse engineer. |
+| [tmar-model-tree/](tmar-model-tree/) | Initial web implementation | Independent feature categories, type-scoped selection/visibility, large collapse headers and preserved chronological history. |
+| [tmar-display-controls/](tmar-display-controls/) | Initial web implementation | Lower-bar Labels, per-workspace note-pin preferences and a resizable left panel. |
+
+The two TMAR extensions were integrated in [PR #1](https://github.com/mrhz1973/tmar-scan-desktop/pull/1), revision `496fe2eb0fb7a140fa9b8d9707e126030db2b70c`. See the [validation record](../docs/tmar-web-validation.md) for tested scope and limitations. Plugin sources, documentation and tests are available; no desktop release or runtime plugin manager is implied.
+
+The initial [Zebra plugin](tmar-zebra/README.md) is developed separately under the [coordination handoff](../docs/tmar-zebra-handoff.md). It adds view-only analysis and local pinned notes; review, real-part validation and platform qualification remain separate from the source change.
 
 ## The rules
 
@@ -72,3 +88,38 @@ registrations calls `plugin.install()` first — see
 ## Licence
 
 AGPL-3.0-only, like the app; see [../LICENSE](../LICENSE).
+
+## TMAR host additions
+
+`src/plugins/panelExtensions.tsx` offers static, build-time panel slots. Register
+an ID, slot and React component during plugin installation. The current slots
+include `deviation.extra`, `reverse.export`, `reverse.analysis`, `settings.tools`,
+`view.tools` and `workspace.divider`. The divider slot is between the existing
+left panel and stage; it does not wrap or remount the viewport. The host renders nothing when a slot
+has no contribution. Duplicate IDs are refused; the registration returns cleanup
+for tests. This is not a hot-loading or sandboxing interface.
+
+The reverse plugin also exposes `app/noteWorkspaces.ts` for explicit workspace
+placement adapters. An adapter cannot replace Reverse engineer or another
+registered workspace. Each dependent plugin must document its picking and
+coordinate assumptions and retain the shared note model.
+
+## TMAR usability hooks
+
+`settings.tools` and `view.tools` are generic panel slots. The host never names
+a TMAR plugin. Reverse engineer's optional `app/listExtensions.tsx` provides
+note-list replacement and feature-list/row wrappers with inherited fallbacks.
+`SceneManager.captureView/restoreView` bookmarks only the camera; NotePins can
+show one temporary focused pin without changing its saved visibility switch.
+The ID-based selection helper is `src/plugins/listSelection.ts`.
+
+The export plugin takes over the export panel; with no export contribution,
+the inherited STEP button remains. See [the current validation record](../docs/tmar-usability-validation.md).
+
+## Category-selection follow-up
+
+The model-tree plugin now separates sketches, section sketches, surface operations
+and solid-body operations. Unknown kinds cannot hide bodies. The original
+chronological list is retained; no CAD build order is changed. See
+[category validation](../docs/tmar-feature-categories-validation.md) for tests,
+including actual compiled UI, save/reopen and unchanged integrated Zebra.

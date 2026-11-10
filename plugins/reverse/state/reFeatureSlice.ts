@@ -10,6 +10,7 @@ import { movableFace, partialRound, type SketchFeature, toolsOf, type TrimTool, 
 import { findRegions } from '../core/regions'
 import { DEFAULT_SURFACE_FIT } from '../core/surfaceFit'
 import { emptyNetworkDraft, networkDraftOf } from './reNetworkDraft'
+import { networkHasOffsets } from '../core/networkPointMotion'
 import { DEFAULT_DRAFT_DEG, DEFAULT_FILLET_MM, DEFAULT_SPLIT_OVERLAP, DEFAULT_SPLIT_TOLERANCE_MM, DEFAULT_WALL_MM, featureDraftReady, featureOfDraft, historyEditOf, movePivot, roundFaceLength, trimToleranceFor, withMoveBodies } from './reDrafts'
 import { CLOSE_OTHERS, hideElement, hideSection, hideSketches, KIND_LABELS, lastSolid, leanAfterSnap, nameFor, remember, sketchesTakenOn, sketchesUsedBy, withExprs } from './reFeatureHelpers'
 import { unplacedEdge } from './reSketchDraft'
@@ -261,7 +262,7 @@ export const featureSlice = (set: StoreSet, get: StoreGet): Pick<ReState, 'featu
   commitFeature: () => {
     const s = get()
     const d = s.featureDraft
-    if (!d || !featureDraftReady(d)) return null
+    if (!d || !featureDraftReady(d) || (d.kind === 'network' && (d.motionActive || (networkHasOffsets(d) && s.preview.status !== 'ok')))) return null
     // A moved face goes into what made it where the box was ticked to:
     // the extrude's distance, the sketch's line or circle. No feature is
     // added — the list is edited, as the operator would have edited it by
@@ -445,7 +446,16 @@ export const featureSlice = (set: StoreSet, get: StoreGet): Pick<ReState, 'featu
       return {}
     }),
   editNetwork: (change) =>
-    set((s) => (s.featureDraft?.kind === 'network' ? { featureDraft: change(s.featureDraft) } : {})),
+    set((s) => {
+      const previous = s.featureDraft
+      if (previous?.kind !== 'network') return {}
+      const next = change(previous)
+      const geometryChanged = previous.nodes !== next.nodes || previous.curves !== next.curves ||
+        previous.cells !== next.cells || previous.spans !== next.spans || previous.fit !== next.fit
+      // Do not leave the preceding valid preview eligible for Create between
+      // the synchronous point edit and the next asynchronous kernel request.
+      return { featureDraft: next, ...(geometryChanged ? { preview: { status: 'idle' as const } } : {}) }
+    }),
   setMoveBodies: (bodies) =>
     set((s) => {
       const d = s.featureDraft

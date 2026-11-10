@@ -51,6 +51,8 @@ export interface SmoothSettings {
   limit: number
   /** Fit each side of a sharp edge on its own, and leave the edge itself. */
   keepEdges: boolean
+  /** Share of the full bounded displacement, 0..1. Absent means 1 (legacy). */
+  strength?: number
   /** Smooth only these vertices — a region marked by hand — fading out
    *  towards its edge; absent, the whole mesh. */
   region?: Uint32Array | null
@@ -135,6 +137,8 @@ export function smoothMesh(
   onProgress?: (text: string) => void,
 ): EditedMesh & { report: SmoothReport } {
   const { size, limit, keepEdges } = settings
+  const strength = settings.strength ?? 1
+  if (!Number.isFinite(strength) || strength < 0 || strength > 1) throw new Error('Smoothing intensity must be between 0 and 1.')
   if (!(size > 0)) throw new Error('The size must be more than zero.')
   if (!(limit > 0)) throw new Error('The limit must be more than zero.')
 
@@ -143,6 +147,7 @@ export function smoothMesh(
   const { offsets, list } = buildAdjacency(indices, vertexCount)
   const region = settings.region ?? null
   if (region && region.length === 0) throw new Error('Nothing is marked — mark the surface to smooth on the part first.')
+  if (region && region.some(v => v >= vertexCount || !used[v])) throw new Error('The marked region no longer matches this mesh. Mark it again; the whole part was not smoothed.')
   // How much of its fitted move each vertex makes: all of it, or, in a marked
   // region, a share that fades to nothing at the region's edge.
   const reach = region ? regionShares(positions, used, region, size, offsets, list) : null
@@ -326,6 +331,18 @@ export function smoothMesh(
     next = swap
   }
 
+  // Convex blend with this invocation's input: strength cannot exceed the
+  // bounded full displacement. Repeating Smooth is cumulative across invocations.
+  if (strength === 0) cur.set(positions)
+  else if (strength !== 1) for (let v = 0; v < vertexCount; v++) {
+    // Outside the region not even a signed-zero bit should change.
+    if (!used[v] || (reach && reach[v] === 0)) continue
+    for (let k = 0; k < 3; k++) {
+      const i = v * 3 + k
+      cur[i] = positions[i] + strength * (cur[i] - positions[i])
+    }
+  }
+
   let moved = 0
   let heldCount = 0
   let maxMove = 0
@@ -350,7 +367,7 @@ export function smoothMesh(
   return {
     ...edited,
     report: {
-      settings: { size, limit, keepEdges },
+      settings: { size, limit, keepEdges, ...(settings.strength !== undefined ? { strength } : {}) },
       region: region ? region.length : null,
       moved,
       held: heldCount,

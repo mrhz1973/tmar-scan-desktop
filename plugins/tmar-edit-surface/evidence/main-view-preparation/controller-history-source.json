@@ -1,0 +1,34 @@
+{
+  "pass": true,
+  "solid": {
+    "initialVolume": 6000,
+    "movedVolume": 6037.500974997176,
+    "lockUndoNoRecalculation": true,
+    "mixedUndoRedo": true,
+    "redoDiscarded": true,
+    "noOpIgnored": true,
+    "pendingApplyBlocked": true,
+    "validStep": true
+  },
+  "continuity": {
+    "g0MoveVolume": 6037.50000009508,
+    "protectedG1Refused": true,
+    "modeAndShapeUndoRedo": true
+  },
+  "failedLoad": {
+    "message": "importStep: failed to read STEP data",
+    "oldHistoryNotRestored": true,
+    "staleEvaluations": 0
+  },
+  "freeBoundary": {
+    "edgeMoved": "CAD valido · superficie aperta · spostamento bordo 8.9e-1 mm",
+    "lockUndoRedo": true,
+    "modeAndGeometryUndoRedo": true,
+    "validStep": true
+  },
+  "failedFreeBoundaryLoad": {
+    "oldHistoryNotRestored": true,
+    "staleEvaluations": 0
+  },
+  "consoleErrors": []
+}

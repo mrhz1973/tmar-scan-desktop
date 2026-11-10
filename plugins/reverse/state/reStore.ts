@@ -10,6 +10,7 @@
 // it.
 
 import { create } from 'zustand'
+import { withAtomicNotifications } from '../../../src/state/atomicNotifications'
 import type { Vec2 } from '../../../src/core/flat/types'
 import type { Vec3 } from '../../../src/core/types'
 import type { EdgeInfo, FaceInfo, FeatureResult } from '../core/build'
@@ -70,6 +71,8 @@ export interface ReState {
    *  (StepFileRef) — only ever added to, so an Import taken back and
    *  brought again by the undo history finds its file; saved for the
    *  Imports the project holds (projectSection.ts). */
+  /** Session-only document identity; never restored by project Undo. */
+  documentEpoch: string
   stepFiles: Record<string, string>
   /** A STEP file's text kept — once, however often it is imported — and
    *  the reference an Import holds it by. */
@@ -561,7 +564,7 @@ export interface ReState {
   addDraftFaces: (bodyId: number, faces: FaceInfo[]) => void
 }
 
-export const useReverse = create<ReState>()((set, get) => ({
+export const useReverse = create<ReState>()(withAtomicNotifications((set, get) => ({
   kernelStatus: 'idle',
   kernelMessage: null,
   kernelVersion: null,
@@ -575,6 +578,7 @@ export const useReverse = create<ReState>()((set, get) => ({
   bodies: [],
   hiddenBodies: [],
   bodyStyles: {},
+  documentEpoch: crypto.randomUUID(),
   stepFiles: {},
   addStepFile: (name, text) => {
     const file: StepFileRef = { key: stepFileKey(text), name, size: text.length }
@@ -950,6 +954,7 @@ export const useReverse = create<ReState>()((set, get) => ({
       closedFolders: [],
       listSelection: NO_PICK,
       bodyHover: null,
+      documentEpoch: crypto.randomUUID(),
       stepFiles: {},
       buildVersion: s.buildVersion + 1,
       sketchDraft: null,
@@ -1003,7 +1008,7 @@ export const useReverse = create<ReState>()((set, get) => ({
       return { selection: selectionOf(next, at) }
     }),
   ...featureSlice(set, get),
-}))
+})))
 
 export { arcThrough }
 

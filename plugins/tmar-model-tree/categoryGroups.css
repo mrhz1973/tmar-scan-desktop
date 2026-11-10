@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.tmar-feature-category { margin: 10px 0; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.tmar-feature-category [hidden] { display: none !important; }
+.tmar-feature-category .toolrow { flex-wrap: wrap; margin-top: 6px; }
+.tmar-feature-category .tmar-category-scope { min-height: 2.5em; }
+.tmar-feature-category .tmar-category-kind { color: var(--dim); font-size: 10px; white-space: nowrap; }
+.tmar-feature-category .kv .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tmar-build-history { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 8px; }
+.tmar-build-history > summary { cursor: pointer; font-weight: 600; padding: 10px 4px; }
+.tmar-build-history > summary:focus-visible { outline: 2px solid var(--accent-d); }

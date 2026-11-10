@@ -95,6 +95,8 @@ export type ScanEdit =
   | { kind: 'fill'; maxSize: number; mode: FillMode; holes: number; triangles: number }
   | {
       kind: 'smooth'
+      /** Intensity used for this application, 0..1; old records imply 1. */
+      strength?: number
       /** Bumps smaller than this across smoothed out, mm, and no point moved
        *  further than the limit; the furthest any went. */
       size: number
@@ -174,7 +176,7 @@ export type ScanEdit =
 export const MESH_SETTINGS = [
   'tolerance', 'toleranceAuto', 'maxTriangles', 'pieceSize', 'pieceSizeAuto', 'cutRef', 'cutOffset', 'cutOffsetAuto', 'cutKeep',
   'cutCap', 'mirrorRef', 'mirrorOffset', 'mirrorOffsetAuto', 'mirrorKeep', 'mirrorMode', 'holeSize', 'holeSizeAuto', 'fillMode', 'smoothScope', 'smoothSize', 'smoothSizeAuto', 'smoothLimit', 'smoothLimitAuto',
-  'smoothEdges', 'densifyEdge', 'densifyEdgeAuto', 'offsetScope', 'offsetDirection', 'offsetDistance', 'boolOp', 'boolSolids', 'trimSolid', 'trimOffset', 'trimDepth',
+  'smoothEdges', 'smoothStrength', 'densifyEdge', 'densifyEdgeAuto', 'offsetScope', 'offsetDirection', 'offsetDistance', 'boolOp', 'boolSolids', 'trimSolid', 'trimOffset', 'trimDepth',
   'trimFlip', 'shellThickness', 'shellThicknessAuto', 'shellSide', 'wrapGap', 'wrapGapAuto', 'wrapGrow', 'wrapEdges',
 ] as const
 
@@ -365,6 +367,7 @@ interface MeshState {
   smoothLimit: number
   smoothLimitAuto: boolean
   smoothEdges: boolean
+  smoothStrength: number
 
   // ---- Densify -----------------------------------------------------------------------
   /** No edge longer than this, mm — to start, a hundredth of the part. */
@@ -517,6 +520,7 @@ interface MeshState {
   setSmoothLimit: (v: number) => void
   setSmoothEdges: (on: boolean) => void
   setDensifyEdge: (v: number) => void
+  setSmoothStrength: (value: number) => void
   setOffsetScope: (scope: SmoothScope) => void
   setOffsetDirection: (direction: OffsetDirection) => void
   setOffsetDistance: (v: number) => void
@@ -642,6 +646,7 @@ export const useMeshTools = create<MeshState>()((set) => ({
   smoothLimit: 0.2,
   smoothLimitAuto: true,
   smoothEdges: true,
+  smoothStrength: 1,
 
   densifyEdge: 1,
   densifyEdgeAuto: true,
@@ -757,6 +762,10 @@ export const useMeshTools = create<MeshState>()((set) => ({
 
   setSmoothEdges: (smoothEdges) => set({ smoothEdges }),
   setDensifyEdge: (v) => set({ densifyEdge: Math.max(1e-3, v), densifyEdgeAuto: false }),
+
+  setSmoothStrength: (value) => {
+    if (Number.isFinite(value)) set({ smoothStrength: Math.max(0, Math.min(1, value)) })
+  },
 
   setOffsetScope: (offsetScope) => set({ offsetScope }),
 
@@ -937,7 +946,7 @@ export function scanEditText(e: ScanEdit, units: DisplayUnits = 'mm'): string {
     case 'fill':
       return `Filled ${count(e.holes)} hole${e.holes === 1 ? '' : 's'} under ${len(e.maxSize)}${e.mode === 'flat' ? ', flat' : ''}`
     case 'smooth':
-      return `Smoothed bumps under ${len(e.size)}${e.region ? ' in a marked region' : ''}, within ${len(e.limit)}`
+      return `Smoothed bumps under ${len(e.size)}${e.region ? ' in a marked region' : ''}, within ${len(e.limit)}${e.strength !== undefined && e.strength !== 1 ? ` at ${Math.round(e.strength * 100)}% intensity` : ''}`
     case 'densify':
       return `Densified to edges under ${len(e.maxEdge)}`
     case 'boolean':

@@ -32,3 +32,9 @@
 /assets/reHelperWorker-*
   ! Content-Security-Policy
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; connect-src 'self' data: blob:; object-src 'none'; base-uri 'self'
+
+# TMAR Edit Surface owns a separate worker that loads the same CAD bindings.
+# Keep its exception worker-specific; the page and unrelated workers stay strict.
+/assets/editor.worker-*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; connect-src 'self' data: blob:; object-src 'none'; base-uri 'self'

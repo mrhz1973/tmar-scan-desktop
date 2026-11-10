@@ -31,6 +31,7 @@ import {
 import { VIEW_THEMES, themeById } from '../viewer/viewThemes'
 import { useDismiss } from './useDismiss'
 import { NumberInput } from './NumberField'
+import { PluginPanelExtensions } from '../plugins/panelExtensions'
 
 /** The puck's six motions by 3Dconnexion's names, in the order its trainer
  *  walks through them. */
@@ -212,8 +213,8 @@ export function SettingsModal() {
             ))}
           </div>
           <small>
-            Light or dark chassis. <b>System</b> follows the operating system's setting, and
-            changes with it.
+            <b>Dark</b> is the default. Your explicit choice is remembered in this browser.
+            <b> System</b> follows the operating system only when selected.
           </small>
         </div>
         <div className="setting">
@@ -493,6 +494,7 @@ export function SettingsModal() {
           </small>
         </div>
 
+        <PluginPanelExtensions slot="settings.tools" />
         <h3>Guidance</h3>
         <label className="checkrow settings-check">
           <input

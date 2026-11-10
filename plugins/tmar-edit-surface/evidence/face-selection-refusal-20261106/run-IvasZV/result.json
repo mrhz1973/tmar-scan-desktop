@@ -1,0 +1,6 @@
+{
+  "scope": "source modules + actual OCCT WASM worker, generated STEP; no host UI or user project",
+  "commit": "6b052ead5a59871e46a5c125c38e2044d9f65f34",
+  "verdict": "INCOMPLETE",
+  "error": "Error: Failed to launch the browser process:  Code: 2147483651\n\nstderr:\n\n\nTROUBLESHOOTING: https://pptr.dev/troubleshooting\n\n    at ChildProcess.onClose (file:///C:/Users/mrhz/.codex/.chatgpt-projects/g-p-6ad36fa11fa0819192bdd25602d307e2/tmar-scan-desktop-zebra/node_modules/@puppeteer/browsers/lib/launch.js:343:24)\n    at ChildProcess.emit (node:events:526:24)\n    at ChildProcess._handle.onexit (node:internal/child_process:294:12)"
+}

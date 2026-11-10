@@ -4,6 +4,7 @@
 // things have to happen in on load — scan, its alignment, reference, image,
 // then the stores, then everything that is measured rather than stored.
 
+import { workspaceEditors } from '../plugins/workspaceEditors'
 import { meshUnitsOf } from '../core/meshUnits'
 import { useRef, type RefObject } from 'react'
 import type { ElementKind } from '../core/types'
@@ -89,24 +90,31 @@ export function useProject({
   const projectClient = useRef<ProjectClient | null>(null)
   const client = () => (projectClient.current ??= new ProjectClient())
   const capture = () => collectProject(sources.current, elementScope.current, APP_VERSION)
-  const recovery = useRecovery(capture, () => imports.busy || useStore.getState().busy, (file) => openProject(file, true))
+  const recovery = useRecovery(capture, () => imports.busy || useStore.getState().busy || workspaceEditors.active(), (file) => openProject(file, true))
 
   /** The session as a project file, and the session marked saved — what
    *  Save Project downloads and project.save hands back. */
   const packProject = () => imports.run(async (): Promise<PackedProject> => {
     const store = useStore.getState()
+    if (workspaceEditors.active()) { const error = 'Concludi Edit Surface con Applica o Annulla prima di salvare.'; store.setError(error); return { error } }
     if (!projectHasContent(sources.current)) return { error: 'There is nothing to save yet — no scan, image or work.' }
     store.setError(null)
     useStore.setState({ busy: true, statusText: 'Saving project…' })
     try {
+      // A just-published annotated copy may still be in the temporary
+      // unresolved state while its OCCT witness is rechecked. Wait before
+      // collecting project.json so the saved status reflects validation.
+      for (const section of projectSections()) await section.beforeSave?.()
+      if (workspaceEditors.active()) throw new Error('Concludi Edit Surface prima di salvare.')
       const snapshot = capture()
+      const warning=projectSections().flatMap(section=>section.saveSays?.() ?? [])
       const { manifest, members } = snapshot
       const bytes = await client().pack(manifest, members)
       const stem = projectStem(store.projectName, store.fileName, useFlat.getState().imageName)
       recovery.markSaved(snapshot)
       useStore.setState({
         busy: false,
-        statusText: `Project saved — ${(bytes.byteLength / 1e6).toFixed(1)} MB.`,
+        statusText: `Project saved — ${(bytes.byteLength / 1e6).toFixed(1)} MB.${warning.length?` ${warning.join(' ')}`:''}`,
       })
       return { name: `${stem}.${PROJECT_EXTENSION}`, bytes }
     } catch (e) {

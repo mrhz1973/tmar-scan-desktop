@@ -6,6 +6,7 @@
 // others would have to reach for it.
 
 import { create } from 'zustand'
+import { useWorkspaceEditor, workspaceEditors } from '../plugins/workspaceEditors'
 
 /** The things this tool does of itself. The mesh workspaces share the scan,
  *  the scene and the camera, differing only in what is drawn on top of the
@@ -26,5 +27,11 @@ interface ShellState {
 
 export const useShell = create<ShellState>()((set) => ({
   workspace: 'elements',
-  setWorkspace: (workspace) => set({ workspace }),
+  setWorkspace: (workspace) => {
+    if (workspaceEditors.active() && workspace !== 'reverse') {
+      useWorkspaceEditor.setState({ error: 'Concludi Edit Surface prima di cambiare area di lavoro.' })
+      return
+    }
+    set({ workspace })
+  },
 }))

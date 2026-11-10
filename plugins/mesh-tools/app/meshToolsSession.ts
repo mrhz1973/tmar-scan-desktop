@@ -48,6 +48,9 @@ import { editedCopy, editedCopyBytes, type EditedCopy } from '../state/editedCop
 import type { ScanSource } from '../../../src/app/scanSwap'
 import { onScan } from '../../../src/app/scanEvents'
 import { meanEdgeLength } from '../core/smooth'
+import { smoothRegion } from '../core/smoothRegion'
+import { remapVertices } from '../../../src/core/geometry/remap'
+import { SMOOTH_MARK_COLOR } from '../state/meshStore'
 import type { OfferedSolid, SolidMesh } from '../../../src/app/solids'
 import { booleanSolids, namesOf } from './booleanSolids'
 import { creaseSetting } from '../../../src/core/geometry/crease'
@@ -81,6 +84,10 @@ const BOOLEAN_CHORD_MM = 0.01
  *  own, refused while anything is open that the copy would change under —
  *  or inside a step a command opened, which checked that before it did. */
 export interface EditRun {
+  /** Internal: preserve Smooth's selection through the returned vertex map. */
+  preserveSmoothMark?: Uint32Array
+  /** Scope captured by the UI action, not inferred after asynchronous work. */
+  smoothScope?: 'all' | 'marked'
   inStep?: boolean
   /** The units the status line gives its lengths in: the panel passes the
    *  ones on screen; a command leaves them, and its answer is in mm. What is
@@ -395,6 +402,7 @@ export function createMeshToolsSession({
     // What the edit did, once it landed: a failure is said by runImport, and
     // the copy stays as it was.
     let landed: EditLanded | null = null
+    const markingBefore = useMark.getState()
     useMeshTools.getState().setEditing(true)
     try {
       await runImport(imports, busyText, async () => {
@@ -417,6 +425,16 @@ export function createMeshToolsSession({
         await historyAsync(label, async () => {
           await setEditedCopy({ source, map })
           useMeshTools.getState().addPending(result.edit)
+          const scene = sceneRef.current
+          const meshState = useMeshTools.getState()
+          if (run?.preserveSmoothMark && scene && useShell.getState().workspace === 'mesh' && meshState.tool === 'smooth' && meshState.smoothScope === 'marked') {
+            const kept = remapVertices(run.preserveSmoothMark, result.vertexMap)
+            scene.setPaintedVertices(kept, SMOOTH_MARK_COLOR)
+            // Restoring only the mask used to reset Brush to Navigate. Keep
+            // both the exact selection and the user's gesture ready for reuse.
+            useMark.setState({ count: scene.paintedVertices().length, gesture: markingBefore.gesture,
+              erase: markingBefore.erase, backfaces: markingBefore.backfaces })
+          }
         })
         useStore.getState().setStatus(result.status)
         landed = { edit: result.edit, status: result.status, report: result.report }
@@ -722,18 +740,19 @@ export function createMeshToolsSession({
   }
 
   /** Smooth the copy as the panel says — all of it, or the region marked on
-   *  it (or `region`, given). The marking goes with the mesh it was on, so
-   *  what smoothing did is in plain view — and its deviation, which the
-   *  marking would cover. */
+   *  it (or `region`, given). Its marking is carried through the returned
+   *  vertex map so the same region can be smoothed again without reselecting. */
   const smoothScan = async (region?: Uint32Array | null, run?: EditRun): Promise<EditLanded | null> => {
-    const { smoothScope, smoothSize: size, smoothLimit: limit, smoothEdges: keepEdges } = useMeshTools.getState()
+    const { smoothScope, smoothSize: size, smoothLimit: limit, smoothEdges: keepEdges, smoothStrength: strength } = useMeshTools.getState()
     const len = lengthsOf(run?.units)
-    const r = regionOf(smoothScope, region, 'Mark the surface to smooth on the part first — with a window, the brush or a lasso.')
-    if (r === false) return null
+    let r: Uint32Array | null
+    try { r = smoothRegion(run?.smoothScope ?? smoothScope, region, marked) }
+    catch (e) { useStore.getState().setError(message(e)); return null }
+    if (strength === 0) { useStore.getState().setStatus('Smooth intensity is 0%; no edit was made.'); return null }
     return workerEdit(
       r ? 'Mesh Tools: smooth a marked region' : 'Mesh Tools: smooth',
       'Smoothing…',
-      () => ({ type: 'smooth', settings: { size, limit, keepEdges, ...(r ? { region: r } : {}) } }),
+      () => ({ type: 'smooth', settings: { size, limit, keepEdges, strength, ...(r ? { region: r } : {}) } }),
       (rep) => {
         const s = rep.kind === 'smooth' ? rep.report : null
         const maxMove = s?.maxMove ?? 0
@@ -744,13 +763,13 @@ export function createMeshToolsSession({
         const limited = s && s.atLimit > 0 ? ` ${count(s.atLimit)} stopped at the ${typedLen(limit, len.units)} limit.` : ''
         const what = r ? `the marked region — ${count(s?.moved ?? 0)} points` : `${count(s?.moved ?? 0)} points`
         return {
-          edit: { kind: 'smooth', size, limit, maxMove, ...(r ? { region: r.length } : {}) },
+          edit: { kind: 'smooth', size, limit, maxMove, strength, ...(r ? { region: r.length } : {}) },
           status:
             `Smoothed ${what} — moved at most ${len.fmt(maxMove, 3)}, RMS ${len.fmt(s?.rmsMove ?? 0, 3)}.` +
             `${held}${limited} Ctrl+Z puts it back.`,
         }
       },
-      run,
+      { ...run, ...(r ? { preserveSmoothMark: r.slice() } : {}) },
     )
   }
 

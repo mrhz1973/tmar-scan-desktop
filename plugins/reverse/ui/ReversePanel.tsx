@@ -43,6 +43,8 @@ import { useRePrefs } from '../state/rePrefs'
 import { RevolveEditor } from './RevolveEditor'
 import { FeatureEditor } from './FeatureEditor'
 import { NoteList } from './NoteList'
+import { PluginPanelExtensions, panelExtensions } from '../../../src/plugins/panelExtensions'
+import { FeatureListExtension, FeatureRowExtension } from '../app/listExtensions'
 import { fittedOf, useFitMarks } from '../app/reFitMarks'
 
 /** The coordinate planes' rows in the body list, in CAD's order: XY, XZ, YZ. */
@@ -279,6 +281,9 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
         </p>
       </div>
 
+      {/* Analysis stays near the model and leaves the stage during edits. */}
+      {!editorOpen && <PluginPanelExtensions slot="reverse.analysis" />}
+
       <ParameterList />
 
       {!editorOpen && (
@@ -402,6 +407,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
               <Icon name="surface" />
               <span>Patch network</span>
             </button>
+            <PluginPanelExtensions slot="reverse.create.after-network" />
             <button data-test="feature-trim" disabled={!fileName || !ready || (!bodies.some((b) => b.surface) && !hasSolidElement)} title="Close a set of fitted surfaces, sheets and measured planes, cylinders, cones and spheres into a solid: the faces they cut space into are kept where they lie on the scan and sewn" onClick={() => re.getState().startFeature('trim')}>
               <Icon name="trim" />
               <span>Trim</span>
@@ -425,7 +431,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
       </div>
 
       {features.length + rolledBack.length > 0 && (
-        <div className="group" ref={featureListRef}>
+        <FeatureListExtension><div className="group" ref={featureListRef}>
           <div className="g-label">
             <span>
               Features
@@ -455,7 +461,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
             if (f.suppressed)
               return (
                 <Fragment key={f.id}>
-                  <SuppressedRow feature={f} icon={FEATURE_ICONS[f.kind]} locked={editorOpen} />
+                  <FeatureRowExtension id={f.id}><SuppressedRow feature={f} icon={FEATURE_ICONS[f.kind]} locked={editorOpen} /></FeatureRowExtension>
                   {marks(features.indexOf(f) + 1)}
                 </Fragment>
               )
@@ -516,7 +522,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
                       : f.body
             return (
               <Fragment key={f.id}>
-              <ElementRow
+              <FeatureRowExtension id={f.id}><ElementRow
                 testId="feature-row"
                 name={f.name}
                 picture={<KeyIcon name={FEATURE_ICONS[f.kind]} size={15} />}
@@ -538,7 +544,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
                   if (blocked) useStore.getState().setError(`${f.name} is built on by a later feature — delete that first.`)
                   else re.getState().removeFeature(f.id)
                 }}
-              />
+              /></FeatureRowExtension>
               {r?.status === 'ok' && r.note && (
                 <p className="hint rowerror" data-test="feature-note">
                   {r.note}
@@ -562,16 +568,16 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
           {/* Below the bar: set aside, not built, there to come back. */}
           {rolledBack.map((f, i) => (
             <Fragment key={f.id}>
-              <div className="kv ghost rolled" data-test="feature-row-rolled" title={playback ? `${f.name} is still to come in the playback` : `${f.name} is below the rollback bar — not built until the bar is moved below it`}>
+              <FeatureRowExtension id={f.id}><div className="kv ghost rolled" data-test="feature-row-rolled" title={playback ? `${f.name} is still to come in the playback` : `${f.name} is below the rollback bar — not built until the bar is moved below it`}>
                 <span className="dot" />
                 <span className="name">{f.name}</span>
                 <b>{playback ? 'to come' : 'rolled back'}</b>
-              </div>
+              </div></FeatureRowExtension>
               {marks(features.length + i + 1)}
             </Fragment>
           ))}
           {buildError && <p className="hint warn" data-test="build-error">⚠ {buildError}</p>}
-        </div>
+        </div></FeatureListExtension>
       )}
 
       {featureMenu}
@@ -598,6 +604,7 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
       {/* What the person wants of the part, pinned on it for the agent — while
           the agent connection is on. */}
       <NoteList />
+      <PluginPanelExtensions slot="reverse.export" />
 
       {/* A body leaves the tool whether or not a scan stood behind it; only the
           comparison needs one. */}
@@ -605,10 +612,10 @@ export function ReversePanel({ onOpenScan, onExportStep, onExportMesh, onCompare
         <>
           <div className="divider" />
           <div className="toolrow">
-            <button className="withicon" data-test="export-body-step" disabled={!canExport} onClick={onExportStep} title="Write every visible body into one STEP file as solids — what FreeCAD and Fusion open as a body">
+            {panelExtensions('reverse.export').length === 0 && <button className="withicon" data-test="export-body-step" disabled={!canExport} onClick={onExportStep} title="Write every visible body into one STEP file as solids — what FreeCAD and Fusion open as a body">
               <Icon name="exportStep" size={18} />
               Export body STEP
-            </button>
+            </button>}
             <button className="withicon" data-test="compare-in-deviation" disabled={!canCompare} onClick={onCompare} title="Measure the scan against the visible bodies in the Deviation workspace — its scale, histogram, pins and report. The bodies go in as the reference part; no best fit is run, they stand in the scan's frame already">
               <Icon name="compare" size={18} />
               Compare in Deviation

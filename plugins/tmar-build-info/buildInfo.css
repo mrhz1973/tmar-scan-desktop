@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+.top button.tmar-build-badge { flex: none; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; min-height: 38px; padding: 4px 8px; border: 1px solid var(--accent-d); background: var(--accent-soft); color: var(--ink); border-radius: 5px; white-space: nowrap; }
+.tmar-build-badge strong { font: 700 15px var(--ui); }
+.tmar-build-badge .tmar-build-brand { font: 500 10px var(--ui); }
+[data-test="tmar-technical-details"] { margin-top: 10px; }
+[data-test="tmar-technical-details"] summary { cursor: pointer; }
+.top button.tmar-build-badge:focus-visible { outline: 2px solid var(--accent-d); outline-offset: 2px; }
+[data-test="tmar-build-details"] input { min-width: 0; max-width: 100%; font-family: monospace; }

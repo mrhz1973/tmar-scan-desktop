@@ -146,7 +146,8 @@ function warmGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
  *  whatever the scheme's finish: a CAD face square to the view takes the
  *  whole highlight, and a map is read by its colours. */
 function referenceMapMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, roughness: 1, metalness: 0 })
+  // Keep the map behind CAD boundary overlays, also when warming its program.
+  return new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })
 }
 
 /** The overlay data and the marking brush are defined beside the modules that
@@ -499,7 +500,8 @@ export class SceneManager {
   /** Who currently owns the plain left-drag. The brush and the grips both need
    *  it and must not fight over handing it back — the navigator is told once,
    *  from whether anyone is holding it at all. */
-  private dragClaims = new Set<'paint' | 'handle' | 'gizmo' | 'layer'>()
+  private editorInput: SceneLayer | null = null
+  private dragClaims = new Set<'paint' | 'handle' | 'gizmo' | 'layer' | 'editor'>()
 
   onPick: ((hit: PickHit) => void) | null = null
   onHover: ((hit: PickHit | null) => void) | null = null
@@ -772,8 +774,9 @@ export class SceneManager {
    *  aside for both. While a marking gesture is live the grips never get a
    *  look-in: that one asked first. */
   private handlePointerDown(e: PointerEvent): boolean {
-    // The gizmo corner is a button before it is anything else: tested here
-    // rather than read off the hover, because a finger has no hover.
+    // The corner gizmo remains an explicit camera control even while an editor
+    // owns the CAD viewport. Test it before routing other presses to the editor;
+    // an accepted gizmo press stops the click machinery and cannot pick a pole.
     if (e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       const axis = this.gizmoAt(e.clientX, e.clientY)
       if (axis !== null) {
@@ -781,6 +784,9 @@ export class SceneManager {
         return true
       }
     }
+    // All non-gizmo gestures, including captured pole/cell drags, remain
+    // exclusive to the editor while its input lease is active.
+    if (this.editorInput) return this.editorInput.pointerDown?.(e) ?? false
     if (this.marking.pointerGesture() !== null) return this.marking.handlePointerDown(e)
     if (this.grips.handlePointerDown(e)) return true
     for (const layer of this.sortedLayers()) if (layer.pointerDown?.(e)) return true
@@ -843,6 +849,7 @@ export class SceneManager {
   /** A click that survived the drag threshold: whatever of the layers' and
    *  the viewport's own takes it, else a surface pick. */
   private handleClick(x: number, y: number, ctrlKey = false): void {
+    if (this.editorInput) { this.editorInput.click?.(x, y, ctrlKey); return }
     // What the arrow keys stepped to under the cursor takes the click first.
     const stepped = this.cyclingLayer({ x, y })
     if (stepped?.click?.(x, y, ctrlKey)) return
@@ -887,6 +894,7 @@ export class SceneManager {
    * there takes the step. True when one did.
    */
   cycleUnderCursor(step: 1 | -1): boolean {
+    if (this.editorInput) return this.hoverAt ? (this.editorInput.cycle?.(this.hoverAt, step, false) ?? false) : false
     const at = this.hoverAt
     if (!at) return false
     // A measured element before the layer would take the click: the
@@ -954,6 +962,7 @@ export class SceneManager {
 
   /** Light what is under a client point — or, with null, nothing. */
   private hoverUnder(at: { x: number; y: number } | null): void {
+    if (this.editorInput) { this.editorInput.hover?.(at, false); return }
     // The gizmo's arrows light under the cursor and take the plain left-drag
     // off the camera while one is under it, the way the grips do: a press on
     // an arrow is a click on a button, not the start of an orbit.
@@ -1028,8 +1037,9 @@ export class SceneManager {
     wireSlots?: Uint8Array,
     copyOf: Uint32Array = new Uint32Array(0),
     surface: Uint8Array | null = null,
+    cadEdges: Float32Array | null = null,
   ): void {
-    this.prepareMesh(positions, indices, normals, wireSlots, copyOf, surface).commit()
+    this.prepareMesh(positions, indices, normals, wireSlots, copyOf, surface, cadEdges).commit()
   }
 
   /** Allocate and index a replacement before releasing the current mesh.
@@ -1042,6 +1052,7 @@ export class SceneManager {
     wireSlots?: Uint8Array,
     copyOf: Uint32Array = new Uint32Array(0),
     surface: Uint8Array | null = null,
+    cadEdges: Float32Array | null = null,
   ): { commit(): void; dispose(): void } {
     const geometry = new THREE.BufferGeometry()
     const { colors, paint, tint } = this.layOutScan(
@@ -1069,6 +1080,9 @@ export class SceneManager {
     const material = new THREE.MeshStandardMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
+      // STEP-as-scan uses the same depth contract as CAD bodies/references:
+      // faces behind display boundaries, Zebra fill between the two.
+      polygonOffset: cadEdges !== null, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
     })
     applyFinish(material, this.theme)
     patchScanShader(material, { backface: this.backface, paintColor: this.uPaintColor, surfaceColor: this.uSurfaceColor, surfaceOwn: this.uSurfaceOwn, deflect: this.uDeflect, wire: this.wire })
@@ -1083,6 +1097,7 @@ export class SceneManager {
       this.disposeMesh()
       this.setPreview(null)
       this.mesh = mesh
+      if (cadEdges !== null) this.scanCadEdges.set(geometry, cadEdges)
       this.adoptScanLayout(geometry, copyOf)
       this.partGroup.add(this.mesh)
       this.applySlice()
@@ -2549,7 +2564,7 @@ export class SceneManager {
 
   /** Take the plain left-drag away from the camera, or give it back, for one
    *  reason among several. The navigator only ever hears the total. */
-  private claimDrag(reason: 'paint' | 'handle' | 'gizmo' | 'layer', on: boolean): void {
+  private claimDrag(reason: 'paint' | 'handle' | 'gizmo' | 'layer' | 'editor', on: boolean): void {
     const had = this.dragClaims.size > 0
     if (on) this.dragClaims.add(reason)
     else this.dragClaims.delete(reason)
@@ -2579,6 +2594,23 @@ export class SceneManager {
    *  can draw and raycast the same 1.4-million-triangle mesh without a second
    *  copy or a second tree — three.js keeps per-renderer GPU state, so one
    *  geometry can safely appear in two canvases. */
+  private readonly scanCadEdges = new WeakMap<THREE.BufferGeometry, Float32Array>()
+
+  /** Borrow the currently displayed scan; edited mesh previews have no CAD
+   *  topology. The source metadata never becomes exported scan geometry. */
+  scanDisplay(): { mesh: THREE.Mesh; cadEdges: Float32Array | null } | null {
+    return this.mesh ? { mesh: this.mesh, cadEdges: this.scanCadEdges.get(this.mesh.geometry) ?? null } : null
+  }
+
+  private moveScanEdges(geometry: THREE.BufferGeometry, transform: Rigid): void {
+    const edges = this.scanCadEdges.get(geometry)
+    if (!edges) return
+    const moved = edges.slice()
+    rigidApplyToPoints(transform, moved)
+    // New identity makes render layers discard their obsolete line buffers.
+    this.scanCadEdges.set(geometry, moved)
+  }
+
   scanGeometry(): THREE.BufferGeometry | null {
     if (this.editedShown && this.other) return this.other.geometry
     return (this.mesh?.geometry as THREE.BufferGeometry) ?? null
@@ -2684,6 +2716,15 @@ export class SceneManager {
     return [c.x, c.y, c.z]
   }
 
+  /** Borrow the displayed reference; callers must not mutate or dispose it.
+   * STEP boundaries belong to the original reference even when a map replaces
+   * its shading. No source coordinates are moved to display this metadata. */
+  referenceDisplay(): { mesh: THREE.Mesh; cadEdges: Float32Array | null } | null {
+    if (!this.nominalMesh) return null
+    const mesh = this.referenceMapMesh?.visible ? this.referenceMapMesh : this.nominalMesh
+    return { mesh, cadEdges: (this.nominalMesh.geometry.userData.cadEdges as Float32Array | undefined) ?? null }
+  }
+
   nominalGeometry(): THREE.BufferGeometry | null {
     return (this.nominalMesh?.geometry as THREE.BufferGeometry) ?? null
   }
@@ -2705,6 +2746,7 @@ export class SceneManager {
     indices: Uint32Array,
     normals: Float32Array,
     wireSlots?: Uint8Array,
+    cadEdges?: Float32Array,
   ): { commit(): void; dispose(): void } {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -2723,7 +2765,10 @@ export class SceneManager {
     const material = new THREE.MeshStandardMaterial({
       color: this.theme.nominal,
       side: THREE.DoubleSide,
+      // Same depth contract as CAD bodies: leave space for face boundaries.
+      polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
     })
+    if (cadEdges) geometry.userData.cadEdges = cadEdges
     applyFinish(material, this.theme)
     material.onBeforeCompile = (shader) => {
       spliceBackfaceTint(shader, this.referenceBackface)
@@ -2773,6 +2818,7 @@ export class SceneManager {
     const geometry = this.mesh.geometry as THREE.BufferGeometry
     const positions = geometry.getAttribute('position') as THREE.BufferAttribute
     const normals = geometry.getAttribute('normal') as THREE.BufferAttribute
+    this.moveScanEdges(geometry, m)
     rigidApplyToPoints(m, positions.array as Float32Array)
     rigidRotateVectors(m, normals.array as Float32Array)
     positions.needsUpdate = true
@@ -2783,6 +2829,7 @@ export class SceneManager {
     // frame, and moves with it.
     if (this.other) {
       const g = this.other.geometry
+      this.moveScanEdges(g, m)
       rigidApplyToPoints(m, g.getAttribute('position').array as Float32Array)
       rigidRotateVectors(m, g.getAttribute('normal').array as Float32Array)
       g.getAttribute('position').needsUpdate = true
@@ -2996,6 +3043,45 @@ export class SceneManager {
     this.invalidate()
   }
 
+  /** Camera-only bookmark for inspection tools; no model changes. */
+  captureView() {
+    return { ...this.viewport.pose(), ...this.viewport.viewLink().extents() }
+  }
+  restoreView(pose: ReturnType<SceneManager['captureView']>): void {
+    this.viewport.viewLink().setExtents(pose.halfW, pose.halfH)
+    this.viewport.retarget(pose.dir, pose.up, pose.target, pose.zoom)
+    this.invalidate()
+  }
+  /** Inspect a saved point in the part's frame. A normal faces the marked
+   *  surface towards the camera. This changes only the view, never the part. */
+  focusPoint(at: Vec3, normal?: Vec3): void {
+    this.partGroup.updateWorldMatrix(true, false)
+    const point = new THREE.Vector3(...at).applyMatrix4(this.partGroup.matrixWorld)
+    const pose = this.viewport.pose()
+    const direction = normal?.every(Number.isFinite) ? new THREE.Vector3(...normal) : pose.dir.clone()
+    if (normal && direction.lengthSq() > 1e-12) direction.applyMatrix3(new THREE.Matrix3().getNormalMatrix(this.partGroup.matrixWorld))
+    if (direction.lengthSq() < 1e-12) direction.copy(pose.dir)
+    direction.normalize()
+    const up = pose.up.clone().addScaledVector(direction, -pose.up.dot(direction))
+    if (up.lengthSq() < 1e-8) {
+      up.set(0, 1, 0)
+      if (Math.abs(up.dot(direction)) > 0.95) up.set(1, 0, 0)
+      up.addScaledVector(direction, -up.dot(direction))
+    }
+    up.normalize()
+    const radius = Math.max(0.5, this.layerHost().modelRadius() * 0.09)
+    const box = new THREE.Box3(point.clone().addScalar(-radius), point.clone().addScalar(radius))
+    const place = box.getBoundingSphere(new THREE.Sphere())
+    const clip = new THREE.Sphere(this.clipSphere.center.clone(), this.clipSphere.radius).union(place)
+    const framed = new THREE.Sphere(this.framedClip.center.clone(), this.framedClip.radius).union(place)
+    this.viewport.frameCamera(box, null, { dir: direction, up }, radius * 4)
+    this.clipSphere.center.copy(clip.center)
+    this.clipSphere.radius = clip.radius
+    this.framedClip.center.copy(framed.center)
+    this.framedClip.radius = framed.radius
+    this.invalidate()
+  }
+
   labelsShown(): boolean {
     return !this.container.classList.contains('nolabels')
   }
@@ -3165,6 +3251,7 @@ export class SceneManager {
     wireSlots: Uint8Array | undefined,
     copyOf: Uint32Array,
     surface: Uint8Array | null = null,
+    cadEdges: Float32Array | null = null,
   ): void {
     if (!this.mesh) return
     // A copy of the scan that went is not a copy of this one.
@@ -3180,6 +3267,11 @@ export class SceneManager {
     forgetTree(geometry)
     geometry.disposeBoundsTree?.()
     geometry.dispose()
+    this.scanCadEdges.delete(geometry)
+    if (cadEdges !== null) this.scanCadEdges.set(geometry, cadEdges)
+    const material = this.mesh.material as THREE.Material
+    material.polygonOffset = cadEdges !== null
+    material.polygonOffsetFactor = material.polygonOffsetUnits = 1
     const { colors, paint, tint } = this.layOutScan(geometry, positions, indices, normals, wireSlots, copyOf, null, true, surface)
     this.regions.attach(colors, paint, tint, this.scanVertices)
     geometry.computeBoundsTree()
@@ -3559,6 +3651,24 @@ export class SceneManager {
   }
 
   // ---- the plugins' layers -----------------------------------------------------
+
+  /** Exclusive edit input; rendering layers remain mounted. No global visibility change. */
+  leaseEditorInput(layer: SceneLayer): () => void {
+    if (this.editorInput || this.marking.pointerGesture() !== null) throw new Error('The viewport already has an active interaction.')
+    this.hoverUnder(null)
+    this.editorInput = layer
+    // A captured editor handle is intercepted before the navigator sees its pointerdown.
+    // Do not reserve *all* plain mouse drags for the entire session: empty-space
+    // orbit and pan must keep the operator's configured navigation bindings.
+    let held = true
+    return () => {
+      if (!held) return
+      held = false
+      if (this.editorInput === layer) this.editorInput = null
+      this.hoverDirty = true
+      this.invalidate()
+    }
+  }
 
   /** Add a plugin's layer — see sceneLayers.ts. The returned function takes
    *  it away again, disposing it. */

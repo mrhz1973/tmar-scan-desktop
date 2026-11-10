@@ -1,0 +1,20 @@
+{
+  "pass": true,
+  "heldWorkerOpen": true,
+  "actualMove": [
+    40,
+    0,
+    0
+  ],
+  "staleRefused": true,
+  "emptyFaceList": true,
+  "retryBounds": {
+    "xmin": 39.9999999,
+    "ymin": -1e-7,
+    "zmin": 9.9999999,
+    "xmax": 60.0000001,
+    "ymax": 30.0000001,
+    "zmax": 10.0000001
+  },
+  "consoleErrors": []
+}

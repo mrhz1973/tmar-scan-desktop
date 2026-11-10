@@ -1,0 +1,350 @@
+{
+  "hostBaseline": "a28c747591e740d62f3b1f90330f145141c77de1",
+  "description": "Read-only snapshot of author local workspace plugin before reporting correction; no published plugin commit asserted.",
+  "pluginFiles": {
+    "brep.ts": {
+      "sha256": "456b1b2d305564046ada042f012de887fba71819d46cf363dd31371a2b5816ef",
+      "bytes": 8409
+    },
+    "dragFrame.ts": {
+      "sha256": "7a4b787e7f068213ac13e3f450ad947204a810f96b9397a817dbe07cf34b9156",
+      "bytes": 6595
+    },
+    "editor.worker.ts": {
+      "sha256": "2a2608d18e78c82b16e4ec6247a473788569e25c5db4ed3229d026cf6cefd68f",
+      "bytes": 2782
+    },
+    "editorKernel.ts": {
+      "sha256": "bf910ca295343b151522f4f2637e8f32c4809cf788a40b1108de528a7ec8dbf8",
+      "bytes": 33336
+    },
+    "EditSurface.tsx": {
+      "sha256": "cfaaa7355810d1b59b59aa24dd51bfe1264a67bb7754a396cc5cc840d2e738fc",
+      "bytes": 47242
+    },
+    "EditSurfaceIcon.tsx": {
+      "sha256": "0dbc07cbedd1f9d30842aa6e63f8b9fd97f1d4c1a432c9caebea91648e8c947f",
+      "bytes": 513
+    },
+    "freeBoundary.ts": {
+      "sha256": "d123ecb5c00ec8262c6c312dd54135ed2ad0bc0791098585be32bd42a973d954",
+      "bytes": 3252
+    },
+    "localFrame.ts": {
+      "sha256": "4ec6da957ddf2dfa2aca9cee1b1062db26b76f7d7285f0fb692271133fca9e80",
+      "bytes": 2640
+    },
+    "netPicking.ts": {
+      "sha256": "ea432cdb2775348196180eae9613714c37c2bf662489f010ee9df576a4891460",
+      "bytes": 7405
+    },
+    "netSelection.ts": {
+      "sha256": "10cff3ae3d3a8ec1b8b15c8732791f0b73c2e0223b5eda14c1dad2ddd35da98f",
+      "bytes": 781
+    },
+    "plugin.ts": {
+      "sha256": "63e1ed8825b1149fbfc43c9c12ce64bd0dca49cf7da20d0c61adc77d98ba4ef8",
+      "bytes": 1251
+    },
+    "previewQueue.ts": {
+      "sha256": "5b960c563ee2a0b0d75fae8e68c134c4a0079684c6a53f6ca1ffc23a6c39073d",
+      "bytes": 8261
+    },
+    "README.md": {
+      "sha256": "d02dec1816b0f7f23fd80d712af6c925d5c4fcf0c179e2c3f8dfc4029f142584",
+      "bytes": 48787
+    },
+    "RECIPE-INTEGRATION.md": {
+      "sha256": "ed9fd616d9c329e811c7ac9d544fd3edacf35f9dfff6347d64104e157cf5d936",
+      "bytes": 10729
+    },
+    "recipe.ts": {
+      "sha256": "ac52e87fdd565ef658f429732ab64a2cd76ea762cbbc0069535dd372bf42e91f",
+      "bytes": 3147
+    },
+    "sheetDrag.ts": {
+      "sha256": "fd71e4fe3c4ddc5a5f7ea122317cba18dbb3a0ea0b8e8c8a88269e89f4870a78",
+      "bytes": 6854
+    },
+    "sheetExtension.ts": {
+      "sha256": "0c87557aaf73d5ae13585e9bcf62c26373dbe21ac2f441890f6aee8c1a92458b",
+      "bytes": 4217
+    },
+    "snap.ts": {
+      "sha256": "21206ca7aa279ae6558e73fef856a0ceb59ee9fb1b8286db4c2c0c73a5229d98",
+      "bytes": 1388
+    },
+    "surface.css": {
+      "sha256": "f2b2dea3d074326a3070eba0954751ef22fed562a40d6caeedf8bd6a4baaa97a",
+      "bytes": 2406
+    },
+    "surfaceCage.ts": {
+      "sha256": "447fcd3a2f7e95e59d2d9e783f48f5108e53dbb757a1eb0313a659feb12eff24",
+      "bytes": 4243
+    },
+    "surfaceDraft.ts": {
+      "sha256": "9a27aeaf218115fd150715c02863228449a124f80d76b79feee26b0b4c9ce34f",
+      "bytes": 15136
+    },
+    "surfaceGesture.ts": {
+      "sha256": "7e0cb2db9f9a548b3e25ae3f56aa49608fd07e3fd723ea7f1e06ea1530768e09",
+      "bytes": 5780
+    },
+    "surfaceHistory.ts": {
+      "sha256": "65a2dbe632de94d93d587765b56c3bacafc89b6b4b81212b8696083375f2c53b",
+      "bytes": 2055
+    },
+    "surfaceRuntime.ts": {
+      "sha256": "9d782a686b21862a2fcfbf633ac101c58b104a612babc6f416270df16d1630c5",
+      "bytes": 1281
+    },
+    "SurfaceViewport.tsx": {
+      "sha256": "03d06a49bdd2e1e10eaffdae4d0c220a8adc45f0431cfc1cce969b2d3a738923",
+      "bytes": 28302
+    },
+    "symmetry.ts": {
+      "sha256": "d743202e4a578daa4d6b0ff6656157a3b8ea8e96e88fff21796f79e0888f7b85",
+      "bytes": 1779
+    },
+    "tests\\dragFrame.test.ts": {
+      "sha256": "ecfa227d464016b6e326550c7894ab9319cea16833c32bb4f441b59276698fc5",
+      "bytes": 7776
+    },
+    "tests\\e2e-close-during-apply.mjs": {
+      "sha256": "b4d4d49afff700f1b1eb84c65da83ee09169dcf62adfc5da3f5088386f5dede8",
+      "bytes": 5223
+    },
+    "tests\\e2e-compiled-source.mjs": {
+      "sha256": "a15461459d9ccc25f7591c4b10c2c3053e2005f5a3870ac3560482e10d13d448",
+      "bytes": 4304
+    },
+    "tests\\e2e-controls.mjs": {
+      "sha256": "500ba78c7034da17bdaebd713af305ab86d1105dffd2a992ce759970d4041a1b",
+      "bytes": 7598
+    },
+    "tests\\e2e-direct-selection.mjs": {
+      "sha256": "e95adffc8313750f3db153c53d4379e4dc23d0f21d28ab2052a0e11134a01dcd",
+      "bytes": 8465
+    },
+    "tests\\e2e-entry.mjs": {
+      "sha256": "996b444d1b19b7164e622cd9d55dc384aeb2dbb5de68b345d970abba9baeeb0a",
+      "bytes": 6443
+    },
+    "tests\\e2e-free-boundary.mjs": {
+      "sha256": "bf893c89afa716d5d9c693075533576abf67c0081e379230372b02b4cec12d76",
+      "bytes": 10298
+    },
+    "tests\\e2e-history.mjs": {
+      "sha256": "fe0dd2289d9e4c79ab40479a02491ecb47b8806166932ffaebd907120facb96d",
+      "bytes": 13612
+    },
+    "tests\\e2e-live-preview.mjs": {
+      "sha256": "eac222dd065c8ef68d22cd490c02e1082273539833c4d9bcbd0f046d6bb28a05",
+      "bytes": 8679
+    },
+    "tests\\e2e-local-drag.mjs": {
+      "sha256": "05691eae56e97b3c6da0448f3ca8875611a97c02a62a0839f2666ac532fae15b",
+      "bytes": 7281
+    },
+    "tests\\e2e-net-selection.mjs": {
+      "sha256": "231761ba33ca8dd24866c7ec9656f9b6e964f54f7cfb975ccb4f129dba805799",
+      "bytes": 13763
+    },
+    "tests\\e2e-partial-domain.mjs": {
+      "sha256": "ccc8c7bee62a7920d959948d2015ebc64dada9ad4315acd9b67239334947440b",
+      "bytes": 6359
+    },
+    "tests\\e2e-perforated.mjs": {
+      "sha256": "05d4806f6bbf951acdecce0d4d20be0d78a979b34d952f3cb835e0de4b7bc307",
+      "bytes": 11214
+    },
+    "tests\\e2e-recipe.mjs": {
+      "sha256": "1153cc1800150fb304dde8ba6f3bcb71e56d7d257d7bfe207279367935a6c0b8",
+      "bytes": 5942
+    },
+    "tests\\e2e-refined-surface.mjs": {
+      "sha256": "6050aca2bdba6de506516812e0c3ea5fd46fd369c118dc41bee3a8b9e1873335",
+      "bytes": 7065
+    },
+    "tests\\e2e-screen-drag.mjs": {
+      "sha256": "b431015f0db5398c460cb75009da1141022320d1ec5a6ba8b6ca28b72ed9e62a",
+      "bytes": 6697
+    },
+    "tests\\e2e-sheet-extension.mjs": {
+      "sha256": "815e8865726eafb97bd6a8ee941e910136dea799b48b8587e0333f39c1973507",
+      "bytes": 15240
+    },
+    "tests\\e2e-snap-cad.mjs": {
+      "sha256": "8868366161c6ace296de8bc9362a13090490ecfbcf3161ce281211f461f9e681",
+      "bytes": 12187
+    },
+    "tests\\e2e-snap.mjs": {
+      "sha256": "cd32d4621220453fbeda18e607441773fe746cc1f2821a66b85ce969a8c924c4",
+      "bytes": 14325
+    },
+    "tests\\e2e-source-stale.mjs": {
+      "sha256": "598682d3a93def7e53e8c4e575e4b7acc1943f046d1c18d3738ec5efd0fd8406",
+      "bytes": 6466
+    },
+    "tests\\e2e-surface.mjs": {
+      "sha256": "619a58c1115928c7ba0c1ebe88377dc0da5a8d0832d04e566b309845621f8077",
+      "bytes": 5451
+    },
+    "tests\\e2e-workspace-compiled.mjs": {
+      "sha256": "1183b14790b38fc186184246c703f78c568c41cc370ab6abf28af58e719142d8",
+      "bytes": 7088
+    },
+    "tests\\e2e-workspace-integration.mjs": {
+      "sha256": "26dd4ff2c9e644d465711232f8c0984ecfbf1b6baab64ff826ea15a97ba4d447",
+      "bytes": 25662
+    },
+    "tests\\e2e-workspace-pick-note.mjs": {
+      "sha256": "c2c9fa59ad1dff707fc670b3810e9ed1e244598b831ef8089dca6fc4ef5b369f",
+      "bytes": 15242
+    },
+    "tests\\e2e-workspace-snap.mjs": {
+      "sha256": "e5d514ac1fa7240541846adeb2f9d2119e0b752613471b375329fa6f2d781fb3",
+      "bytes": 14158
+    },
+    "tests\\e2e-workspace-strip.mjs": {
+      "sha256": "da07038b916db2d4b3ded96250675d1a67fae57210ffa309a98940cda423bee0",
+      "bytes": 20361
+    },
+    "tests\\editorKernel.test.ts": {
+      "sha256": "b5cf48a5b97777566b5499314bef45b5e98fd2930f05955ef66f17157b1909dd",
+      "bytes": 6873
+    },
+    "tests\\entry.test.ts": {
+      "sha256": "c99eeea44021d9b48965f5ac479f12cc12292488134102905d2d720d7cbd811f",
+      "bytes": 2226
+    },
+    "tests\\freeBoundaryProof.test.ts": {
+      "sha256": "d320af907b5cfd35605f8451278c0bb5d4c39039441bd57adc580e5da5500c93",
+      "bytes": 5767
+    },
+    "tests\\freeBoundaryRational.test.ts": {
+      "sha256": "93d6994860570274383adb98ebebc60117f6ef7be90cb02009777a282ab9f3cd",
+      "bytes": 7859
+    },
+    "tests\\localFrame.test.ts": {
+      "sha256": "6fd8ccb6ad43299d5422de1c9471c307adbc2933a9593eb550502b3afee015c6",
+      "bytes": 3225
+    },
+    "tests\\netPicking.test.ts": {
+      "sha256": "206d111755f049b0222e3ff86dfe88cc2c5e3942d6919e82d20557e27637f087",
+      "bytes": 5619
+    },
+    "tests\\outer-trim.test.ts": {
+      "sha256": "f9a3f14e41f87b63088dde13e8cee5d852acdaa247acfbc1576effd52e0276e4",
+      "bytes": 1852
+    },
+    "tests\\partial-domain.test.ts": {
+      "sha256": "587cbb32983302a3119843d8ca9827eeb215594544a42e5bd3ab0eb7c4f17caf",
+      "bytes": 7391
+    },
+    "tests\\perforated.test.ts": {
+      "sha256": "dbc31e21edfa7621af6d445ce18a1dfb886b63318a22a56e62953eadd0874624",
+      "bytes": 5490
+    },
+    "tests\\previewQueue.test.ts": {
+      "sha256": "f861c6895426adf0b3c1db4cd902ea7a71e62fdc143b3288c3c5c406d847970e",
+      "bytes": 7159
+    },
+    "tests\\recipe.test.ts": {
+      "sha256": "3742ac070554d2c8d4a8aaa99ce624a8dee3886b2077f060a8d8feaffc010a27",
+      "bytes": 11844
+    },
+    "tests\\sheetDrag.test.ts": {
+      "sha256": "b2abcbf8a3abeafe9b443e242b1bb6847c7d54ea50cb6fa6ed89980f2f1a4f34",
+      "bytes": 1358
+    },
+    "tests\\sheetExtension.test.ts": {
+      "sha256": "62a9045bb38bc187eae4d79724c3636fd28ffee55807697b34419ce7ad211451",
+      "bytes": 3488
+    },
+    "tests\\snap.test.ts": {
+      "sha256": "870f3cc3e7b85f5a06da833ed2e1f64b5fea7c41b9760f1862554cad59060bfa",
+      "bytes": 4341
+    },
+    "tests\\surfaceCage.test.ts": {
+      "sha256": "4ddc5bd993e47fec23d27f0ac63cf21a4ecd09e81290b06bd88240a7c205883f",
+      "bytes": 3737
+    },
+    "tests\\surfaceDraft.test.ts": {
+      "sha256": "caba7383ed7c3cc93ce66979692bde388522932b18b1e53cd8910b94a081576e",
+      "bytes": 12151
+    },
+    "tests\\surfaceGesture.test.ts": {
+      "sha256": "2a3bcef1c6d9bb52e4e1d561876ae09454477d13660a21842779b66ceb5bb919",
+      "bytes": 7867
+    },
+    "tests\\surfaceHistory.test.ts": {
+      "sha256": "ed941871e06b87cd32ca2ab4c23daeec5ae9809fe171ce3f788dd90b518de4c9",
+      "bytes": 2517
+    },
+    "tests\\surfaceRuntime.test.ts": {
+      "sha256": "172d81d2c5c142a0573f541ef2cced5ed088461caa865420217e70f6dd4a3679",
+      "bytes": 2806
+    },
+    "tests\\symmetry.test.ts": {
+      "sha256": "6af37c3b26013b472bf1f139b1486f0ed1b9a9a78af1d1d1c7af8182ca8b71c4",
+      "bytes": 2672
+    },
+    "tests\\workerClient.test.ts": {
+      "sha256": "21d9ecd1a54c6bfccca457f8a5c36a71d496d9eaf9d4ef1a1df213baddcfa62a",
+      "bytes": 7107
+    },
+    "tests\\workspaceLayer.test.ts": {
+      "sha256": "f15a3dab416fa97de0560c6329d0bc584670f465dfbf1401a1600fcb538c1ace",
+      "bytes": 23107
+    },
+    "tests\\workspacePreview.test.ts": {
+      "sha256": "1b09ff4dabf4890a4717e27f708c4a52b2cecd95271d46ac1874d9005b9da1ac",
+      "bytes": 9806
+    },
+    "tests\\workspaceSession.test.ts": {
+      "sha256": "e673702b84e19e1221dd8f1a7559f2f04be3dabe41847432739fa7748cb11724",
+      "bytes": 35484
+    },
+    "workerClient.ts": {
+      "sha256": "ad8197f7ee8173c27f8e90df6adb3e3dd3c9e1914072562c65e466a81a07b164",
+      "bytes": 4133
+    },
+    "workspaceBridge.ts": {
+      "sha256": "d94739e27b21c3a87a4269ac5f14e9b1c5129134cf5cf07049d5bd500e2e5c24",
+      "bytes": 3468
+    },
+    "WorkspaceEntry.tsx": {
+      "sha256": "7335f37bcee46dca8ed63af7a2760da06478bfbf7fb492404aac0ffdfb9ad36d",
+      "bytes": 3314
+    },
+    "workspaceHost.ts": {
+      "sha256": "e7c84e3770c01d439aea8b26129d9cd440cca560bd1c0836f966a0d12efa162f",
+      "bytes": 640
+    },
+    "workspaceIntegration.ts": {
+      "sha256": "7f46bd489328a6ce905f91d98dc054805253afeb97416d9bb1ea61991b1a9d30",
+      "bytes": 1193
+    },
+    "workspaceLayer.ts": {
+      "sha256": "511b3dc9ef089b6102241fedc460d89b2394e1de18bd4c636bb084485ad2f790",
+      "bytes": 32661
+    },
+    "workspacePreview.ts": {
+      "sha256": "d30b46ca413b1c639661ec9ec4f0ebb73db1a53ae2306c81bb83d73c1910db2d",
+      "bytes": 10569
+    },
+    "workspaceSession.ts": {
+      "sha256": "2f27fcffbac0211c14456167558de22bd67f53218cb06537131495945611b6f4",
+      "bytes": 50287
+    },
+    "workspaceSurface.css": {
+      "sha256": "b9d4f477ec1b471e6901b0320da0591b647af59a34387ab3ee61097ea174287e",
+      "bytes": 1720
+    },
+    "WorkspaceSurfaceParameters.tsx": {
+      "sha256": "ef73871fe3541dcb6bb07ebd581413613ed3e0b10d5922b5e5cf42e729c32395",
+      "bytes": 17124
+    }
+  }
+}

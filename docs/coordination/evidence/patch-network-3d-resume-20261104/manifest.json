@@ -1,0 +1,88 @@
+{
+  "base": "5f39ff521d0095e01fb9b7f1a5af833bca9e28ba",
+  "recoveredSourceArchiveSha256": "1791956bf388f4b0100cd5df06aea7aa53bdf9e3977d063fcc004a0f50a6d6cba0",
+  "sourceChecks": 27,
+  "compiledChecks": 14,
+  "tests": {
+    "numTotalTests": 130,
+    "numPassedTests": 129,
+    "numFailedTests": 0,
+    "numPendingTests": 1
+  },
+  "testFiles": 18,
+  "files": {
+    "source-result.json": {
+      "originalSha256": "8a49ff8941051c455a691f37a432bd401d508268cbba7cc11ab7b1bf27bd5380",
+      "publishedSha256": "3d39d04e59fa4a0171024ef7301fdc0ed3681ab91bee182f8822efc7663c196b"
+    },
+    "compiled-result.json": {
+      "originalSha256": "8cafbf0661c26dd9694f701767774050a95de282785cd8559a5cb8207b0e5401",
+      "publishedSha256": "8cafbf0661c26dd9694f701767774050a95de282785cd8559a5cb8207b0e5401"
+    },
+    "initial-history-failure.json": {
+      "originalSha256": "45bfce8385be5f30068075363faa786a6faf109e3ae33a8f24e97c41548f41d3",
+      "publishedSha256": "720cfcfa4d57b5b293fa8d91cf14792c5f14a6645c4aceb79afbd704184aa61f"
+    },
+    "validation.json": {
+      "originalSha256": "fc23ef4acc7a4bb40d577c93b745bd0a84633567ce5060e06542fbc27a76e7e9",
+      "publishedSha256": "5473d1f8e29b9fe7972f87c92599c8937cae2a852f51d5a1acaab204d61c1358"
+    },
+    "delegated-review-status.json": {
+      "originalSha256": "1b9ca30f7a654094ccc13f4b30a03c37649aa09826136b01d8ad695662ef399a",
+      "publishedSha256": "d7ca67d647121be1186bae953e042dc453806ae3f1df12408ec0ce84852afeef"
+    },
+    "compiled-edit.png": {
+      "originalSha256": "a2a845324de62c3f74e5ad6ed7a576b5efe9cbb9a8dbe39821386c90ca6227f5",
+      "publishedSha256": "a2a845324de62c3f74e5ad6ed7a576b5efe9cbb9a8dbe39821386c90ca6227f5"
+    },
+    "compiled-reopened.png": {
+      "originalSha256": "d9ee6bdac4f72b0a436f8baef9b47b862a6138c8ddf26b58b003fee87e9d3dc8",
+      "publishedSha256": "d9ee6bdac4f72b0a436f8baef9b47b862a6138c8ddf26b58b003fee87e9d3dc8"
+    },
+    "source-points-3d.png": {
+      "originalSha256": "2e0b265e2f3974254ceaa97fcb600457c914d806ef352cc730d8975caf2a0adf",
+      "publishedSha256": "2e0b265e2f3974254ceaa97fcb600457c914d806ef352cc730d8975caf2a0adf"
+    },
+    "synthetic-baseline.scanruler": {
+      "originalSha256": "76b5935ddaad17fe3865b6d46db290dc7172e763e5bd283c60b59f12dd642860",
+      "publishedSha256": "76b5935ddaad17fe3865b6d46db290dc7172e763e5bd283c60b59f12dd642860"
+    },
+    "synthetic-compiled-reopened.scanruler": {
+      "originalSha256": "003433424bbf71be6356c3381f48f5256a02d0e0c61101db94766172f78b8eec",
+      "publishedSha256": "003433424bbf71be6356c3381f48f5256a02d0e0c61101db94766172f78b8eec"
+    },
+    "synthetic-network-export.step": {
+      "originalSha256": "12d33e7e80497eb0fc6106f0efdcc3499ef27b9ee6489f0ee3dc123e4c4f18ad",
+      "publishedSha256": "12d33e7e80497eb0fc6106f0efdcc3499ef27b9ee6489f0ee3dc123e4c4f18ad"
+    }
+  },
+  "sourceHashes": {
+    "plugins/reverse/README.md": "e302ff4ff7a5b63c26943bf2d7c3b5c0a6fda814c51e37d80d8069d127798b10",
+    "plugins/reverse/app/projectSection.ts": "8c10cea7cf2e2ff33f7aef1b0e3cff301bc5a29c5241069dbb039043ae1d3785",
+    "plugins/reverse/app/reSchemas.ts": "0254cbe8f3fc33b2de34ed620f4e580a5203ca9b28ffc8d0ac06a0678d6e1856",
+    "plugins/reverse/app/useReverseWorkspace.ts": "7442eab8507fca1fa3be954fbefa1603376f7a1d0046f6c8c75a8190ad74d53f",
+    "plugins/reverse/core/features.ts": "818fa80f8c44341f89a8991d2a919cf3ffaafe2699ddcbdda01f95ca0542d04d",
+    "plugins/reverse/core/network.ts": "f6e92ad76ed4024f1f90661704f5914653861642f699096bf65301c969455c19",
+    "plugins/reverse/core/networkBody.ts": "a8b11c60d64f72abc42d77e107f9485cf04f508ee54872ce68a8340933b696bf",
+    "plugins/reverse/core/networkCells.ts": "52a6583032264c92ac3791c8cd13d190ddf6736cd59ca2dda4fc2eef36c10a28",
+    "plugins/reverse/core/networkCentreFit.ts": "b4cc3c11ca08936214d9122d2fb26911ce1bc9c587f2f15a343de61ae140e6ab",
+    "plugins/reverse/core/networkNormalMotion.ts": "42d642ca799de32003cdcd091d194ad163d134185f37a64728f107dccaa469b8",
+    "plugins/reverse/core/networkPointMotion.ts": "a1e70f7c2b7bc39767eb3a6e56649b219cbe306506ffab7237422a55afe0caaf",
+    "plugins/reverse/core/networkSplit.ts": "fa5bdd0fa43b938c8648a54b9230136845c0b56a331799777904b91b313aea2c",
+    "plugins/reverse/plugin.ts": "0cd92718e3d5ca020d9b0695d52aa4e067cea013cc9e2ac92c60ed2a48fc7f91",
+    "plugins/reverse/scripts/e2e-network-point-compiled.mjs": "8c6023b3bec32879626fc97d1ec9bb0d0ba3e97cd0bc8074a4c6b5044267d707",
+    "plugins/reverse/scripts/e2e-network-point-motion.mjs": "5e732b64877265e6c780d9640ea520204f99b2bb0058f8230c821dfea4ded865",
+    "plugins/reverse/state/reFeatureSlice.ts": "19c79ea06e4e4d5a1cd68c436692041b0882f127c46334faf21efed70e725411",
+    "plugins/reverse/state/reNetworkDraft.ts": "c8ada616a74ee2d2169d2719d7eff9e66309ec36d497783a2702bb79296c8db3",
+    "plugins/reverse/state/reTypes.ts": "f47a8ff66c7bf62c28016e0366b302c301e01201f29c3e93bc76f900827e925b",
+    "plugins/reverse/tests/networkNormalMotion.test.mjs": "75d75ef70849e1633ddcab2fe2530ee082fd4999035c83d95f41cebff5a9ae1c",
+    "plugins/reverse/tests/reNetworkNormal.test.ts": "ee40d86eb683f80b8b422f41544475090e57fcecaf484b79130bd7eb902b0313",
+    "plugins/reverse/tests/reNetworkPointMotion.test.ts": "444f9cb613be7519aafc222265767ee5a996ce30bd0be63e0aea0f557ef452fc",
+    "plugins/reverse/ui/FeatureEditor.tsx": "a609c55537d62ba14d2c60a5445b8a1183330fe90700c9ab52e2edf48e245217",
+    "plugins/reverse/ui/NetworkEditor.tsx": "00550fa08df39ece125274e87f23753e175df87a9c7be2cab52e5a992fced068",
+    "plugins/reverse/ui/NetworkPointFields.tsx": "1b2426136562377e8dab2c292ceafa8f31df0dd260418bf6b60148e050b94951",
+    "plugins/reverse/ui/reverse.css": "65f4c7fdbe89433783c78d25313afcf6d160cb92907800811c03d0bb55d3bb49",
+    "plugins/reverse/viewer/networkLayer.ts": "3c0d63ad2f4d5e9969fbc8e67e63060009be2882c0c982f7a521e528c71146fb"
+  },
+  "textPublication": "JSON evidence normalized to LF; originals retained and original/published hashes distinguished."
+}

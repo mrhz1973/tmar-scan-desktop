@@ -1,5 +1,14 @@
 # Development
 
+> **TMAR fork status, November 2, 2026:** body STL UI and scan-side Deviation notes
+> are implemented in `main` as build-time plugins; no desktop shell is required.
+> Start with the [current web instructions](../README.md#how-to-try-it-today),
+> [plugin catalog](../plugins/README.md) and [validation record](tmar-web-validation.md).
+> The release/deployment recipes below are inherited from upstream; they do not
+> mean this fork has a hosted deployment, an automatic updater or desktop installers.
+> Use an isolated branch/worktree for changes. Zebra work follows the
+> [coordination handoff](tmar-zebra-handoff.md).
+
 ```bash
 npm install
 npm --prefix mcp ci # the agent server's dependencies: its tests and the agent browser checks
@@ -194,3 +203,20 @@ R2 token; `node scripts/e2e-open-link.mjs` tries both forms against a dev
 server (its header says how). The GitHub Actions workflow
 (`.github/workflows/ci.yml`) still runs tests and a build on every push and
 pull request, so a red suite is visible before Cloudflare ships it.
+
+## TMAR usability regression
+
+`node plugins/tmar-quick-notes/scripts/e2e-usability.mjs` starts an ephemeral
+local server and isolated browser unless APP_URL is provided. It uses generated
+geometry, not a user's scan, and tests multi-selection, note focus/shortcut,
+draft preservation, label preferences and actual STEP/STL downloads. It is also
+listed in the plugin CI manifest. See [the validation record](tmar-usability-validation.md).
+
+## TMAR category-selection qualification
+
+Run `node plugins/tmar-model-tree/scripts/e2e-categories.mjs` to generate and test
+the synthetic multi-category project. After a production build, run
+`node plugins/tmar-model-tree/scripts/e2e-categories-production.mjs`; this consumes
+the generated fixture and uses public compiled controls, no development globals.
+Use isolated profiles and ephemeral servers, never a user's existing tab.
+[Results, commands and limits](tmar-feature-categories-validation.md).

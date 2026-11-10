@@ -11,6 +11,7 @@
 // is the same kind of instrument: set it, run it, read it.
 
 import { type ReactNode } from 'react'
+import { PluginPanelExtensions } from '../../../src/plugins/panelExtensions'
 import {
   scanEditFigure,
   scanEditText,
@@ -236,6 +237,8 @@ export function MeshPanel({
         {!scanName && <p className="hint">Drop it anywhere in the window.</p>}
       </div>
 
+      <PluginPanelExtensions slot="mesh.analysis" />
+
       <div className="group">
         <div className="sec-head">
           Tools
@@ -304,6 +307,8 @@ export function MeshPanel({
       )}
 
       <EditedCopy busy={busy} onUse={onUseEdited} onDiscard={onDiscardEdited} onExport={onExportEdited} />
+
+      <PluginPanelExtensions slot="mesh.notes" />
 
       {edits.length > 0 && (
         <div className="group" data-test="scan-edits">
