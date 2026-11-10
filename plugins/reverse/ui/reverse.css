@@ -1414,7 +1414,7 @@
 .note-focus-ring::before, .note-focus-ring::after { content: ''; position: absolute; background: #ffe35c; box-shadow: 0 0 0 1px #111; }
 .note-focus-ring::before { width: 18px; height: 3px; left: 15px; top: 22px; }
 .note-focus-ring::after { width: 3px; height: 18px; left: 22px; top: 15px; }
-.note-label.focused { border: 2px solid #e8b400; background: #fff7cf; color: #191919; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px #181818; margin-left: 38px; }
+.re-note-label.focused { border: 2px solid #e8b400; background: #fff7cf; color: #191919; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px #181818; margin-left: 38px; }
 
 /* Explicit 3D controls must fit the resizable narrow model column. */
 [data-test='network-point-motion'],
