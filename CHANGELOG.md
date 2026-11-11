@@ -22,6 +22,14 @@ saves carry the same number as `appVersion`. How a release is cut is in
   projects and numerical calculations independently of the display language.
 - Keep the official ScanRuler base at 0.11.1 and the existing CAD kernel version.
 
+### Recovery checkpoint download — 2026-11-11
+
+- Offer an explicit Download checkpoint / Scarica checkpoint action for local
+  browser recovery copies, saving a standard `.scanruler` project without
+  restoring it or deleting the stored checkpoint.
+- Keep the existing recovery and CAD/project formats intact. Show success and
+  failure messages in both Italian and English.
+
 ### TMAR Versione 4 — ScanRuler 0.11.1 integration — 2026-11-10
 
 - Use the complete official ScanRuler 0.11.1 source as the base, including all

@@ -23,6 +23,9 @@ export function RecoveryBar({ recovery }: { recovery: RecoveryStatus }) {
         {item.name} — {new Date(item.savedAt).toLocaleString(language === 'it' ? 'it-IT' : 'en-US')}
       </option>)}
     </select>
+    <button data-test="download-checkpoint" disabled={busy || recovery.working}
+      title={tmarText("Download a recovery copy without restoring or deleting it.")}
+      onClick={() => void recovery.download(id)}>{tmarText("Download checkpoint")}</button>
     <button data-test="restore-checkpoint" disabled={busy || recovery.working} onClick={() => void recovery.restore(id)}>{tmarText("Restore")}</button>
     <button data-test="discard-checkpoint" disabled={busy || recovery.working} onClick={() => void recovery.discard(id)}>{tmarText("Discard checkpoint")}</button>
   </aside>
