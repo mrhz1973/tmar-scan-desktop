@@ -1,0 +1,123 @@
+{
+  "schema": "TMAR_NATIVE_V3_SUCCESSOR7_PREFLIGHT_V1",
+  "dateUtc": "2026-11-11T08:40:06.288Z",
+  "scope": "input+runtime+Windows protection preflight, no CAD run",
+  "candidateId": "tubo-6b-t2-successor7-storage-candidate-1",
+  "candidateRoot": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111",
+  "detachedFiles": [
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_20261111\\face-321.source.brep",
+      "status": "PIN_VERIFIED",
+      "sha256": "10c20fdbd4752cb4642ffd9ec8a4d6f7860dd8d4ef9c93d979bcc7e6cda5ce0a",
+      "bytes": 355804
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_20261111\\face-322.source.brep",
+      "status": "PIN_VERIFIED",
+      "sha256": "9ee0420ec25064f89bdaa049f9f1e6899c6c0a185d4797f53831bd0212ccfa64",
+      "bytes": 363839
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_20261111\\face-323.source.brep",
+      "status": "PIN_VERIFIED",
+      "sha256": "be5d618395055efb262e53c200e435754a5675b870a9d19e8d422f2156ef2148",
+      "bytes": 387591
+    }
+  ],
+  "supportAndSeamFiles": [
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\supports\\face-321.net.json",
+      "status": "MISSING"
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\supports\\face-322.net.json",
+      "status": "MISSING"
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\supports\\face-323.net.json",
+      "status": "MISSING"
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\supports\\protected-face-324-reference.net.json",
+      "status": "MISSING"
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\seams\\face-321-quintic-v-curve.json",
+      "status": "MISSING"
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\seams\\face-323-quintic-v-curve.json",
+      "status": "MISSING"
+    }
+  ],
+  "savedCandidateAndContract": [
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\stored-candidate-successor7.local\\candidate.local\\candidate.coefficients.local.json",
+      "status": "MISSING"
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\stored-candidate-successor7.local\\candidate.local\\qualification.receipt.local.json",
+      "status": "MISSING"
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\continuous-successor7.local\\t2-frozen-target.local.json",
+      "status": "MISSING"
+    },
+    {
+      "path": "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\native-contract.local.json",
+      "status": "MISSING"
+    }
+  ],
+  "runtime": [
+    {
+      "path": "C:\\Users\\mrhz\\.codex\\worktrees\\edit-surface-tubo-periodic\\tmar-scan-desktop-zebra\\node_modules\\occt-wasm\\dist\\occt-wasm.js",
+      "status": "PIN_VERIFIED",
+      "sha256": "1f9068dcef229e4c1e39126710012c92211d46e577520adc6e40716f862b6ceb",
+      "bytes": 114081
+    },
+    {
+      "path": "C:\\Users\\mrhz\\.codex\\worktrees\\edit-surface-tubo-periodic\\tmar-scan-desktop-zebra\\node_modules\\occt-wasm\\dist\\occt-wasm.wasm",
+      "status": "PIN_VERIFIED",
+      "sha256": "bb664d8f07c11b0d2ea1fc5a0bfd858e8cc927088c7c37ad24a86e50c004dca2",
+      "bytes": 21111587
+    }
+  ],
+  "sourceCapture": {
+    "path": "C:\\Users\\mrhz\\.codex\\worktrees\\edit-surface-tubo-periodic\\tmar-scan-desktop-zebra\\plugins\\tmar-edit-surface\\evidence\\modified-candidate-1887859.local\\source-capture.local.json",
+    "status": "PIN_VERIFIED",
+    "sha256": "02a34618425c96fe82e7355a9b31467a09399849b7cb3339d6b1fda89e7d1539",
+    "bytes": 663837
+  },
+  "originalProtection": {
+    "head": "f0b051806750fb503519c13f2f24e9e2b2e97221",
+    "branch": "codex/edit-surface-tubo-periodic",
+    "wip": 66,
+    "staged": 0,
+    "protectedExpected": 194,
+    "protectedVerified": 194,
+    "protectedFailed": 0
+  },
+  "code": {
+    "branch": "codex/edit-surface-native-v3-20261111",
+    "sha": "f0b051806750fb503519c13f2f24e9e2b2e97221"
+  },
+  "missing": [
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\supports\\face-321.net.json",
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\supports\\face-322.net.json",
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\supports\\face-323.net.json",
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\supports\\protected-face-324-reference.net.json",
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\seams\\face-321-quintic-v-curve.json",
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\seams\\face-323-quintic-v-curve.json",
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\stored-candidate-successor7.local\\candidate.local\\candidate.coefficients.local.json",
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\stored-candidate-successor7.local\\candidate.local\\qualification.receipt.local.json",
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\continuous-successor7.local\\t2-frozen-target.local.json",
+    "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111\\native-successor7-contract.local\\native-contract.local.json"
+  ],
+  "mismatch": [],
+  "markerCreated": false,
+  "kernelInitializations": 0,
+  "solverCalls": 0,
+  "CADLiveActions": 0,
+  "STEPExports": 0,
+  "status": "WAIT_INPUT_OR_PROTECTION"
+}

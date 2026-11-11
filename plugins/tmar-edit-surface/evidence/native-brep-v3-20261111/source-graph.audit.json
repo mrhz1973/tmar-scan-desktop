@@ -1,0 +1,105 @@
+{
+  "schema": "TMAR_BREP_V3_FROZEN_STEP_GRAPH_BINDING_AUDIT_V1",
+  "sourceCaptureSha256": "02a34618425c96fe82e7355a9b31467a09399849b7cb3339d6b1fda89e7d1539",
+  "scope": "static original source graph, no native candidate assembly",
+  "checks": [
+    {
+      "name": "joint74-322-forward",
+      "actual": [
+        true
+      ],
+      "pass": true
+    },
+    {
+      "name": "joint74-323-reverse",
+      "actual": [
+        false
+      ],
+      "pass": true
+    },
+    {
+      "name": "joint75-321-forward",
+      "actual": [
+        true
+      ],
+      "pass": true
+    },
+    {
+      "name": "joint75-322-reverse",
+      "actual": [
+        false
+      ],
+      "pass": true
+    },
+    {
+      "name": "single-seam-dual-use-321",
+      "actual": [
+        true,
+        false
+      ],
+      "pass": true
+    },
+    {
+      "name": "single-seam-dual-use-322",
+      "actual": [
+        true,
+        false
+      ],
+      "pass": true
+    },
+    {
+      "name": "single-seam-dual-use-323",
+      "actual": [
+        true,
+        false
+      ],
+      "pass": true
+    },
+    {
+      "name": "curve3d-link-207440",
+      "edge": 207440,
+      "curve": 207442,
+      "pass": true
+    },
+    {
+      "name": "curve3d-link-207742",
+      "edge": 207742,
+      "curve": 207744,
+      "pass": true
+    },
+    {
+      "name": "curve3d-link-208034",
+      "edge": 208034,
+      "curve": 208036,
+      "pass": true
+    },
+    {
+      "name": "pcurve-raw-step-id-207455",
+      "pass": true
+    },
+    {
+      "name": "pcurve-raw-step-id-207462",
+      "pass": true
+    },
+    {
+      "name": "pcurve-raw-step-id-208039",
+      "pass": true
+    },
+    {
+      "name": "pcurve-raw-step-id-208046",
+      "pass": true
+    },
+    {
+      "name": "rim323-324-not-in-target-bundle",
+      "pass": true
+    }
+  ],
+  "checkedCount": 15,
+  "errors": [],
+  "kernelStarts": 0,
+  "solverCalls": 0,
+  "liveCadActions": 0,
+  "status": "STATIC_STEP_GRAPH_BINDINGS_PASS",
+  "caveat": "Does not certify newly materialized candidate pcurve binding, assembly identity, exact G1 or full Tube",
+  "timestamp": "2026-11-11T08:35:50.937Z"
+}

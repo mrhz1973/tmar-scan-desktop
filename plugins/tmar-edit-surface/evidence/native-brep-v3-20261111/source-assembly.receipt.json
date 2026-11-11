@@ -1,0 +1,74 @@
+{
+  "schema": "TMAR_SOURCE_ASSEMBLY_PREFLIGHT_RECEIPT_V1",
+  "status": "SOURCE_TOPOLOGY_PREFLIGHT_PASS",
+  "startedAtUtc": "2026-11-11T08:32:54.743Z",
+  "sourceHashes": {
+    "321": "10c20fdbd4752cb4642ffd9ec8a4d6f7860dd8d4ef9c93d979bcc7e6cda5ce0a",
+    "322": "9ee0420ec25064f89bdaa049f9f1e6899c6c0a185d4797f53831bd0212ccfa64",
+    "323": "be5d618395055efb262e53c200e435754a5675b870a9d19e8d422f2156ef2148"
+  },
+  "scope": "original detached 321/322/323, no candidate, no CAD live",
+  "checks": [
+    {
+      "name": "frozen-detached-faces-native-valid",
+      "values": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "source-face-orientations",
+      "values": [
+        "forward",
+        "forward",
+        "forward"
+      ]
+    },
+    {
+      "name": "proposed-assembly-counts",
+      "expected": {
+        "faces": 3,
+        "edges": 7,
+        "vertices": 4,
+        "shells": 1,
+        "solids": 0
+      },
+      "actual": {
+        "valid": true,
+        "faces": 3,
+        "edges": 7,
+        "vertices": 4,
+        "shells": 1,
+        "solids": 0,
+        "pair74": 0,
+        "pair75": 0
+      }
+    }
+  ],
+  "actions": {
+    "kernelInits": 1,
+    "fromBREP": 3,
+    "sew": 1,
+    "STEPExport": 0,
+    "heal": 0,
+    "fitting": 0,
+    "liveCad": 0
+  },
+  "summary": {
+    "valid": true,
+    "faces": 3,
+    "edges": 7,
+    "vertices": 4,
+    "shells": 1,
+    "solids": 0,
+    "pair74": 0,
+    "pair75": 0
+  },
+  "sourceHashesAfter": {
+    "321": "10c20fdbd4752cb4642ffd9ec8a4d6f7860dd8d4ef9c93d979bcc7e6cda5ce0a",
+    "322": "9ee0420ec25064f89bdaa049f9f1e6899c6c0a185d4797f53831bd0212ccfa64",
+    "323": "be5d618395055efb262e53c200e435754a5675b870a9d19e8d422f2156ef2148"
+  },
+  "completedAtUtc": "2026-11-11T08:32:54.892Z"
+}
