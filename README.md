@@ -5,9 +5,10 @@
 
 ## ScanRuler 0.11.1 + TMAR integration — 10 November 2026
 
-**Versione 4 · Anteprima** combines the complete official **ScanRuler 0.11.1**
-base, including its mesh-worker CSP and fitting-project recovery fixes, with
-our extensions. The integration carries forward the workspace editor host, current Edit
+**TMAR Versione 5 · Anteprima** builds on the complete official **ScanRuler 0.11.1**
+base and the Versione 4 integration, adding the Italian interface by default
+with live English selection. The integrated base includes the mesh-worker CSP
+and fitting-project recovery fixes. The integration carries forward the workspace editor host, current Edit
 Surface plugin, navigation and gizmo changes, CAD face duplication, thin-face
 annotation matching and saved parametric edits. Supported edits expose
 **Mantieni la modifica riapribile** when applying and **Riprendi modifica** after
@@ -216,9 +217,9 @@ The planned shell uses Electron: it remains a web engine embedded in an applicat
 
 ## Status and roadmap
 
-The source baseline verified for this plan declares **ScanRuler 0.9.4** in [package.json](package.json), at upstream commit [`5c1f2f9`](https://github.com/CNCKitchen/ScanRuler/commit/5c1f2f96b7ac336d5c2bad64148ae19790b0443c). This identifies the inherited baseline, not a TMAR desktop release.
+The current web fork is based on official **ScanRuler 0.11.1** with **TMAR Versione 5 — Anteprima** and **occt-wasm 5.15.0**, as recorded in [the integration report](docs/tmar-upstream-0.11.1-integration-20261110.md) and [the Italian localization report](docs/ITALIAN-LOCALIZATION.md). ScanRuler 0.9.4 belongs to the historical Versione 3 baseline, not the current release. This source status does not qualify the separate desktop installer or experimental Tubo geometry.
 
-**Status key:** **Implemented in web source** means code is merged and the documented checks exist; it does not mean a desktop installer or hosted deployment exists. **Partial** identifies delivered subfeatures with remaining work. **Planned/assigned** is not an availability claim. PR #1 introduced the first web extensions; PR #3 integrated Zebra at `0b26d51`. This usability increment builds on that baseline. The inherited package version is not a TMAR release identifier; consult the tested commit and validation record.
+**Status key:** **Implemented in web source** means code is merged and the documented checks exist; it does not mean a desktop installer exists. Stable and Dev web preview deployment is separately identified by [live version metadata](https://scanruler.31-70-139-73.sslip.io/tmar-live-versions.json). **Partial** identifies delivered subfeatures with remaining work. **Planned/assigned** is not an availability claim. PR #1 introduced the first web extensions; PR #3 integrated Zebra at `0b26d51`. This usability increment builds on that baseline. The inherited package version is not a TMAR release identifier; consult the tested commit and validation record.
 
 | Area | Status | Intended outcome |
 | --- | --- | --- |
@@ -240,7 +241,8 @@ The source baseline verified for this plan declares **ScanRuler 0.9.4** in [pack
 | CAD body export UI | Implemented in web source | One Export body dialog chooses STEP or STL and visible/selected CAD bodies; adjustable STL chord, no source scan. |
 | Collapsible Features and Notes panels | Implemented, initial web scope | Independent header controls, browser-remembered state, preserved selection and note draft. Column width is draggable and configurable in Settings; broader layout presets remain future work. |
 | Per-workspace labeling and annotation visibility plugin | Implemented lower-bar controls | Labels and Notes visibility per 3D workspace; no annotation deletion. Advanced Settings categories remain planned. |
-| Italian application and documentation localization | Planned for a later stage | An English-first project with translatable UI strings, a selectable Italian interface and maintained Italian documentation. |
+| Italian application interface | Implemented in web source; Versione 5 published to Stable/Dev on 10 November 2026 | Italian default and selectable English in Settings without project reload; command IDs, project fields and user text stay unchanged. |
+| Italian documentation | Partial | [Localization notes](docs/ITALIAN-LOCALIZATION.md) and selected technical pages exist; comprehensive Italian user documentation is not yet qualified. |
 | Customizations and contributions | Partial | Six TMAR plugins with English documentation and reusable host hooks. Dynamic package management and automated upstream updates remain planned. |
 
 There are two tracks: **web plugins can be implemented and used now**, independently of the desktop shell; the desktop track remains **shell -> persistence and recovery -> pause/resume -> verified updates -> measured optimization**. Follow-up work includes reference/split-view notes, captured comparison metadata, richer Settings categories, generalized construction-list actions and broader platform/real-part qualification. Tasks can proceed in isolated branches; reliability takes priority over speed. This README does not set delivery dates.

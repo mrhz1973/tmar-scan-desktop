@@ -7,6 +7,11 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR recovery storage reliability — 2026-11-11
+
+- Retry local project recovery after an IndexedDB open fails or is blocked by another page instead of retaining a rejected connection promise.
+- Close any late connection from the blocked request, without disturbing a newer retry. The checkpoint format and the CAD/project data remain unchanged.
+
 ### TMAR Versione 5 — interfaccia italiana — 2026-11-10
 
 - Make Italian the default interface language, with a remembered Italian/English

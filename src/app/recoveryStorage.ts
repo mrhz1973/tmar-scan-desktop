@@ -37,19 +37,34 @@ export class RecoveryStorage {
   constructor(readonly id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')) {}
 
   private open(): Promise<IDBDatabase> {
-    return this.db ??= new Promise((resolve, reject) => {
+    if (this.db) return this.db
+    let blocked = false
+    const pending = new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('scanruler-recovery', 1)
       request.onupgradeneeded = () => {
         for (const name of ['checkpoints', 'sources', 'info']) request.result.createObjectStore(name)
       }
       request.onsuccess = () => {
         const db = request.result
-        db.onversionchange = () => { db.close(); this.db = null }
+        // A blocked request may succeed after we rejected it. Do not leak
+        // an untracked connection or let it replace a newer retry.
+        if (blocked) { db.close(); return }
+        db.onversionchange = () => {
+          db.close()
+          if (this.db === pending) this.db = null
+        }
         resolve(db)
       }
-      request.onerror = () => { this.db = null; reject(request.error) }
-      request.onblocked = () => reject(new Error('Local recovery database is blocked by another page.'))
+      request.onerror = () => reject(request.error ?? new Error('Local recovery database could not be opened.'))
+      request.onblocked = () => {
+        blocked = true
+        reject(new Error('Local recovery database is blocked by another page.'))
+      }
     })
+    this.db = pending
+    // Retrying must be possible once another page releases a blocked open.
+    void pending.catch(() => { if (this.db === pending) this.db = null })
+    return pending
   }
 
   private async transaction<T>(mode: IDBTransactionMode, run: (tx: IDBTransaction, result: (value: T) => void) => void): Promise<T> {
