@@ -133,8 +133,23 @@ try {
   const { re, screen } = reverseHelpers(page)
   const notes = () => re(() => window.__reNotes.getState().notes.map((n) => ({ id: n.id, text: n.text, on: n.on.map((t) => t.kind), done: !!n.done, reply: n.reply ?? null })))
   check(Boolean(await page.$('[data-test=note-list]')), 'the panel has Notes for the agent while the connection is on')
+  // The agent's feature command can return before the panel finishes releasing
+  // its draft. Clicking a disabled Note button would silently do nothing and
+  // make every later note assertion fail for an unrelated timing reason.
+  const noteButtonReady = await page.waitForFunction(() => {
+    const button = document.querySelector('[data-test=note-add]')
+    return button instanceof HTMLButtonElement && !button.disabled
+  }, { timeout: 10_000 }).then(() => true, () => false)
+  if (!noteButtonReady) {
+    const reason = await page.$eval('[data-test=note-add]', (button) => ({
+      disabled: button.disabled, title: button.title,
+    })).catch(() => null)
+    fail(`the Note key never became enabled after the completed CAD feature: ${JSON.stringify(reason)}`)
+    throw new Error('Note key unavailable after feature completion')
+  }
   await page.click('[data-test=note-add]')
-  await sleep(150)
+  await page.waitForFunction(() => document.querySelector('[data-test=note-add]')?.getAttribute('aria-pressed') === 'true',
+    { timeout: 5_000 }).catch(() => {})
   check((await page.$eval('[data-test=note-add]', (b) => b.getAttribute('aria-pressed'))) === 'true', 'the Note key is in hand')
   const [tx, ty] = await screen([12, 8, 10])
   await page.mouse.move(tx, ty)
