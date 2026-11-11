@@ -1,0 +1,38 @@
+{
+  "schema": "TMAR_SUCCESSOR7_STATIC_V3_PREMATERIALIZATION_V1",
+  "status": "PASS_STATIC_NO_NATIVE_KERNEL",
+  "candidateSha256": "65aad438fef18cbf67a10d9c356b353d58f31011f5bad025041c094ec45c0bc4",
+  "coefficientReceiptSha256": "aca25e62b0f222c91406ba51b10b45634158a712c4dcb99d48d459e7afb5a847",
+  "source322Sha256": "9ee0420ec25064f89bdaa049f9f1e6899c6c0a185d4797f53831bd0212ccfa64",
+  "protected324ReferenceSha256": "bd07285b2c59bdd70d94ad98be1d38356baa41fe1eabe79c5ae5e291835bf9d3",
+  "checks": [
+    {
+      "face": 321,
+      "sourceSha256": "10c20fdbd4752cb4642ffd9ec8a4d6f7860dd8d4ef9c93d979bcc7e6cda5ce0a",
+      "candidateNetSha256": "ae008b6e187bb262be0d48e78c49e18504998cb123e9e2766c198c909ee57b75",
+      "materializedBREPSha256": "8caa76dec7ae7f1f9676b1cbb21b58618e4887b7a408a499d146ac1ef46e45ca",
+      "materializedBREPBytes": 332380,
+      "seamPoles": 12,
+      "protectedVRowsIdentical": true,
+      "pcurveRecordsUnmodified": true,
+      "topologyRecordsUnmodified": true
+    },
+    {
+      "face": 323,
+      "sourceSha256": "be5d618395055efb262e53c200e435754a5675b870a9d19e8d422f2156ef2148",
+      "candidateNetSha256": "aff35bb02ec4fcca3029b4a5e18dd99c51e7645be0ddf652d2d43a10bcc22e4e",
+      "materializedBREPSha256": "44994c094de5037a9d18f01799cb4d7b045e756b510131b121c033dfb0de9f75",
+      "materializedBREPBytes": 379602,
+      "seamPoles": 12,
+      "protectedVRowsIdentical": true,
+      "pcurveRecordsUnmodified": true,
+      "topologyRecordsUnmodified": true
+    }
+  ],
+  "qualification": "not-native",
+  "kernelInitializations": 0,
+  "markerCreated": false,
+  "previousSolveOrMaterializationReplayed": false,
+  "liveCADActions": 0,
+  "createdAtUtc": "2026-11-11T12:20:18.166Z"
+}

@@ -1,0 +1,76 @@
+{
+    "schema":  "TMAR_NATIVE_V3_SUCCESSOR7_TRANSFER_V1",
+    "status":  "TRANSFER_VERIFIED",
+    "sourceSha256":  "ee31639c7e47c19bb78a151455734cb6f9aae616fa7e64036f5a06fcad9ca2e8",
+    "sourceBytes":  709301,
+    "manifestSchema":  "TMAR_NATIVE_V3_SUCCESSOR7_INPUT_SET_V1",
+    "manifestPayloadCount":  10,
+    "destination":  "D:\\TMAR_EDIT_SURFACE_NATIVE_V3_INPUTS_20261111",
+    "verifiedFiles":  [
+                          {
+                              "path":  "native-successor7-contract.local/supports/face-321.net.json",
+                              "bytes":  155365,
+                              "sha256":  "ae008b6e187bb262be0d48e78c49e18504998cb123e9e2766c198c909ee57b75",
+                              "existing":  false
+                          },
+                          {
+                              "path":  "native-successor7-contract.local/supports/face-322.net.json",
+                              "bytes":  11814,
+                              "sha256":  "b60b126dac307bb90c96c8bd4e2618250bdb2e7bb6cc4441179f55f8079af054",
+                              "existing":  false
+                          },
+                          {
+                              "path":  "native-successor7-contract.local/supports/face-323.net.json",
+                              "bytes":  178533,
+                              "sha256":  "aff35bb02ec4fcca3029b4a5e18dd99c51e7645be0ddf652d2d43a10bcc22e4e",
+                              "existing":  false
+                          },
+                          {
+                              "path":  "native-successor7-contract.local/supports/protected-face-324-reference.net.json",
+                              "bytes":  177711,
+                              "sha256":  "bd07285b2c59bdd70d94ad98be1d38356baa41fe1eabe79c5ae5e291835bf9d3",
+                              "existing":  false
+                          },
+                          {
+                              "path":  "native-successor7-contract.local/seams/face-321-quintic-v-curve.json",
+                              "bytes":  707,
+                              "sha256":  "b87273febbfacdc5b377dbaefc24088e777176ab2331d722359a6f5795175a87",
+                              "existing":  false
+                          },
+                          {
+                              "path":  "native-successor7-contract.local/seams/face-323-quintic-v-curve.json",
+                              "bytes":  782,
+                              "sha256":  "ffdd04576cd54c58c2142403dcaed470c34cdbe1da1fe1ac81ef3595b0f028f7",
+                              "existing":  false
+                          },
+                          {
+                              "path":  "stored-candidate-successor7.local/candidate.local/candidate.coefficients.local.json",
+                              "bytes":  367807,
+                              "sha256":  "65aad438fef18cbf67a10d9c356b353d58f31011f5bad025041c094ec45c0bc4",
+                              "existing":  false
+                          },
+                          {
+                              "path":  "stored-candidate-successor7.local/candidate.local/qualification.receipt.local.json",
+                              "bytes":  757978,
+                              "sha256":  "aca25e62b0f222c91406ba51b10b45634158a712c4dcb99d48d459e7afb5a847",
+                              "existing":  false
+                          },
+                          {
+                              "path":  "continuous-successor7.local/t2-frozen-target.local.json",
+                              "bytes":  54017,
+                              "sha256":  "9c1212e391c43fd5a124ba6edd88a1a5d5b50ea523c233758fe4843d33598ae7",
+                              "existing":  false
+                          },
+                          {
+                              "path":  "native-successor7-contract.local/native-contract.local.json",
+                              "bytes":  37401,
+                              "sha256":  "149def38ba1bc766efdc14cb36ca463e5fc74e3deaa48b14de5ae184c020962b",
+                              "existing":  false
+                          }
+                      ],
+    "promotedCount":  10,
+    "untouchedExistingCount":  0,
+    "originalLiveCADModified":  false,
+    "originalWorktreeModified":  false,
+    "timestampUtc":  "2026-11-11T12:15:11.1808240Z"
+}

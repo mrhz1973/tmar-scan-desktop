@@ -1,0 +1,13 @@
+{
+  "schema": "TMAR_SUCCESSOR7_NATIVE_V3_ONE_RUN_MARKER_V1",
+  "scopeId": "tubo-6b-successor7-native-v3-single-attempt-20261111-v2",
+  "planSha256": "f0e5f292bb402dd3a1152aabfc358ded2ef2a335f77e1d73a93e6cee473a80df",
+  "sourceBrepSha256": {
+    "321": "10c20fdbd4752cb4642ffd9ec8a4d6f7860dd8d4ef9c93d979bcc7e6cda5ce0a",
+    "322": "9ee0420ec25064f89bdaa049f9f1e6899c6c0a185d4797f53831bd0212ccfa64",
+    "323": "be5d618395055efb262e53c200e435754a5675b870a9d19e8d422f2156ef2148"
+  },
+  "candidateSha256": "65aad438fef18cbf67a10d9c356b353d58f31011f5bad025041c094ec45c0bc4",
+  "consumedAtUtc": "2026-11-11T12:38:14.589Z",
+  "noAutomaticRetry": true
+}

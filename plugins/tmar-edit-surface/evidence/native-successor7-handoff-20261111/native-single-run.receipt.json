@@ -1,0 +1,584 @@
+{
+  "schema": "TMAR_SUCCESSOR7_NATIVE_V3_ONCE_RECEIPT_V1",
+  "scope": "new-bounded-actual-successor7-detached-plus-assembly-native-sampled",
+  "candidateId": "tubo-6b-t2-successor7-storage-candidate-1",
+  "verdict": "LOCAL_DETACHED_AND_SAMPLED_ASSEMBLY_PASS_NOT_FULL_TUBE",
+  "startedAtUtc": "2026-11-11T12:38:14.192Z",
+  "coefficientEvidence": "64/64 saved and qualified operationally; NOT replayed",
+  "exactG1Certified": false,
+  "globalTubeAccepted": false,
+  "fullNativeGateCertified": false,
+  "originalSourceNotImported": true,
+  "oldMarkersUnmodified": true,
+  "actions": {
+    "kernelInitializations": 1,
+    "fromBREP": 3,
+    "sew": 1,
+    "toBREP": 6,
+    "getSubShapes": 8,
+    "sharedEdgeQueries": 2,
+    "STEPExport": 0,
+    "STEPImport": 0,
+    "heal": 0,
+    "fit": 0,
+    "liveCAD": 0,
+    "automaticRetry": 0
+  },
+  "stage": "done",
+  "checks": [
+    {
+      "label": "new-bounded-isolated-plan",
+      "pass": true
+    },
+    {
+      "label": "frozen-kernel-and-no-healing-budget",
+      "pass": true
+    },
+    {
+      "label": "isolated-native-commit",
+      "pass": true
+    },
+    {
+      "label": "isolated-native-branch",
+      "pass": true
+    },
+    {
+      "label": "unchanged-original-head",
+      "pass": true
+    },
+    {
+      "label": "original-wip-count-66",
+      "pass": true
+    },
+    {
+      "label": "original-stage-empty",
+      "pass": true
+    },
+    {
+      "label": "all-194-protected-sha256-match",
+      "pass": true
+    },
+    {
+      "label": "read-only-preflight-ready",
+      "pass": true
+    },
+    {
+      "label": "same-candidate-static-rewrite-ready",
+      "pass": true
+    },
+    {
+      "label": "coefficient-gate-not-native-pass",
+      "pass": true
+    },
+    {
+      "label": "pure-V3-candidate-rewrite-321",
+      "pass": true,
+      "detail": "rewritten"
+    },
+    {
+      "label": "materialized-hash-matches-static-321",
+      "pass": true
+    },
+    {
+      "label": "raw-both-own-pcurves-unchanged-321",
+      "pass": true
+    },
+    {
+      "label": "raw-own-dual-pcurve-seam-321",
+      "pass": true
+    },
+    {
+      "label": "pure-V3-candidate-rewrite-323",
+      "pass": true,
+      "detail": "rewritten"
+    },
+    {
+      "label": "materialized-hash-matches-static-323",
+      "pass": true
+    },
+    {
+      "label": "raw-both-own-pcurves-unchanged-323",
+      "pass": true
+    },
+    {
+      "label": "raw-own-dual-pcurve-seam-323",
+      "pass": true
+    },
+    {
+      "label": "protected322-raw-identical",
+      "pass": true
+    },
+    {
+      "label": "protected324-reference-hash",
+      "pass": true
+    },
+    {
+      "label": "sample-addresses-frozen",
+      "pass": true
+    },
+    {
+      "label": "no-output-overwrite-D:\\TMAR_EDIT_SURFACE_NATIVE_V3_QA_20261111\\successor7-face-321.detached-once.brep",
+      "pass": true
+    },
+    {
+      "label": "no-output-overwrite-D:\\TMAR_EDIT_SURFACE_NATIVE_V3_QA_20261111\\successor7-face-323.detached-once.brep",
+      "pass": true
+    },
+    {
+      "label": "detached-native-support-pcurve-orientation-321",
+      "pass": true,
+      "detail": {
+        "valid": true,
+        "orientation": "forward",
+        "edges": 3,
+        "supportIdentical": true,
+        "pcurvesIdentical": true,
+        "nativeBrepSha256": "9c61921d7064b263990181034bad06c129b2e4579a9147326c465de8c1233ab2"
+      }
+    },
+    {
+      "label": "detached-native-support-pcurve-orientation-322",
+      "pass": true,
+      "detail": {
+        "valid": true,
+        "orientation": "forward",
+        "edges": 3,
+        "supportIdentical": true,
+        "pcurvesIdentical": true,
+        "nativeBrepSha256": "9ee0420ec25064f89bdaa049f9f1e6899c6c0a185d4797f53831bd0212ccfa64"
+      }
+    },
+    {
+      "label": "detached-native-support-pcurve-orientation-323",
+      "pass": true,
+      "detail": {
+        "valid": true,
+        "orientation": "forward",
+        "edges": 3,
+        "supportIdentical": true,
+        "pcurvesIdentical": true,
+        "nativeBrepSha256": "c80f242c29ff03335adb15e350da7ecca3fda0f6451ebff81312e2f288c5e905"
+      }
+    },
+    {
+      "label": "one-own-quintic-3D-seam-321",
+      "pass": true,
+      "detail": 1
+    },
+    {
+      "label": "native-quintic-seam-pole-identity-321",
+      "pass": true
+    },
+    {
+      "label": "own-seam-range-0-1-321",
+      "pass": true,
+      "detail": {
+        "first": 0,
+        "last": 1
+      }
+    },
+    {
+      "label": "own-quintic-two-UV-branches-321",
+      "pass": true,
+      "detail": {
+        "samples": 10,
+        "branches": 2,
+        "maxCurveSupportGapMm": 2.847716647714797e-14,
+        "pcurveRecordsIdentical": true,
+        "edgeRange": {
+          "first": 0,
+          "last": 1
+        }
+      }
+    },
+    {
+      "label": "one-own-quintic-3D-seam-323",
+      "pass": true,
+      "detail": 1
+    },
+    {
+      "label": "native-quintic-seam-pole-identity-323",
+      "pass": true
+    },
+    {
+      "label": "own-seam-range-0-1-323",
+      "pass": true,
+      "detail": {
+        "first": 0,
+        "last": 1
+      }
+    },
+    {
+      "label": "own-quintic-two-UV-branches-323",
+      "pass": true,
+      "detail": {
+        "samples": 10,
+        "branches": 2,
+        "maxCurveSupportGapMm": 2.95110562224397e-14,
+        "pcurveRecordsIdentical": true,
+        "edgeRange": {
+          "first": 0,
+          "last": 1
+        }
+      }
+    },
+    {
+      "label": "candidate-sewn-3face-7edge-4vertex-1shell",
+      "pass": true,
+      "detail": {
+        "valid": true,
+        "faces": 3,
+        "edges": 7,
+        "vertices": 4,
+        "shells": 1,
+        "solids": 0
+      }
+    },
+    {
+      "label": "unambiguous-assembled-support-binding",
+      "pass": true,
+      "detail": [
+        321
+      ]
+    },
+    {
+      "label": "assembled-face-uniqueness-321",
+      "pass": true
+    },
+    {
+      "label": "assembled-pcurve-and-orientation-321",
+      "pass": true
+    },
+    {
+      "label": "unambiguous-assembled-support-binding",
+      "pass": true,
+      "detail": [
+        322
+      ]
+    },
+    {
+      "label": "assembled-face-uniqueness-322",
+      "pass": true
+    },
+    {
+      "label": "assembled-pcurve-and-orientation-322",
+      "pass": true
+    },
+    {
+      "label": "unambiguous-assembled-support-binding",
+      "pass": true,
+      "detail": [
+        323
+      ]
+    },
+    {
+      "label": "assembled-face-uniqueness-323",
+      "pass": true
+    },
+    {
+      "label": "assembled-pcurve-and-orientation-323",
+      "pass": true
+    },
+    {
+      "label": "assembled-three-face-mapping-complete",
+      "pass": true
+    },
+    {
+      "label": "post-assembly-one-shared-edge-74",
+      "pass": true,
+      "detail": 1
+    },
+    {
+      "label": "postsew-native-joint-range-74",
+      "pass": true,
+      "detail": {
+        "first": 0,
+        "last": 242.48253589446
+      }
+    },
+    {
+      "label": "native-joint-point-and-edge-74",
+      "pass": true,
+      "detail": {
+        "joint": 74,
+        "lateral": 323,
+        "support": 322,
+        "sharedEdges": 1,
+        "curveRange": {
+          "first": 0,
+          "last": 242.48253589446
+        },
+        "positionSamples": 850,
+        "directionSamples": 566,
+        "maxPositionGapMm": 1.426731109887446e-11,
+        "maxJointEdgeGapMm": 1.3205000413569156e-11,
+        "maxNormalChord": 0.00009997007604435642,
+        "minNormalDot": 0.9999999950029916,
+        "maxUnitTangentChord": 4.194544389944222e-9,
+        "maxEdgeTangentChord": 1.095434265217756e-8
+      }
+    },
+    {
+      "label": "native-joint-normal-direction-74",
+      "pass": true,
+      "detail": {
+        "joint": 74,
+        "lateral": 323,
+        "support": 322,
+        "sharedEdges": 1,
+        "curveRange": {
+          "first": 0,
+          "last": 242.48253589446
+        },
+        "positionSamples": 850,
+        "directionSamples": 566,
+        "maxPositionGapMm": 1.426731109887446e-11,
+        "maxJointEdgeGapMm": 1.3205000413569156e-11,
+        "maxNormalChord": 0.00009997007604435642,
+        "minNormalDot": 0.9999999950029916,
+        "maxUnitTangentChord": 4.194544389944222e-9,
+        "maxEdgeTangentChord": 1.095434265217756e-8
+      }
+    },
+    {
+      "label": "post-assembly-one-shared-edge-75",
+      "pass": true,
+      "detail": 1
+    },
+    {
+      "label": "postsew-native-joint-range-75",
+      "pass": true,
+      "detail": {
+        "first": 0,
+        "last": 237.3422596445
+      }
+    },
+    {
+      "label": "native-joint-point-and-edge-75",
+      "pass": true,
+      "detail": {
+        "joint": 75,
+        "lateral": 321,
+        "support": 322,
+        "sharedEdges": 1,
+        "curveRange": {
+          "first": 0,
+          "last": 237.3422596445
+        },
+        "positionSamples": 850,
+        "directionSamples": 566,
+        "maxPositionGapMm": 1.8949312873699076e-11,
+        "maxJointEdgeGapMm": 1.598793155502818e-11,
+        "maxNormalChord": 0.00008476575204231985,
+        "minNormalDot": 0.9999999964073836,
+        "maxUnitTangentChord": 5.097525962118372e-11,
+        "maxEdgeTangentChord": 9.113153780444411e-9
+      }
+    },
+    {
+      "label": "native-joint-normal-direction-75",
+      "pass": true,
+      "detail": {
+        "joint": 75,
+        "lateral": 321,
+        "support": 322,
+        "sharedEdges": 1,
+        "curveRange": {
+          "first": 0,
+          "last": 237.3422596445
+        },
+        "positionSamples": 850,
+        "directionSamples": 566,
+        "maxPositionGapMm": 1.8949312873699076e-11,
+        "maxJointEdgeGapMm": 1.598793155502818e-11,
+        "maxNormalChord": 0.00008476575204231985,
+        "minNormalDot": 0.9999999964073836,
+        "maxUnitTangentChord": 5.097525962118372e-11,
+        "maxEdgeTangentChord": 9.113153780444411e-9
+      }
+    },
+    {
+      "label": "finite-native-midpoint-normals-321",
+      "pass": true,
+      "detail": {
+        "addresses": 708,
+        "finiteNonzero": 708,
+        "bad": 0,
+        "minLength": 0.9999999999999998,
+        "maxLength": 1.0000000000000002
+      }
+    },
+    {
+      "label": "finite-native-midpoint-normals-322",
+      "pass": true,
+      "detail": {
+        "addresses": 95,
+        "finiteNonzero": 95,
+        "bad": 0,
+        "minLength": 0.9999999999999998,
+        "maxLength": 1.0000000000000002
+      }
+    },
+    {
+      "label": "finite-native-midpoint-normals-323",
+      "pass": true,
+      "detail": {
+        "addresses": 708,
+        "finiteNonzero": 708,
+        "bad": 0,
+        "minLength": 0.9999999999999997,
+        "maxLength": 1.0000000000000002
+      }
+    },
+    {
+      "label": "protected-322-unchanged-post-native",
+      "pass": true
+    },
+    {
+      "label": "protected-324-reference-unchanged-post-native",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "nativeCalls": 14639,
+  "detached": {
+    "321": {
+      "valid": true,
+      "orientation": "forward",
+      "edges": 3,
+      "supportIdentical": true,
+      "pcurvesIdentical": true,
+      "nativeBrepSha256": "9c61921d7064b263990181034bad06c129b2e4579a9147326c465de8c1233ab2"
+    },
+    "322": {
+      "valid": true,
+      "orientation": "forward",
+      "edges": 3,
+      "supportIdentical": true,
+      "pcurvesIdentical": true,
+      "nativeBrepSha256": "9ee0420ec25064f89bdaa049f9f1e6899c6c0a185d4797f53831bd0212ccfa64"
+    },
+    "323": {
+      "valid": true,
+      "orientation": "forward",
+      "edges": 3,
+      "supportIdentical": true,
+      "pcurvesIdentical": true,
+      "nativeBrepSha256": "c80f242c29ff03335adb15e350da7ecca3fda0f6451ebff81312e2f288c5e905"
+    }
+  },
+  "ownSeams": {
+    "321": {
+      "samples": 10,
+      "branches": 2,
+      "maxCurveSupportGapMm": 2.847716647714797e-14,
+      "pcurveRecordsIdentical": true,
+      "edgeRange": {
+        "first": 0,
+        "last": 1
+      }
+    },
+    "323": {
+      "samples": 10,
+      "branches": 2,
+      "maxCurveSupportGapMm": 2.95110562224397e-14,
+      "pcurveRecordsIdentical": true,
+      "edgeRange": {
+        "first": 0,
+        "last": 1
+      }
+    }
+  },
+  "assembledTopology": {
+    "valid": true,
+    "faces": 3,
+    "edges": 7,
+    "vertices": 4,
+    "shells": 1,
+    "solids": 0
+  },
+  "assembledFaces": [
+    {
+      "face": 321,
+      "orientation": "forward",
+      "pcurveIdentical": true,
+      "nativeBrepSha256": "c357306558a58422b1be1c47aeb954d774f3e8c63322ed6e9f2010f6e14af5bb"
+    },
+    {
+      "face": 322,
+      "orientation": "forward",
+      "pcurveIdentical": true,
+      "nativeBrepSha256": "2eadc5500e770a5be80fbb0f473f672060b88e36856d02ee2e246912c7501673"
+    },
+    {
+      "face": 323,
+      "orientation": "forward",
+      "pcurveIdentical": true,
+      "nativeBrepSha256": "4b2b9fbf8b61b03d7e1df6cf690d3a8a6e85ab32f75334c4607a5a89197f9069"
+    }
+  ],
+  "joints": {
+    "74": {
+      "joint": 74,
+      "lateral": 323,
+      "support": 322,
+      "sharedEdges": 1,
+      "curveRange": {
+        "first": 0,
+        "last": 242.48253589446
+      },
+      "positionSamples": 850,
+      "directionSamples": 566,
+      "maxPositionGapMm": 1.426731109887446e-11,
+      "maxJointEdgeGapMm": 1.3205000413569156e-11,
+      "maxNormalChord": 0.00009997007604435642,
+      "minNormalDot": 0.9999999950029916,
+      "maxUnitTangentChord": 4.194544389944222e-9,
+      "maxEdgeTangentChord": 1.095434265217756e-8
+    },
+    "75": {
+      "joint": 75,
+      "lateral": 321,
+      "support": 322,
+      "sharedEdges": 1,
+      "curveRange": {
+        "first": 0,
+        "last": 237.3422596445
+      },
+      "positionSamples": 850,
+      "directionSamples": 566,
+      "maxPositionGapMm": 1.8949312873699076e-11,
+      "maxJointEdgeGapMm": 1.598793155502818e-11,
+      "maxNormalChord": 0.00008476575204231985,
+      "minNormalDot": 0.9999999964073836,
+      "maxUnitTangentChord": 5.097525962118372e-11,
+      "maxEdgeTangentChord": 9.113153780444411e-9
+    }
+  },
+  "interiorNormals": {
+    "321": {
+      "addresses": 708,
+      "finiteNonzero": 708,
+      "bad": 0,
+      "minLength": 0.9999999999999998,
+      "maxLength": 1.0000000000000002
+    },
+    "322": {
+      "addresses": 95,
+      "finiteNonzero": 95,
+      "bad": 0,
+      "minLength": 0.9999999999999998,
+      "maxLength": 1.0000000000000002
+    },
+    "323": {
+      "addresses": 708,
+      "finiteNonzero": 708,
+      "bad": 0,
+      "minLength": 0.9999999999999997,
+      "maxLength": 1.0000000000000002
+    }
+  },
+  "cleanupErrors": [],
+  "elapsedMs": 758,
+  "completedAtUtc": "2026-11-11T12:38:14.950Z"
+}
