@@ -17,6 +17,8 @@ import { projectSections } from './projectSections'
 import { watchUnsaved } from './project'
 import { useShell } from '../state/shellStore'
 import { ProjectClient } from '../core/project/projectClient'
+import { saveFile } from './exports'
+import { exportRecoveryCheckpoint } from './recoveryDownload'
 import { RecoveryStorage, staleCheckpoints, type CheckpointInfo } from './recoveryStorage'
 import { ProjectSnapshotCache, type ProjectSnapshot } from './projectSnapshot'
 
@@ -27,6 +29,7 @@ export interface RecoveryStatus {
   available: CheckpointInfo[]
   working: boolean
   restore: (id: string) => Promise<void>
+  download: (id: string) => Promise<void>
   discard: (id: string) => Promise<void>
 }
 
@@ -196,6 +199,21 @@ export function useRecovery(capture: () => Snapshot, blocked: () => boolean, ope
       update({ status: `Recovery failed: ${error instanceof Error ? error.message : String(error)}` })
     } finally { worker?.dispose(); update({ working: false }) }
   }
+  const download = async (id: string) => {
+    const db = storage.current
+    const info = state.available.find((item) => item.id === id)
+    if (!db || !info || state.working || callbacks.current.blocked()) return
+    update({ working: true })
+    const worker = new ProjectClient()
+    try {
+      await exportRecoveryCheckpoint(info, (key) => db.read(key),
+        (manifest, members) => worker.pack(manifest, members), saveFile)
+      // Download is non-destructive: the checkpoint remains available.
+      update({ status: 'Checkpoint downloaded. The local recovery copy is unchanged.' })
+    } catch (error) {
+      update({ status: `Could not download checkpoint: ${error instanceof Error ? error.message : String(error)}` })
+    } finally { worker.dispose(); update({ working: false }) }
+  }
   const discard = async (id: string) => {
     if (!storage.current) return
     update({ working: true })
@@ -205,5 +223,5 @@ export function useRecovery(capture: () => Snapshot, blocked: () => boolean, ope
     } catch (error) { update({ status: `Could not discard checkpoint: ${String(error)}` }) }
     finally { update({ working: false }) }
   }
-  return { ...state, restore, discard, markSaved, restored }
+  return { ...state, restore, download, discard, markSaved, restored }
 }
