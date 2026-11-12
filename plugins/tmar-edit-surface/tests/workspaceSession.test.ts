@@ -318,6 +318,7 @@ describe('whole natural boundary movement',()=>{
     const t = await setup({sheet:true})
     await selectFace(t)
     const s = t.session
+    s.setDragMode('local')
     s.setFreeBoundary(true)
     await ready(t, 2)
     const net = s.getPanelState().net!, history = s.getSnapshot().historyRevision
@@ -349,6 +350,7 @@ describe('whole natural boundary movement',()=>{
     const t = await setup({sheet:true})
     await selectFace(t)
     const s = t.session
+    s.setDragMode('local')
     s.setFreeBoundary(true)
     await ready(t, 2)
     s.setWholeFaceDrag(true)
@@ -974,6 +976,8 @@ describe('WorkspaceSurfaceSession',()=>{
     const t=await setup(), net=plane()
     net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
     await selectFace(t,net)
+    expect(t.session.getPanelState().dragMode).toBe('axis')
+    t.session.setDragMode('local')
     expect(t.session.getPanelState().dragMode).toBe('local')
     expect(t.session.getPanelState().axis).toBe(2)
     t.session.selectPoints([12],false);t.session.moveSelected(.25)
@@ -987,6 +991,7 @@ describe('WorkspaceSurfaceSession',()=>{
     const t=await setup(), net=plane()
     net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
     await selectFace(t,net)
+    t.session.setDragMode('local')
     t.session.setContinuity('G0');t.session.setAxis(0);t.session.selectPoints([6],false)
     t.session.stretchSelected(1.2)
     expect(t.session.getPanelState().net!.poles[6][0]).toBeCloseTo(0)
@@ -1003,6 +1008,7 @@ describe('WorkspaceSurfaceSession',()=>{
     const t=await setup(), net=plane()
     net.poles=net.poles.map(([u,v]):Point=>[u,v,.1*u*u])
     await selectFace(t,net)
+    t.session.setDragMode('local')
     t.session.setContinuity('G0');t.session.selectPoints([7],false);t.session.lockSelected(true)
     t.session.selectPoints([6],false);t.session.setAxis(0)
     t.session.stretchSelected(1.2)
@@ -1184,6 +1190,7 @@ describe('WorkspaceSurfaceSession',()=>{
         signal:abort.signal,assertSourceCurrent:()=>{},own:(fn:()=>void)=>fn,reportFatal:vi.fn()}
       session=await createWorkspaceSurfaceSession(context as never,vi.fn() as never,{runtime,sha256:async bytes=>sha(bytes)})
       await session.chooseFace(index)
+      session.setDragMode('local')
       await vi.advanceTimersByTimeAsync(90);await flush()
       expect(session.getSnapshot().validation.kind).toBe('valid')
       session.selectAllFree(); session.moveSelected(.1)

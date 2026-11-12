@@ -147,6 +147,9 @@ try{
   check(!changed(before.rotation,after.rotation)&&framed&&await unchanged(),'Inquadra reticolo fits the net while preserving camera direction and poles')
   await page.screenshot({path:join(out,'navigation-gizmo-frame.png')})
 
+  // Duplicate face is part of the V5 Modify tool group: reveal it before clicking.
+  await page.click('[data-test=workspace-surface-tool-modify]')
+  await page.waitForSelector('[data-test=surface-duplicate-cad-face]:enabled',{visible:true})
   await page.click('[data-test=surface-duplicate-cad-face]')
   if(await page.$eval('[data-test=workspace-editor-hide-source]',e=>e.checked))await page.click('[data-test=workspace-editor-hide-source]')
   await page.waitForSelector('[data-test=workspace-editor-apply]:enabled',{timeout:120000})
