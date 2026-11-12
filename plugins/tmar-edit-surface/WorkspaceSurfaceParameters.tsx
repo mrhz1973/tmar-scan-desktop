@@ -10,13 +10,16 @@ import { formatSurfaceDisplacementUpper } from './surfaceDisplay'
 import { useSurfaceLengthInput } from './useSurfaceLengthInput'
 import { wholeBoundaryIndices } from './wholeBoundary'
 import { parseNumericInput } from './numericInput'
+import { evaluatePoleLockState, poleLockDescription, suggestedPoleUnlock, type PoleLockReason } from './poleEditability'
+import { SURFACE_TOOLS, surfaceToolInfo, type SurfaceTool } from './surfaceTools'
 import './workspaceSurface.css'
-import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
+import { pluginText as tmarText, useLanguage as useTmarLanguage, setLanguage } from '../../src/i18n'
 
 
 /** The host owns Apply and Cancel; this panel edits only the session draft. */
 export function WorkspaceSurfaceParameters({ controller }: { controller: WorkspaceSurfaceSession }) {
-  useTmarLanguage()
+  const language = useTmarLanguage()
+  const [selectedTool, setSelectedTool] = useState<SurfaceTool>('select')
 
   const len = useLength()
   const state = useSyncExternalStore(controller.subscribe, controller.getPanelState, controller.getPanelState)
@@ -56,12 +59,27 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
   const disabled = state.busy || state.gesture !== 'idle'
   const hiddenPoles = controller.getViewState().hiddenPoles
   const editable = state.selected.filter(i => !state.locked.includes(i) && !hiddenPoles.includes(i))
+  // Describe selected protected controls without loosening the CAD guard.
+  const polePolicy = state.net ? evaluatePoleLockState(state.net, {
+    continuity: state.continuity, freeBoundary: state.freeBoundary,
+    trimLocks: state.faces[state.face]?.trimLocks ?? [],
+    manualLocks: state.manualLocks, hiddenPoles,
+  }) : null
+  const selectedLocked = state.selected.filter(i => state.locked.includes(i))
+    .map(i => ({ index: i, reason: (polePolicy?.reasons[i] === 'editable' ? 'manual' : polePolicy?.reasons[i] ?? 'manual') as PoleLockReason }))
+  const g0MayHelp = !state.freeBoundary && !state.planeTangencyActive && !state.curvedTangencyActive &&
+    selectedLocked.some(x => suggestedPoleUnlock(x.reason, true, state.canFreeBoundary)==='g0')
   const activeWholeBoundary=state.wholeBoundaryDrag ?? wholeBoundary
   const boundaryPoles = state.canFreeBoundary && state.net ? wholeBoundaryIndices(state.net,activeWholeBoundary) : []
   const boundaryManuallyLocked = boundaryPoles.length > 0 && boundaryPoles.every(id => state.manualLocks.includes(id))
   const hasFreeVisiblePoint = !!state.net?.poles.some((_, index) => !state.locked.includes(index) && !hiddenPoles.includes(index))
   const axisNames = state.dragMode === 'local' ? ['U', 'V', 'N'] : ['X', 'Y', 'Z']
   const strip = state.strip
+  // Keep active drafts and gestures visible in their owning tool group.
+  const lockedTool: SurfaceTool | null = strip ? 'edges' :
+    state.surfaceTarget === 'scan' || state.surfaceTarget === 'cad' ? 'move' :
+    state.surfaceTarget ? 'modify' : state.placingNote ? 'analysis' : null
+  const activeTool: SurfaceTool = lockedTool ?? selectedTool
   const cylinder = !!state.faces[state.face]?.experimentalCylinder
   const g1Candidates = state.g1Candidates ?? []
   const tangencyActive = state.planeTangencyActive || state.curvedTangencyActive
@@ -115,9 +133,30 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       setError('')
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
   }
-  return <div ref={panelRef} className="workspace-surface-panel" data-test="workspace-surface-parameters">
-    <p>{tmarText("Seleziona una faccia nella vista oppure nell’elenco. La modifica resta una bozza CAD fino ad Applica.")}</p>
-    <p>{tmarText("Esporta STEP crea un file locale della geometria CAD convalidata; il file STEP non contiene le note.")}</p>
+  return <div ref={panelRef} className="workspace-surface-panel" data-test="workspace-surface-parameters" data-active-tool={activeTool}>
+    <div className="ws-tool-header">
+      <strong>{language === 'it' ? 'Strumenti superficie' : 'Surface tools'}</strong>
+      <label>{language === 'it' ? 'Lingua' : 'Language'}
+        <select data-test="workspace-surface-language" aria-label={language === 'it' ? 'Lingua interfaccia' : 'Interface language'} value={language} onChange={event => setLanguage(event.target.value as 'it' | 'en')}>
+          <option value="it">Italiano</option><option value="en">English</option>
+        </select>
+      </label>
+    </div>
+    <nav className="ws-tool-grid" data-test="workspace-surface-tool-grid" aria-label={language === 'it' ? 'Strumenti Edit Surface' : 'Edit Surface tools'}>
+      {SURFACE_TOOLS.map(tool => {
+        const info = surfaceToolInfo(tool, language)
+        return <button key={tool} type="button" data-test={'workspace-surface-tool-'+tool}
+          className={'ws-tool-tab ws-tool-'+info.className} aria-pressed={activeTool===tool}
+          disabled={(lockedTool !== null || state.gesture !== 'idle') && tool!==activeTool}
+          title={info.summary} onClick={() => setSelectedTool(tool)}>
+          <span className="ws-tool-icon" aria-hidden="true">{info.icon}</span><span className="ws-tool-name">{info.title}</span>
+        </button>
+      })}
+    </nav>
+    <details className="ws-tool-help"><summary>{language === 'it' ? 'Guida rapida' : 'Quick help'}</summary>
+      <p>{tmarText("Seleziona una faccia nella vista oppure nell’elenco. La modifica resta una bozza CAD fino ad Applica.")}</p>
+      <p>{tmarText("Esporta STEP crea un file locale della geometria CAD convalidata; il file STEP non contiene le note.")}</p>
+    </details>
     <label>{tmarText("Faccia CAD")}<select data-test="surface-face" value={state.face < 0 ? '' : String(state.face)} disabled={disabled || state.calculating || !!strip}
         onChange={e => { if (e.target.value !== '') chooseFace(Number(e.target.value)) }}>
         <option value="">{tmarText("Scegli una faccia…")}</option>
@@ -127,19 +166,28 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       </select>
     </label>
     {state.net && <>
+      <section className="ws-tool-group" data-tool-group="analysis">
       {cylinder && <div><p>{tmarText("Cilindro sperimentale: i controlli CAD sono campionati; verifica il risultato prima dell’uso e prima di aggiungere note.")}</p>
         <button type="button" data-test="surface-validate-cylinder" disabled={disabled || state.calculating}
           onClick={() => attempt(() => controller.validateCylinder())}>{tmarText("Verifica CAD del cilindro")}</button></div>}
+      </section>
+      <section className="ws-tool-group" data-tool-group="history">
       <button type="button" data-test="surface-export-step" disabled={disabled || !state.canExportStep}
         title={state.notes.length || state.placingNote ? tmarText("Le note non vengono incluse nello STEP: rimuovile prima di esportare.") : tmarText("Scarica la geometria CAD convalidata come STEP.")}
         onClick={() => { void exportStep() }}>{tmarText("Esporta STEP")}</button>
+      </section>
+      <section className="ws-tool-group" data-tool-group="modify">
       {(state.duplicateCadFace || state.faces[state.face]?.canDuplicateCadFace) && <div>
         <label className="inline"><input data-test="surface-duplicate-cad-face" type="checkbox" checked={state.duplicateCadFace}
           disabled={disabled || (!state.duplicateCadFace && !state.canDuplicateCadFace)} onChange={e => attempt(() => controller.setDuplicateCadFace(e.target.checked))} />{tmarText("Duplica faccia CAD")}</label>
         {state.duplicateCadFace && <p role="status">{state.duplicateCadFaceStale ? tmarText("Preview cambiata. Togli la spunta e scegli di nuovo cosa applicare.") : tmarText("Con Applica, la faccia della preview diventa una superficie CAD separata. Il solido resta nel progetto. Per mantenerlo visibile, togli la spunta a «Nascondi l’originale dopo Applica».")}</p>}
       </div>}
+      </section>
+      <section className="ws-tool-group" data-tool-group="select">
       <label className="inline"><input data-test="surface-navigation-only" type="checkbox" checked={state.navigationOnly} disabled={disabled}
         onChange={e => attempt(() => controller.setNavigationOnly(e.target.checked))} />{tmarText("Naviga nella vista (sospendi modifica del reticolo)")}</label>
+      </section>
+      <section className="ws-tool-group" data-tool-group="edges">
       {strip ? <fieldset data-test="surface-strip-panel"><legend>{tmarText("Duplica bordo libero")}</legend>
         <p>{tmarText("Scegli un bordo e trascina D lungo l’asse scelto, oppure indica lo spostamento nell’unità indicata.")}</p>
         <label>{tmarText("Bordo libero")}<select data-test="surface-strip-edge" value={strip.selectedEdge < 0 ? '' : String(strip.selectedEdge)}
@@ -170,7 +218,9 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       </fieldset> : <button type="button" data-test="surface-strip-begin" disabled={disabled || !state.canBeginStrip}
         title={!state.canBeginStrip ? tmarText("Serve una superficie aperta con anteprima valida e senza note o vincoli G1 attivi.") : tmarText("Duplica un bordo libero della superficie aperta.")}
         onClick={() => attempt(() => controller.beginStrip())}>{tmarText("Duplica bordo libero")}</button>}
+      </section>
       {!strip && <>
+      <section className="ws-tool-group" data-tool-group="move">
       <fieldset data-test="surface-point-target"><legend>{tmarText("Porta un punto della superficie sul riferimento")}</legend>
         <p>{tmarText("Seleziona i poli liberi, scegli il riferimento e clicca un punto della faccia. Cerco il riferimento esterno più vicino lungo la normale CAD, nei due versi, entro ")}{len.fmt(state.snapDistance)}{tmarText(". Il punto della superficie si muove; i poli possono muoversi di più.")}</p>
         <label>{tmarText("Limite spostamento di ciascun polo · ")}{len.word()}<input data-test="surface-point-budget" type="text" inputMode="decimal" value={pointBudgetText}
@@ -195,6 +245,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           <button type="button" data-test="surface-point-cancel" onClick={()=>controller.cancelSurfaceTarget()}>{tmarText("Annulla scelta punto")}</button></>}
         <p>{tmarText("Il riferimento usa i triangoli visualizzati. L’esito richiede la verifica CAD; le protezioni dei bordi restano attive. Disattiva simmetria e tangenze aggiunte per usare questo comando.")}</p>
       </fieldset>
+      </section>
+      <section className="ws-tool-group" data-tool-group="edges">
       {state.canBeginStrip && <label>{tmarText("Direzione CAD per il bordo D")}<select data-test="surface-direct-strip-axis" value={state.directStripAxis} disabled={disabled}
           onChange={e => attempt(() => controller.setDirectStripAxis(Number(e.target.value) as 0 | 1 | 2))}>
           <option value={0}>{tmarText("X")}</option><option value={1}>{tmarText("Y")}</option><option value={2}>{tmarText("Z")}</option>
@@ -277,6 +329,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           onChange={e => attempt(() => controller.setWholeFaceDrag(e.target.checked))} />{tmarText("Trascina la faccia nella vista")}</label>
         <p>{tmarText("Attiva i bordi liberi su una singola faccia naturale e sblocca tutti i poli. Afferra la superficie per traslarla senza magnete. In modalità Locale, gli assi U, V e N si calcolano nel punto CAD cliccato. Con un piano di sezione attivo, usa Schermo o Assi XYZ. Il trascinamento richiede la verifica CAD e si annulla in un solo passaggio.")}</p>
       </fieldset>}
+      </section>
+      <section className="ws-tool-group" data-tool-group="select">
       <label>{tmarText("Selezione del reticolo")}<select data-test="surface-selection-mode" value={state.selectionMode} disabled={disabled}
           onChange={e => attempt(() => controller.setSelectionMode(e.target.value as NetSelectionMode))}>
           <option value="auto">{tmarText("Punti, segmenti e celle")}</option><option value="points">{tmarText("Solo punti")}</option>
@@ -285,6 +339,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         </select>
       </label>
       {state.selectionMode === 'auto' && <p>{tmarText("Per spostare una cella, selezionala con un clic e poi trascinala. Un trascinamento su una cella non selezionata resta disponibile per la navigazione.")}</p>}
+      </section>
+      <section className="ws-tool-group" data-tool-group="modify">
       <fieldset data-test="surface-refine-net"><legend>{tmarText("Raffina reticolo")}</legend>
         <p>{tmarText("Aggiungi punti di controllo nella direzione scelta per modificare il reticolo più finemente.")}</p>
         <div className="row">{(['U', 'V', 'both'] as const).map(axis => {
@@ -297,6 +353,8 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           </button>
         })}</div>
       </fieldset>
+      </section>
+      <section className="ws-tool-group" data-tool-group="move">
       <label>{tmarText("Trascinamento")}<select data-test="surface-drag-mode" value={state.dragMode} disabled={disabled}
           onChange={e => attempt(() => controller.setDragMode(e.target.value as DragMode))}>
           <option value="axis">{tmarText("Asse globale")}</option><option value="screen">{tmarText("Piano dello schermo")}</option>
@@ -327,8 +385,12 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           }} /></label>
           <p>{tmarText("Alt sospende il magnete durante il trascinamento. L’aggancio usa la geometria visualizzata.")}</p></>}
       </fieldset>
+      </section>
+      <section className="ws-tool-group" data-tool-group="select">
       <label className="inline"><input data-test="surface-control-net" type="checkbox" checked={state.showNet} disabled={disabled}
         onChange={e => attempt(() => controller.setShowNet(e.target.checked))} />{tmarText(" Mostra reticolo")}</label>
+      </section>
+      <section className="ws-tool-group" data-tool-group="modify">
       <fieldset><legend>{tmarText("Simmetria dei poli")}</legend>
         <label className="inline"><input data-test="surface-symmetry" type="checkbox" checked={state.symmetry} disabled={disabled}
           onChange={e => attempt(() => controller.setSymmetry(e.target.checked))} />{tmarText(" Modifica anche il polo speculare")}</label>
@@ -350,7 +412,9 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
             onClick={() => attempt(() => controller.projectSelectedToMirrorPlane())}>{tmarText("Porta i poli selezionati sul piano")}</button>
         </>}
       </fieldset>
+      </section>
       </>}
+      <section className="ws-tool-group" data-tool-group="analysis">
       {hasSurfaceZebra && <fieldset><legend>{tmarText("Analisi Zebra")}</legend>
         <label className="inline"><input data-test="surface-zebra" type="checkbox" checked={!!state.stripes} disabled={disabled}
           onChange={e => attempt(() => controller.setStripes(e.target.checked ? { orientation: 'horizontal', width: 3, color: '#5388b1' } : null))} />{tmarText(" Mostra strisce sulla preview")}</label>
@@ -368,8 +432,19 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <label>{tmarText("Trasparenza superficie · ")}{Math.round(state.transparency * 100)}%<input data-test="surface-transparency"
         type="range" min="0" max="0.9" step="0.05" value={state.transparency} disabled={disabled}
         onChange={e => attempt(() => controller.setTransparency(Number(e.target.value)))} /></label>
+      </section>
       {!strip && <>
+      <section className="ws-tool-group" data-tool-group="select">
       <p data-test="surface-selection">{state.selected.length}{tmarText(" selezionati · ")}{editable.length}{tmarText(" modificabili")}</p>
+      {selectedLocked.length > 0 && <div className="ws-lock-reasons" data-test="surface-locked-selection-reason" role="status">
+        <p>{language === 'it' ? 'Punti selezionati ma protetti:' : 'Selected but protected control points:'}</p>
+        {selectedLocked.slice(0,6).map(({index,reason}) => <p key={index}>
+          {language === 'it' ? 'Polo ' : 'Pole '}{index+1}: {poleLockDescription(reason, language)}
+        </p>)}
+        {selectedLocked.length>6 && <p>{language === 'it' ? 'Altri poli protetti: ' : 'Other protected poles: '}{selectedLocked.length-6}</p>}
+        {g0MayHelp && <p>{language === 'it' ? 'In Bordi/Vincoli puoi valutare G0: libera la prima fila interna, ma non il contorno condiviso.' :
+          'Under Edges/Constraints, G0 may free the first interior ring; shared boundaries remain locked.'}</p>}
+      </div>}
       <div className="row"><button type="button" data-test="surface-next-free" disabled={disabled || !hasFreeVisiblePoint}
         title={tmarText("Seleziona il prossimo punto visibile e non bloccato, utile nei reticoli fitti.")}
         onClick={() => attempt(() => {
@@ -384,11 +459,15 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         <button type="button" disabled={disabled} onClick={() => attempt(() => controller.clearSelection())}>{tmarText("Nessuno")}</button></div>
       <div className="row"><button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(true))}>{tmarText("Blocca punti")}</button>
         <button type="button" disabled={disabled || !state.selected.length} onClick={() => attempt(() => controller.lockSelected(false))}>{tmarText("Sblocca punti")}</button></div>
+      </section>
+      <section className="ws-tool-group" data-tool-group="move">
       <label>{tmarText("Spostamento · ")}{len.word()}<input data-test="surface-distance" type="text" inputMode="decimal" value={distanceText}
         onChange={e => setDistanceText(e.target.value)}
         onBlur={() => { if(distanceText.trim()==='-')setDistanceText('') }} disabled={disabled} /></label>
       <button type="button" data-test="surface-move" disabled={disabled || state.symmetryBlocked || !editable.length || distanceValue===null}
         onClick={() => { if(distanceValue!==null)attempt(() => controller.moveSelected(distanceValue)) }}>{tmarText("Sposta lungo ")}{axisNames[state.axis]}</button>
+      </section>
+      <section className="ws-tool-group" data-tool-group="modify">
       <button type="button" disabled={disabled || state.symmetryBlocked || !editable.length} onClick={() => attempt(() => controller.flattenSelected())}>{tmarText("Spiana i poli sul piano originale")}</button>
       <button type="button" data-test="surface-point-tangent-plane" disabled={disabled || !!state.surfaceTarget || !state.canTargetPoint}
         onClick={() => attempt(() => controller.beginTangentPlane())}>{tmarText("Spiana i poli sul piano tangente nel punto")}</button>
@@ -415,9 +494,13 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
       <p>{tmarText("Lo stiramento usa il centro del reticolo. In modalità locale segue la direzione del primo punto selezionato.")}</p>
       <button type="button" data-test="surface-stretch" disabled={disabled || state.symmetryBlocked || !editable.length || factorValue===null || !(factorValue>0&&factorValue<=3)}
         onClick={() => { if(factorValue!==null&&factorValue>0&&factorValue<=3)attempt(() => controller.stretchSelected(factorValue)) }}>{tmarText("Stira lungo ")}{axisNames[state.axis]}</button>
+      </section>
+      <section className="ws-tool-group" data-tool-group="history">
       <div className="row"><button type="button" data-test="surface-undo" disabled={disabled || !state.canUndo} onClick={() => attempt(() => controller.undo())}>{tmarText("Annulla modifica")}</button>
         <button type="button" data-test="surface-redo" disabled={disabled || !state.canRedo} onClick={() => attempt(() => controller.redo())}>{tmarText("Ripeti")}</button>
         <button type="button" disabled={disabled || tangencyActive} onClick={() => attempt(() => controller.restoreOriginal())}>{tmarText("Ripristina")}</button></div>
+      </section>
+      <section className="ws-tool-group" data-tool-group="analysis">
       <fieldset><legend>{tmarText("Note sulla superficie")}</legend>
         <button type="button" data-test="surface-note-add" disabled={disabled || state.calculating || (!state.placingNote && !state.canPlaceNote)} aria-pressed={state.placingNote}
           onClick={() => attempt(() => controller.setPlacingNote(!state.placingNote))}>{state.placingNote ? tmarText("Annulla scelta punto") : tmarText("Aggiungi nota")}</button>
@@ -430,6 +513,7 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
         {!!state.notes.length && <p>{state.annotatedCopyAvailable ? tmarText("Con Applica le note complete vengono salvate nel progetto insieme alla copia CAD. Per esportare solo lo STEP, rimuovi prima le note dalla bozza.") : tmarText("Le note restano nella bozza e non vengono incluse nello STEP né salvate nel progetto. Rimuovile prima di esportare o applicare.")}</p>}
         {state.annotatedCopyAvailable && state.notes.some(note => !note.text.trim()) && <p>{tmarText("Scrivi il testo di tutte le note prima di applicare.")}</p>}
       </fieldset>
+      </section>
       </>}
     </>}
     {error && <p role="alert">{tmarText(error)}</p>}

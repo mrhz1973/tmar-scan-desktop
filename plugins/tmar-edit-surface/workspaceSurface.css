@@ -15,3 +15,33 @@
 .workspace-surface-panel .row button { flex: 1; min-width: 0; }
 .workspace-surface-panel button[aria-pressed=true] { outline: 2px solid var(--accent, #439ce0); }
 .workspace-surface-panel p { margin: 0; font-size: 12px; line-height: 1.4; }
+
+
+/* V5 workspace Edit Surface palette: compact 3x2 tools, one category shown. */
+.ws-tool-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.ws-tool-header strong { font-size: 14px; }
+.workspace-surface-panel .ws-tool-header label { display: grid; gap: 2px; margin: 0; font-size: 11px; flex: 0 0 108px; }
+.ws-tool-header select { width: 100%; }
+.ws-tool-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; min-width: 0; }
+.workspace-surface-panel .ws-tool-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 68px; padding: 5px 3px; border: 1px solid var(--line-strong,#576e7a); border-radius: 7px; background: var(--well,#293740); color: var(--ink,#e8edf3); cursor: pointer; }
+.workspace-surface-panel .ws-tool-tab:disabled { opacity: .45; cursor: not-allowed; }
+.workspace-surface-panel .ws-tool-tab[aria-pressed=true] { outline: 2px solid var(--accent,#439ce0); outline-offset: -2px; background: var(--panel,#374957); }
+.workspace-surface-panel .ws-tool-tab:focus-visible { outline: 3px solid var(--accent,#439ce0); outline-offset: 2px; }
+.ws-tool-icon { display: flex; align-items: center; justify-content: center; height: 32px; width: 33px; border-radius: 7px; font-size: 24px; font-weight: 600; font-family: "Segoe UI Symbol","Segoe UI",sans-serif; }
+.ws-tool-select .ws-tool-icon { background: #d9ab56; color: #1d2932; }
+.ws-tool-move .ws-tool-icon { background: #297da9; color: #f4fbff; }
+.ws-tool-modify .ws-tool-icon { background: #77549e; color: #fff; }
+.ws-tool-edges .ws-tool-icon { background: #2d805d; color: #fff; }
+.ws-tool-analysis .ws-tool-icon { background: #996c36; color: #fff; }
+.ws-tool-history .ws-tool-icon { background: #667482; color: #fff; }
+.ws-tool-name { font-size: 10.5px; line-height: 1.2; text-align: center; font-weight: 650; overflow-wrap: anywhere; }
+.ws-tool-help summary { font-size: 12px; cursor: pointer; }
+.workspace-surface-panel .ws-tool-group { display: none; min-width: 0; }
+.workspace-surface-panel[data-active-tool="select"] .ws-tool-group[data-tool-group="select"],
+.workspace-surface-panel[data-active-tool="move"] .ws-tool-group[data-tool-group="move"],
+.workspace-surface-panel[data-active-tool="modify"] .ws-tool-group[data-tool-group="modify"],
+.workspace-surface-panel[data-active-tool="edges"] .ws-tool-group[data-tool-group="edges"],
+.workspace-surface-panel[data-active-tool="analysis"] .ws-tool-group[data-tool-group="analysis"],
+.workspace-surface-panel[data-active-tool="history"] .ws-tool-group[data-tool-group="history"] { display: grid; grid-template-columns: minmax(0,1fr); gap: 8px; }
+.workspace-surface-panel .ws-tool-group > * { min-width: 0; max-width: 100%; }
+.workspace-surface-panel .ws-lock-reasons { display: grid; gap: 4px; border-left: 3px solid #d08b49; padding: 6px 8px; background: var(--well,#293740); border-radius: 4px; }

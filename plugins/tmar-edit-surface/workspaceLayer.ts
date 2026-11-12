@@ -10,6 +10,7 @@ import type { ReferenceDescriptor } from '../../src/plugins/workspaceEditorTypes
 import type { SceneLayer } from '../../src/viewer/sceneLayers'
 import type { Net,Point } from './brep'
 import { dragDirection } from './localFrame'
+import { pickWorkspaceGizmoArrow } from './workspaceGizmoPick'
 import { pickNetAt } from './netPicking'
 import { populateSurfaceCage } from './surfaceCage'
 import { createDragFrame } from './dragFrame'
@@ -701,20 +702,17 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     return pickNetAt({ net, mode: state.showNet ? state.selectionMode : 'points', hiddenPoles: state.hiddenPoles,
       camera: view.camera(), partWorld: partMatrix(net.poles[0]), rect: view.bounds(), clientX: x, clientY: y })
   }
-  const pickArrow = (event: PointerEvent): number | null => {
+  const pickArrow = (event: PointerEvent) => {
     const state = owner.getViewState(), net = state.net
     if (!net || state.dragMode === 'screen' || event.ctrlKey || event.metaKey) return null
-    const index = state.selected.find(i => !state.locked.includes(i) && !state.hiddenPoles.includes(i))
-    if (index === undefined) return null
-    const direction = dragDirection(net, index, state.dragMode, state.axis)
-    if (!direction) return null
-    const start = view.projectPartPoint(net.poles[index])
-    const end = view.projectPartPoint(point(new THREE.Vector3(...net.poles[index]).addScaledVector(new THREE.Vector3(...direction), radius * 0.22)))
-    if (!start.visible || !end.visible) return null
-    const dx = end.clientX - start.clientX, dy = end.clientY - start.clientY, length = Math.hypot(dx, dy)
-    if (length < 8) return null
-    const x = event.clientX - start.clientX, y = event.clientY - start.clientY, along = (x * dx + y * dy) / length
-    return along >= 5 && along <= length + 4 && Math.abs(x * dy - y * dx) / length <= 6 ? index : null
+    // The V5 workspace uses the host's CAD-to-screen projection, which can
+    // differ from the standalone modal's scene/world coordinates. Hit-test
+    // every axis of every selected editable pole against the drawn arrows.
+    return pickWorkspaceGizmoArrow({
+      net, selected: state.selected, locked: state.locked, hiddenPoles: state.hiddenPoles,
+      mode: state.dragMode, radius, clientX: event.clientX, clientY: event.clientY,
+      projectPartPoint: point => view.projectPartPoint(point),
+    })
   }
   const pickPaths = (pathsIn: readonly (readonly Point[])[], selectedEdge: number, x: number, y: number,
     respectSection=true, partWorld?:THREE.Matrix4) => {
@@ -1224,7 +1222,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       }
       if (faceHit && !owner.beginWholeFaceGesture) return false
       const arrow = state.wholeFaceDrag ? null : pickArrow(event)
-      const picked = faceHit ? net.poles.map((_, index) => index) : arrow === null ? pickNet(event.clientX, event.clientY) : [arrow]
+      const picked = faceHit ? net.poles.map((_, index) => index) : arrow === null ? pickNet(event.clientX, event.clientY) : [arrow.pole]
       // Preserve the entire net interaction. A coincident boundary may also
       // reveal D, but a pole or its arrow always takes precedence.
       const directHit = !faceHit && arrow === null && (!picked || picked.length > 1) && state.directStrip && owner.beginDirectStripGesture
@@ -1247,7 +1245,9 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         owner.reportViewError('Simmetria bloccata: almeno un punto speculare è assente o bloccato. Modifica la selezione, sblocca i punti oppure usa il comando di proiezione sul piano.')
         return true
       }
-      const direction = dragDirection(net, ids[0], state.dragMode, state.axis)
+      // A clicked red/green/blue handle chooses its own axis. In local mode
+      // the picked pole defines the U/V/N direction for the whole selection.
+      const direction = dragDirection(net, arrow?.pole ?? ids[0], state.dragMode, arrow?.axis ?? state.axis)
       if (state.dragMode !== 'screen' && !direction) return true
       const origin = faceHit ? new THREE.Vector3(...faceHit.point)
         : picked.reduce((v, i) => v.add(new THREE.Vector3(...net.poles[i])), new THREE.Vector3()).multiplyScalar(1 / picked.length)
