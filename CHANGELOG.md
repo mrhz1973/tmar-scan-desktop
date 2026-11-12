@@ -7,7 +7,7 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
-### TMAR Versione 7 ? ScanRuler 0.11.2 integration candidate (12 November 2026)
+### TMAR Versione 7 - ScanRuler 0.11.2 integration candidate (13 November 2026)
 
 - Merge the complete official upstream ScanRuler 0.11.2 tag
   70772c027e33f1eb89e9f501afb3d5ca65548b01 into the qualified
@@ -17,7 +17,11 @@ saves carry the same number as `appVersion`. How a release is cut is in
 - Keep TMAR Edit Surface's six-group bilingual workspace, safe G0/G1 inner-pole
   unlocking, XYZ handles, selected-pole freehand drag, CAD history/notes,
   save/reopen, display units and original project compatibility.
-- Candidate number: TMAR Versione 7 ? Anteprima. Stable Versione 5 and
+- When agent-side CAD commands finish, the local Note button updates immediately;
+  it remains unavailable while a command or editor is active.
+- CAD-edge screenshot checks inspect actual model pixels with bounded retries
+  when width or colour changes straddle a renderer frame.
+- Candidate number: TMAR Versione 7 - Anteprima. Stable Versione 5 and
   the currently published Dev Versione 6 stay unchanged until separate
   integration/CI, native CAD and browser gates complete.
 

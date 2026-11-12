@@ -2,10 +2,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { setLanguage, coreText, pluginText } from '../src/i18n'
-import { useComb } from '../src/state/combStore'
-import { CombControls } from '../src/ui/CombControls'
-import { EditedCopyNote } from '../plugins/mesh-tools/ui/EditedCopyNote'
+import { setLanguage, coreText, pluginText } from '../../../src/i18n'
+import { useComb } from '../../../src/state/combStore'
+import { CombControls } from '../../../src/ui/CombControls'
+import { EditedCopyNote } from '../ui/EditedCopyNote'
 
 afterEach(() => {
   useComb.getState().setOn(false)

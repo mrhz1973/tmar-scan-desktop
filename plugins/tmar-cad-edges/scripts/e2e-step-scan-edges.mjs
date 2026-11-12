@@ -42,8 +42,25 @@ try {
   const on=await picture('step-scan-zebra-edges-on');await click('[data-test=cad-edges-toggle]');const off=await picture('step-scan-zebra-edges-off')
   const delta=await pixelDiff(page,on,off);check(delta>.02,`actual model crop changes when STEP Scan edges toggle (${delta.toFixed(4)}%, no toolbar pixels)`)
   await click('[data-test=cad-edges-toggle]');await input('[data-test=cad-edges-color]','#ff3030');const red=await picture('step-scan-red-edges')
-  const thin=await redPixels(red);check(thin>100,`changed edge color is visible on the model (${thin} red pixels)`)
-  await input('[data-test=cad-edges-width]',5.5);const thick=await picture('step-scan-edges-5_5px'),thickCount=await redPixels(thick)
+  let thin=await redPixels(red)
+  // A colour change can arrive between render frames under heavy browser CI.
+  // Retry actual model pixels, never the toolbar colour input; a persistently
+  // invisible colour remains a failure after the bounded frame checks.
+  for(let tries=0;thin<=100 && tries<4;tries++){
+    await sleep(180)
+    const refreshed=await picture('step-scan-red-edges')
+    thin=await redPixels(refreshed)
+  }
+  check(thin>100,`changed edge color is visible on the model (${thin} red pixels)`)
+  await input('[data-test=cad-edges-width]',5.5)
+  let thick=await picture('step-scan-edges-5_5px'),thickCount=await redPixels(thick)
+  // Rebuilding the edge layer can briefly leave the screenshot between two
+  // render frames. Keep checking actual model pixels, with a finite bound.
+  for(let tries=0;thickCount<=thin*1.4 && tries<4;tries++){
+    await sleep(180)
+    thick=await picture('step-scan-edges-5_5px')
+    thickCount=await redPixels(thick)
+  }
   check(thickCount>thin*1.4,`5.5 px creates thicker MODEL lines (${thin} -> ${thickCount} red pixels)`)
   await click('[data-test=cad-edges-reset]')
   check(await page.evaluate(()=>{const s=window.__re.scene().scanDisplay(),o=window.__scanBefore,g=s.mesh.geometry;return s.mesh===o.mesh&&g===o.geometry&&s.mesh.material===o.material&&s.cadEdges===o.edges&&g.attributes.position.array.every((v,i)=>v===o.p[i])&&g.index.array.every((v,i)=>v===o.i[i])&&!window.__re.measure.getState().wireframe}),'edge styling preserves scan buffers/material, measurement geometry and wireframe-off state')
