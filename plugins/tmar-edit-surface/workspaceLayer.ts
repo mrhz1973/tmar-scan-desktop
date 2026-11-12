@@ -1235,12 +1235,16 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // Explicit cell mode keeps the direct-drag interaction.
       if (!faceHit && state.selectionMode === 'auto' && picked.length === 4 &&
           !picked.every(i => state.selected.includes(i))) return false
+      // A direct-strip edge selection must not silently become a group drag:
+      // an individual pole click takes precedence over the selected edge/D.
+      const replacingDirectEdge = !faceHit && arrow === null && picked.length === 1 && !!state.directStrip
       if (!directHit) clearDirect()
       const wasSelected = !faceHit && picked.every(i => state.selected.includes(i))
-      const selected = wasSelected ? [...state.selected] : picked
-      // Grabbing an already-selected yellow pole keeps its multi-selection.
-      // Picking a new pole replaces it; axis arrows retain their behaviour.
-      if (!faceHit && arrow === null && !wasSelected) owner.selectPoints(picked, false)
+      const keepSelection = wasSelected && !replacingDirectEdge
+      const selected = keepSelection ? [...state.selected] : picked
+      // A previously selected yellow pole keeps an intentional point group.
+      // A newly picked pole, or a pole picked from a direct edge, selects itself.
+      if (!faceHit && arrow === null && !keepSelection) owner.selectPoints(picked, false)
       const ids = selected.filter(i => !state.locked.includes(i) && !state.hiddenPoles.includes(i))
       if (faceHit && ids.length !== net.poles.length) return false
       if (!ids.length) return true
@@ -1254,7 +1258,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // to its own XYZ/U/V/N axis. A 2D mouse cannot control depth directly:
       // rotate the viewport first or use an axis handle for that component.
       // Do not change whole-face, boundary, edge or cell gesture contracts.
-      const gestureMode = workspacePoleDragMode(state.dragMode, arrow !== null, !!faceHit, picked.length)
+      const gestureMode = workspacePoleDragMode(state.dragMode, arrow !== null, !!faceHit, picked.length, keepSelection)
       const direction = gestureMode === 'screen' ? null :
         dragDirection(net, arrow?.pole ?? ids[0], state.dragMode, arrow?.axis ?? state.axis)
       if (gestureMode !== 'screen' && !direction) return true

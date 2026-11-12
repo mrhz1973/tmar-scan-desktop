@@ -2,15 +2,17 @@
 import type { DragMode } from './localFrame'
 
 /**
- * A direct left-button grab of one control pole follows the current screen
- * plane, independently of the numerical XYZ/U/V/N mode. Clicking a coloured
- * gizmo arrow, selecting an edge/cell, or dragging the whole CAD face retains
- * the existing constrained gesture behaviour.
+ * Directly grabbing an already-selected yellow control point follows the
+ * camera-facing screen plane. The first grab of a new/unselected pole keeps
+ * its existing constrained drag, so precise XYZ/U/V/N and reference snapping
+ * retain their pre-existing contract. Clicking a coloured gizmo arrow,
+ * selecting an edge/cell, or dragging the whole face also stays constrained.
  *
  * The caller must check CAD locks and hidden poles before starting a gesture.
  */
 export function workspacePoleDragMode(
-  current: DragMode, onArrow: boolean, onWholeFace: boolean, pickedCount: number,
+  current: DragMode, onArrow: boolean, onWholeFace: boolean,
+  pickedCount: number, alreadySelected: boolean,
 ): DragMode {
-  return !onArrow && !onWholeFace && pickedCount === 1 ? 'screen' : current
+  return !onArrow && !onWholeFace && pickedCount === 1 && alreadySelected ? 'screen' : current
 }

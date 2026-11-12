@@ -5,7 +5,7 @@ Starting checkpoint: `83f0b0016613edcc69e42ff65ac9c5eefb17975d`.
 
 ## Operator interaction
 
-- **Yellow movable pole:** left mouse button down on the pole, move the mouse, release to commit. It moves freely on the **camera-facing screen plane through that control point**. The same visible pole tracks the pointer in both viewport directions. Moving in depth requires orbiting the camera and dragging again (or using a precise XYZ axis).
+- **Yellow movable pole (already selected):** left mouse button down on the pole, move the mouse, release to commit. The first pick of an unselected pole retains the existing axis/local gesture and reference snapping; release the first click to select the pole, then drag the yellow selected point for freehand movement. It moves freely on the **camera-facing screen plane through that control point**. The same visible pole tracks the pointer in both viewport directions. Moving in depth requires orbiting the camera and dragging again (or using a precise XYZ axis).
 - **Coloured XYZ or U/V/N arrow:** unchanged, constrains the displacement strictly to the selected arrow axis.
 - **Multiple selected movable points:** dragging an already selected yellow pole retains the selection and moves all selected editable poles by the same CAD-space displacement.
 - **G0/G1 boundary, trim and manual locks:** unchanged. A locked point cannot move via the new gesture.
