@@ -90,15 +90,20 @@ const validStored = (saved, label) => {
 
 async function moveOnePole(distance) {
   await ready()
+  // V5 only shows the active tool: select Move before changing the drag mode.
+  await page.click('[data-test=workspace-surface-tool-move]')
   await page.select('[data-test=surface-drag-mode]', 'axis')
   await page.click('[data-test=surface-axis-2]')
-  await page.waitForSelector('[data-test=surface-next-free]:enabled')
+  await page.click('[data-test=workspace-surface-tool-select]')
+  await page.waitForSelector('[data-test=surface-next-free]:enabled',{visible:true})
   await page.click('[data-test=surface-next-free]')
   const before = await page.evaluate(() => {
     const c = window.surfaceHistoryQa.useWorkspaceEditor.getState().controller, p = c.getPanelState()
     return { poles: c.getViewState().net.poles, selected: p.selected, revision: c.getSnapshot().current.draftEpoch }
   })
   assert.equal(before.selected.length, 1, 'The simple edit selects exactly one free pole')
+  await page.click('[data-test=workspace-surface-tool-move]')
+  await page.waitForSelector('[data-test=surface-distance]',{visible:true})
   await page.click('[data-test=surface-distance]')
   await page.keyboard.down(MOD); await page.keyboard.press('a'); await page.keyboard.up(MOD)
   await page.type('[data-test=surface-distance]', String(distance))

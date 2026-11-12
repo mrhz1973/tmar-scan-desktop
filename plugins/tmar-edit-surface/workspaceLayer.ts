@@ -10,6 +10,8 @@ import type { ReferenceDescriptor } from '../../src/plugins/workspaceEditorTypes
 import type { SceneLayer } from '../../src/viewer/sceneLayers'
 import type { Net,Point } from './brep'
 import { dragDirection } from './localFrame'
+import { pickWorkspaceGizmoArrow } from './workspaceGizmoPick'
+import { workspacePoleDragMode } from './workspacePoleDragMode'
 import { pickNetAt } from './netPicking'
 import { populateSurfaceCage } from './surfaceCage'
 import { createDragFrame } from './dragFrame'
@@ -701,20 +703,17 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
     return pickNetAt({ net, mode: state.showNet ? state.selectionMode : 'points', hiddenPoles: state.hiddenPoles,
       camera: view.camera(), partWorld: partMatrix(net.poles[0]), rect: view.bounds(), clientX: x, clientY: y })
   }
-  const pickArrow = (event: PointerEvent): number | null => {
+  const pickArrow = (event: PointerEvent) => {
     const state = owner.getViewState(), net = state.net
     if (!net || state.dragMode === 'screen' || event.ctrlKey || event.metaKey) return null
-    const index = state.selected.find(i => !state.locked.includes(i) && !state.hiddenPoles.includes(i))
-    if (index === undefined) return null
-    const direction = dragDirection(net, index, state.dragMode, state.axis)
-    if (!direction) return null
-    const start = view.projectPartPoint(net.poles[index])
-    const end = view.projectPartPoint(point(new THREE.Vector3(...net.poles[index]).addScaledVector(new THREE.Vector3(...direction), radius * 0.22)))
-    if (!start.visible || !end.visible) return null
-    const dx = end.clientX - start.clientX, dy = end.clientY - start.clientY, length = Math.hypot(dx, dy)
-    if (length < 8) return null
-    const x = event.clientX - start.clientX, y = event.clientY - start.clientY, along = (x * dx + y * dy) / length
-    return along >= 5 && along <= length + 4 && Math.abs(x * dy - y * dx) / length <= 6 ? index : null
+    // The V5 workspace uses the host's CAD-to-screen projection, which can
+    // differ from the standalone modal's scene/world coordinates. Hit-test
+    // every axis of every selected editable pole against the drawn arrows.
+    return pickWorkspaceGizmoArrow({
+      net, selected: state.selected, locked: state.locked, hiddenPoles: state.hiddenPoles,
+      mode: state.dragMode, radius, clientX: event.clientX, clientY: event.clientY,
+      projectPartPoint: point => view.projectPartPoint(point),
+    })
   }
   const pickPaths = (pathsIn: readonly (readonly Point[])[], selectedEdge: number, x: number, y: number,
     respectSection=true, partWorld?:THREE.Matrix4) => {
@@ -1224,7 +1223,7 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       }
       if (faceHit && !owner.beginWholeFaceGesture) return false
       const arrow = state.wholeFaceDrag ? null : pickArrow(event)
-      const picked = faceHit ? net.poles.map((_, index) => index) : arrow === null ? pickNet(event.clientX, event.clientY) : [arrow]
+      const picked = faceHit ? net.poles.map((_, index) => index) : arrow === null ? pickNet(event.clientX, event.clientY) : [arrow.pole]
       // Preserve the entire net interaction. A coincident boundary may also
       // reveal D, but a pole or its arrow always takes precedence.
       const directHit = !faceHit && arrow === null && (!picked || picked.length > 1) && state.directStrip && owner.beginDirectStripGesture
@@ -1236,9 +1235,16 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       // Explicit cell mode keeps the direct-drag interaction.
       if (!faceHit && state.selectionMode === 'auto' && picked.length === 4 &&
           !picked.every(i => state.selected.includes(i))) return false
+      // A direct-strip edge selection must not silently become a group drag:
+      // an individual pole click takes precedence over the selected edge/D.
+      const replacingDirectEdge = !faceHit && arrow === null && picked.length === 1 && !!state.directStrip
       if (!directHit) clearDirect()
-      const selected = !faceHit && picked.every(i => state.selected.includes(i)) ? [...state.selected] : picked
-      if (!faceHit && arrow === null) owner.selectPoints(picked, false)
+      const wasSelected = !faceHit && picked.every(i => state.selected.includes(i))
+      const keepSelection = wasSelected && !replacingDirectEdge
+      const selected = keepSelection ? [...state.selected] : picked
+      // A previously selected yellow pole keeps an intentional point group.
+      // A newly picked pole, or a pole picked from a direct edge, selects itself.
+      if (!faceHit && arrow === null && !keepSelection) owner.selectPoints(picked, false)
       const ids = selected.filter(i => !state.locked.includes(i) && !state.hiddenPoles.includes(i))
       if (faceHit && ids.length !== net.poles.length) return false
       if (!ids.length) return true
@@ -1247,16 +1253,23 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         owner.reportViewError('Simmetria bloccata: almeno un punto speculare è assente o bloccato. Modifica la selezione, sblocca i punti oppure usa il comando di proiezione sul piano.')
         return true
       }
-      const direction = dragDirection(net, ids[0], state.dragMode, state.axis)
-      if (state.dragMode !== 'screen' && !direction) return true
+      // Left-dragging a control point itself moves it freely in the plane of
+      // the screen. A coloured arrow still constrains the exact same gesture
+      // to its own XYZ/U/V/N axis. A 2D mouse cannot control depth directly:
+      // rotate the viewport first or use an axis handle for that component.
+      // Do not change whole-face, boundary, edge or cell gesture contracts.
+      const gestureMode = workspacePoleDragMode(state.dragMode, arrow !== null, !!faceHit, picked.length, keepSelection)
+      const direction = gestureMode === 'screen' ? null :
+        dragDirection(net, arrow?.pole ?? ids[0], state.dragMode, arrow?.axis ?? state.axis)
+      if (gestureMode !== 'screen' && !direction) return true
       const origin = faceHit ? new THREE.Vector3(...faceHit.point)
         : picked.reduce((v, i) => v.add(new THREE.Vector3(...net.poles[i])), new THREE.Vector3()).multiplyScalar(1 / picked.length)
       const matrix = partMatrix(point(origin)), rect = view.bounds(), camera = view.camera()
       const frame = createDragFrame({ camera, partWorld: matrix, rect, anchor: point(origin), clientX: event.clientX, clientY: event.clientY,
-        ...(state.dragMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction: direction!, allowViewAlignedDepth: true }) })
-      if (!frame) { report('Direzione allineata alla vista: ruota il modello o scegli un altro asse.'); return true }
+        ...(gestureMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction: direction!, allowViewAlignedDepth: true }) })
+      if (!frame) { report('Impossibile avviare il trascinamento: ruota il modello o seleziona una freccia.'); return true }
       const inverse = new THREE.Matrix3().setFromMatrix4(matrix.clone().invert())
-      const snapDirection = state.dragMode === 'screen' ? new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld).applyMatrix3(inverse).normalize() : new THREE.Vector3(...direction!)
+      const snapDirection = gestureMode === 'screen' ? new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld).applyMatrix3(inverse).normalize() : new THREE.Vector3(...direction!)
       const anchor = new THREE.Vector3(...net.poles[ids[0]])
       let reportedInvalidTarget = false
       const gesture = createSurfaceGesture({ frame, poles: net.poles, selected: ids, start: mousePoint(event), strength: state.dragStrength,

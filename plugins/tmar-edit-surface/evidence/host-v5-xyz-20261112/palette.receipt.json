@@ -1,0 +1,33 @@
+{
+  "schema": "TMAR_EDIT_SURFACE_V5_WORKSPACE_PALETTE_QA_V1",
+  "startedAt": "2026-11-12T06:42:40.224Z",
+  "host": "ScanRuler 0.11.1 TMAR Versione 5",
+  "scope": "isolated synthetic STEP, workspace host controls only",
+  "verdict": "PASS",
+  "checks": [
+    "native synthetic source is valid",
+    "V5 workspace Edit Surface is enabled",
+    "actual V5 workspace panel opened",
+    "six tool buttons shown in real workspace",
+    "Italian initially selected",
+    "V5 workspace CAD face selection completed",
+    "only select controls are visible",
+    "only move controls are visible",
+    "only modify controls are visible",
+    "only edges controls are visible",
+    "only analysis controls are visible",
+    "only history controls are visible",
+    "V5 G1 protection remains selected",
+    "selected protected G1 pole 1 explains its lock without unlocking CAD",
+    "world XYZ gizmo is the default while local U/V/N stays selectable",
+    "language changes without losing the numeric draft",
+    "English tool labels update in place",
+    "Italian tool labels restore immediately",
+    "V5 host Apply and Cancel remain visible",
+    "no JavaScript console errors"
+  ],
+  "errors": [],
+  "output": "D:\\TMAR_HOST_V5_UX_QA_20261112\\v5-tools-fvNqDC",
+  "completedAt": "2026-11-12T06:42:45.437Z",
+  "consoleErrors": []
+}

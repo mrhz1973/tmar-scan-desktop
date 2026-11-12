@@ -256,7 +256,8 @@ export class WorkspaceSurfaceSession implements WorkspaceEditorController, Works
     | {kind:'tangent-plane';points?:never}
     | {kind:'tangent-span';points?:never;plan?:ReturnType<typeof planTangentSpan>}
   )) | null = null
-  private dragMode: DragMode = 'local'
+  // Three world XYZ axes are available immediately; local U/V/N remains selectable.
+  private dragMode: DragMode = 'axis'
   private axis = 2
   private dragStrength = 1
   private selectionMode: NetSelectionMode = 'auto'

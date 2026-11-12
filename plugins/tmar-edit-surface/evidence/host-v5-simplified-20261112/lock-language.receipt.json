@@ -1,0 +1,26 @@
+{
+  "schema": "TMAR_V5_G1_INNER_UNLOCK_GLOBAL_LANG_V1",
+  "scope": "Isolated synthetic 6-face closed CAD solid",
+  "verdict": "PASS",
+  "checks": [
+    "synthetic source CAD solid valid",
+    "G1 clearly shows one movable point of 25",
+    "selected protected interior ring explains G1 constraint",
+    "clear one-click unlock for protected interior point",
+    "G0 unlocks nine interior points with boundaries fixed",
+    "selected interior ring point now displays X/Y/Z handles",
+    "global Settings language propagates to Edit Surface selector",
+    "host Edit Surface header follows global English",
+    "Edit Surface launcher tooltip follows English",
+    "protected-point explanation switches to English",
+    "English technical dropdown is translated",
+    "English drag direction is translated",
+    "global language switch preserves CAD pole selection",
+    "Italian returns without editor reload",
+    "no browser JavaScript errors"
+  ],
+  "errors": [],
+  "output": "D:\\TMAR_HOST_V5_UX_FIX_QA_20261112\\v5-lock-locale-Pr6dEJ",
+  "completedAtUtc": "2026-11-12T19:28:32.019Z",
+  "browserErrors": []
+}

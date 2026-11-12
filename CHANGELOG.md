@@ -7,6 +7,24 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR Versione 6 — candidato Edit Surface UX (12 novembre 2026)
+
+- Nuovo pannello Edit Surface a sei gruppi funzionali, con testi italiano/inglese
+  sincronizzati alle impostazioni globali.
+- Gizmo completo X/Y/Z e trascinamento con tasto sinistro dei punti modificabili
+  nel piano della vista, conservando i vincoli CAD e l'opzione locale U/V/N.
+- Indicatore dei poli disponibili, chiarimento delle protezioni G0/G1 e
+  possibilità controllata di abilitare ulteriori poli interni senza liberare
+  le cuciture condivise.
+- Versione numerata **6 — Anteprima** nel manifest sorgente. **Non pubblicata**:
+  PR #48 ancora subordinata a CI e qualifica; Stable e Dev rimangono alla
+  versione precedentemente pubblicata. Lo stato definitivo si legge sul
+  portale `https://scanruler.31-70-139-73.sslip.io/`.
+- Versione ufficiale ScanRuler mantenuta a 0.11.1 per questo candidato;
+  0.11.2 non è ancora integrata.
+
+
+
 ### TMAR recovery storage reliability — 2026-11-11
 
 - Retry local project recovery after an IndexedDB open fails or is blocked by another page instead of retaining a rejected connection promise.

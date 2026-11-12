@@ -318,6 +318,7 @@ describe('whole natural boundary movement',()=>{
     const t = await setup({sheet:true})
     await selectFace(t)
     const s = t.session
+    s.setDragMode('local')
     s.setFreeBoundary(true)
     await ready(t, 2)
     const net = s.getPanelState().net!, history = s.getSnapshot().historyRevision
@@ -349,6 +350,7 @@ describe('whole natural boundary movement',()=>{
     const t = await setup({sheet:true})
     await selectFace(t)
     const s = t.session
+    s.setDragMode('local')
     s.setFreeBoundary(true)
     await ready(t, 2)
     s.setWholeFaceDrag(true)
@@ -631,15 +633,15 @@ describe('experimental simultaneous surface-point controller',()=>{
     const t=await setup();await selectFace(t);t.session.selectPoints([12],false);t.session.beginSurfaceTarget('scan',1,true)
     const render=()=>renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:t.session}))
     expect(render()).toMatch(/aria-live="polite"[^>]*aria-atomic="true"/)
-    expect(render()).toContain('Punti raccolti: 0 di 8. Servono almeno due punti')
+    expect(render()).toContain('Collected points: 0 of 8. At least two points')
     for(const pin of pins()){
       const pending=t.session.pickSurfaceTarget(pin.at,at=>({point:[at[0],at[1],.02],kind:'scan',label:'Scan QA',current:()=>true}))
       t.worker.reply(t.worker.sent.at(-1)!.id,pin);await pending
     }
-    const complete=render();expect(complete).toContain('Punti raccolti: 2 di 8. Puoi applicare')
+    const complete=render();expect(complete).toContain('Collected points: 2 of 8. You can apply')
     expect(complete).toMatch(/data-test="surface-point-apply">/)
     t.session.removeSurfaceTarget(1)
-    const removed=render();expect(removed).toContain('Punti raccolti: 1 di 8. Servono almeno due punti')
+    const removed=render();expect(removed).toContain('Collected points: 1 of 8. At least two points')
     expect(removed).toMatch(/data-test="surface-point-apply" disabled/)
     await t.session.dispose('cancelled')
   })
@@ -974,6 +976,8 @@ describe('WorkspaceSurfaceSession',()=>{
     const t=await setup(), net=plane()
     net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
     await selectFace(t,net)
+    expect(t.session.getPanelState().dragMode).toBe('axis')
+    t.session.setDragMode('local')
     expect(t.session.getPanelState().dragMode).toBe('local')
     expect(t.session.getPanelState().axis).toBe(2)
     t.session.selectPoints([12],false);t.session.moveSelected(.25)
@@ -987,6 +991,7 @@ describe('WorkspaceSurfaceSession',()=>{
     const t=await setup(), net=plane()
     net.poles=net.poles.map(([u,v]):Point=>[0,u,v])
     await selectFace(t,net)
+    t.session.setDragMode('local')
     t.session.setContinuity('G0');t.session.setAxis(0);t.session.selectPoints([6],false)
     t.session.stretchSelected(1.2)
     expect(t.session.getPanelState().net!.poles[6][0]).toBeCloseTo(0)
@@ -1003,6 +1008,7 @@ describe('WorkspaceSurfaceSession',()=>{
     const t=await setup(), net=plane()
     net.poles=net.poles.map(([u,v]):Point=>[u,v,.1*u*u])
     await selectFace(t,net)
+    t.session.setDragMode('local')
     t.session.setContinuity('G0');t.session.selectPoints([7],false);t.session.lockSelected(true)
     t.session.selectPoints([6],false);t.session.setAxis(0)
     t.session.stretchSelected(1.2)
@@ -1184,6 +1190,7 @@ describe('WorkspaceSurfaceSession',()=>{
         signal:abort.signal,assertSourceCurrent:()=>{},own:(fn:()=>void)=>fn,reportFatal:vi.fn()}
       session=await createWorkspaceSurfaceSession(context as never,vi.fn() as never,{runtime,sha256:async bytes=>sha(bytes)})
       await session.chooseFace(index)
+      session.setDragMode('local')
       await vi.advanceTimersByTimeAsync(90);await flush()
       expect(session.getSnapshot().validation.kind).toBe('valid')
       session.selectAllFree(); session.moveSelected(.1)
@@ -1593,7 +1600,7 @@ describe('WorkspaceSurfaceSession',()=>{
     const {createElement}=await import('react')
     const html=renderToStaticMarkup(createElement(WorkspaceSurfaceParameters,{controller:t.session}))
     expect(html).toContain('data-test="surface-duplicate-cad-face"')
-    expect(html).toContain('Con Applica, la faccia della preview')
+    expect(html).toContain('Apply turns the preview face into a separate CAD surface')
     expect(()=>t.session.freeze(before as never)).toThrow(/ticket/)
     const value=ticket(t), release=t.session.freeze(value as never)
     const pending=t.session.prepareApply(value as never,new AbortController().signal)

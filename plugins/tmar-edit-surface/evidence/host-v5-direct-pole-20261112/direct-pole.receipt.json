@@ -1,0 +1,55 @@
+{
+  "schema": "TMAR_V5_DIRECT_YELLOW_POLE_MOUSE_V1",
+  "scope": "isolated synthetic six-face closed CAD solid",
+  "verdict": "PASS",
+  "checks": [
+    "synthetic source STEP shape is valid",
+    "G0 allows non-central pole 6 and keeps three XYZ arrow handles",
+    "selected yellow point is visible and directly clickable on host canvas",
+    "freehand point follows mouse in both screen directions (no axis lock)",
+    "screen-plane drag changes multiple CAD coordinates",
+    "G0 boundary pole remains unchanged",
+    "freehand direct drag does not change the XYZ arrow mode",
+    "Undo restores the directly dragged point without modifying the original body",
+    "freehand drag translates both selected editable points by the same 3D vector",
+    "dragging an already selected pole retains the multi-selection",
+    "group Undo restores both poles",
+    "protected boundary point is in the viewport",
+    "LMB drag cannot move a locked G0 boundary point or any other CAD pole",
+    "no JavaScript browser errors"
+  ],
+  "freehand": [
+    {
+      "kind": "single",
+      "pole": 6,
+      "delta": [
+        1.6064748655745689,
+        2.240938169530409,
+        1.7676897415276613
+      ],
+      "errorPx": 5.684341886080802e-14
+    },
+    {
+      "kind": "multi",
+      "poles": [
+        6,
+        7
+      ],
+      "deltaSix": [
+        -1.299368544484821,
+        -1.8877839846499853,
+        -1.5597262425244054
+      ],
+      "deltaSeven": [
+        -1.299368544484821,
+        -1.8877839846499853,
+        -1.5597262425244054
+      ]
+    }
+  ],
+  "errors": [],
+  "output": "D:\\TMAR_HOST_V5_DIRECT_POLE_QA_20261112\\v5-direct-pole-U18D7H",
+  "startedUtc": "2026-11-12T19:50:48.386Z",
+  "completedUtc": "2026-11-12T19:50:55.634Z",
+  "consoleErrors": []
+}

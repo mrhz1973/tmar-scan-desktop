@@ -1,0 +1,76 @@
+{
+  "scope": "isolated Vite source app, actual Edit Surface controller, synthetic 20×30×10 mm box",
+  "head": "83f0b0016613edcc69e42ff65ac9c5eefb17975d",
+  "sourceSha256": "7f8bed101a3a196707f7921f02a14f74df2e506d1f8112340b13a7d38db67b58",
+  "checks": [
+    "Edit Surface borrows the existing viewport, camera and source geometry",
+    "Fusion Shift+MMB orbits without editing poles or project history",
+    "Fusion MMB pans without rotating or editing the draft",
+    "CNC Kitchen LMB orbits on verified empty canvas with the editor active",
+    "CNC Kitchen RMB pans on verified empty canvas with the editor active",
+    "Clicking the X gizmo orients the shared camera without editing the draft",
+    "Clicking the Y gizmo orients the shared camera without editing the draft",
+    "Clicking the Z gizmo orients the shared camera without editing the draft",
+    "Inquadra reticolo fits the net while preserving camera direction and poles",
+    "Duplica faccia CAD Apply creates one separate CAD body in one history action",
+    "Original visibility choice is respected; the duplicate is an ordinary CAD import",
+    "Native readback confirms the intact 6000 mm³ solid and separate 600 mm² face",
+    "Global Undo removes only the duplicate",
+    "Global Redo restores the same valid solid and detached face",
+    "Fresh-page project ZIP reopen preserves the valid source solid and separate CAD face",
+    "Project reopen preserves the explicit source and copy visibility",
+    "No browser application errors"
+  ],
+  "consoleErrors": [],
+  "cleanupErrors": [],
+  "verdict": "PASS",
+  "afterApply": {
+    "source": {
+      "valid": true,
+      "faces": 6,
+      "solids": 1,
+      "area": 2199.9999999999995,
+      "volume": 6000
+    },
+    "copy": {
+      "valid": true,
+      "faces": 1,
+      "solids": 0,
+      "area": 599.9999999999999,
+      "volume": 0
+    }
+  },
+  "afterRedo": {
+    "source": {
+      "valid": true,
+      "faces": 6,
+      "solids": 1,
+      "area": 2199.9999999999995,
+      "volume": 6000
+    },
+    "copy": {
+      "valid": true,
+      "faces": 1,
+      "solids": 0,
+      "area": 599.9999999999999,
+      "volume": 0
+    }
+  },
+  "projectSha256": "44a879c8f4cf7f6c121a6cfe94d36c9bbb8bc4247362a0651f12127ff02166a3",
+  "afterReopen": {
+    "source": {
+      "valid": true,
+      "faces": 6,
+      "solids": 1,
+      "area": 2199.9999999999995,
+      "volume": 6000
+    },
+    "copy": {
+      "valid": true,
+      "faces": 1,
+      "solids": 0,
+      "area": 599.9999999999999,
+      "volume": 0
+    }
+  }
+}

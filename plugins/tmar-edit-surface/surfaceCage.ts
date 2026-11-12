@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import * as THREE from 'three'
 import type { Net } from './brep'
-import { dragDirection, type DragMode } from './localFrame'
+import type { DragMode } from './localFrame'
+import { GIZMO_AXIS_COLORS, gizmoHandles } from './surfaceGizmo'
 import { netEdges } from './netSelection'
 
 export interface SurfaceCageOptions {
@@ -21,7 +22,7 @@ export interface SurfaceCageOptions {
 /** Draw into an empty group in the same local frame as the control net.
  * The caller owns the group and must dispose its children when replacing it. */
 export function populateSurfaceCage(cage: THREE.Group, options: SurfaceCageOptions): void {
-  const { net: n, selected, locked, hiddenPoles, showNet, dragMode, axis, mirrorAxis, mirrorOffset, mirrorPartners, radius } = options
+  const { net: n, selected, locked, hiddenPoles, showNet, dragMode, mirrorAxis, mirrorOffset, mirrorPartners, radius } = options
   const hidden = new Set(hiddenPoles)
   const mirrored = new Set<number>()
   if (mirrorPartners) {
@@ -46,29 +47,33 @@ export function populateSurfaceCage(cage: THREE.Group, options: SurfaceCageOptio
   }
   n.poles.forEach((p, i) => {
     if (hidden.has(i)) return
-    const color = selected.includes(i) ? '#ffcf35' : locked.includes(i) ? '#89939c' : mirrored.has(i) ? '#f785ff' : '#58f3d0'
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.012, 10, 8), new THREE.MeshBasicMaterial({ color, transparent: true, depthTest: false, depthWrite: false }))
+    const isLocked = locked.includes(i), isSelected = selected.includes(i)
+    // A locked selected pole must never look like a yellow movable handle.
+    const color = isSelected && isLocked ? '#ef8298' : isSelected ? '#ffcf35' : isLocked ? '#89939c' : mirrored.has(i) ? '#f785ff' : '#58f3d0'
+    const geometry = isLocked ? new THREE.OctahedronGeometry(radius * (isSelected ? 0.016 : 0.013)) : new THREE.SphereGeometry(radius * 0.012, 10, 8)
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, transparent: true, depthTest: false, depthWrite: false }))
     mesh.position.set(...p); mesh.userData.point = i; mesh.renderOrder = 5; cage.add(mesh)
     // Picking can run before the next render after the cage is rebuilt.
     mesh.updateWorldMatrix(true, false)
   })
-  const anchor = selected.find(i => !locked.includes(i) && !hidden.has(i))
-  if (anchor !== undefined && dragMode !== 'screen') {
-    const direction = dragDirection(n, anchor, dragMode, axis)
-    if (direction) {
-      const arrow = new THREE.ArrowHelper(new THREE.Vector3(...direction), new THREE.Vector3(...n.poles[anchor]), radius * 0.22, 0xffcf35, radius * 0.045, radius * 0.025)
-      // ArrowHelper shares default geometry globally; each cage owns only its clones.
-      arrow.line.geometry = arrow.line.geometry.clone(); arrow.cone.geometry = arrow.cone.geometry.clone()
-      arrow.traverse(o => { const m = o as THREE.Mesh; if (m.material && !Array.isArray(m.material)) { m.material.transparent = true; m.material.depthTest = false; m.material.depthWrite = false }; o.renderOrder = 6 })
-      cage.add(arrow)
-    }
+  for (const { pole, axis, direction } of gizmoHandles(n, selected, locked, hiddenPoles, dragMode)) {
+    const arrow = new THREE.ArrowHelper(new THREE.Vector3(...direction), new THREE.Vector3(...n.poles[pole]),
+      radius * 0.22, GIZMO_AXIS_COLORS[axis], radius * 0.045, radius * 0.025)
+    arrow.name = 'SurfaceGizmo3D'; arrow.userData.gizmoPole = pole; arrow.userData.gizmoAxis = axis
+    // ArrowHelper shares default geometry globally; each cage owns its clones.
+    arrow.line.geometry = arrow.line.geometry.clone(); arrow.cone.geometry = arrow.cone.geometry.clone()
+    arrow.traverse(o => { const m = o as THREE.Mesh; if (m.material && !Array.isArray(m.material)) {
+      m.material.transparent = true; m.material.depthTest = false; m.material.depthWrite = false
+    }; o.renderOrder = 6 })
+    cage.add(arrow)
   }
   if (!showNet) return // Hide the connecting cage, retain editable poles.
   const lines: number[] = [], colors: number[] = []
   for (const [a, b] of netEdges(n)) {
     if (hidden.has(a) || hidden.has(b)) continue
     lines.push(...n.poles[a], ...n.poles[b])
-    const c = new THREE.Color(selected.includes(a) && selected.includes(b) ? '#ffcf35' : '#95e7ea')
+    const c = new THREE.Color(selected.includes(a) && selected.includes(b) ?
+      (locked.includes(a) || locked.includes(b) ? '#ef8298' : '#ffcf35') : '#95e7ea')
     colors.push(c.r, c.g, c.b, c.r, c.g, c.b)
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
