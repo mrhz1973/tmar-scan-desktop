@@ -2119,5 +2119,22 @@
   "Cividis": "Cividis",
   "Mako": "Mako",
   "Rocket": "Rocket",
-  "Turbo": "Turbo"
+  "Turbo": "Turbo",
+  "Curvature comb": "Pettine di curvatura",
+  "Shows how sharply every edge bends: teeth perpendicular to the edge, a line along their tips and a faintly filled area.": "Mostra quanto si incurva ogni bordo: denti perpendicolari al bordo, una linea tra le estremit? e un'area leggermente riempita.",
+  "The comb follows sheet edges (sections, detected image edges and shadows), plus every fitted arc, circle and spline, in their own colours.": "Il pettine segue i bordi del foglio (sezioni, contorni rilevati dalle immagini e ombre) e ogni arco, cerchio e spline adattati, nei rispettivi colori.",
+  "The comb follows sections on the 3D part and the curves fitted on their sheets; 2D Measure shows the same comb with a cursor reading.": "Il pettine segue le sezioni sul pezzo 3D e le curve adattate sui relativi fogli; Misure 2D mostra lo stesso pettine con la lettura al cursore.",
+  "Straight edges have no teeth. True arcs show equal-height teeth; a non-circular blend grows and shrinks. Teeth begin where flat turns into round and switch sides when curvature changes sign.": "I tratti rettilinei non hanno denti. Gli archi circolari hanno denti di altezza costante; una raccordatura non circolare li fa crescere e diminuire. Iniziano nel passaggio da piano a curvo e cambiano lato quando cambia il verso della curvatura.",
+  "Scanned and detected edges are smoothed over the Smoothing length; larger values suppress noise and smaller values reveal smaller rounds. The true radius is preserved for sufficiently long arcs. Fitted curves and shadows are exact.": "I bordi scansionati o rilevati vengono levigati sulla lunghezza impostata; valori maggiori riducono il rumore, valori minori mostrano raccordi pi? piccoli. Il raggio reale ? preservato per archi sufficientemente lunghi. Le curve adattate e le ombre sono esatte.",
+  "Length scales the teeth. Teeth too long to draw at sharp corners are shortened and faded.": "Lunghezza regola la scala dei denti. I denti troppo lunghi negli angoli acuti vengono accorciati e attenuati.",
+  "Smoothing": "Levigatura",
+  "How long a scanned or detected edge is smoothed for each reading. Fitted curves are exact and are not smoothed.": "Lunghezza del tratto di bordo scansionato o rilevato utilizzato per levigare ogni lettura. Le curve adattate sono esatte e non vengono levigate.",
+  "Teeth are {0} times their natural drawn length": "I denti sono lunghi {0} volte la loro lunghezza naturale",
+  "Copy reading": "Copia lettura",
+  "Copy position": "Copia posizione",
+  "Remove pin": "Rimuovi punto fissato",
+  "Hide in viewport": "Nascondi nella vista",
+  "Show in viewport": "Mostra nella vista",
+  "Pin": "Punto fissato",
+  "Edit": "Modifica"
 }

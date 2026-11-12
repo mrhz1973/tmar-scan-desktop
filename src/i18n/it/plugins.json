@@ -1423,5 +1423,13 @@
   "further off the part": "più distante dal pezzo",
   "nearer the part": "più vicina al pezzo",
   "median": "mediana",
-  "least": "minimo"
+  "least": "minimo",
+  "Mesh Tools holds an edited copy of the scan ({0} {1}) that is not in use; this workspace measures the original scan.": "Strumenti mesh conserva una copia modificata della scansione ({0} {1}) non ancora in uso; questa area misura la scansione originale.",
+  "edit": "modifica",
+  "edits": "modifiche",
+  "Go to Mesh Tools to view the edited scan copy": "Apri Strumenti mesh per visualizzare la copia modificata",
+  "Show": "Mostra",
+  "Use this edited copy for analysis in all workspaces; elements are refitted. Ctrl+Z restores the previous scan.": "Usa questa copia modificata per le analisi in tutte le aree; gli elementi vengono adattati di nuovo. Ctrl+Z ripristina la scansione precedente.",
+  "Hide this notice until the edited copy changes again": "Nascondi l'avviso finch? la copia modificata non cambia nuovamente",
+  "Hide": "Nascondi"
 }

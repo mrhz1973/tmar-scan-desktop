@@ -8,7 +8,7 @@ import { verdictLines, type Verdict } from '../core/dimensions'
 import { ValueWindow, type ReadValue } from './DroValue'
 import { RowTools } from './RowTools'
 import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
-
+import { copyText, useContextMenu } from './ContextMenu'
 
 export function WarningNote({ text }: { text: string }) {
   useTmarLanguage()
@@ -68,9 +68,15 @@ export function DimensionRow({
   onDelete: () => void
 }) {
   useTmarLanguage()
-
+  const ctx = useContextMenu(name, () => [
+    { label: tmarText('Copy reading'), disabled: !value.value || Boolean(value.invalid), onSelect: () => copyText(value.value ?? '') },
+    { label: tmarText('Edit'), disabled: editorOpen, onSelect: onEdit },
+    { label: tmarText(visible ? 'Hide in viewport' : 'Show in viewport'), onSelect: onToggleVisible },
+    { label: tmarText('Delete'), danger: true, rule: true, onSelect: onDelete },
+  ])
   return (
-    <div className={'dro hero dim' + (visible ? '' : ' ghost')} data-test={`${testPrefix}-row`}>
+    <>
+    <div className={'dro hero dim' + (visible ? '' : ' ghost')} data-test={`${testPrefix}-row`} onContextMenu={ctx.onContextMenu}>
       <div className="dro-label">
         <span>
           {name} · {tmarText(value.label)}
@@ -100,5 +106,7 @@ export function DimensionRow({
         <WarningNote text={tmarText((value.warning ?? value.invalid)!)} />
       )}
     </div>
+    {ctx.menu}
+    </>
   )
 }

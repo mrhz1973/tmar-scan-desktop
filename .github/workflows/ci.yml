@@ -18,8 +18,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  unit-tests:
+    name: Unit tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run --shard=${{ matrix.shard }}/4
+
   unit-and-mcp:
-    name: Unit, architecture and MCP
+    name: Architecture, launcher and MCP
     runs-on: ubuntu-24.04
     # These checks and the browser job use the same checkout independently.
     # A workflow is green only when both jobs pass; no gate is omitted.
@@ -37,7 +54,6 @@ jobs:
         run: node scripts/check-units.mjs
       - name: Launcher metadata and unavailable-state handling
         run: node --test ops/vps-launcher/check.mjs
-      - run: npm test
       - name: The agent server (mcp/), its own package
         run: npm --prefix mcp ci && npm --prefix mcp test
   build-and-browser:

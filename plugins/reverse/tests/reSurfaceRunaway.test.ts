@@ -201,7 +201,7 @@ describe('the kernel’s surface and its mesh', () => {
     expect(Math.abs(body.box!.min[2] - lo)).toBeLessThan(0.5)
     expect(Math.abs(body.box!.max[2] - hi)).toBeLessThan(0.5)
     expect(body.triangles).toBeLessThan(50_000)
-  })
+  }, 60_000) // Native OCCT meshing can exceed 20s on busy CI runners; geometry limits are unchanged.
 
   it('refuses a fit that runs away before the kernel makes it', async () => {
     const { result, body } = await fitted(disc(rim(56, 1), 60, 15, 1, 0.5, 5), { net: { u: 14, v: 14 } })

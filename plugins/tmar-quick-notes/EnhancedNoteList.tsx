@@ -2,6 +2,7 @@
 import { useState, type MouseEvent } from 'react'
 import { useListSelection } from '../../src/plugins/listSelection'
 import { useStore } from '../../src/state/store'
+import { useCommandActivity } from '../../src/commands/activity'
 import { usePrefs } from '../../src/state/prefsStore'
 import { CollapseButton } from '../../src/ui/CollapseButton'
 import { Icon } from '../../src/ui/icons'
@@ -25,6 +26,9 @@ export function EnhancedNoteList({ placementBlocked = null }: NoteListProps) {
   const agentOn = usePrefs((s) => s.agentLink)
   useReverse((s) => s.building || reEditorOpen(s) || !!s.playback)
   useStore((s) => s.busy)
+  // The Note guard reads command activity; subscribe so its disabled state
+  // clears after an agent command finishes even when no other store changes.
+  useCommandActivity((s) => s.running)
   const part = useStore((s) => s.fileName)
   const listed = notes.filter((n) => n.text.trim() !== '')
   const selection = useListSelection(listed.map((n) => n.id), part)
