@@ -1916,6 +1916,13 @@ function Workbench() {
               {tmarText(markHint)}
             </div>
           )}
+          {/* What another workspace's plugin has to say about this one — see
+              PluginRuntime.elsewhere. */}
+          {!picking && runtimes.some((r, i) => i !== activeIndex && r.elsewhere) && (
+            <div className="stagenotes">
+              {runtimes.map((r, i) => (i !== activeIndex && r.elsewhere ? <div key={plugins()[i].id}>{r.elsewhere}</div> : null))}
+            </div>
+          )}
           <BusyOverlay />
           {errorText && <div className="toast">{tmarText(errorText)}</div>}
           {dragging && (

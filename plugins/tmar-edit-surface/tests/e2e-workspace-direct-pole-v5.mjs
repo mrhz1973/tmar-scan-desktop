@@ -9,7 +9,7 @@ import { launchApp } from '../../../scripts/e2e-lib.mjs'
 
 assert.equal(process.env.SCANRULER_ISOLATED,'1','Only synthetic isolated tests')
 const url=process.env.APP_URL
-assert.equal(url,'http://127.0.0.1:18945/','Dedicated localhost QA only')
+assert.match(url,/^http:\/\/127\.0\.0\.1:\d+\/$/,'Dedicated localhost QA only')
 const base=resolve(process.env.TMAR_DIRECT_POLE_QA_OUT||'')
 assert(isAbsolute(base)&&!base.toLowerCase().startsWith(resolve(process.cwd()).toLowerCase()+sep))
 mkdirSync(base,{recursive:true})
