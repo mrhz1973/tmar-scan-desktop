@@ -1,0 +1,38 @@
+{
+  "schema": "TMAR_V5_WORKSPACE_APPLY_SAVE_REOPEN_V1",
+  "scope": "synthetic six-face solid, V5 host and integrated UX plugin",
+  "verdict": "PASS",
+  "checks": [
+    "synthetic source box is a valid OCCT solid",
+    "real V5 editor accepts the synthetic CAD face",
+    "precise numeric Z movement changes an editable control point",
+    "Apply creates a separate CAD body and exactly one history entry",
+    "both exported STEP bodies re-import as valid native solids with unchanged face count",
+    "edited copy differs geometrically from original",
+    "V5 Save Project writes a nonempty .scanruler archive",
+    "reopened project retains the valid edited CAD copy and its volume",
+    "no JavaScript browser errors"
+  ],
+  "errors": [],
+  "output": "D:\\TMAR_HOST_V5_UX_QA_20261112\\v5-roundtrip-eEIpoY",
+  "startedAtUtc": "2026-11-12T06:52:04.016Z",
+  "savedProjectSha256": "fdd484746da290396ffc55f96be5319bb9a2916186c51d50c23c0a5fb988e10c",
+  "geometry": [
+    {
+      "id": 1,
+      "valid": true,
+      "solidCount": 1,
+      "faceCount": 6,
+      "volume": 6000
+    },
+    {
+      "id": 2,
+      "valid": true,
+      "solidCount": 1,
+      "faceCount": 6,
+      "volume": 6015
+    }
+  ],
+  "completedAtUtc": "2026-11-12T06:52:13.346Z",
+  "consoleErrors": []
+}
