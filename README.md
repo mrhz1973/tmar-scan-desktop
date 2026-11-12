@@ -3,6 +3,22 @@
 
 **An open-source ScanRuler fork with modular Zebra analysis, local notes and navigation, category-scoped feature multi-selection, workspace labels and unified CAD-body export. A Windows/macOS desktop application is planned separately.**
 
+## Candidato TMAR Versione 6 — Anteprima (non ancora pubblicata)
+
+La prossima consegna integrata è identificata dal manifest `tmar-version.json` come
+**TMAR Versione 6 — Anteprima**, sulla base ScanRuler **0.11.1**. Include la nuova
+interfaccia Edit Surface V5 con pulsanti bilingue, gizmo XYZ e trascinamento
+diretto dei poli modificabili. Il candidato rimane nella
+[PR #48](https://github.com/mrhz1973/tmar-scan-desktop/pull/48) e **non è
+la Versione 5 attualmente pubblicata**. Prima della distribuzione richiede
+CI integralmente verde, qualifica della stessa build e promozione controllata.
+
+L'indirizzo d'ingresso da preservare è
+[scanruler.31-70-139-73.sslip.io](https://scanruler.31-70-139-73.sslip.io/).
+Il portale legge le versioni realmente pubblicate dai metadata Stable/Dev:
+ogni *nuova consegna* deve avere un numero TMAR maggiore del precedente.
+Il numero della versione ufficiale CNCKitchen resta distinto.
+
 ## ScanRuler 0.11.1 + TMAR integration — 10 November 2026
 
 **TMAR Versione 5 · Anteprima** builds on the complete official **ScanRuler 0.11.1**

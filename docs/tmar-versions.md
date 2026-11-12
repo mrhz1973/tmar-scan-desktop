@@ -35,6 +35,33 @@ release, installer, deployment or an automatic update of an open session.
 
 Versione 1 is based on the current review branch with Edit Surface direct selection. Numbering changes no geometry or input behavior. The previously reported one-pixel drag threshold and Escape-during-drag limitations, unfinished annotated transactions/parametric history and recovery remain open. No general QS parity or stable desktop release is declared.
 
+## Controllo dell'indirizzo e della versione prima di ogni pubblicazione
+
+Il punto di ingresso canonico richiesto dall'operatore è
+`https://scanruler.31-70-139-73.sslip.io/`.
+La pagina deve continuare a indirizzare ai canali Stable e Dev e a mostrare
+l'identità reale delle build letta da `/tmar-live-versions.json`.
+Il canale Dev è su `https://scanruler-dev.31-70-139-73.sslip.io/`.
+
+**Regola obbligatoria:** ogni nuova snapshot pubblicata sotto Stable/Dev che
+contenga modifiche visibili deve avere un `tmar_number` incrementato
+rispetto alla consegna precedente. Un commit, un rebuild di prova o una
+ricompilazione della medesima snapshot non costituisce un nuovo rilascio.
+Non distribuire due snapshot diverse con lo stesso numero.
+
+Preflight di consegna: confrontare SHA Git, `tmar-version.json` e
+`tmar-preview-version.json`, controllare i metadata pubblici, validare il
+collegamento d'ingresso e il DNS/redirect, aggiornare il changelog, quindi
+verificare da rete esterna che il badge e il portale mostrino la nuova versione.
+Se il link pubblico cambia, notificare l'operatore e preservare il redirect
+dell'indirizzo canonico; non sostituire automaticamente il suo preferito.
+
+**Candidato successivo (non ancora in Stable/Dev):**
+TMAR **Versione 6 — Anteprima**, nel ramo `integration/host-v5-ux-20261111`.
+La Versione 5 rimane l'ultima build realmente pubblicata, finché la Versione 6
+non supera CI e accettazione operatore. L'upgrade ufficiale CNCKitchen 0.11.2
+è un lavoro separato da verificare con le personalizzazioni TMAR.
+
 ## Checks
 
 ```sh
