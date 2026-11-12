@@ -48,18 +48,18 @@ export function WorkspaceEntry() {
   }
   return <div className="es-feature-entry" data-test="edit-surface-entry">
     <button type="button" data-test="feature-edit-surface" aria-label={tmarText("Edit Surface")}
-      title={tmarText("Modifica i poli di una faccia CAD nella vista principale.")}
+      title={tmarText("Edit the control points of a CAD face in the main viewport.")}
       disabled={unavailable || !bodies.length || busy || running || building || editing || playback || opening} onClick={begin}>
       <EditSurfaceIcon /><span>{tmarText("Edit Surface")}</span>
     </button>
     {choosing && createPortal(<div className="workspace-surface-choose-back">
-      <section className="workspace-surface-choose" role="dialog" aria-modal="true" aria-label={tmarText("Scegli corpo CAD")}>
-        <h2>{tmarText("Scegli il corpo CAD")}</h2>
-        <label>{tmarText("Corpo ")}<select data-test="surface-source-body" value={bodyId} onChange={e => setBodyId(e.target.value)}>
-          <option value="">{tmarText("Scegli…")}</option>{bodies.map(body => <option key={body.id} value={body.id}>{body.name}</option>)}
+      <section className="workspace-surface-choose" role="dialog" aria-modal="true" aria-label={tmarText("Choose CAD body")}>
+        <h2>{tmarText("Choose the CAD body")}</h2>
+        <label>{tmarText("Body ")}<select data-test="surface-source-body" value={bodyId} onChange={e => setBodyId(e.target.value)}>
+          <option value="">{tmarText("Choose…")}</option>{bodies.map(body => <option key={body.id} value={body.id}>{body.name}</option>)}
         </select></label>
-        <div><button type="button" disabled={!bodyId || opening} onClick={() => void open(Number(bodyId))}>{tmarText("Continua")}</button>
-          <button type="button" disabled={opening} onClick={() => setChoosing(false)}>{tmarText("Annulla")}</button></div>
+        <div><button type="button" disabled={!bodyId || opening} onClick={() => void open(Number(bodyId))}>{tmarText("Continue")}</button>
+          <button type="button" disabled={opening} onClick={() => setChoosing(false)}>{tmarText("Cancel")}</button></div>
       </section>
     </div>, document.body)}
   </div>

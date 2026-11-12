@@ -45,3 +45,11 @@
 .workspace-surface-panel[data-active-tool="history"] .ws-tool-group[data-tool-group="history"] { display: grid; grid-template-columns: minmax(0,1fr); gap: 8px; }
 .workspace-surface-panel .ws-tool-group > * { min-width: 0; max-width: 100%; }
 .workspace-surface-panel .ws-lock-reasons { display: grid; gap: 4px; border-left: 3px solid #d08b49; padding: 6px 8px; background: var(--well,#293740); border-radius: 4px; }
+.workspace-surface-panel .ws-pole-policy { display: grid; gap: 5px; padding: 9px 10px; border: 1px solid var(--line-strong,#536c7b); border-radius: 7px; background: var(--well,#27333c); }
+.workspace-surface-panel .ws-pole-policy strong { font-size: 13px; color: var(--ink,#f0f6fa); }
+.workspace-surface-panel .ws-pole-policy button, .workspace-surface-panel .ws-lock-reasons button { width: 100%; min-height: 36px; border-radius: 6px; padding: 7px; font-weight: 700; background: var(--accent,#286b92); color: white; }
+.workspace-surface-panel .ws-pole-legend { display: flex; gap: 10px; flex-wrap: wrap; }
+.workspace-surface-panel .ws-pole-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.workspace-surface-panel .ws-pole-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 1px solid #526572; }
+.workspace-surface-panel .ws-pole-free { background: #58f3d0; }
+.workspace-surface-panel .ws-pole-locked { background: #89939c; }
