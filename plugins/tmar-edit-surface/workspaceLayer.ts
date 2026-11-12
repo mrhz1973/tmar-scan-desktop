@@ -11,6 +11,7 @@ import type { SceneLayer } from '../../src/viewer/sceneLayers'
 import type { Net,Point } from './brep'
 import { dragDirection } from './localFrame'
 import { pickWorkspaceGizmoArrow } from './workspaceGizmoPick'
+import { workspacePoleDragMode } from './workspacePoleDragMode'
 import { pickNetAt } from './netPicking'
 import { populateSurfaceCage } from './surfaceCage'
 import { createDragFrame } from './dragFrame'
@@ -1235,8 +1236,11 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
       if (!faceHit && state.selectionMode === 'auto' && picked.length === 4 &&
           !picked.every(i => state.selected.includes(i))) return false
       if (!directHit) clearDirect()
-      const selected = !faceHit && picked.every(i => state.selected.includes(i)) ? [...state.selected] : picked
-      if (!faceHit && arrow === null) owner.selectPoints(picked, false)
+      const wasSelected = !faceHit && picked.every(i => state.selected.includes(i))
+      const selected = wasSelected ? [...state.selected] : picked
+      // Grabbing an already-selected yellow pole keeps its multi-selection.
+      // Picking a new pole replaces it; axis arrows retain their behaviour.
+      if (!faceHit && arrow === null && !wasSelected) owner.selectPoints(picked, false)
       const ids = selected.filter(i => !state.locked.includes(i) && !state.hiddenPoles.includes(i))
       if (faceHit && ids.length !== net.poles.length) return false
       if (!ids.length) return true
@@ -1245,18 +1249,23 @@ export function createWorkspaceLayer(view: WorkspaceSurfaceView, owner: Workspac
         owner.reportViewError('Simmetria bloccata: almeno un punto speculare è assente o bloccato. Modifica la selezione, sblocca i punti oppure usa il comando di proiezione sul piano.')
         return true
       }
-      // A clicked red/green/blue handle chooses its own axis. In local mode
-      // the picked pole defines the U/V/N direction for the whole selection.
-      const direction = dragDirection(net, arrow?.pole ?? ids[0], state.dragMode, arrow?.axis ?? state.axis)
-      if (state.dragMode !== 'screen' && !direction) return true
+      // Left-dragging a control point itself moves it freely in the plane of
+      // the screen. A coloured arrow still constrains the exact same gesture
+      // to its own XYZ/U/V/N axis. A 2D mouse cannot control depth directly:
+      // rotate the viewport first or use an axis handle for that component.
+      // Do not change whole-face, boundary, edge or cell gesture contracts.
+      const gestureMode = workspacePoleDragMode(state.dragMode, arrow !== null, !!faceHit, picked.length)
+      const direction = gestureMode === 'screen' ? null :
+        dragDirection(net, arrow?.pole ?? ids[0], state.dragMode, arrow?.axis ?? state.axis)
+      if (gestureMode !== 'screen' && !direction) return true
       const origin = faceHit ? new THREE.Vector3(...faceHit.point)
         : picked.reduce((v, i) => v.add(new THREE.Vector3(...net.poles[i])), new THREE.Vector3()).multiplyScalar(1 / picked.length)
       const matrix = partMatrix(point(origin)), rect = view.bounds(), camera = view.camera()
       const frame = createDragFrame({ camera, partWorld: matrix, rect, anchor: point(origin), clientX: event.clientX, clientY: event.clientY,
-        ...(state.dragMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction: direction!, allowViewAlignedDepth: true }) })
-      if (!frame) { report('Direzione allineata alla vista: ruota il modello o scegli un altro asse.'); return true }
+        ...(gestureMode === 'screen' ? { mode: 'screen' as const } : { mode: 'axis' as const, direction: direction!, allowViewAlignedDepth: true }) })
+      if (!frame) { report('Impossibile avviare il trascinamento: ruota il modello o seleziona una freccia.'); return true }
       const inverse = new THREE.Matrix3().setFromMatrix4(matrix.clone().invert())
-      const snapDirection = state.dragMode === 'screen' ? new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld).applyMatrix3(inverse).normalize() : new THREE.Vector3(...direction!)
+      const snapDirection = gestureMode === 'screen' ? new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld).applyMatrix3(inverse).normalize() : new THREE.Vector3(...direction!)
       const anchor = new THREE.Vector3(...net.poles[ids[0]])
       let reportedInvalidTarget = false
       const gesture = createSurfaceGesture({ frame, poles: net.poles, selected: ids, start: mousePoint(event), strength: state.dragStrength,

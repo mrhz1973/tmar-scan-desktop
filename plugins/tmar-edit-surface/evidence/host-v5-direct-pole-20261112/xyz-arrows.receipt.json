@@ -1,0 +1,45 @@
+{
+  "schema": "TMAR_V5_WORKSPACE_3AXIS_BROWSER_V1",
+  "startedAtUtc": "2026-11-12T19:54:59.369Z",
+  "scope": "V5 host viewport, synthetic 6-face box only",
+  "verdict": "PASS",
+  "checks": [
+    "OCCT synthetic box is valid",
+    "V5 host draws all three axes on a movable G1 pole",
+    "all three host-space projected arrow segments are pickable",
+    "X arrow changes its own coordinate only",
+    "Y arrow changes its own coordinate only",
+    "Z arrow changes its own coordinate only",
+    "host browser has no JavaScript errors"
+  ],
+  "axes": [
+    {
+      "axis": 0,
+      "delta": [
+        1.0956182806328485,
+        0,
+        0
+      ]
+    },
+    {
+      "axis": 1,
+      "delta": [
+        0,
+        1.3274134410658824,
+        0
+      ]
+    },
+    {
+      "axis": 2,
+      "delta": [
+        0,
+        0,
+        1.0089500856702234
+      ]
+    }
+  ],
+  "errors": [],
+  "output": "D:\\TMAR_HOST_V5_DIRECT_POLE_QA_20261112\\v5-gizmo-RqHH7D",
+  "completedAtUtc": "2026-11-12T19:55:10.234Z",
+  "consoleErrors": []
+}

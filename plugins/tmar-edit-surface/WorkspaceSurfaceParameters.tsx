@@ -196,6 +196,9 @@ export function WorkspaceSurfaceParameters({ controller }: { controller: Workspa
           <span><i className="ws-pole-free" />{language === 'it' ? 'Punto libero' : 'Movable point'}</span>
           <span><i className="ws-pole-locked" />{language === 'it' ? 'Punto protetto' : 'Protected point'}</span>
         </p>
+        <p data-test="surface-freehand-hint">{language === 'it'
+          ? 'Punto giallo: tieni premuto il tasto sinistro e trascina liberamente sullo schermo. Per andare in profondità ruota prima la vista, oppure usa una freccia XYZ.'
+          : 'Yellow point: hold the left mouse button and drag freely across the screen. For depth, rotate the view first or use an XYZ arrow.'}</p>
       </div>
       <section className="ws-tool-group" data-tool-group="analysis">
       {cylinder && <div><p>{surfaceText("Cilindro sperimentale: i controlli CAD sono campionati; verifica il risultato prima dell’uso e prima di aggiungere note.")}</p>
