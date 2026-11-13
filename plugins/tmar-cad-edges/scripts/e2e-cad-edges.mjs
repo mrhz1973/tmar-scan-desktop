@@ -116,10 +116,28 @@ try {
   await call('project.load',{bytes:roundtrip.file.bytes,name:'reference-edges-roundtrip.scanruler',discard:true})
   await page.waitForFunction(()=>!window.__re.store.getState().building,{timeout:180000})
   check(await page.evaluate(()=>window.__re.scene().referenceDisplay()?.cadEdges?.length>0&&window.__reNotes.getState().notes.length===2),'STEP boundaries are recovered from the source and both notes survive project reopen')
-  await page.evaluate(async()=>{const {useDeviation}=await import('/src/state/deviationStore.ts');useDeviation.setState({split:true})});await sleep(220)
-  check(Boolean(await page.$('[data-test=zebra-deviation-blocked]')),'split view remains explicitly guarded, not silently misrendered')
-  await page.evaluate(async()=>{const {useDeviation}=await import('/src/state/deviationStore.ts');useDeviation.setState({split:false})});await sleep(220)
-  check(await page.$eval('[data-test=zebra-enabled]',e=>!e.checked),'returning from split view starts with Zebra off')
+  // Zebra now displays on the scan at left while the linked reference remains
+  // normally shaded; changing layouts must preserve the selected single-view target.
+  await page.evaluate(async()=>{const {useDeviation}=await import('/src/state/deviationStore.ts');useDeviation.setState({split:true,showScan:true})})
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  await page.waitForFunction(()=>document.querySelector('[data-test=zebra-target]')?.value==='scan')
+  check(!(await page.$('[data-test=zebra-deviation-blocked]')) &&
+    Boolean(await page.$('[data-test=zebra-split-help]')) &&
+    (await page.$eval('[data-test=zebra-enabled]',e=>e.checked)),
+    'split keeps Zebra active on the left scan with an explicit scope explanation')
+  await page.waitForFunction(()=>{
+    const scene=window.__re.scene(),host=scene.layerHost(),geometry=scene.scanGeometry()
+    const scan=host.partGroup.children.find(child=>child.isMesh&&child.geometry===geometry)
+    return scan?.children.some(child=>child.name==='tmar-zebra-overlay')
+  })
+  check(await page.evaluate(()=>{
+    const scene=window.__re.scene(),ref=scene.referenceDisplay()?.mesh
+    return !!ref && !ref.children.some(child=>child.name==='tmar-zebra-overlay')
+  }), 'split Zebra does not overlay the independent reference')
+  await page.evaluate(async()=>{const {useDeviation}=await import('/src/state/deviationStore.ts');useDeviation.setState({split:false})})
+  await page.waitForFunction(()=>document.querySelector('[data-test=zebra-target]')?.value==='reference')
+  check(await page.$eval('[data-test=zebra-enabled]',e=>e.checked),
+    'closing split preserves enabled Zebra and restores the chosen single-view reference target')
   check(await page.evaluate(async()=>!(await import('/src/state/prefsStore.ts')).usePrefs.getState().agentLink),'all edge/annotation operations leave the agent connection disabled')
   await page.screenshot({path:shotPath('cad-edges-complete.png')})
 } catch(e){fail(e.stack??String(e))}
