@@ -18,8 +18,8 @@ export function enableZebra(on: boolean): void {
   const ui = useZebraUi.getState(), re = useReverse.getState()
   if (on && useShell.getState().workspace === 'deviation') {
     const d=useDeviation.getState()
-    if (d.split || d.picking || d.animate || d.alignStatus === 'running') return
-    ui.setTarget(d.source === 'reference' && d.nominalName && d.showNominal ? 'reference' : 'scan')
+    if (d.picking || d.animate || d.alignStatus === 'running') return
+    ui.setTarget(d.split ? 'scan' : d.source === 'reference' && d.nominalName && d.showNominal ? 'reference' : 'scan')
   }
   if (on && useShell.getState().workspace === 'reverse' && ui.target === 'visible' && !re.bodies.some((b) => b.visible) && useStore.getState().fileName) ui.setTarget('scan')
   ui.setEnabled(on)
@@ -30,12 +30,12 @@ export function ZebraQuickButton() {
   const workspace = useShell((s) => s.workspace)
   const enabled = useZebraUi((s) => s.enabled)
   const cadEditing = useReverse((s) => reEditorOpen(s) || s.building || !!s.playback)
-  const devBlocked = useDeviation(s => s.split || s.picking || s.animate || s.alignStatus === 'running')
+  const devBlocked = useDeviation(s => s.picking || s.animate || s.alignStatus === 'running')
   const editing = workspace === 'reverse' ? cadEditing : devBlocked
   if (workspace !== 'reverse' && workspace !== 'deviation') return null
   return <div className="keys"><button data-test="zebra-quick-toggle" className={enabled ? 'on' : undefined}
     aria-pressed={enabled} disabled={editing && !enabled}
-    title={editing ? tmarText("Finish the active operation and use a single viewport for Zebra analysis") : enabled ? tmarText("Turn Zebra off") : tmarText("Show Zebra analysis and its stripe controls")}
+    title={editing ? tmarText("Finish the active operation before using Zebra analysis") : enabled ? tmarText("Turn Zebra off") : tmarText("Show Zebra analysis and its stripe controls")}
     onClick={() => {
       enableZebra(!enabled)
       if (!enabled) requestAnimationFrame(() => document.querySelector('[data-test="tmar-zebra"]')?.scrollIntoView({ block: 'nearest' }))

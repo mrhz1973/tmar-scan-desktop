@@ -7,6 +7,22 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR HTML - Zebra split scan-side prototype (13 November 2026)
+
+- In an isolated TMAR Versione 7 source branch, enable Zebra on the **left
+  scan** in Surface Deviation's existing two-viewport comparison; keep the
+  **right reference** at its original shading and preserve camera linking.
+- Allow local notes on the left scan while the split is open; the reference
+  viewport remains non-pickable for notes. The current note store and
+  .scanruler project format are unchanged.
+- Display the supported scope in Italian and English, guard the unsupported
+  reference-side Zebra option, and retain the existing single-viewport
+  behavior.
+- Add a synthetic Chrome regression for left/right rendering isolation,
+  split hide/show, stripe orientation, safe note placement and project
+  save/reopen. **Source-only, not deployed**; do not relabel the published
+  TMAR 7 as a different build under the same number.
+
 ### TMAR Versione 7 - ScanRuler 0.11.2 integration candidate (13 November 2026)
 
 - Merge the complete official upstream ScanRuler 0.11.2 tag

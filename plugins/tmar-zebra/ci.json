@@ -1,1 +1,1 @@
-{ "e2e": ["scripts/e2e-zebra.mjs"] }
+{ "e2e": ["scripts/e2e-zebra.mjs", "scripts/e2e-zebra-split.mjs"] }

@@ -1431,5 +1431,8 @@
   "Show": "Mostra",
   "Use this edited copy for analysis in all workspaces; elements are refitted. Ctrl+Z restores the previous scan.": "Usa questa copia modificata per le analisi in tutte le aree; gli elementi vengono adattati di nuovo. Ctrl+Z ripristina la scansione precedente.",
   "Hide this notice until the edited copy changes again": "Nascondi l'avviso finch? la copia modificata non cambia nuovamente",
-  "Hide": "Nascondi"
+  "Hide": "Nascondi",
+  "Finish the active operation before using Zebra analysis": "Concludi l'operazione attiva prima di utilizzare l'analisi Zebra.",
+  "Zebra requires a still Deviation viewport. Finish the active operation before inspecting the surface.": "Zebra richiede una vista Scostamento ferma. Concludi l'operazione attiva prima di esaminare la superficie.",
+  "In split view, Zebra shades the scan on the left; the reference on the right keeps normal shading. Notes attach only to the left scan.": "Nella vista affiancata Zebra colora la scansione a sinistra; il riferimento a destra mantiene l'ombreggiatura normale. Le note si associano soltanto alla scansione di sinistra."
 }

@@ -21,8 +21,8 @@ import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../sr
 export function ZebraDeviationPanel() {
   useTmarLanguage()
 
-  const blocked = useDeviation(s=>s.split || s.picking || s.animate || s.alignStatus === 'running')
-  if (blocked) return <p className="hint" data-test="zebra-deviation-blocked">{tmarText("Zebra requires a still, single Deviation viewport. Split-view support remains planned.")}</p>
+  const blocked = useDeviation(s=>s.picking || s.animate || s.alignStatus === 'running')
+  if (blocked) return <p className="hint" data-test="zebra-deviation-blocked">{tmarText("Zebra requires a still Deviation viewport. Finish the active operation before inspecting the surface.")}</p>
   return <ZebraPanel/>
 }
 export interface ZebraInspection {
@@ -39,9 +39,10 @@ export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}
 
   const workspace = useShell(s=>s.workspace), onDeviation = workspace === 'deviation'
   const referenceName = useDeviation(s=>s.nominalName), showScan = useDeviation(s=>s.showScan)
+  const split = useDeviation(s=>s.split)
   const editingNote = useNotes(s=>s.editing)
   const enabled = useZebraUi((s) => s.enabled), uiTarget = useZebraUi((s) => s.target)
-  const target = inspection ? 'scan' : uiTarget
+  const target = inspection ? 'scan' : onDeviation && split ? 'scan' : uiTarget
   const inspectionRef = useRef(inspection)
   inspectionRef.current = inspection
   const toggle = inspection?.toggle ?? enableZebra
@@ -117,7 +118,7 @@ export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}
           {!onDeviation && !inspection && <option value="visible">{tmarText("Visible CAD bodies")}</option>}
           {!onDeviation && !inspection && <option value="selected">{tmarText("Selected CAD bodies")}</option>}
           <option value="scan">{tmarText(inspection?.label) ?? (tmarText("Scan"))}</option>
-          {onDeviation && <option value="reference" disabled={!referenceName}>{tmarText("Reference (STEP / mesh)")}</option>}
+          {onDeviation && <option value="reference" disabled={!referenceName || split}>{tmarText("Reference (STEP / mesh)")}</option>}
         </select>
       </label>
       <label className="field"><span>{tmarText("Stripe direction")}</span>
@@ -135,6 +136,7 @@ export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}
       <p className="hint" data-test="zebra-status" role="status">{unavailable ? tmarText("The 3D view is unavailable.") : count > 0 ? tmarText("Showing stripes on {0} visible {1}.", [count, count === 1 ? tmarText("object") : tmarText("objects")]) : target === 'selected' ? tmarText("Select visible CAD bodies in the body list.") : target === 'reference' ? tmarText("Load and show the reference in Surface Deviation. Hide the scan when it covers the reference.") : target === 'scan' ? tmarText("Show a scan with surface normals to analyze it.") : tmarText("Show a CAD body with surface normals to analyze it.")}</p>
       {inspection && <p className="hint" data-test="mesh-zebra-help">{tmarText(inspection.hint)}</p>}
       {inspection?.noteBlocked && <p className="hint" data-test="mesh-zebra-note-help">{tmarText(inspection.noteBlocked)}</p>}
+      {onDeviation && split && <p className="hint" data-test="zebra-split-help">{tmarText("In split view, Zebra shades the scan on the left; the reference on the right keeps normal shading. Notes attach only to the left scan.")}</p>}
       {onDeviation && <p className="hint">{tmarText("Zebra temporarily replaces the selected object's shading, not its geometry or measurements. Turn it off to read the comparison colors. Notes remain scan-side in this workspace.")}</p>}
       <p className="hint">{tmarText("Rotate the view to inspect reflected bands. This is a visual aid, not a numerical continuity measurement. Shading follows the displayed mesh normals.")}</p>
     </>}

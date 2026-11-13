@@ -26,28 +26,28 @@ scope. No new runtime change or real-part acceptance is implied by this entry.
 
 ## ZEBRA-SPLIT-002
 
-**Split view with Zebra and local notes - PLANNED / not implemented.**
+**PARTIAL - isolated source candidate, not yet deployed or accepted by the operator.**
+Branch: `feat/web-zebra-split-20261113`, based on TMAR 7 / ScanRuler 0.11.2.
 
-Goal: evaluate two 3D panes so a user can inspect Zebra and keep annotated
-comparison context visible without leaving the review. A candidate is Zebra
-beside normal shading or a deviation view. A docked note list can accompany the
-panes but, on its own, is not the requested split-view feature.
+The first bounded increment reuses the existing Surface Deviation split:
+Zebra appears on the **left scan** beside the **normally shaded right
+reference**. The left scan retains its existing note store; clicking the
+right reference never creates a false scan attachment. Zebra on the right
+reference and reference-anchored notes are **not yet supported**.
 
-- [ ] Define the supported workspace/pane combinations. Evaluate Reverse engineer/Zebra and Surface Deviation scan/reference separately.
-- [ ] Choose vertical/horizontal layout and a resizable divider, including a usable narrow-screen fallback.
-- [ ] Specify linked versus independent cameras and preserve model alignment; do not move geometry to synchronize views.
-- [ ] Reuse existing local note records, IDs, text, anchors and provenance; no duplicate note store and no required or automatically enabled agent connection.
-- [ ] Place a note on the supported scan or CAD surface in the correct pane while Zebra remains active; explain unsupported targets instead of silently misplacing an anchor.
-- [ ] Define which pane(s) Go to note controls, show the corresponding focus/highlight, and preserve Return to previous view.
-- [ ] Provide per-pane Labels and note-pin visibility, with temporary focus of one note without revealing all annotations.
-- [ ] Preserve category-scoped feature visibility, clipping, source geometry/materials and the existing lower-bar controls.
-- [ ] Save/reopen the same note records without duplication and explicitly decide which layout/camera preferences persist.
-- [ ] Test placement, selection, focus, hidden/clipped targets, resizing, mode transitions, project round trips and renderer cleanup; qualify platforms separately.
+- [x] Implement left-scan Zebra in the existing side-by-side Deviation view, without changing geometry or the right reference's material.
+- [x] Reuse the existing two linked viewports, without remounting the right canvas when the split is hidden and reopened.
+- [x] Keep reference-side Zebra selection unavailable while split; explain scope in Italian and English.
+- [x] Permit local notes in the left scan pane, preserve their IDs/targets, and reject clicks in the right reference pane.
+- [x] Verify on synthetic STEP/STL fixtures: visual isolation, stripe controls, split hide/show and note save/reopen.
+- [ ] Qualify camera-linked note focus/return for hidden or clipped targets in split mode.
+- [ ] Specify and implement resizable layouts, narrow screens and any horizontal alternative.
+- [ ] Evaluate optional Zebra on the right reference, independent per-pane settings and reference-side note identity.
+- [ ] Support Reverse engineer split and any new CAD-side composition without duplicating sources or notes.
+- [ ] Complete per-pane labels, navigation, project persistence policy, multi-platform/large-model QA and owner visual acceptance.
 
-Current boundary: the delivered Deviation note adapter is scan-side and
-single-viewport. This task does not claim reference-side or split-view note
-placement already works. It remains future work while current-result review
-continues.
+This partial implementation is not a release or full completion of ZEBRA-SPLIT-002.
+The existing general Zebra review remains open.
 
 ## ZEBRA-GALLERY-003
 

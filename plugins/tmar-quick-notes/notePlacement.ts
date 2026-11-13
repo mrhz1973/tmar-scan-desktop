@@ -24,10 +24,12 @@ export interface DeviationNoteState {
 export function deviationNoteBlock(d: DeviationNoteState, hasScan: boolean, busy: boolean): string | null {
   if (!hasScan) return 'Load a scan before placing a note.'
   if (busy || d.nominalBusy || d.alignStatus === 'running' || d.mapStatus === 'running' || d.referenceStatus === 'running') return 'Wait for the current operation to finish before placing a note.'
-  if (d.split) return 'Switch to the single viewport before placing a note. Split-view notes are not supported yet.'
+  // The main viewport remains the scan at left in split mode. The independent
+  // reference half cannot create notes: its click handler does not call the
+  // shared scan-side placement adapter.
   if (d.picking || d.marking) return 'Finish alignment picking or surface marking before placing a note.'
   if (d.animate) return 'Stop deformation animation before placing a note on the actual surface.'
-  if (d.mapOn === 'reference') return 'Select the scan-side map to place a note. Reference-side notes are not supported yet.'
+  if (d.mapOn === 'reference' && !d.split) return 'Select the scan-side map to place a note. Reference-side notes are not supported yet.'
   if (!d.showScan) return 'Show the scan before placing a note.'
   return null
 }
