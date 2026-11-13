@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+[Unit]
+Description=TMAR ScanRuler preview: test and deploy latest main
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=tmar-preview
+Group=tmar-preview
+WorkingDirectory=/opt/tmar-scanruler-preview
+Environment=HOME=/opt/tmar-scanruler-preview
+ExecStart=/bin/bash /opt/tmar-scanruler-preview/ops/deploy.sh
+Nice=10
+TimeoutStartSec=1800
+MemoryMax=4G
+TasksMax=200
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/opt/tmar-scanruler-preview
+InaccessiblePaths=/etc/goi-ors /opt/tecnoone-preview /root
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
