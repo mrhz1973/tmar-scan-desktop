@@ -117,3 +117,13 @@ limits. This gallery does not close those review items or announce a desktop rel
 
 [Image provenance](images/README.md) · [Theme checks](tmar-dark-gallery-validation.md)
 · [Open review backlog](tmar-review-backlog.md).
+
+## November 4, 2026 — separate Edit Surface review gallery
+
+**Unmerged review build, not the hosted application.** Three new real compiled-app captures are documented separately from the available features above.
+
+| Editor, Zebra and note | Applied copy | Reopened native project |
+| --- | --- | --- |
+| [<img src="images/updates-20261104/edit-surface-annotated.png" alt="CAD control net, Zebra, draft note and Local N displacement in the main viewport." width="280">](images/updates-20261104/edit-surface-annotated.png) | [<img src="images/updates-20261104/edited-copy-note.png" alt="Modified copy and verified note; original retained but hidden." width="280">](images/updates-20261104/edited-copy-note.png) | [<img src="images/updates-20261104/reopened-note.png" alt="Fresh-page native Load preserves the CAD copy and its note." width="280">](images/updates-20261104/reopened-note.png) |
+
+[Captions, exact source and limitations](tmar-edit-surface-preview-gallery.md). Existing hero and eleven UI screenshots remain unchanged.
