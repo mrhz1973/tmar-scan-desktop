@@ -19,7 +19,9 @@ A first **scan-side split-view candidate** is under review in
 `feat/web-zebra-split-20261113`: in Surface Deviation's existing linked
 split, the left scan may show Zebra while the right reference keeps normal
 shading. Notes are placed on the left scan only, using the existing records
-and project saves; the right reference cannot receive scan notes. The right
+and project saves; the right reference cannot receive scan notes. Go to note
+centers a visible scan-side note and Return restores the previous linked
+camera pose in both viewports; note anchors and geometry remain unchanged. The right
 reference cannot yet be Zebra-shaded in split mode, and reference-anchored
 notes, resizable layouts and per-pane controls remain future work. **This
 candidate is not published in Stable or Dev.** See

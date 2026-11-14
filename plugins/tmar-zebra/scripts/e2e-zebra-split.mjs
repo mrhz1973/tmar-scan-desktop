@@ -142,6 +142,32 @@ try {
   check(await page.$eval('[data-test=zebra-enabled]', e => e.checked),
     'Zebra remains visible when the scan note is kept')
 
+  // Locate the saved left-scan observation and return to the original linked
+  // framing, without changing or anchoring anything on the reference.
+  const rightBeforeFocus = await shot('.compareview canvas')
+  await page.click('[data-note-id="' + savedRow.id + '"] [data-test=note-locate]')
+  await page.waitForSelector('[data-test=note-focus-ring][data-note-id="' + savedRow.id + '"]', { visible: true })
+  await page.waitForFunction(id => {
+    const ring = document.querySelector('[data-test=note-focus-ring][data-note-id="' + id + '"]')
+    const canvas = document.querySelector('.viewport canvas')
+    if (!ring || !canvas) return false
+    const r = ring.getBoundingClientRect(), c = canvas.getBoundingClientRect()
+    return Math.hypot(r.x + r.width / 2 - c.x - c.width / 2, r.y + r.height / 2 - c.y - c.height / 2) < 3 && r.width >= 50
+  }, { timeout: 30000 }, savedRow.id)
+  check(await page.$eval('[data-test=note-focus-feedback]', el => el.textContent.includes('centered')),
+    'scan-side note focuses and highlights inside the left split viewport')
+  await sleep(700)
+  const rightAfterFocus = await shot('.compareview canvas')
+  const linkedChange = await pixelDiff(page, rightBeforeFocus, rightAfterFocus)
+  check(linkedChange > 1, 'the reference view follows the left scan focus (' + linkedChange.toFixed(2) + '% of pixels)')
+  await page.click('[data-test=note-return-view]')
+  await sleep(700)
+  const rightAfterReturn = await shot('.compareview canvas')
+  const returnDifference = await pixelDiff(page, rightBeforeFocus, rightAfterReturn)
+  check(returnDifference < 1, 'Return to previous view restores the linked reference framing (' + returnDifference.toFixed(3) + '%)')
+  check(await page.$eval('[data-test=zebra-enabled]', el => el.checked),
+    'note navigation and Return keep split Zebra enabled')
+
   await page.evaluate(() => {
     const original = URL.createObjectURL
     URL.createObjectURL = blob => { window.zebraSplitSaved = blob; return original(blob) }

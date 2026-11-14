@@ -40,7 +40,8 @@ reference and reference-anchored notes are **not yet supported**.
 - [x] Keep reference-side Zebra selection unavailable while split; explain scope in Italian and English.
 - [x] Permit local notes in the left scan pane, preserve their IDs/targets, and reject clicks in the right reference pane.
 - [x] Verify on synthetic STEP/STL fixtures: visual isolation, stripe controls, split hide/show and note save/reopen.
-- [ ] Qualify camera-linked note focus/return for hidden or clipped targets in split mode.
+- [x] Qualify Go to note and Return to previous view for an ordinary visible scan note in split, including both linked cameras and unchanged Zebra state (synthetic Chrome).
+- [ ] Extend the split focus/return qualification to hidden or clipped scan targets and large-model sessions.
 - [ ] Specify and implement resizable layouts, narrow screens and any horizontal alternative.
 - [ ] Evaluate optional Zebra on the right reference, independent per-pane settings and reference-side note identity.
 - [ ] Support Reverse engineer split and any new CAD-side composition without duplicating sources or notes.

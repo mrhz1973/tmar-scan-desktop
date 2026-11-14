@@ -20,7 +20,10 @@ saves carry the same number as `appVersion`. How a release is cut is in
   behavior.
 - Add a synthetic Chrome regression for left/right rendering isolation,
   split hide/show, stripe orientation, safe note placement and project
-  save/reopen. **Source-only, not deployed**; do not relabel the published
+  save/reopen.
+- Permit Go to note for a saved scan-side observation in linked Deviation
+  split mode; both cameras follow focus and Return restores the prior pose.
+  Guard unfinished reference calculations, picking and non-scan note anchors. **Source-only, not deployed**; do not relabel the published
   TMAR 7 as a different build under the same number.
 
 ### TMAR Versione 7 - ScanRuler 0.11.2 integration candidate (13 November 2026)
