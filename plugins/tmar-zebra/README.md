@@ -15,10 +15,21 @@ User-supplied screenshot, November 2, 2026: **Reverse engineer**, imported
 The displayed target is a mesh, not a CAD BRep proven by its filename.
 [Full example, provenance and limits](../../docs/tmar-zebra-examples.md).
 
-Future work: [split view with local notes](../../docs/tmar-review-backlog.md#zebra-split-002)
-and [additional real-part gallery views](../../docs/tmar-review-backlog.md#zebra-gallery-003).
-The [current result review](../../docs/tmar-review-backlog.md#zebra-review-001)
-remains open. Split-view note placement is not delivered by this documentation.
+A first **scan-side split-view candidate** is under review in
+`feat/web-zebra-split-20261113`: in Surface Deviation's existing linked
+split, the left scan may show Zebra while the right reference keeps normal
+shading. Notes are placed on the left scan only, using the existing records
+and project saves; the right reference cannot receive scan notes. Go to note
+centers a visible scan-side note and Return restores the previous linked
+camera pose in both viewports; note anchors and geometry remain unchanged. The right
+reference cannot yet be Zebra-shaded in split mode, and reference-anchored
+notes, resizable layouts and per-pane controls remain future work. **This
+candidate is not published in Stable or Dev.** See
+[ZEBRA-SPLIT-002](../../docs/tmar-review-backlog.md#zebra-split-002).
+
+Further work includes [real-part gallery views](../../docs/tmar-review-backlog.md#zebra-gallery-003);
+the [current Zebra result review](../../docs/tmar-review-backlog.md#zebra-review-001)
+remains open and requires operator acceptance.
 
 ## Use
 
@@ -72,7 +83,9 @@ In single-view **Surface Deviation**, Zebra also supports **Reference (STEP / me
 STEP supplies face-boundary metadata; a mesh-only reference does not. Hide the scan
 when inspecting the reference alone. Zebra temporarily covers comparison colors:
 turn it off to read the map. Notes in this workspace still attach to a visible scan,
-not the reference. Split view, picking/alignment and deformation animation are guarded.
+not the reference. The first split-view candidate supports scan-side Zebra and
+notes; reference-side notes, picking/alignment and deformation animation remain
+guarded.
 [Validation and limits](../../docs/tmar-cad-edges-validation.md).
 
 ## Checks
@@ -80,6 +93,7 @@ not the reference. Split view, picking/alignment and deformation animation are g
 ```bash
 npx vitest run plugins/tmar-zebra/tests/zebra.test.ts
 node plugins/tmar-zebra/scripts/e2e-zebra.mjs
+node plugins/tmar-zebra/scripts/e2e-zebra-split.mjs
 node plugins/tmar-zebra/scripts/check-reflection.mjs
 node scripts/check-plugin-boundary.mjs
 node scripts/check-units.mjs

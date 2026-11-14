@@ -1168,6 +1168,7 @@
   "Unselect all": "Deseleziona tutto",
   "Use a single Deviation viewport for CAD edges. Split-view support remains planned.": "Per i bordi CAD usa una singola vista Scostamento. Il supporto della vista divisa è previsto in seguito.",
   "Use a still, single Deviation viewport before locating a note.": "Prima di individuare una nota, usa una singola vista Scostamento ferma.",
+  "Only scan-side notes can be located in the split view.": "Nella vista affiancata puoi raggiungere soltanto le note sulla scansione.",
   "Use for analysis": "Usa per l’analisi",
   "Use for analysis takes it into every workspace. Ctrl+Z puts the mesh back.": "Usa per l’analisi rende il risultato disponibile in ogni area di lavoro. Ctrl+Z ripristina la mesh.",
   "Use the Note button on the view bar to open local notes. No agent connection is required.": "Usa il pulsante Note nella barra della vista per aprire le note locali. Non occorre collegare un agente.",
@@ -1431,5 +1432,8 @@
   "Show": "Mostra",
   "Use this edited copy for analysis in all workspaces; elements are refitted. Ctrl+Z restores the previous scan.": "Usa questa copia modificata per le analisi in tutte le aree; gli elementi vengono adattati di nuovo. Ctrl+Z ripristina la scansione precedente.",
   "Hide this notice until the edited copy changes again": "Nascondi l'avviso finch? la copia modificata non cambia nuovamente",
-  "Hide": "Nascondi"
+  "Hide": "Nascondi",
+  "Finish the active operation before using Zebra analysis": "Concludi l'operazione attiva prima di utilizzare l'analisi Zebra.",
+  "Zebra requires a still Deviation viewport. Finish the active operation before inspecting the surface.": "Zebra richiede una vista Scostamento ferma. Concludi l'operazione attiva prima di esaminare la superficie.",
+  "In split view, Zebra shades the scan on the left; the reference on the right keeps normal shading. Notes attach only to the left scan.": "Nella vista affiancata Zebra colora la scansione a sinistra; il riferimento a destra mantiene l'ombreggiatura normale. Le note si associano soltanto alla scansione di sinistra."
 }

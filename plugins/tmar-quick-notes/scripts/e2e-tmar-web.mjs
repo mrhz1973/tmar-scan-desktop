@@ -143,7 +143,35 @@ try {
   await page.evaluate(async()=>{const {useDeviation}=await import('/src/state/deviationStore.ts');useDeviation.setState({mapOn:'reference'})})
   check(await page.$eval('[data-test=note-add]',b=>b.disabled),'reference-side placement is explicitly blocked in this initial adapter')
   await page.evaluate(async()=>{const {useDeviation}=await import('/src/state/deviationStore.ts');useDeviation.setState({mapOn:'scan',split:true})})
-  check(await page.$eval('[data-test=note-add]',b=>b.disabled),'split-view placement is explicitly guarded instead of silently doing nothing')
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  // Switching the reference map can leave its asynchronous measurement still
+  // running. The note guard correctly blocks *all* placements until it settles.
+  // Opening the split must not be treated as permission to bypass that guard.
+  const referenceBusy=await page.evaluate(async()=>{
+    const {useDeviation}=await import('/src/state/deviationStore.ts')
+    return useDeviation.getState().referenceStatus==='running'
+  })
+  if(referenceBusy) check(await page.$eval('[data-test=note-add]',b=>b.disabled),
+    'the existing note guard remains active while reference measurement is running')
+  await page.waitForFunction(async()=>{
+    const {useDeviation}=await import('/src/state/deviationStore.ts')
+    const {useStore}=await import('/src/state/store.ts')
+    const d=useDeviation.getState()
+    return d.referenceStatus!=='running' && d.mapStatus!=='running' &&
+      d.alignStatus!=='running' && !d.nominalBusy && !useStore.getState().busy
+  },{timeout:120000})
+  check(!(await page.$eval('[data-test=note-add]',b=>b.disabled)),
+    'split permits scan-side notes instead of falsely blocking both panes')
+  const countBeforeRightClick=await page.evaluate(()=>window.__reNotes.getState().notes.length)
+  await page.click('[data-test=note-add]')
+  const refCenter=await page.$eval('.compareview canvas',el=>{const r=el.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})
+  await page.mouse.click(refCenter.x,refCenter.y);await sleep(220)
+  check(await page.evaluate(n=>window.__reNotes.getState().notes.length===n &&
+    window.__reNotes.getState().placing,countBeforeRightClick),
+    'reference half never fabricates scan notes or consumes armed scan-side placement')
+  await page.keyboard.press('Escape')
+  check(!await page.evaluate(()=>window.__reNotes.getState().placing),
+    'Escape cancels scan-side placement while split is open')
   writeFileSync(join(downloads,'fixture-results.json'),JSON.stringify({bodyStl:b,notes:restored,comparisonPreserved:observed.mapVersion===before.mapVersion},null,2))
   const disabledURL=new URL(process.env.APP_URL);disabledURL.searchParams.set('plugins','none')
   await page.goto(disabledURL.href,{waitUntil:'networkidle0'})
