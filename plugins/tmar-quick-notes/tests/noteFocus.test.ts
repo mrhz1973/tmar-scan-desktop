@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { beforeEach, describe, expect, it } from 'vitest'
-import { Group } from 'three'
+import { Group, Plane, Vector3 } from 'three'
 import { focusProblem, focusWarning } from '../noteFocus'
 import { useStore } from '../../../src/state/store'
 import { useShell } from '../../../src/state/shellStore'
@@ -38,6 +38,28 @@ describe('saved note navigation policy', () => {
     expect(focusProblem(note, scene)).toMatch(/Finish/)
     useDeviation.setState({ referenceStatus: 'idle', picking: true })
     expect(focusProblem(note, scene)).toMatch(/Finish/)
+  })
+  it('allows scan-side note focus with a hidden scan in split view, retaining visibility', () => {
+    useShell.setState({ workspace: 'deviation' })
+    useDeviation.setState({ split: true, showScan: false })
+    expect(focusProblem(note, scene)).toBeNull()
+    expect(focusWarning(note, scene)).toMatch(/hidden/)
+    expect(useDeviation.getState().showScan).toBe(false)
+  })
+  it('warns when the saved scan-side note is clipped in split view without changing its anchor', () => {
+    useShell.setState({ workspace: 'deviation' })
+    useDeviation.setState({ split: true })
+    const clippedScene = {
+      scanShown: () => true,
+      layerHost: () => ({
+        partGroup: new Group(),
+        clipPlanes: () => [new Plane(new Vector3(0, 0, -1), 0)],
+      }),
+    } as unknown as SceneManager
+    const before = JSON.stringify(note)
+    expect(focusProblem(note, clippedScene)).toBeNull()
+    expect(focusWarning(note, clippedScene)).toMatch(/clipped/)
+    expect(JSON.stringify(note)).toBe(before)
   })
   it('does not move the camera for invalid coordinates', () => expect(focusProblem({ ...note, at: [NaN, 0, 0] }, scene)).toMatch(/valid/))
   it('does not interrupt a CAD operation', () => { useReverse.setState({ building: true }); expect(focusProblem(note, scene)).toMatch(/Finish/) })
