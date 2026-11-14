@@ -324,7 +324,15 @@ const legend = await text('[data-test=copy-legend]')
 console.log('deviation:', legend)
 check(/max/.test(legend) && /RMS/.test(legend), 'the copy is coloured by its deviation from the scan, with its figures')
 check(/added/.test(legend), 'and says how much of it an edit made')
-check((await colouredFraction(page)) > 0.05, 'the map is painted on the copy')
+// The legend is a DOM update; WebGL may paint the map in a later frame on CI.
+// Retry the *same pixel threshold* for a bounded period rather than accepting
+// a blank frame or weakening the geometric/visual acceptance criterion.
+let coloured = await colouredFraction(page)
+for (let frame = 0; coloured <= 0.05 && frame < 7; frame++) {
+  await sleep(180)
+  coloured = await colouredFraction(page)
+}
+check(coloured > 0.05, 'the map is painted on the copy')
 await page.screenshot({ path: shotPath('mesh-edits-deviation.png') })
 await page.click('[data-test=toggle-copy-deviation]')
 await sleep(300)
