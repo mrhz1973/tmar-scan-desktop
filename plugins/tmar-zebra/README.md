@@ -25,10 +25,19 @@ camera pose in both viewports. Hidden or section-clipped scan targets carry an
 explicit warning: their saved marker remains reachable without revealing the
 scan, changing the cutting plane or editing the note. Synthetic Chrome checks
 preserve all note fields and the archived model payloads byte-for-byte. The right
-reference cannot yet be Zebra-shaded in split mode, and reference-anchored
-notes, resizable layouts and per-pane controls remain future work. **This
+reference cannot yet be Zebra-shaded in split mode; reference-anchored notes,
+independent per-pane controls and alternative layouts remain future work. **This
 candidate is not published in Stable or Dev.** See
 [ZEBRA-SPLIT-002](../../docs/tmar-review-backlog.md#zebra-split-002).
+
+The built-in scan/reference comparison now has a vertical drag handle. Arrow
+keys adjust the scan share by two percentage points (Shift: ten); Home/End
+reach the readable limits, and Enter or a double-click resets equal panes.
+Escape, lost pointer capture, window blur or closing the split cancel an
+unfinished drag. The fraction is a browser-local layout preference, not model
+or project data. Limited desktop space clamps both panes without overwriting
+the preferred ratio, which returns when the window grows. No scene is remounted
+and no scan/reference alignment changes merely because a pane is resized.
 
 Further work includes [real-part gallery views](../../docs/tmar-review-backlog.md#zebra-gallery-003);
 the [current Zebra result review](../../docs/tmar-review-backlog.md#zebra-review-001)

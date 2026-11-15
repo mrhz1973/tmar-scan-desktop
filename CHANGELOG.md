@@ -7,6 +7,18 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR HTML - resizable comparison divider (15 November 2026)
+
+- Add a draggable divider to the existing scan/reference split, with keyboard
+  adjustment, 50/50 reset and cancellation of interrupted gestures.
+- Keep both WebGL canvases mounted and the existing camera link intact. Clamp
+  narrow panes; remember the desired ratio in this browser, never in CAD data.
+- Keep the scan's deviation legend and caption attached to its resized pane.
+  Other plugin split workspaces do not opt into this layout.
+- Extend synthetic GUI regression to resize, keyboard, cancellation, limited
+  desktop space, preference persistence and the existing note/project checks.
+- Web source candidate only: no public deployment or desktop installer.
+
 ### TMAR HTML - hidden and clipped split-note qualification (15 November 2026)
 
 - Extend the existing public-UI split Zebra regression to hidden scans and

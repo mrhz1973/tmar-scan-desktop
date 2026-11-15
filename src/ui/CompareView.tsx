@@ -23,6 +23,7 @@ import { useDeviation } from '../state/deviationStore'
 import { usePrefs } from '../state/prefsStore'
 import { useStore } from '../state/store'
 import { CompareScene } from '../viewer/CompareScene'
+import { SplitViewDivider } from './SplitViewDivider'
 import { schemeById } from '../viewer/navSchemes'
 import type { SceneManager } from '../viewer/SceneManager'
 import { sceneTheme } from '../viewer/viewThemes'
@@ -120,12 +121,15 @@ export function CompareView({
   }, [wireframe])
 
   return (
-    <div className="comparehalf" data-test="compare-half" hidden={!active}>
-      <div className="compareview" ref={holder} />
-      <div className="splitcap">
-        <b>{tmarText(role)}</b>
-        <span>{name}</span>
+    <>
+      <SplitViewDivider active={active} />
+      <div className="comparehalf" data-test="compare-half" hidden={!active}>
+        <div className="compareview" ref={holder} />
+        <div className="splitcap">
+          <b>{tmarText(role)}</b>
+          <span>{name}</span>
+        </div>
       </div>
-    </div>
+    </>
   )
 }

@@ -43,7 +43,9 @@ reference and reference-anchored notes are **not yet supported**.
 - [x] Qualify Go to note and Return to previous view for an ordinary visible scan note in split, including both linked cameras and unchanged Zebra state (synthetic Chrome).
 - [x] Qualify hidden and section-clipped scan-note focus/return in linked split, retaining scan visibility, section settings, every saved note field and byte-identical archived model payloads (synthetic Chrome).
 - [ ] Extend hidden/clipped split qualification to large models and real operator sessions.
-- [ ] Specify and implement resizable layouts, narrow screens and any horizontal alternative.
+- [x] Implement a resizable vertical scan/reference divider without remounting either canvas; keyboard control, reset, gesture cancellation, readable-pane limits and equal-pane fallback when desktop space is limited.
+- [x] Persist the preferred split ratio only in this browser; do not serialize it as CAD geometry, camera pose or project data.
+- [ ] Evaluate alternative stacked layouts and other workspace combinations separately; no mobile or desktop-shell release is implied.
 - [ ] Evaluate optional Zebra on the right reference, independent per-pane settings and reference-side note identity.
 - [ ] Support Reverse engineer split and any new CAD-side composition without duplicating sources or notes.
 - [ ] Complete per-pane labels, navigation, project persistence policy, multi-platform/large-model QA and owner visual acceptance.

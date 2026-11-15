@@ -31,7 +31,7 @@ try {
   if (server) await server.listen()
   const app = await launchApp({
     url: server ? server.resolvedUrls.local[0] : process.env.APP_URL,
-    width: 1600, height: 1000, protocolTimeout: 120000, language: 'en',
+    width: 1600, height: 1000, protocolTimeout: 120000, language: 'en', agentDataOk: false,
   })
   browser = app.browser
   const page = app.page
@@ -46,7 +46,18 @@ try {
       return { x: Math.round(r.x + 10), y: Math.round(r.y + 10),
         width: Math.round(r.width - 20), height: Math.round(r.height - 20) }
     })
-    const png = await page.screenshot({ clip, encoding: 'base64' })
+    // A DOM resize precedes its WebGL paint. Require two consecutive stable
+    // images rather than comparing an intermediate layout/animation frame.
+    let png = await page.screenshot({ clip, encoding: 'base64' })
+    let stable = false
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await sleep(120)
+      const next = await page.screenshot({ clip, encoding: 'base64' })
+      stable = await pixelDiff(page, png, next) < 0.05
+      png = next
+      if (stable) break
+    }
+    if (!stable) throw new Error('Viewport did not settle before screenshot: ' + selector)
     if (name) await page.screenshot({ path: shotPath(name) })
     return png
   }
@@ -114,6 +125,8 @@ try {
   await page.waitForFunction(() => document.documentElement.lang === 'it')
   check(await page.$eval('[data-test=zebra-split-help]', e => e.textContent.includes('Nella vista affiancata')),
     'the split-view explanation is translated into Italian')
+  check(await page.$eval('[data-test=split-view-divider]', e => e.getAttribute('aria-label').includes('Ridimensiona')),
+    'the divider accessible label follows the Italian interface')
   await page.select('[data-test=interface-language]', 'en')
   await page.waitForFunction(() => document.documentElement.lang === 'en')
   await page.click('[data-test=settings-close]')
@@ -199,6 +212,116 @@ try {
   const baselineNote = baseline.project.reverseNotes?.notes?.find(n => String(n.id) === savedRow.id)
   if (!baselineNote) throw new Error('Saved note is missing before hidden/clipped checks')
 
+  // Resize only the host layout. Neither WebGL canvas may be reconstructed,
+  // and the same downloaded note/model data must survive every layout change.
+  const divider = '[data-test=split-view-divider]'
+  const panes = () => page.evaluate(() => {
+    const left = document.querySelector('.viewslot > .viewport')?.getBoundingClientRect()
+    const right = document.querySelector('[data-test=compare-half]')?.getBoundingClientRect()
+    const handle = document.querySelector('[data-test=split-view-divider]')
+    const rect = handle?.getBoundingClientRect()
+    return { left: left?.width ?? 0, right: right?.width ?? 0,
+      total: document.querySelector('.viewslot.split')?.clientWidth ?? 0,
+      x: rect ? rect.x + rect.width / 2 : 0, y: rect ? rect.y + 170 : 0,
+      divider: rect?.width ?? 0, value: Number(handle?.getAttribute('aria-valuenow')),
+      disabled: handle?.getAttribute('aria-disabled'), stored: localStorage.getItem('tmar.splitView.ratio') }
+  })
+  const dragDivider = async (delta, cancel = false) => {
+    const before = await panes()
+    await page.mouse.move(before.x, before.y)
+    await page.mouse.down()
+    await page.mouse.move(before.x + delta, before.y, { steps: 12 })
+    if (cancel) await page.keyboard.press('Escape')
+    await page.mouse.up()
+    await sleep(250)
+  }
+  await page.waitForSelector(divider, { visible: true })
+  const equalPanes = await panes()
+  check(Math.abs(equalPanes.left - equalPanes.right) < 1 && equalPanes.divider === 12,
+    'the accessible divider initially separates equal-sized views')
+  await page.$eval('.viewport canvas', e => { e.dataset.layoutIdentity = 'scan' })
+  await page.$eval('.compareview canvas', e => { e.dataset.layoutIdentity = 'reference' })
+  await dragDivider(140)
+  const dragged = await panes()
+  check(Math.abs(dragged.left - equalPanes.left - 140) < 2 && Math.abs(dragged.right - equalPanes.right + 140) < 2,
+    'a real divider drag enlarges one viewport and shrinks the other by the same amount')
+  check(dragged.left >= 240 && dragged.right >= 240 && Number(dragged.stored) > 0.5,
+    'the committed split preference keeps readable pane widths')
+  await dragDivider(-80, true)
+  const cancelled = await panes()
+  check(Math.abs(cancelled.left - dragged.left) < 1 && cancelled.stored === dragged.stored,
+    'Escape rolls back the active resize without changing the stored preference')
+  // Loss of capture must abandon a half-finished gesture, not persist it.
+  await page.$eval(divider, el => el.addEventListener('gotpointercapture', event => {
+    el.dataset.testPointer = String(event.pointerId)
+  }, { once: true }))
+  const captureStart = await panes()
+  await page.mouse.move(captureStart.x, captureStart.y)
+  await page.mouse.down()
+  await page.mouse.move(captureStart.x - 60, captureStart.y, { steps: 6 })
+  check((await panes()).stored === captureStart.stored, 'drag previews do not write browser preferences before release')
+  await page.$eval(divider, el => el.releasePointerCapture(Number(el.dataset.testPointer)))
+  await page.mouse.up()
+  await sleep(200)
+  check(Math.abs((await panes()).left - captureStart.left) < 1 && (await panes()).stored === captureStart.stored,
+    'lost pointer capture cancels the preview and retains the last committed split')
+  const closeDuringDrag = await panes()
+  await page.mouse.move(closeDuringDrag.x, closeDuringDrag.y)
+  await page.mouse.down()
+  await page.mouse.move(closeDuringDrag.x - 70, closeDuringDrag.y, { steps: 6 })
+  await page.$eval('[data-test=toggle-split]', el => el.click())
+  await page.mouse.up()
+  await page.waitForSelector('[data-test=compare-half][hidden]')
+  check(!(await page.$('.compare-resizing')) && (await panes()).stored === closeDuringDrag.stored,
+    'closing split during a drag cleans up capture and does not persist the unfinished gesture')
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  await sleep(200)
+  check(Math.abs((await panes()).left - closeDuringDrag.left) < 1, 'reopening after cancellation restores the committed layout')
+  await page.focus(divider)
+  await page.keyboard.press('ArrowLeft')
+  check((await panes()).value === dragged.value - 2, 'ArrowLeft adjusts the split by two percentage points')
+  await page.keyboard.press('Home')
+  const minimum = await panes()
+  check(minimum.left >= 239.9 && minimum.value === Number(await page.$eval(divider, e => e.getAttribute('aria-valuemin'))),
+    'Home stops at the minimum readable scan pane')
+  await page.keyboard.press('End')
+  const maximum = await panes()
+  check(maximum.right >= 239.9 && maximum.value === Number(await page.$eval(divider, e => e.getAttribute('aria-valuemax'))),
+    'End stops at the minimum readable reference pane')
+  await page.keyboard.press('Enter')
+  check(Math.abs((await panes()).left - (await panes()).right) < 1, 'Enter restores the 50/50 split')
+  await dragDivider(80)
+  const resetAt = await panes()
+  await page.mouse.click(resetAt.x, resetAt.y, { count: 2 })
+  await sleep(200)
+  check((await panes()).value === 50 && Number((await panes()).stored) === 0.5, 'double-click also resets and saves equal panes')
+
+  await dragDivider(140)
+  const preferredSplit = await panes()
+  await page.setViewport({ width: 820, height: 1000 })
+  await sleep(300)
+  const narrowSplit = await panes()
+  check(narrowSplit.disabled === 'true' && Math.abs(narrowSplit.left - narrowSplit.right) < 1 &&
+    Math.abs(narrowSplit.left + narrowSplit.right + narrowSplit.divider - narrowSplit.total) < 1,
+    'limited desktop space keeps equal panes without overflowing the stage')
+  check(narrowSplit.stored === preferredSplit.stored, 'shrinking the window does not overwrite the preferred ratio')
+  await page.setViewport({ width: 1600, height: 1000 })
+  await sleep(300)
+  check(Math.abs((await panes()).left - preferredSplit.left) < 1, 'the preferred split returns when desktop space is restored')
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half][hidden]')
+  check(await page.$eval(divider, e => e.hidden) &&
+    !(await page.$('.stage.compare-resizable')), 'closing the split removes its divider and layout overrides')
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  await sleep(250)
+  check(Math.abs((await panes()).left - preferredSplit.left) < 1, 'reopening split restores the chosen ratio')
+  check(Boolean(await page.$('.viewport canvas[data-layout-identity=scan]')) &&
+    Boolean(await page.$('.compareview canvas[data-layout-identity=reference]')),
+    'resizing, narrow layout and hide/show retain both original WebGL canvases')
+  await page.screenshot({ path: shotPath('zebra-split-resized.png') })
+
   // Hiding a scan must remain an operator decision: locating its saved anchor
   // may show a marker, never silently reveal that scan or move its geometry.
   const scanVisible = await shot('.viewport canvas')
@@ -282,6 +405,48 @@ try {
   }, { timeout: 120000 }, text)
   check((await notes()).some(n => n.id === savedRow?.id && n.text === text),
     'fresh project reload displays the same note ID and text')
+  if ((await page.$eval('[data-test=toggle-split]', el => el.getAttribute('aria-pressed'))) !== 'true') {
+    await page.click('[data-test=toggle-split]')
+  }
+  await page.waitForSelector(divider, { visible: true })
+  await sleep(250)
+  check(Math.abs((await panes()).left - preferredSplit.left) < 1 && (await panes()).stored === preferredSplit.stored,
+    'fresh app reload restores the browser layout preference independently of the project')
+
+  // The divider belongs to the host comparison, not to Zebra. Verify the
+  // standalone host and the deviation legend without loading any plugin.
+  const withoutPlugins = new URL(page.url())
+  withoutPlugins.searchParams.set('plugins', 'none')
+  await page.goto(withoutPlugins.href, { waitUntil: 'networkidle0' })
+  await page.click('[data-test=workspace-deviation]')
+  await loadScan(page, scanPath, { inputSelector: '[data-test=start-scan] input[type=file]', timeout: 120000, settle: 0 })
+  await (await page.$('[data-test=slot-reference] input[type=file]')).uploadFile(stepPath)
+  await page.waitForSelector('[data-test=align-auto]:enabled', { timeout: 120000 })
+  await page.click('[data-test=align-auto]')
+  await page.waitForSelector('[data-test=deviation-legend]', { timeout: 120000 })
+  await page.waitForFunction(() => !document.querySelector('[data-test=fitting-chip]'), { timeout: 120000 })
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector(divider, { visible: true })
+  check(!(await page.$('[data-test=tmar-zebra]')) && !(await page.$('[data-test=tmar-deviation-notes]')),
+    'the host divider works when all optional plugins are disabled')
+  const legendPlacement = () => page.evaluate(() => {
+    const legend = document.querySelector('[data-test=deviation-legend]').getBoundingClientRect()
+    const scan = document.querySelector('.viewslot > .viewport').getBoundingClientRect()
+    return { right: legend.right, width: legend.width, scanRight: scan.right, scanLeft: scan.left }
+  })
+  const beforeLegend = await legendPlacement()
+  const beforeHostDrag = await panes()
+  await dragDivider(-60)
+  const afterLegend = await legendPlacement()
+  const afterHostDrag = await panes()
+  check(Math.abs(afterHostDrag.left - beforeHostDrag.left + 60) < 2,
+    'the optional-plugin-free host responds to an actual divider drag')
+  check(afterLegend.right <= afterLegend.scanRight && afterLegend.right - afterLegend.width >= afterLegend.scanLeft &&
+    Math.abs((afterLegend.right - beforeLegend.right) - (afterHostDrag.left - beforeHostDrag.left)) < 2,
+    'the deviation legend follows its resized scan pane without crossing into the reference')
+  await page.screenshot({ path: shotPath('split-divider-host-legend.png') })
+
+
 } catch (error) {
   fail(error.stack ?? String(error))
 } finally {
