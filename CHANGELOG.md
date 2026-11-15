@@ -7,6 +7,16 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR HTML - hidden and clipped split-note qualification (15 November 2026)
+
+- Extend the existing public-UI split Zebra regression to hidden scans and
+  section-clipped note anchors: focus keeps the visibility/cut unchanged,
+  the reference camera follows and Return restores the working view.
+- Verify every saved note field and every archived model payload against the
+  pre-navigation project, without development globals or an agent connection.
+- This is test coverage of the existing Web behavior, not a new production
+  feature or deployment. Large-model and operator acceptance remain open.
+
 ### TMAR HTML - Zebra split scan-side prototype (13 November 2026)
 
 - In an isolated TMAR Versione 7 source branch, enable Zebra on the **left

@@ -168,17 +168,105 @@ try {
   check(await page.$eval('[data-test=zebra-enabled]', el => el.checked),
     'note navigation and Return keep split Zebra enabled')
 
+  // All subsequent checks use the same public controls and downloaded archive,
+  // so this scenario also runs on the compiled app without development globals.
   await page.evaluate(() => {
     const original = URL.createObjectURL
     URL.createObjectURL = blob => { window.zebraSplitSaved = blob; return original(blob) }
     HTMLAnchorElement.prototype.click = function () {}
   })
-  await page.waitForSelector('[data-test=save-project]:enabled')
-  await page.click('[data-test=save-project]')
-  await page.waitForFunction(() => window.zebraSplitSaved instanceof Blob, { timeout: 40000 })
-  const raw = await page.evaluate(async () => Array.from(new Uint8Array(await window.zebraSplitSaved.arrayBuffer())))
-  const archive = unzipSync(Uint8Array.from(raw))
-  const project = JSON.parse(strFromU8(archive['project.json']))
+  const saveSnapshot = async () => {
+    await page.evaluate(() => { window.zebraSplitSaved = null })
+    await page.waitForSelector('[data-test=save-project]:enabled')
+    await page.click('[data-test=save-project]')
+    await page.waitForFunction(() => window.zebraSplitSaved instanceof Blob, { timeout: 40000 })
+    const raw = await page.evaluate(async () => Array.from(new Uint8Array(await window.zebraSplitSaved.arrayBuffer())))
+    const archive = unzipSync(Uint8Array.from(raw))
+    return { raw, archive, project: JSON.parse(strFromU8(archive['project.json'])) }
+  }
+  const focusSavedNote = async () => {
+    await page.click('[data-note-id="' + savedRow.id + '"] [data-test=note-locate]')
+    await page.waitForFunction(id => {
+      const ring = document.querySelector('[data-test=note-focus-ring][data-note-id="' + id + '"]')
+      const canvas = document.querySelector('.viewport canvas')
+      if (!ring || !canvas || getComputedStyle(ring).display === 'none') return false
+      const r = ring.getBoundingClientRect(), c = canvas.getBoundingClientRect()
+      return r.width >= 50 && Math.hypot(r.x + r.width / 2 - c.x - c.width / 2, r.y + r.height / 2 - c.y - c.height / 2) < 3
+    }, { timeout: 30000 }, savedRow.id)
+    return page.$eval('[data-test=note-focus-feedback]', el => el.textContent)
+  }
+  const baseline = await saveSnapshot()
+  const baselineNote = baseline.project.reverseNotes?.notes?.find(n => String(n.id) === savedRow.id)
+  if (!baselineNote) throw new Error('Saved note is missing before hidden/clipped checks')
+
+  // Hiding a scan must remain an operator decision: locating its saved anchor
+  // may show a marker, never silently reveal that scan or move its geometry.
+  const scanVisible = await shot('.viewport canvas')
+  await page.click('[data-test=toggle-scan]')
+  await page.waitForFunction(() => document.querySelector('[data-test=toggle-scan]')?.getAttribute('aria-pressed') === 'false')
+  const scanHidden = await shot('.viewport canvas', 'zebra-split-hidden.png')
+  check(await pixelDiff(page, scanVisible, scanHidden) > 1, 'the scan is actually hidden in the left viewport')
+  const hiddenReferenceBefore = await shot('.compareview canvas')
+  const hiddenMessage = await focusSavedNote()
+  check(hiddenMessage.includes('hidden'), 'hidden scan note is centered with an explicit visibility warning')
+  check(await page.$eval('[data-test=toggle-scan]', el => el.getAttribute('aria-pressed') === 'false'),
+    'locating the hidden note does not reveal its scan')
+  const hiddenReferenceFocused = await shot('.compareview canvas')
+  check(await pixelDiff(page, hiddenReferenceBefore, hiddenReferenceFocused) > 1,
+    'the reference camera follows hidden scan-note focus')
+  await page.click('[data-test=note-return-view]')
+  const hiddenReferenceReturned = await shot('.compareview canvas')
+  check(await pixelDiff(page, hiddenReferenceBefore, hiddenReferenceReturned) < 1 &&
+    await page.$eval('[data-test=toggle-scan]', el => el.getAttribute('aria-pressed') === 'false'),
+    'Return restores the reference framing while leaving the scan hidden')
+  check(await page.$eval('[data-test=zebra-enabled]', el => el.checked),
+    'hidden-note navigation preserves the Zebra preference')
+  await page.click('[data-test=toggle-scan]')
+  await page.waitForFunction(() => document.querySelector('[data-test=toggle-scan]')?.getAttribute('aria-pressed') === 'true')
+
+  // The fixture is [0,20]^3. Cut at its midpoint along the clicked surface's
+  // normal; the section UI chooses the half facing the original camera.
+  const axisIndex = [0, 1, 2].reduce((best, i) => Math.abs(baselineNote.at[i] - 10) > Math.abs(baselineNote.at[best] - 10) ? i : best, 0)
+  const axis = ['x', 'y', 'z'][axisIndex]
+  await page.click('[data-test=toggle-section-view]')
+  await page.waitForSelector('[data-test=section-view-ref]')
+  await page.select('[data-test=section-view-ref]', axis)
+  await page.$eval('[data-test=section-view-offset]', el => { el.focus(); el.value = '10' })
+  await page.keyboard.press('Enter')
+  const sectionBefore = await page.evaluate(() => ({
+    active: document.querySelector('[data-test=toggle-section-view]')?.getAttribute('aria-pressed'),
+    axis: document.querySelector('[data-test=section-view-ref]')?.value,
+    offset: document.querySelector('[data-test=section-view-offset]')?.value,
+  }))
+  check(sectionBefore.active === 'true' && sectionBefore.axis === axis && Number(sectionBefore.offset) === 10,
+    'a real midpoint section is active before locating the clipped scan note')
+  const clippedReferenceBefore = await shot('.compareview canvas', 'zebra-split-section-before.png')
+  const clippedMessage = await focusSavedNote()
+  check(clippedMessage.includes('clipped'), 'clipped scan note is centered with an explicit section warning')
+  const sectionAfter = await page.evaluate(() => ({
+    active: document.querySelector('[data-test=toggle-section-view]')?.getAttribute('aria-pressed'),
+    axis: document.querySelector('[data-test=section-view-ref]')?.value,
+    offset: document.querySelector('[data-test=section-view-offset]')?.value,
+  }))
+  check(JSON.stringify(sectionAfter) === JSON.stringify(sectionBefore),
+    'locating the clipped note does not disable, move or reorient the section')
+  check(await pixelDiff(page, clippedReferenceBefore, await shot('.compareview canvas')) > 1,
+    'the reference camera follows clipped scan-note focus')
+  await page.click('[data-test=note-return-view]')
+  check(await pixelDiff(page, clippedReferenceBefore, await shot('.compareview canvas')) < 1,
+    'Return restores both linked cameras with the section still active')
+  check(await page.$eval('[data-test=toggle-section-view]', el => el.getAttribute('aria-pressed') === 'true') &&
+    await page.$eval('[data-test=zebra-enabled]', el => el.checked),
+    'clipped-note navigation preserves the section and Zebra preferences')
+  await page.click('[data-test=toggle-section-view]')
+
+  const { raw, archive, project } = await saveSnapshot()
+  check(JSON.stringify(project.reverseNotes) === JSON.stringify(baseline.project.reverseNotes),
+    'hidden/clipped focus and Return preserve every saved note field and anchor')
+  const modelKeys = Object.keys(baseline.archive).filter(key => key !== 'project.json')
+  check(modelKeys.length > 0 && modelKeys.length === Object.keys(archive).filter(key => key !== 'project.json').length &&
+    modelKeys.every(key => archive[key] && Buffer.from(archive[key]).equals(Buffer.from(baseline.archive[key]))),
+    'hidden/clipped navigation leaves all archived model payloads byte-identical')
   const stored = project.reverseNotes?.notes?.find(note => String(note.id) === savedRow?.id)
   check(!!stored && stored.text === text && stored.on?.[0]?.kind === 'scan',
     'the saved .scanruler preserves the original scan-side note ID and anchor kind')

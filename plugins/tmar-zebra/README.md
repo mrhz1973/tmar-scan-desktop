@@ -20,8 +20,11 @@ A first **scan-side split-view candidate** is under review in
 split, the left scan may show Zebra while the right reference keeps normal
 shading. Notes are placed on the left scan only, using the existing records
 and project saves; the right reference cannot receive scan notes. Go to note
-centers a visible scan-side note and Return restores the previous linked
-camera pose in both viewports; note anchors and geometry remain unchanged. The right
+centers a saved scan-side note and Return restores the previous linked
+camera pose in both viewports. Hidden or section-clipped scan targets carry an
+explicit warning: their saved marker remains reachable without revealing the
+scan, changing the cutting plane or editing the note. Synthetic Chrome checks
+preserve all note fields and the archived model payloads byte-for-byte. The right
 reference cannot yet be Zebra-shaded in split mode, and reference-anchored
 notes, resizable layouts and per-pane controls remain future work. **This
 candidate is not published in Stable or Dev.** See
