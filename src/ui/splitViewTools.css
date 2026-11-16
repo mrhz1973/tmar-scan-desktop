@@ -1,0 +1,37 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Keep the global view row above the two pane-owned rows, not over their keys.
+   Other split workspaces keep their existing positioning. */
+.stage.split.compare-resizable .stagecorner { bottom: 52px; }
+.split-view-tools {
+  box-sizing: border-box;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px 3px 8px;
+  z-index: 2;
+}
+.split-view-tools b { flex-shrink: 0; }
+.split-view-tools .split-view-filename { min-width: 0; }
+.split-view-appearance {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  pointer-events: auto;
+}
+.split-view-appearance button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--dim);
+  background: none;
+}
+.split-view-appearance button:hover { background: var(--well); color: var(--ink); }
+.split-view-appearance button.on { background: var(--ink); color: var(--panel); }
+.split-view-appearance button:focus-visible {
+  outline: 2px solid var(--accent-d);
+  outline-offset: 1px;
+}

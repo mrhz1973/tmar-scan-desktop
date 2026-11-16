@@ -7,6 +7,19 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR HTML - independent split-pane display shortcuts (16 November 2026)
+
+- Add a labelled display bar to each scan/reference pane, with direct switches
+  for transparency, triangle wireframe and backface tint. Reuse the existing
+  stores and rendering paths; the older menus stay synchronized in both directions.
+- Keep the general view row clear of the pane controls, including narrowed panes,
+  long file names and Italian labels. Native buttons support keyboard operation.
+- Preserve the two canvas instances, linked navigation, notes and model data.
+  The controls work without optional plugins; there is no new project setting.
+- Add synthetic public-UI checks in development and compiled HTML, including
+  model-pixel isolation and the existing Zebra/note/project regression.
+- Isolated Web candidate only: no public deployment, new dependency or CAD change.
+
 ### TMAR HTML - resizable comparison divider (15 November 2026)
 
 - Add a draggable divider to the existing scan/reference split, with keyboard

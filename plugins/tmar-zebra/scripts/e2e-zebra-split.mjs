@@ -212,6 +212,18 @@ try {
   const baselineNote = baseline.project.reverseNotes?.notes?.find(n => String(n.id) === savedRow.id)
   if (!baselineNote) throw new Error('Saved note is missing before hidden/clipped checks')
 
+  // Exercise the new pane shortcuts while Zebra and a saved note are present.
+  // The final archive comparison below covers these actions too, not just
+  // navigation: every note field and model payload must remain unchanged.
+  for (const side of ['scan', 'reference']) for (const kind of ['transparent', 'wireframe', 'backfaces']) {
+    const selector = `[data-test=split-${side}-${kind}]`
+    const before = await page.$eval(selector, el => el.getAttribute('aria-pressed'))
+    await page.click(selector)
+    check(await page.$eval(selector, el => el.getAttribute('aria-pressed')) !== before,
+      `${side} ${kind} shortcut works with Zebra and a saved scan note`)
+    await page.click(selector)
+  }
+
   // Resize only the host layout. Neither WebGL canvas may be reconstructed,
   // and the same downloaded note/model data must survive every layout change.
   const divider = '[data-test=split-view-divider]'

@@ -46,12 +46,64 @@ reference and reference-anchored notes are **not yet supported**.
 - [x] Implement a resizable vertical scan/reference divider without remounting either canvas; keyboard control, reset, gesture cancellation, readable-pane limits and equal-pane fallback when desktop space is limited.
 - [x] Persist the preferred split ratio only in this browser; do not serialize it as CAD geometry, camera pose or project data.
 - [ ] Evaluate alternative stacked layouts and other workspace combinations separately; no mobile or desktop-shell release is implied.
-- [ ] Evaluate optional Zebra on the right reference, independent per-pane settings and reference-side note identity.
+- [x] Expose independent transparency, triangle wireframe and backface-tint shortcuts in labelled scan/reference pane bars, reusing existing stores and keeping the older menus synchronized.
+- [x] Qualify these shortcuts with and without optional plugins, including model-pixel isolation, keyboard access, constrained panes and Italian labels.
+- [ ] Evaluate optional Zebra on the right reference, independent per-pane Zebra settings and reference-side note identity.
 - [ ] Support Reverse engineer split and any new CAD-side composition without duplicating sources or notes.
 - [ ] Complete per-pane labels, navigation, project persistence policy, multi-platform/large-model QA and owner visual acceptance.
 
 This partial implementation is not a release or full completion of ZEBRA-SPLIT-002.
 The existing general Zebra review remains open.
+
+### 16 November 2026 - pane display checkpoint
+
+Bounded successor of `344087e87e8cdac6d530f786387fbaf33f3a1262`, on the same
+Web branch. `SplitViewTools` adds shortcuts, not independent copies of state:
+scan `translucent/wireframe/showBackfaces` and reference
+`nominalSeeThrough/nominalMesh/nominalBackfaces` retain their existing setters.
+The general view row is lifted only for this resizable built-in split so it
+cannot cover the two pane bars. No geometry, camera-link, kernel, dependency,
+project-format or display-preference persistence policy was changed.
+
+Local Windows / isolated Chrome checks, synthetic fixtures:
+
+| Check | Observed result |
+| --- | --- |
+| Unit: new display tools, existing divider layout and camera link | 15/15 PASS, three files |
+| New public-UI scenario, development | 89/89 PASS |
+| Same new public-UI scenario, compiled HTML | 89/89 PASS |
+| Extended Zebra / notes / divider / save-reopen scenario, compiled HTML | 65/65 PASS |
+| TypeScript and Vite production build | PASS |
+| Plugin boundary, display units, worker CSP, JavaScript syntax and diff checks | PASS |
+
+Both display scenarios include all optional plugins and `?plugins=none`.
+They check actual model-pixel changes, absence of changes in the other model,
+legacy-menu synchronization, Space/Enter, split hide/show, the same two WebGL
+canvases, divider Home/End/reset, a 900-pixel desktop window and Italian labels.
+All three browser sessions in the compiled qualification reported zero console
+or page errors. The Zebra scenario exercises all six new shortcuts after its
+saved baseline; every saved note field remains equal and archived model payloads
+remain byte-identical. Its 65 checks include the previous 59 plus six shortcut
+checks; these are not independent whole-project acceptance campaigns.
+
+The first diagnostic used an inverted closed STL that the existing importer
+correctly reorients outward, so its backface pixel assertions failed. The test
+fixture now uses the existing PLY keep-winding marker; neither the renderer nor
+acceptance thresholds were relaxed. The failed diagnostic log is retained.
+
+Evidence is in the worktree's ignored `e2e-out/`: `pane-tools-unit-20261116.log`,
+`pane-tools-dev-20261116.log` (failed diagnostic),
+`pane-tools-dev-ply-20261116.log`, `pane-tools-build-20261116.log`, and
+`pane-tools-compiled-20261116.log`. The two `split-view-tools-*-it.png` images
+show the synthetic UI, not the owner's part. Existing large-bundle,
+WASM-module externalization and Node localStorage warnings remain visible.
+
+The full unit suite, MCP suite and entire `e2e:ci` collection were not rerun
+locally for this increment. The new scenario is registered in both development
+and production CI phases. Full exact-head GitHub CI remains a separate gate;
+a previous commit's green result is not inherited. Real-part, large-model,
+long-session, cross-platform and owner visual acceptance remain open.
+No merge, VPS publication, version-number change or A09 execution is included.
 
 ## ZEBRA-GALLERY-003
 

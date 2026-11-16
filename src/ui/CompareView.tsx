@@ -27,13 +27,12 @@ import { SplitViewDivider } from './SplitViewDivider'
 import { schemeById } from '../viewer/navSchemes'
 import type { SceneManager } from '../viewer/SceneManager'
 import { sceneTheme } from '../viewer/viewThemes'
-import { coreText as tmarText, useLanguage as useTmarLanguage } from '../i18n'
+import { SplitViewTools } from './SplitViewTools'
 
 
 export function CompareView({
   scene,
   geometry,
-  role,
   name,
   active,
 }: {
@@ -41,14 +40,11 @@ export function CompareView({
    *  back when the hand is on this side. */
   scene: SceneManager
   geometry: THREE.BufferGeometry
-  role: string
   name: string
   /** Whether the half is on the stage. False keeps it, and its context, alive
    *  but paused and out of the layout. */
   active: boolean
 }) {
-  useTmarLanguage()
-
   const holder = useRef<HTMLDivElement>(null)
   const compareRef = useRef<CompareScene | null>(null)
   const navScheme = useStore((s) => s.navScheme)
@@ -125,10 +121,7 @@ export function CompareView({
       <SplitViewDivider active={active} />
       <div className="comparehalf" data-test="compare-half" hidden={!active}>
         <div className="compareview" ref={holder} />
-        <div className="splitcap">
-          <b>{tmarText(role)}</b>
-          <span>{name}</span>
-        </div>
+        <SplitViewTools side="reference" name={name} />
       </div>
     </>
   )

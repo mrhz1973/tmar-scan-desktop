@@ -2140,5 +2140,8 @@
   "Resize scan and reference views": "Ridimensiona le viste scansione e riferimento",
   "Scan {0}%, reference {1}%": "Scansione {0}%, riferimento {1}%",
   "Drag to resize the views. Arrow keys adjust; double-click or Enter resets. Escape cancels.": "Trascina per ridimensionare le viste. Regola con le frecce; doppio clic o Invio ripristina. Esc annulla.",
-  "The views stay equal while there is not enough space to resize them.": "Le viste restano uguali quando lo spazio non basta per ridimensionarle."
+  "The views stay equal while there is not enough space to resize them.": "Le viste restano uguali quando lo spazio non basta per ridimensionarle.",
+  "Display controls for {0}": "Comandi di visualizzazione: {0}",
+  "Triangle wireframe": "Reticolo triangolare",
+  "Backface tint": "Colora facce posteriori"
 }
