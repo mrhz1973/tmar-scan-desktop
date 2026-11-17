@@ -7,6 +7,72 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR HTML - Zebra on the split reference (18 November 2026)
+
+- Allow Analyze to choose the left Scan or right Reference in Surface Deviation's
+  linked split. One target uses Zebra at a time, with shared stripe settings.
+- Route visual layers through the owning comparison renderer, including section
+  updates, reference replacement and cleanup; reuse the existing Zebra shader.
+- Preserve both canvas instances across target changes and split hide/show.
+  Notes keep their scan anchors, and Zebra remains a temporary display setting.
+- Add focused host lifecycle and synthetic browser regression coverage; update
+  the Italian/English scope text and plugin extension documentation.
+- Isolated Web candidate; deployment and operator acceptance remain separate.
+
+### TMAR HTML - independent split-pane display shortcuts (16 November 2026)
+
+- Add a labelled display bar to each scan/reference pane, with direct switches
+  for transparency, triangle wireframe and backface tint. Reuse the existing
+  stores and rendering paths; the older menus stay synchronized in both directions.
+- Keep the general view row clear of the pane controls, including narrowed panes,
+  long file names and Italian labels. Native buttons support keyboard operation.
+- Preserve the two canvas instances, linked navigation, notes and model data.
+  The controls work without optional plugins; there is no new project setting.
+- Add synthetic public-UI checks in development and compiled HTML, including
+  model-pixel isolation and the existing Zebra/note/project regression.
+- Isolated Web candidate only: no public deployment, new dependency or CAD change.
+
+### TMAR HTML - resizable comparison divider (15 November 2026)
+
+- Add a draggable divider to the existing scan/reference split, with keyboard
+  adjustment, 50/50 reset and cancellation of interrupted gestures.
+- Keep both WebGL canvases mounted and the existing camera link intact. Clamp
+  narrow panes; remember the desired ratio in this browser, never in CAD data.
+- Keep the scan's deviation legend and caption attached to its resized pane.
+  Other plugin split workspaces do not opt into this layout.
+- Extend synthetic GUI regression to resize, keyboard, cancellation, limited
+  desktop space, preference persistence and the existing note/project checks.
+- Web source candidate only: no public deployment or desktop installer.
+
+### TMAR HTML - hidden and clipped split-note qualification (15 November 2026)
+
+- Extend the existing public-UI split Zebra regression to hidden scans and
+  section-clipped note anchors: focus keeps the visibility/cut unchanged,
+  the reference camera follows and Return restores the working view.
+- Verify every saved note field and every archived model payload against the
+  pre-navigation project, without development globals or an agent connection.
+- This is test coverage of the existing Web behavior, not a new production
+  feature or deployment. Large-model and operator acceptance remain open.
+
+### TMAR HTML - Zebra split scan-side prototype (13 November 2026)
+
+- In an isolated TMAR Versione 7 source branch, enable Zebra on the **left
+  scan** in Surface Deviation's existing two-viewport comparison; keep the
+  **right reference** at its original shading and preserve camera linking.
+- Allow local notes on the left scan while the split is open; the reference
+  viewport remains non-pickable for notes. The current note store and
+  .scanruler project format are unchanged.
+- Display the supported scope in Italian and English, guard the unsupported
+  reference-side Zebra option, and retain the existing single-viewport
+  behavior.
+- Add a synthetic Chrome regression for left/right rendering isolation,
+  split hide/show, stripe orientation, safe note placement and project
+  save/reopen.
+- Permit Go to note for a saved scan-side observation in linked Deviation
+  split mode; both cameras follow focus and Return restores the prior pose.
+  Guard unfinished reference calculations, picking and non-scan note anchors. **Source-only, not deployed**; do not relabel the published
+  TMAR 7 as a different build under the same number.
+
 ### TMAR Versione 7 - ScanRuler 0.11.2 integration candidate (13 November 2026)
 
 - Merge the complete official upstream ScanRuler 0.11.2 tag

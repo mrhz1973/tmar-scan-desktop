@@ -23,11 +23,17 @@ beforeEach(() => {
 
 describe('Deviation note placement guards', () => {
   it('permits the ordinary visible scan-side map', () => expect(deviationNoteBlock(idle, true, false)).toBeNull())
+  it('permits notes on the left split scan, even with a reference-side map selected', () => {
+    expect(deviationNoteBlock({ ...idle, split: true }, true, false)).toBeNull()
+    expect(deviationNoteBlock({ ...idle, split: true, mapOn: 'reference' }, true, false)).toBeNull()
+  })
   it('refuses unsupported or ambiguous modes', () => {
     expect(deviationNoteBlock(idle, false, false)).toMatch(/Load a scan/)
     expect(deviationNoteBlock(idle, true, true)).toMatch(/Wait/)
-    for (const patch of [{ split: true }, { picking: true }, { marking: true }, { animate: true }, { showScan: false }, { mapOn: 'reference' }, { alignStatus: 'running' }, { nominalBusy: true }]) {
+    expect(deviationNoteBlock({ ...idle, mapOn: 'reference' }, true, false)).toMatch(/Select the scan-side map/)
+    for (const patch of [{ picking: true }, { marking: true }, { animate: true }, { showScan: false }, { alignStatus: 'running' }, { nominalBusy: true }]) {
       expect(deviationNoteBlock({ ...idle, ...patch }, true, false)).not.toBeNull()
+      expect(deviationNoteBlock({ ...idle, split: true, ...patch }, true, false)).not.toBeNull()
     }
   })
 })

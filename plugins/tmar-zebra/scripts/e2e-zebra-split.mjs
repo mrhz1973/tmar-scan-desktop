@@ -1,0 +1,680 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Split-view Zebra: select the left scan or right reference, with shared
+// parameters and scan-only notes. Synthetic files and a fresh browser only.
+import { fileURLToPath } from 'node:url'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createServer } from 'vite'
+import { importStep, writeBinarySTL } from 'meshstep'
+import { unzipSync, strFromU8 } from 'fflate'
+import { cubeStep } from '../../../tests/stepFixtures.ts'
+import { launchApp, check, fail, finish, loadScan, pixelDiff, shotPath, sleep } from '../../../scripts/e2e-lib.mjs'
+
+const root = fileURLToPath(new URL('../../../', import.meta.url))
+const standalone = !process.env.APP_URL
+const server = standalone ? await createServer({
+  root,
+  server: { host: '127.0.0.1', port: 0, open: false, watch: { ignored: ['**/e2e-out/**'] } },
+}) : null
+const dir = mkdtempSync(join(tmpdir(), 'tmar-zebra-split-'))
+const step = cubeStep(20)
+const stepPath = join(dir, 'reference.step')
+writeFileSync(stepPath, step)
+const replacementName = 'replacement-reference.step'
+const replacementPath = join(dir, replacementName)
+writeFileSync(replacementPath, cubeStep(12))
+const scan = importStep(step, { surfaceDeviation: 0.005, maxEdge: 1.2 }).mesh
+const scanPath = join(dir, 'scan.stl')
+writeFileSync(scanPath, Buffer.from(writeBinarySTL(scan)))
+
+let browser
+let consoleErrors = []
+try {
+  if (server) await server.listen()
+  const app = await launchApp({
+    url: server ? server.resolvedUrls.local[0] : process.env.APP_URL,
+    width: 1600, height: 1000, protocolTimeout: 120000, language: 'en', agentDataOk: false,
+  })
+  browser = app.browser
+  const page = app.page
+  consoleErrors = app.consoleErrors
+  page.on('dialog', dialog => dialog.accept())
+
+  const shot = async (selector, name) => {
+    await page.mouse.move(2, 2)
+    await sleep(200)
+    const clip = await page.$eval(selector, el => {
+      const r = el.getBoundingClientRect()
+      return { x: Math.round(r.x + 10), y: Math.round(r.y + 10),
+        width: Math.round(r.width - 20), height: Math.round(r.height - 20) }
+    })
+    // Capture only the visible viewport: beyond-viewport captures can perturb
+    // split WebGL frames in headless Chrome, even when this clip is on screen.
+    // A DOM resize precedes its WebGL paint. Require two consecutive stable
+    // images rather than comparing an intermediate layout/animation frame.
+    let png = await page.screenshot({ clip, encoding: 'base64', captureBeyondViewport: false })
+    let stable = false
+    const deltas = []
+    let previous = png
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await sleep(120)
+      const next = await page.screenshot({ clip, encoding: 'base64', captureBeyondViewport: false })
+      const delta = await pixelDiff(page, png, next)
+      deltas.push(delta)
+      stable = delta < 0.05
+      previous = png
+      png = next
+      if (stable) break
+    }
+    if (!stable) {
+      writeFileSync(shotPath('zebra-split-unstable-a.png'), Buffer.from(previous, 'base64'))
+      writeFileSync(shotPath('zebra-split-unstable-b.png'), Buffer.from(png, 'base64'))
+      await page.screenshot({ path: shotPath('zebra-split-unstable.png') })
+      const bounds = await page.$eval(selector, el => el.getBoundingClientRect().toJSON())
+      throw new Error('Viewport did not settle before screenshot: ' + selector +
+        ' deltas=' + JSON.stringify(deltas) + ' clip=' + JSON.stringify(clip) + ' bounds=' + JSON.stringify(bounds))
+    }
+    if (name) await page.screenshot({ path: shotPath(name) })
+    return png
+  }
+  // Query only public DOM so the same scenario runs against a compiled build.
+  const notes = () => page.$$eval('[data-test=note-row]', rows => rows.map(row => ({
+    id: row.getAttribute('data-note-id'),
+    text: row.querySelector('[data-test=note-row-text]')?.textContent ?? '',
+  })))
+
+  await page.click('[data-test=workspace-deviation]')
+  await loadScan(page, scanPath, { inputSelector: '[data-test=start-scan] input[type=file]', timeout: 120000, settle: 0 })
+  await (await page.$('[data-test=slot-reference] input[type=file]')).uploadFile(stepPath)
+  await page.waitForSelector('[data-test=toggle-split]:enabled', { timeout: 120000 })
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  await page.waitForSelector('[data-test=zebra-enabled]')
+  check(!(await page.$('[data-test=zebra-deviation-blocked]')), 'split keeps the Zebra controls available')
+
+  const leftBare = await shot('.viewport canvas', 'zebra-split-left-before.png')
+  const rightBare = await shot('.compareview canvas', 'zebra-split-right-before.png')
+  check(!(await page.$eval('[data-test=zebra-quick-toggle]', e => e.disabled)), 'Zebra quick button works in split view')
+  await page.click('[data-test=zebra-quick-toggle]')
+  await page.waitForFunction(() =>
+    document.querySelector('[data-test=zebra-enabled]')?.checked &&
+    document.querySelector('[data-test=zebra-target]')?.value === 'scan' &&
+    document.querySelector('[data-test=zebra-status]')?.textContent.includes('1 visible object'),
+    { timeout: 20000 },
+  )
+  check(true, 'Zebra targets the visible left scan rather than the reference')
+  check(!(await page.$eval('[data-test=zebra-target] option[value=reference]', el => el.disabled)),
+    'the reference-side Zebra target is available in split view')
+  check(await page.$eval('[data-test=zebra-split-help]', el =>
+    /scan/i.test(el.textContent) && /reference/i.test(el.textContent) && /notes.*scan/i.test(el.textContent)),
+    'the split help describes both Zebra targets and scan-only notes')
+  const leftZebra = await shot('.viewport canvas', 'zebra-split-left-after.png')
+  const rightZebra = await shot('.compareview canvas', 'zebra-split-right-after.png')
+  const leftDelta = await pixelDiff(page, leftBare, leftZebra)
+  const rightDelta = await pixelDiff(page, rightBare, rightZebra)
+  check(leftDelta > 1, 'left scan visually changes under Zebra (' + leftDelta.toFixed(2) + '%)')
+  check(rightDelta < 1 && leftDelta > 20 * rightDelta,
+    'right reference stays visually stable within the WebGL frame noise (' + rightDelta.toFixed(3) + '% vs ' + leftDelta.toFixed(2) + '% on scan)')
+
+  // Verify that both halves remain synchronized after a change of Zebra
+  // orientation and closing/opening the split without remounting its canvas.
+  const rightCanvas = await page.$eval('.compareview canvas', e => {
+    e.dataset.zebraSplitKept = 'yes'
+    return e.isConnected
+  })
+  check(rightCanvas, 'reference canvas starts attached')
+  await page.select('[data-test=zebra-orientation]', 'vertical')
+  const leftRotated = await shot('.viewport canvas')
+  const directionDelta = await pixelDiff(page, leftZebra, leftRotated)
+  check(directionDelta > 0.2, 'Zebra direction remains interactive (' + directionDelta.toFixed(2) + '%)')
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half][hidden]')
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  check(!!(await page.$('.compareview canvas[data-zebra-split-kept=yes]')),
+    'the same reference canvas survives split hide/show')
+  check(await page.$eval('[data-test=zebra-enabled]', e => e.checked),
+    'Zebra survives split hide/show without changing CAD geometry')
+
+  await page.click('[data-test=open-settings]')
+  await page.waitForSelector('[data-test=interface-language]')
+  await page.select('[data-test=interface-language]', 'it')
+  await page.waitForFunction(() => document.documentElement.lang === 'it')
+  check(await page.$eval('[data-test=zebra-split-help]', e => e.textContent.includes('Nella vista affiancata')),
+    'the split-view explanation is translated into Italian')
+  check(await page.$eval('[data-test=split-view-divider]', e => e.getAttribute('aria-label').includes('Ridimensiona')),
+    'the divider accessible label follows the Italian interface')
+  await page.select('[data-test=interface-language]', 'en')
+  await page.waitForFunction(() => document.documentElement.lang === 'en')
+  await page.click('[data-test=settings-close]')
+
+  // The right reference viewport is intentionally not a note target. The
+  // existing scan view on the left still owns the note pin and its IDs.
+  await page.click('[data-test=zebra-add-note]')
+  const rightCenter = await page.$eval('.compareview canvas', e => {
+    const r = e.getBoundingClientRect()
+    return { x: r.x + r.width * .5, y: r.y + r.height * .5 }
+  })
+  await page.mouse.click(rightCenter.x, rightCenter.y)
+  await sleep(250)
+  check((await notes()).length === 0, 'a click in the reference half does not fabricate a scan note')
+  const leftCenter = await page.$eval('.viewport canvas', e => {
+    const r = e.getBoundingClientRect()
+    return { x: r.x + r.width * .5, y: r.y + r.height * .5 }
+  })
+  await page.mouse.click(leftCenter.x, leftCenter.y)
+  await page.waitForSelector('[data-test=note-text]', { timeout: 20000 })
+  const text = 'Synthetic split Zebra scan-side note'
+  await page.type('[data-test=note-text]', text)
+  await page.click('[data-test=note-keep]')
+  const savedRow = (await notes()).find(n => n.text === text)
+  check(!!savedRow, 'the left scan creates a shared local note')
+  check(await page.$eval('[data-test=zebra-enabled]', e => e.checked),
+    'Zebra remains visible when the scan note is kept')
+
+  // Locate the saved left-scan observation and return to the original linked
+  // framing, without changing or anchoring anything on the reference.
+  const rightBeforeFocus = await shot('.compareview canvas')
+  await page.click('[data-note-id="' + savedRow.id + '"] [data-test=note-locate]')
+  await page.waitForSelector('[data-test=note-focus-ring][data-note-id="' + savedRow.id + '"]', { visible: true })
+  await page.waitForFunction(id => {
+    const ring = document.querySelector('[data-test=note-focus-ring][data-note-id="' + id + '"]')
+    const canvas = document.querySelector('.viewport canvas')
+    if (!ring || !canvas) return false
+    const r = ring.getBoundingClientRect(), c = canvas.getBoundingClientRect()
+    return Math.hypot(r.x + r.width / 2 - c.x - c.width / 2, r.y + r.height / 2 - c.y - c.height / 2) < 3 && r.width >= 50
+  }, { timeout: 30000 }, savedRow.id)
+  check(await page.$eval('[data-test=note-focus-feedback]', el => el.textContent.includes('centered')),
+    'scan-side note focuses and highlights inside the left split viewport')
+  await sleep(700)
+  const rightAfterFocus = await shot('.compareview canvas')
+  const linkedChange = await pixelDiff(page, rightBeforeFocus, rightAfterFocus)
+  check(linkedChange > 1, 'the reference view follows the left scan focus (' + linkedChange.toFixed(2) + '% of pixels)')
+  await page.click('[data-test=note-return-view]')
+  await sleep(700)
+  const rightAfterReturn = await shot('.compareview canvas')
+  const returnDifference = await pixelDiff(page, rightBeforeFocus, rightAfterReturn)
+  check(returnDifference < 1, 'Return to previous view restores the linked reference framing (' + returnDifference.toFixed(3) + '%)')
+  check(await page.$eval('[data-test=zebra-enabled]', el => el.checked),
+    'note navigation and Return keep split Zebra enabled')
+
+  // All subsequent checks use the same public controls and downloaded archive,
+  // so this scenario also runs on the compiled app without development globals.
+  await page.evaluate(() => {
+    const original = URL.createObjectURL
+    URL.createObjectURL = blob => { window.zebraSplitSaved = blob; return original(blob) }
+    HTMLAnchorElement.prototype.click = function () {}
+  })
+  const saveSnapshot = async () => {
+    await page.evaluate(() => { window.zebraSplitSaved = null })
+    await page.waitForSelector('[data-test=save-project]:enabled')
+    await page.click('[data-test=save-project]')
+    await page.waitForFunction(() => window.zebraSplitSaved instanceof Blob, { timeout: 40000 })
+    const raw = await page.evaluate(async () => Array.from(new Uint8Array(await window.zebraSplitSaved.arrayBuffer())))
+    const archive = unzipSync(Uint8Array.from(raw))
+    return { raw, archive, project: JSON.parse(strFromU8(archive['project.json'])) }
+  }
+  const focusSavedNote = async () => {
+    await page.click('[data-note-id="' + savedRow.id + '"] [data-test=note-locate]')
+    await page.waitForFunction(id => {
+      const ring = document.querySelector('[data-test=note-focus-ring][data-note-id="' + id + '"]')
+      const canvas = document.querySelector('.viewport canvas')
+      if (!ring || !canvas || getComputedStyle(ring).display === 'none') return false
+      const r = ring.getBoundingClientRect(), c = canvas.getBoundingClientRect()
+      return r.width >= 50 && Math.hypot(r.x + r.width / 2 - c.x - c.width / 2, r.y + r.height / 2 - c.y - c.height / 2) < 3
+    }, { timeout: 30000 }, savedRow.id)
+    return page.$eval('[data-test=note-focus-feedback]', el => el.textContent)
+  }
+  const baseline = await saveSnapshot()
+  const baselineNote = baseline.project.reverseNotes?.notes?.find(n => String(n.id) === savedRow.id)
+  if (!baselineNote) throw new Error('Saved note is missing before hidden/clipped checks')
+
+  // Exercise the new pane shortcuts while Zebra and a saved note are present.
+  // The final archive comparison below covers these actions too, not just
+  // navigation: every note field and model payload must remain unchanged.
+  for (const side of ['scan', 'reference']) for (const kind of ['transparent', 'wireframe', 'backfaces']) {
+    const selector = `[data-test=split-${side}-${kind}]`
+    const before = await page.$eval(selector, el => el.getAttribute('aria-pressed'))
+    await page.click(selector)
+    check(await page.$eval(selector, el => el.getAttribute('aria-pressed')) !== before,
+      `${side} ${kind} shortcut works with Zebra and a saved scan note`)
+    await page.click(selector)
+  }
+
+  // Compare both targets against ordinary shading at the same saved-note
+  // framing. These public controls also exercise the compiled application.
+  const zebraUi = () => page.evaluate(() => ({
+    enabled: document.querySelector('[data-test=zebra-enabled]')?.checked,
+    target: document.querySelector('[data-test=zebra-target]')?.value,
+    orientation: document.querySelector('[data-test=zebra-orientation]')?.value,
+    width: document.querySelector('[data-test=zebra-width]')?.value,
+    color: document.querySelector('[data-test=zebra-color]')?.value,
+  }))
+  await page.click('[data-test=zebra-enabled]')
+  const scanWithNoteBare = await shot('.viewport canvas')
+  const referenceWithNoteBare = await shot('.compareview canvas')
+  await page.click('[data-test=zebra-enabled]')
+  await page.select('[data-test=zebra-target]', 'reference')
+  await page.waitForFunction(() =>
+    document.querySelector('[data-test=zebra-target]')?.value === 'reference' &&
+    document.querySelector('[data-test=zebra-status]')?.textContent.includes('1 visible object'),
+    { timeout: 20000 },
+  )
+  const scanWithReferenceZebra = await shot('.viewport canvas')
+  const referenceZebra = await shot('.compareview canvas', 'zebra-split-reference-after.png')
+  const referenceDelta = await pixelDiff(page, referenceWithNoteBare, referenceZebra)
+  const restoredScanDelta = await pixelDiff(page, scanWithNoteBare, scanWithReferenceZebra)
+  check(referenceDelta > 1 && (await zebraUi()).enabled,
+    'selecting Reference visibly stripes the right model (' + referenceDelta.toFixed(2) + '%)')
+  check(restoredScanDelta < 1 && referenceDelta > 20 * restoredScanDelta,
+    'Reference restores ordinary scan shading without affecting its pixels (' + restoredScanDelta.toFixed(3) + '%)')
+
+  await page.select('[data-test=zebra-orientation]', 'horizontal')
+  const referenceRotated = await shot('.compareview canvas')
+  const referenceDirectionDelta = await pixelDiff(page, referenceZebra, referenceRotated)
+  check(referenceDirectionDelta > 0.2 && await pixelDiff(page, scanWithNoteBare, await shot('.viewport canvas')) < 1,
+    'Reference direction changes its stripes while the scan stays unchanged (' + referenceDirectionDelta.toFixed(2) + '%)')
+  await page.focus('[data-test=zebra-width]')
+  await page.keyboard.press('ArrowRight')
+  const referenceWider = await shot('.compareview canvas')
+  const referenceWidthDelta = await pixelDiff(page, referenceRotated, referenceWider)
+  check(referenceWidthDelta > 0.2 && (await zebraUi()).width === '4' &&
+    await pixelDiff(page, scanWithNoteBare, await shot('.viewport canvas')) < 1,
+    'Reference stripe width responds to the shared range control (' + referenceWidthDelta.toFixed(2) + '%)')
+  await page.$eval('[data-test=zebra-color]', el => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, '#cc6600')
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+    el.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  const referenceColored = await shot('.compareview canvas', 'zebra-split-reference-controls.png')
+  const referenceColorDelta = await pixelDiff(page, referenceWider, referenceColored)
+  check(referenceColorDelta > 0.2 && (await zebraUi()).color === '#cc6600' &&
+    await pixelDiff(page, scanWithNoteBare, await shot('.viewport canvas')) < 1,
+    'Reference stripe color changes without recoloring the scan (' + referenceColorDelta.toFixed(2) + '%)')
+
+  const referenceSettings = await zebraUi()
+  await page.$eval('.viewport canvas', el => { el.dataset.zebraReferenceKept = 'yes' })
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half][hidden]')
+  const targetWhileClosed = (await zebraUi()).target
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  const reopenedReference = await shot('.compareview canvas')
+  check(targetWhileClosed === 'reference' && JSON.stringify(await zebraUi()) === JSON.stringify(referenceSettings) &&
+    !!(await page.$('.viewport canvas[data-zebra-reference-kept=yes]')) &&
+    !!(await page.$('.compareview canvas[data-zebra-split-kept=yes]')) &&
+    await pixelDiff(page, referenceColored, reopenedReference) < 1 &&
+    await pixelDiff(page, scanWithNoteBare, await shot('.viewport canvas')) < 1,
+    'split hide/show preserves both canvases, the Reference target, shared parameters and rendered shading')
+
+  // The split preference stays true when the comparison source is changed,
+  // but an element source has no visible reference half to receive Zebra.
+  await page.click('[data-test=source-element]')
+  await page.waitForSelector('[data-test=compare-half][hidden]')
+  await page.waitForFunction(() =>
+    document.querySelector('[data-test=zebra-status]')?.textContent.includes('Load and show the reference'),
+    { timeout: 20000 },
+  )
+  check(JSON.stringify(await zebraUi()) === JSON.stringify(referenceSettings) &&
+    await page.$eval('.compareview canvas', el => el.getBoundingClientRect().width === 0) &&
+    await page.$eval('[data-test=zebra-status]', el => !el.textContent.includes('1 visible object')),
+    'Element source suspends Reference Zebra with no visible reference object while keeping its parameters')
+  await page.click('[data-test=source-reference]')
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  await page.waitForFunction(() =>
+    document.querySelector('[data-test=zebra-status]')?.textContent.includes('1 visible object'),
+    { timeout: 20000 },
+  )
+  check(JSON.stringify(await zebraUi()) === JSON.stringify(referenceSettings) &&
+    !!(await page.$('.viewport canvas[data-zebra-reference-kept=yes]')) &&
+    !!(await page.$('.compareview canvas[data-zebra-split-kept=yes]')) &&
+    await pixelDiff(page, referenceColored, await shot('.compareview canvas')) < 1 &&
+    await pixelDiff(page, scanWithNoteBare, await shot('.viewport canvas')) < 1,
+    'Reference source restores Zebra on the same canvases with the same parameters and unchanged scan shading')
+
+  const notesBeforeReferenceClick = await notes()
+  await page.click('[data-test=zebra-add-note]')
+  const referenceClick = await page.$eval('.compareview canvas', el => {
+    const r = el.getBoundingClientRect()
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+  })
+  await page.mouse.click(referenceClick.x, referenceClick.y)
+  await sleep(250)
+  check(JSON.stringify(await notes()) === JSON.stringify(notesBeforeReferenceClick) &&
+    !(await page.$('[data-test=note-text]')) &&
+    await page.$eval('[data-test=zebra-add-note]', el => el.getAttribute('aria-pressed') === 'true'),
+    'a striped Reference click creates neither a note editor nor a false scan anchor')
+  await page.click('[data-test=zebra-add-note]')
+
+  const stripedReferenceBeforeFocus = await shot('.compareview canvas')
+  await focusSavedNote()
+  await sleep(700)
+  const stripedReferenceFocused = await shot('.compareview canvas')
+  await page.click('[data-test=note-return-view]')
+  await sleep(700)
+  const stripedReferenceReturned = await shot('.compareview canvas')
+  check(await pixelDiff(page, stripedReferenceBeforeFocus, stripedReferenceFocused) > 1 &&
+    await pixelDiff(page, stripedReferenceBeforeFocus, stripedReferenceReturned) < 1 &&
+    JSON.stringify(await zebraUi()) === JSON.stringify(referenceSettings),
+    'Reference Zebra follows scan-note camera focus and Return without changing the target or shared parameters')
+
+  await page.select('[data-test=zebra-target]', 'scan')
+  const scanZebraReturned = await shot('.viewport canvas')
+  const referenceBareReturned = await shot('.compareview canvas')
+  check(await pixelDiff(page, scanWithNoteBare, scanZebraReturned) > 1 &&
+    await pixelDiff(page, referenceWithNoteBare, referenceBareReturned) < 1 &&
+    JSON.stringify(await zebraUi()) === JSON.stringify({ ...referenceSettings, target: 'scan' }),
+    'switching back to Scan restores ordinary reference shading and retains the shared stripe parameters')
+  await page.select('[data-test=zebra-target]', 'reference')
+  await page.click('[data-test=zebra-enabled]')
+  check(await pixelDiff(page, referenceWithNoteBare, await shot('.compareview canvas')) < 1 &&
+    await pixelDiff(page, scanWithNoteBare, await shot('.viewport canvas')) < 1,
+    'disabling Reference Zebra restores ordinary shading on both models')
+  await page.click('[data-test=zebra-enabled]')
+  await page.waitForFunction(() =>
+    document.querySelector('[data-test=zebra-target]')?.value === 'scan' &&
+    document.querySelector('[data-test=zebra-status]')?.textContent.includes('1 visible object'),
+    { timeout: 20000 },
+  )
+
+  // Resize only the host layout. Neither WebGL canvas may be reconstructed,
+  // and the same downloaded note/model data must survive every layout change.
+  const divider = '[data-test=split-view-divider]'
+  const panes = () => page.evaluate(() => {
+    const left = document.querySelector('.viewslot > .viewport')?.getBoundingClientRect()
+    const right = document.querySelector('[data-test=compare-half]')?.getBoundingClientRect()
+    const handle = document.querySelector('[data-test=split-view-divider]')
+    const rect = handle?.getBoundingClientRect()
+    return { left: left?.width ?? 0, right: right?.width ?? 0,
+      total: document.querySelector('.viewslot.split')?.clientWidth ?? 0,
+      x: rect ? rect.x + rect.width / 2 : 0, y: rect ? rect.y + 170 : 0,
+      divider: rect?.width ?? 0, value: Number(handle?.getAttribute('aria-valuenow')),
+      disabled: handle?.getAttribute('aria-disabled'), stored: localStorage.getItem('tmar.splitView.ratio') }
+  })
+  const dragDivider = async (delta, cancel = false) => {
+    const before = await panes()
+    await page.mouse.move(before.x, before.y)
+    await page.mouse.down()
+    await page.mouse.move(before.x + delta, before.y, { steps: 12 })
+    if (cancel) await page.keyboard.press('Escape')
+    await page.mouse.up()
+    await sleep(250)
+  }
+  await page.waitForSelector(divider, { visible: true })
+  const equalPanes = await panes()
+  check(Math.abs(equalPanes.left - equalPanes.right) < 1 && equalPanes.divider === 12,
+    'the accessible divider initially separates equal-sized views')
+  await page.$eval('.viewport canvas', e => { e.dataset.layoutIdentity = 'scan' })
+  await page.$eval('.compareview canvas', e => { e.dataset.layoutIdentity = 'reference' })
+  await dragDivider(140)
+  const dragged = await panes()
+  check(Math.abs(dragged.left - equalPanes.left - 140) < 2 && Math.abs(dragged.right - equalPanes.right + 140) < 2,
+    'a real divider drag enlarges one viewport and shrinks the other by the same amount')
+  check(dragged.left >= 240 && dragged.right >= 240 && Number(dragged.stored) > 0.5,
+    'the committed split preference keeps readable pane widths')
+  await dragDivider(-80, true)
+  const cancelled = await panes()
+  check(Math.abs(cancelled.left - dragged.left) < 1 && cancelled.stored === dragged.stored,
+    'Escape rolls back the active resize without changing the stored preference')
+  // Loss of capture must abandon a half-finished gesture, not persist it.
+  await page.$eval(divider, el => el.addEventListener('gotpointercapture', event => {
+    el.dataset.testPointer = String(event.pointerId)
+  }, { once: true }))
+  const captureStart = await panes()
+  await page.mouse.move(captureStart.x, captureStart.y)
+  await page.mouse.down()
+  await page.mouse.move(captureStart.x - 60, captureStart.y, { steps: 6 })
+  check((await panes()).stored === captureStart.stored, 'drag previews do not write browser preferences before release')
+  await page.$eval(divider, el => el.releasePointerCapture(Number(el.dataset.testPointer)))
+  await page.mouse.up()
+  await sleep(200)
+  check(Math.abs((await panes()).left - captureStart.left) < 1 && (await panes()).stored === captureStart.stored,
+    'lost pointer capture cancels the preview and retains the last committed split')
+  const closeDuringDrag = await panes()
+  await page.mouse.move(closeDuringDrag.x, closeDuringDrag.y)
+  await page.mouse.down()
+  await page.mouse.move(closeDuringDrag.x - 70, closeDuringDrag.y, { steps: 6 })
+  await page.$eval('[data-test=toggle-split]', el => el.click())
+  await page.mouse.up()
+  await page.waitForSelector('[data-test=compare-half][hidden]')
+  check(!(await page.$('.compare-resizing')) && (await panes()).stored === closeDuringDrag.stored,
+    'closing split during a drag cleans up capture and does not persist the unfinished gesture')
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  await sleep(200)
+  check(Math.abs((await panes()).left - closeDuringDrag.left) < 1, 'reopening after cancellation restores the committed layout')
+  await page.focus(divider)
+  await page.keyboard.press('ArrowLeft')
+  check((await panes()).value === dragged.value - 2, 'ArrowLeft adjusts the split by two percentage points')
+  await page.keyboard.press('Home')
+  const minimum = await panes()
+  check(minimum.left >= 239.9 && minimum.value === Number(await page.$eval(divider, e => e.getAttribute('aria-valuemin'))),
+    'Home stops at the minimum readable scan pane')
+  await page.keyboard.press('End')
+  const maximum = await panes()
+  check(maximum.right >= 239.9 && maximum.value === Number(await page.$eval(divider, e => e.getAttribute('aria-valuemax'))),
+    'End stops at the minimum readable reference pane')
+  await page.keyboard.press('Enter')
+  check(Math.abs((await panes()).left - (await panes()).right) < 1, 'Enter restores the 50/50 split')
+  await dragDivider(80)
+  const resetAt = await panes()
+  await page.mouse.click(resetAt.x, resetAt.y, { count: 2 })
+  await sleep(200)
+  check((await panes()).value === 50 && Number((await panes()).stored) === 0.5, 'double-click also resets and saves equal panes')
+
+  await dragDivider(140)
+  const preferredSplit = await panes()
+  await page.setViewport({ width: 820, height: 1000 })
+  await sleep(300)
+  const narrowSplit = await panes()
+  check(narrowSplit.disabled === 'true' && Math.abs(narrowSplit.left - narrowSplit.right) < 1 &&
+    Math.abs(narrowSplit.left + narrowSplit.right + narrowSplit.divider - narrowSplit.total) < 1,
+    'limited desktop space keeps equal panes without overflowing the stage')
+  check(narrowSplit.stored === preferredSplit.stored, 'shrinking the window does not overwrite the preferred ratio')
+  await page.setViewport({ width: 1600, height: 1000 })
+  await sleep(300)
+  check(Math.abs((await panes()).left - preferredSplit.left) < 1, 'the preferred split returns when desktop space is restored')
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half][hidden]')
+  check(await page.$eval(divider, e => e.hidden) &&
+    !(await page.$('.stage.compare-resizable')), 'closing the split removes its divider and layout overrides')
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector('[data-test=compare-half]:not([hidden])')
+  await sleep(250)
+  check(Math.abs((await panes()).left - preferredSplit.left) < 1, 'reopening split restores the chosen ratio')
+  check(Boolean(await page.$('.viewport canvas[data-layout-identity=scan]')) &&
+    Boolean(await page.$('.compareview canvas[data-layout-identity=reference]')),
+    'resizing, narrow layout and hide/show retain both original WebGL canvases')
+  await page.screenshot({ path: shotPath('zebra-split-resized.png') })
+
+  // Hiding a scan must remain an operator decision: locating its saved anchor
+  // may show a marker, never silently reveal that scan or move its geometry.
+  const scanVisible = await shot('.viewport canvas')
+  await page.click('[data-test=toggle-scan]')
+  await page.waitForFunction(() => document.querySelector('[data-test=toggle-scan]')?.getAttribute('aria-pressed') === 'false')
+  const scanHidden = await shot('.viewport canvas', 'zebra-split-hidden.png')
+  check(await pixelDiff(page, scanVisible, scanHidden) > 1, 'the scan is actually hidden in the left viewport')
+  const hiddenReferenceBefore = await shot('.compareview canvas')
+  const hiddenMessage = await focusSavedNote()
+  check(hiddenMessage.includes('hidden'), 'hidden scan note is centered with an explicit visibility warning')
+  check(await page.$eval('[data-test=toggle-scan]', el => el.getAttribute('aria-pressed') === 'false'),
+    'locating the hidden note does not reveal its scan')
+  const hiddenReferenceFocused = await shot('.compareview canvas')
+  check(await pixelDiff(page, hiddenReferenceBefore, hiddenReferenceFocused) > 1,
+    'the reference camera follows hidden scan-note focus')
+  await page.click('[data-test=note-return-view]')
+  const hiddenReferenceReturned = await shot('.compareview canvas')
+  check(await pixelDiff(page, hiddenReferenceBefore, hiddenReferenceReturned) < 1 &&
+    await page.$eval('[data-test=toggle-scan]', el => el.getAttribute('aria-pressed') === 'false'),
+    'Return restores the reference framing while leaving the scan hidden')
+  check(await page.$eval('[data-test=zebra-enabled]', el => el.checked),
+    'hidden-note navigation preserves the Zebra preference')
+  await page.click('[data-test=toggle-scan]')
+  await page.waitForFunction(() => document.querySelector('[data-test=toggle-scan]')?.getAttribute('aria-pressed') === 'true')
+
+  // The fixture is [0,20]^3. Cut at its midpoint along the clicked surface's
+  // normal; the section UI chooses the half facing the original camera.
+  const axisIndex = [0, 1, 2].reduce((best, i) => Math.abs(baselineNote.at[i] - 10) > Math.abs(baselineNote.at[best] - 10) ? i : best, 0)
+  const axis = ['x', 'y', 'z'][axisIndex]
+  await page.click('[data-test=toggle-section-view]')
+  await page.waitForSelector('[data-test=section-view-ref]')
+  await page.select('[data-test=section-view-ref]', axis)
+  await page.$eval('[data-test=section-view-offset]', el => { el.focus(); el.value = '10' })
+  await page.keyboard.press('Enter')
+  const sectionBefore = await page.evaluate(() => ({
+    active: document.querySelector('[data-test=toggle-section-view]')?.getAttribute('aria-pressed'),
+    axis: document.querySelector('[data-test=section-view-ref]')?.value,
+    offset: document.querySelector('[data-test=section-view-offset]')?.value,
+  }))
+  check(sectionBefore.active === 'true' && sectionBefore.axis === axis && Number(sectionBefore.offset) === 10,
+    'a real midpoint section is active before locating the clipped scan note')
+  const clippedReferenceBefore = await shot('.compareview canvas', 'zebra-split-section-before.png')
+  const clippedScanBefore = await shot('.viewport canvas')
+  await page.select('[data-test=zebra-target]', 'reference')
+  const clippedReferenceZebra = await shot('.compareview canvas', 'zebra-split-reference-section.png')
+  await page.$eval('[data-test=section-view-offset]', el => { el.focus(); el.value = '15' })
+  await page.keyboard.press('Enter')
+  const movedReferenceSection = await shot('.compareview canvas')
+  await page.$eval('[data-test=section-view-offset]', el => { el.focus(); el.value = '10' })
+  await page.keyboard.press('Enter')
+  const returnedReferenceSection = await shot('.compareview canvas')
+  await page.select('[data-test=zebra-target]', 'scan')
+  check(await pixelDiff(page, clippedReferenceBefore, clippedReferenceZebra) > 1 &&
+    await pixelDiff(page, clippedReferenceZebra, movedReferenceSection) > 1 &&
+    await pixelDiff(page, clippedReferenceZebra, returnedReferenceSection) < 1 &&
+    await pixelDiff(page, clippedReferenceBefore, await shot('.compareview canvas')) < 1 &&
+    await pixelDiff(page, clippedScanBefore, await shot('.viewport canvas')) < 1,
+    'Reference Zebra follows a moved section plane and switching back restores both clipped model shadings')
+  const clippedMessage = await focusSavedNote()
+  check(clippedMessage.includes('clipped'), 'clipped scan note is centered with an explicit section warning')
+  const sectionAfter = await page.evaluate(() => ({
+    active: document.querySelector('[data-test=toggle-section-view]')?.getAttribute('aria-pressed'),
+    axis: document.querySelector('[data-test=section-view-ref]')?.value,
+    offset: document.querySelector('[data-test=section-view-offset]')?.value,
+  }))
+  check(JSON.stringify(sectionAfter) === JSON.stringify(sectionBefore),
+    'locating the clipped note does not disable, move or reorient the section')
+  check(await pixelDiff(page, clippedReferenceBefore, await shot('.compareview canvas')) > 1,
+    'the reference camera follows clipped scan-note focus')
+  await page.click('[data-test=note-return-view]')
+  check(await pixelDiff(page, clippedReferenceBefore, await shot('.compareview canvas')) < 1,
+    'Return restores both linked cameras with the section still active')
+  check(await page.$eval('[data-test=toggle-section-view]', el => el.getAttribute('aria-pressed') === 'true') &&
+    await page.$eval('[data-test=zebra-enabled]', el => el.checked),
+    'clipped-note navigation preserves the section and Zebra preferences')
+  await page.click('[data-test=toggle-section-view]')
+
+  const { raw, archive, project } = await saveSnapshot()
+  check(JSON.stringify(project.reverseNotes) === JSON.stringify(baseline.project.reverseNotes),
+    'Reference controls and hidden/clipped navigation preserve every saved note field and anchor')
+  check(Buffer.from(archive['project.json']).equals(Buffer.from(baseline.archive['project.json'])),
+    'Reference controls, split layout and navigation leave project.json byte-identical')
+  const modelKeys = Object.keys(baseline.archive).filter(key => key !== 'project.json')
+  check(modelKeys.length > 0 && modelKeys.length === Object.keys(archive).filter(key => key !== 'project.json').length &&
+    modelKeys.every(key => archive[key] && Buffer.from(archive[key]).equals(Buffer.from(baseline.archive[key]))),
+    'Reference controls and hidden/clipped navigation leave all archived model payloads byte-identical')
+  const stored = project.reverseNotes?.notes?.find(note => String(note.id) === savedRow?.id)
+  check(!!stored && stored.text === text && stored.on?.[0]?.kind === 'scan',
+    'the saved .scanruler preserves the original scan-side note ID and anchor kind')
+
+  // Replacing the source must reconnect an already enabled Reference layer to
+  // the new comparison host. Keep this intentional model change after the
+  // byte-for-byte checks and reload the untouched saved archive below.
+  await page.select('[data-test=zebra-target]', 'reference')
+  const beforeReplacementUi = await zebraUi()
+  const beforeReplacementZebra = await shot('.compareview canvas')
+  await page.$eval('.compareview canvas', el => { el.dataset.beforeReferenceReplacement = 'yes' })
+  await (await page.$('[data-test=slot-reference] input[type=file]')).uploadFile(replacementPath)
+  await page.waitForFunction(name =>
+    document.querySelector('[data-test=split-reference-tools] .split-view-filename')?.textContent === name &&
+    document.querySelector('[data-test=compare-half]')?.hidden === false &&
+    document.querySelector('.compareview canvas')?.isConnected &&
+    document.querySelector('.compareview canvas')?.dataset.beforeReferenceReplacement !== 'yes' &&
+    document.querySelector('[data-test=zebra-target]')?.value === 'reference' &&
+    document.querySelector('[data-test=zebra-status]')?.textContent.includes('1 visible object'),
+    { timeout: 120000 }, replacementName,
+  )
+  await page.waitForSelector('[data-test=save-project]:enabled')
+  const replacementZebra = await shot('.compareview canvas', 'zebra-split-reference-replaced.png')
+  // Import frames the models; compare on/off at this new framing.
+  const replacementScan = await shot('.viewport canvas')
+  check(await page.$$eval('.compareview canvas', canvases => canvases.length === 1 && canvases[0].isConnected &&
+    !canvases[0].dataset.beforeReferenceReplacement) &&
+    JSON.stringify(await zebraUi()) === JSON.stringify(beforeReplacementUi) &&
+    await pixelDiff(page, beforeReplacementZebra, replacementZebra) > 1,
+    'a differently sized STEP replaces the old canvas and keeps Reference Zebra active on the new host')
+  await page.click('[data-test=zebra-enabled]')
+  const replacementBare = await shot('.compareview canvas')
+  check(await pixelDiff(page, replacementZebra, replacementBare) > 1 &&
+    await pixelDiff(page, replacementScan, await shot('.viewport canvas')) < 1,
+    'the replacement reference has real Zebra shading and disabling it leaves the scan unchanged')
+  await page.click('[data-test=zebra-enabled]')
+  await page.select('[data-test=zebra-target]', 'reference')
+  const replacementZebraRepeated = await shot('.compareview canvas')
+  await page.click('[data-test=zebra-enabled]')
+  check(await pixelDiff(page, replacementZebra, replacementZebraRepeated) < 1 &&
+    await pixelDiff(page, replacementBare, await shot('.compareview canvas')) < 1 &&
+    await pixelDiff(page, replacementScan, await shot('.viewport canvas')) < 1,
+    'the replacement host can re-enable and remove Zebra repeatedly with the same restored shading')
+
+  await page.reload({ waitUntil: 'networkidle0' })
+  await page.evaluate(bytes => {
+    const data = new DataTransfer()
+    data.items.add(new File([new Uint8Array(bytes)], 'zebra-split-roundtrip.scanruler'))
+    window.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }))
+  }, raw)
+  await page.waitForFunction(value => {
+    return document.body.textContent.includes(value) &&
+      !document.querySelector('[data-test=save-project]')?.disabled
+  }, { timeout: 120000 }, text)
+  check((await notes()).some(n => n.id === savedRow?.id && n.text === text),
+    'fresh project reload displays the same note ID and text')
+  if ((await page.$eval('[data-test=toggle-split]', el => el.getAttribute('aria-pressed'))) !== 'true') {
+    await page.click('[data-test=toggle-split]')
+  }
+  await page.waitForSelector(divider, { visible: true })
+  await sleep(250)
+  check(Math.abs((await panes()).left - preferredSplit.left) < 1 && (await panes()).stored === preferredSplit.stored,
+    'fresh app reload restores the browser layout preference independently of the project')
+
+  // The divider belongs to the host comparison, not to Zebra. Verify the
+  // standalone host and the deviation legend without loading any plugin.
+  const withoutPlugins = new URL(page.url())
+  withoutPlugins.searchParams.set('plugins', 'none')
+  await page.goto(withoutPlugins.href, { waitUntil: 'networkidle0' })
+  await page.click('[data-test=workspace-deviation]')
+  await loadScan(page, scanPath, { inputSelector: '[data-test=start-scan] input[type=file]', timeout: 120000, settle: 0 })
+  await (await page.$('[data-test=slot-reference] input[type=file]')).uploadFile(stepPath)
+  await page.waitForSelector('[data-test=align-auto]:enabled', { timeout: 120000 })
+  await page.click('[data-test=align-auto]')
+  await page.waitForSelector('[data-test=deviation-legend]', { timeout: 120000 })
+  await page.waitForFunction(() => !document.querySelector('[data-test=fitting-chip]'), { timeout: 120000 })
+  await page.click('[data-test=toggle-split]')
+  await page.waitForSelector(divider, { visible: true })
+  check(!(await page.$('[data-test=tmar-zebra]')) && !(await page.$('[data-test=tmar-deviation-notes]')),
+    'the host divider works when all optional plugins are disabled')
+  const legendPlacement = () => page.evaluate(() => {
+    const legend = document.querySelector('[data-test=deviation-legend]').getBoundingClientRect()
+    const scan = document.querySelector('.viewslot > .viewport').getBoundingClientRect()
+    return { right: legend.right, width: legend.width, scanRight: scan.right, scanLeft: scan.left }
+  })
+  const beforeLegend = await legendPlacement()
+  const beforeHostDrag = await panes()
+  await dragDivider(-60)
+  const afterLegend = await legendPlacement()
+  const afterHostDrag = await panes()
+  check(Math.abs(afterHostDrag.left - beforeHostDrag.left + 60) < 2,
+    'the optional-plugin-free host responds to an actual divider drag')
+  check(afterLegend.right <= afterLegend.scanRight && afterLegend.right - afterLegend.width >= afterLegend.scanLeft &&
+    Math.abs((afterLegend.right - beforeLegend.right) - (afterHostDrag.left - beforeHostDrag.left)) < 2,
+    'the deviation legend follows its resized scan pane without crossing into the reference')
+  await page.screenshot({ path: shotPath('split-divider-host-legend.png') })
+
+
+} catch (error) {
+  fail(error.stack ?? String(error))
+} finally {
+  if (browser) await finish(browser, consoleErrors)
+  if (server) await server.close()
+}

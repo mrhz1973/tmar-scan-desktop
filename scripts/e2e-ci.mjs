@@ -73,13 +73,14 @@ try {
   })
   try {
     await dev.listen()
-    for (const check of ['e2e-import', 'e2e-sample', 'e2e-small-feature', 'e2e-recovery', 'e2e-history', 'e2e-agent', 'e2e-agent-warning', 'e2e-agent-guide', 'e2e-units', ...pluginChecks()]) await run(check, dev.resolvedUrls.local[0])
+    for (const check of ['e2e-import', 'e2e-sample', 'e2e-small-feature', 'e2e-recovery', 'e2e-history', 'e2e-agent', 'e2e-agent-warning', 'e2e-agent-guide', 'e2e-units', 'e2e-split-view-tools', ...pluginChecks()]) await run(check, dev.resolvedUrls.local[0])
   } finally { await dev.close() }
 
   const production = await preview({ root, preview: { host: '127.0.0.1', port: 5194, strictPort: false, open: false } })
   try {
     await run('e2e-production', production.resolvedUrls.local[0])
     await run('e2e-italian', production.resolvedUrls.local[0])
+    await run('e2e-split-view-tools', production.resolvedUrls.local[0])
   }
   finally {
     await new Promise((resolve, reject) => {

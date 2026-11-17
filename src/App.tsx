@@ -75,6 +75,7 @@ import { MapLegend, type LegendStat } from './ui/MapLegend'
 import { fetchSampleScan } from './app/sampleScan'
 import { StartPane, type StartSlot } from './ui/StartPane'
 import { CompareView } from './ui/CompareView'
+import { SplitViewTools } from './ui/SplitViewTools'
 import { formatSigned } from './ui/format'
 import { HoverReadout, type HoverReading } from './ui/HoverReadout'
 import { SplitPicker } from './ui/SplitPicker'
@@ -1744,10 +1745,7 @@ function Workbench() {
             />
             {!splitOpen && (pluginSplit)}
             {splitOpen && (
-              <div className="splitcap">
-                <b>{tmarText("Scan")}</b>
-                <span>{fileName}</span>
-              </div>
+              <SplitViewTools side="scan" name={fileName ?? ''} />
             )}
             {/* Kept after its first opening — see splitKept. A hidden half costs
                 its context and the reference's vertex buffers, once, where
@@ -1756,7 +1754,6 @@ function Workbench() {
               <CompareView
                 scene={sceneRef.current!}
                 geometry={nominalGeometry!}
-                role="Reference"
                 name={nominalName ?? 'reference'}
                 active={splitOpen}
               />

@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # TMAR review backlog
 
-Updated November 2, 2026. This supplements the [main roadmap](../README.md#status-and-roadmap).
-GitHub Issues was disabled when checked on this date, so these requests are
+Updated November 18, 2026. This supplements the [main roadmap](../README.md#status-and-roadmap).
+GitHub Issues was disabled when checked on November 2, 2026, so these requests are
 tracked here in version control. No issue numbers have been created and no
 repository settings have been changed. Implementation and acceptance are
 separate: publishing documentation does not complete the tasks below.
@@ -26,28 +26,181 @@ scope. No new runtime change or real-part acceptance is implied by this entry.
 
 ## ZEBRA-SPLIT-002
 
-**Split view with Zebra and local notes - PLANNED / not implemented.**
+**PARTIAL - isolated source candidate, not yet deployed or accepted by the operator.**
+Branch: `feat/web-zebra-split-20261113`, based on TMAR 7 / ScanRuler 0.11.2.
 
-Goal: evaluate two 3D panes so a user can inspect Zebra and keep annotated
-comparison context visible without leaving the review. A candidate is Zebra
-beside normal shading or a deviation view. A docked note list can accompany the
-panes but, on its own, is not the requested split-view feature.
+The source candidate reuses the existing Surface Deviation split. Zebra starts
+on the **left scan**; Analyze can select the **right reference** instead. One
+target is striped at a time, with shared direction, width and color. The left
+scan retains its existing note store; clicking the right reference never creates
+a false scan attachment. Reference-anchored notes remain unsupported.
 
-- [ ] Define the supported workspace/pane combinations. Evaluate Reverse engineer/Zebra and Surface Deviation scan/reference separately.
-- [ ] Choose vertical/horizontal layout and a resizable divider, including a usable narrow-screen fallback.
-- [ ] Specify linked versus independent cameras and preserve model alignment; do not move geometry to synchronize views.
-- [ ] Reuse existing local note records, IDs, text, anchors and provenance; no duplicate note store and no required or automatically enabled agent connection.
-- [ ] Place a note on the supported scan or CAD surface in the correct pane while Zebra remains active; explain unsupported targets instead of silently misplacing an anchor.
-- [ ] Define which pane(s) Go to note controls, show the corresponding focus/highlight, and preserve Return to previous view.
-- [ ] Provide per-pane Labels and note-pin visibility, with temporary focus of one note without revealing all annotations.
-- [ ] Preserve category-scoped feature visibility, clipping, source geometry/materials and the existing lower-bar controls.
-- [ ] Save/reopen the same note records without duplication and explicitly decide which layout/camera preferences persist.
-- [ ] Test placement, selection, focus, hidden/clipped targets, resizing, mode transitions, project round trips and renderer cleanup; qualify platforms separately.
+- [x] Implement left-scan Zebra in the existing side-by-side Deviation view, without changing geometry or the right reference's material.
+- [x] Reuse the existing two linked viewports, without remounting the right canvas when the split is hidden and reopened.
+- [x] Enable explicit Scan/Reference Zebra selection in split, one target at a time; explain scope and scan-only notes in Italian and English.
+- [x] Permit local notes in the left scan pane, preserve their IDs/targets, and reject clicks in the right reference pane.
+- [x] Verify on synthetic STEP/STL fixtures: visual isolation, stripe controls, split hide/show and note save/reopen.
+- [x] Qualify Go to note and Return to previous view for an ordinary visible scan note in split, including both linked cameras and unchanged Zebra state (synthetic Chrome).
+- [x] Qualify hidden and section-clipped scan-note focus/return in linked split, retaining scan visibility, section settings, every saved note field and byte-identical archived model payloads (synthetic Chrome).
+- [ ] Extend hidden/clipped split qualification to large models and real operator sessions.
+- [x] Implement a resizable vertical scan/reference divider without remounting either canvas; keyboard control, reset, gesture cancellation, readable-pane limits and equal-pane fallback when desktop space is limited.
+- [x] Persist the preferred split ratio only in this browser; do not serialize it as CAD geometry, camera pose or project data.
+- [ ] Evaluate alternative stacked layouts and other workspace combinations separately; no mobile or desktop-shell release is implied.
+- [x] Expose independent transparency, triangle wireframe and backface-tint shortcuts in labelled scan/reference pane bars, reusing existing stores and keeping the older menus synchronized.
+- [x] Qualify these shortcuts with and without optional plugins, including model-pixel isolation, keyboard access, constrained panes and Italian labels.
+- [x] Implement optional Zebra on the right reference through a display-only host contract, retaining the existing shader and linked views.
+- [ ] Evaluate simultaneous Zebra with independent per-pane stripe settings.
+- [ ] Define reference-side note identity separately from existing scan anchors.
+- [ ] Support Reverse engineer split and any new CAD-side composition without duplicating sources or notes.
+- [ ] Complete per-pane labels, navigation, project persistence policy, multi-platform/large-model QA and owner visual acceptance.
 
-Current boundary: the delivered Deviation note adapter is scan-side and
-single-viewport. This task does not claim reference-side or split-view note
-placement already works. It remains future work while current-result review
-continues.
+This partial implementation is not a release or full completion of ZEBRA-SPLIT-002.
+The existing general Zebra review remains open.
+
+### 18 November 2026 - reference Zebra checkpoint
+
+Bounded successor of `6b94bf98a864a0f8c0cba1f48ff7cc6d3d8f56ad`, on the
+same Web branch and existing worktree. The previous revision's complete
+[CI run](https://github.com/mrhz1973/tmar-scan-desktop/actions/runs/43944324351)
+and [license run](https://github.com/mrhz1973/tmar-scan-desktop/actions/runs/43944324517)
+were verified successful on November 18. Those results belong to that revision.
+
+The generic `comparisonView` contract is scoped to the owning `SceneManager`.
+It publishes the configured comparison host, offers a borrowed reference mesh
+and display-only layers, and detaches before host disposal. Layers tick after
+the right camera/section update, wake that renderer, and are disposed once.
+The two canvas lifetimes still depend only on their existing scene/geometry.
+
+The plugin subscribes to host replacement and routes the selected Reference
+overlay to the right renderer only while the reference comparison is open.
+Closing split routes Reference to the main viewport; switching to Fitted
+element removes the hidden comparison from the analysis target. Reopening
+restores the right overlay. Enabling Zebra retains the existing Scan default.
+The shader, pattern, note schema and model geometry paths are unchanged.
+
+Local Windows / isolated Chrome checks, synthetic fixtures:
+
+| Check | Observed result |
+| --- | --- |
+| Focused units: registry, display lifecycle, camera link, divider, pane tools, Zebra | 30/30 PASS, six files |
+| Full unit suite, four workers | 4,851 PASS, 1 FAIL from a pre-existing Windows fixture line ending, 39 SKIP |
+| MCP suite | 149/149 PASS |
+| Extended public-UI Zebra scenario, development | 82/82 PASS |
+| Pane tools and extended Zebra scenario, compiled HTML | 89/89 PASS and 82/82 PASS |
+| TypeScript and Vite production build | PASS |
+| Plugin boundary, display units and worker CSP | PASS |
+
+All four browser sessions reported zero console/page errors. The 82 Zebra
+checks retain the earlier 65 and add 17 checks for Reference pixel isolation,
+shared controls, hide/show, Fitted element/source switching, note-camera focus,
+section movement, reference replacement while enabled and project identity.
+Every saved note field, `project.json` and archived model payload matched the
+baseline. The pane scenario still runs with plugins and with `?plugins=none`.
+These synthetic checks do not qualify a real scanned part or numerical continuity.
+
+The full unit run finished 623 passing files, one failing file and 22 skipped
+files (646 total). Its only failure is the pre-existing SHA-256 assertion for
+`plugins/tmar-edit-surface/evidence/free-boundary/compiled-20261103/moved.step`:
+the Windows checkout has 160 CRLF endings and hash
+`1059edd655f22c71a6f53d8cda551fdcadf68bd8c4574f4dc1199c52a46dd2a1`;
+the unchanged HEAD blob uses LF and the expected
+`61e1e624a432089e613cc9b744a7c883ccee3cd79ba459f0ef1c5c159419741f`.
+Converting CRLF to LF in memory gives bytes identical to that blob.
+Fixture and test have no Git diff; neither was modified. The run remains
+formally one failure, and that case stops before its geometric assertion.
+
+Two local execution issues were diagnosed:
+the Vite/Rollup build succeeds from the preserved canonical Windows worktree path
+`D:\TMAR_WEB_ZEBRA_SPLIT_20261113`; invoking through its organization
+junction produced an `index.html` output-path error. Chrome 157.0.8103.79
+beyond-viewport screenshot capture produced alternating/blank WebGL frames
+even before Zebra was enabled. A controlled probe with fixed models, camera and
+DOM rectangles measured 70-73% differences with that mode and four successive
+0% differences with visible-viewport capture. Both split screenshot helpers now
+use `captureBeyondViewport: false` for their unchanged, fully visible rectangles.
+Pixel thresholds, retry counts and assertions are unchanged; failed shots retain
+their actual image pair, delta sequence and bounds for diagnosis. No rendering
+code was changed for this capture issue.
+
+MCP's locked dependencies were installed in its existing package before the
+successful run; package manifests and lockfiles are unchanged. The original
+Zebra shader/pattern, camera-link code and specialist Edit Surface subtree also
+have no diff.
+
+Evidence remains in the existing ignored `e2e-out/`: `reference-zebra-unit-20261118.log`,
+`reference-zebra-full-unit-20261118.log`,
+`reference-zebra-mcp-installed-20261118.log`,
+`reference-zebra-build-realpath-20261118.log`,
+`reference-zebra-dev-visible-capture-20261118.log`,
+`reference-zebra-compiled-visible-capture-20261118.log` and
+`reference-zebra-capture-probe-20261118.log`. Earlier failed diagnostics are
+retained. `zebra-split-reference-controls.png`,
+`zebra-split-reference-section.png` and `zebra-split-reference-replaced.png`
+show synthetic fixtures. Large-bundle/WASM externalization and Node localStorage
+warnings remain visible.
+
+The entire `e2e:ci` collection was not rerun locally. Exact-revision GitHub CI and
+license results, commit/push receipt and workspace status are recorded in
+[PR #50](https://github.com/mrhz1973/tmar-scan-desktop/pull/50); the previous
+revision's green status is not inherited. Real-part, large-model, long-session,
+cross-platform and owner visual acceptance remain open. This is a source
+candidate, with no merge, VPS promotion, version change or A09 execution.
+
+Routing for this increment: CODE, root host/UI implementation; delegated focused
+TEST files and READ review. Model: inherited GPT-6 Astra Pro session; reasoning
+setting inherited without override. This confines the work to Web display
+behavior. The specialist Edit Surface executor and live CAD are outside this
+increment.
+
+### 16 November 2026 - pane display checkpoint
+
+Bounded successor of `344087e87e8cdac6d530f786387fbaf33f3a1262`, on the same
+Web branch. `SplitViewTools` adds shortcuts, not independent copies of state:
+scan `translucent/wireframe/showBackfaces` and reference
+`nominalSeeThrough/nominalMesh/nominalBackfaces` retain their existing setters.
+The general view row is lifted only for this resizable built-in split so it
+cannot cover the two pane bars. No geometry, camera-link, kernel, dependency,
+project-format or display-preference persistence policy was changed.
+
+Local Windows / isolated Chrome checks, synthetic fixtures:
+
+| Check | Observed result |
+| --- | --- |
+| Unit: new display tools, existing divider layout and camera link | 15/15 PASS, three files |
+| New public-UI scenario, development | 89/89 PASS |
+| Same new public-UI scenario, compiled HTML | 89/89 PASS |
+| Extended Zebra / notes / divider / save-reopen scenario, compiled HTML | 65/65 PASS |
+| TypeScript and Vite production build | PASS |
+| Plugin boundary, display units, worker CSP, JavaScript syntax and diff checks | PASS |
+
+Both display scenarios include all optional plugins and `?plugins=none`.
+They check actual model-pixel changes, absence of changes in the other model,
+legacy-menu synchronization, Space/Enter, split hide/show, the same two WebGL
+canvases, divider Home/End/reset, a 900-pixel desktop window and Italian labels.
+All three browser sessions in the compiled qualification reported zero console
+or page errors. The Zebra scenario exercises all six new shortcuts after its
+saved baseline; every saved note field remains equal and archived model payloads
+remain byte-identical. Its 65 checks include the previous 59 plus six shortcut
+checks; these are not independent whole-project acceptance campaigns.
+
+The first diagnostic used an inverted closed STL that the existing importer
+correctly reorients outward, so its backface pixel assertions failed. The test
+fixture now uses the existing PLY keep-winding marker; neither the renderer nor
+acceptance thresholds were relaxed. The failed diagnostic log is retained.
+
+Evidence is in the worktree's ignored `e2e-out/`: `pane-tools-unit-20261116.log`,
+`pane-tools-dev-20261116.log` (failed diagnostic),
+`pane-tools-dev-ply-20261116.log`, `pane-tools-build-20261116.log`, and
+`pane-tools-compiled-20261116.log`. The two `split-view-tools-*-it.png` images
+show the synthetic UI, not the owner's part. Existing large-bundle,
+WASM-module externalization and Node localStorage warnings remain visible.
+
+The full unit suite, MCP suite and entire `e2e:ci` collection were not rerun
+locally for this increment. The new scenario is registered in both development
+and production CI phases. Full exact-head GitHub CI remains a separate gate;
+a previous commit's green result is not inherited. Real-part, large-model,
+long-session, cross-platform and owner visual acceptance remain open.
+No merge, VPS publication, version-number change or A09 execution is included.
 
 ## ZEBRA-GALLERY-003
 

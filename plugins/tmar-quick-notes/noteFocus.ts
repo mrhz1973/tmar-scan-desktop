@@ -27,7 +27,14 @@ export function focusProblem(note: Note, _scene: SceneManager): string | null {
   const adapterProblem = noteWorkspace(workspace)?.focusProblem?.(note, _scene)
   if (adapterProblem) return adapterProblem
   const d = useDeviation.getState()
-  if (workspace === 'deviation' && (d.picking || d.animate || d.split || d.alignStatus === 'running')) return 'Use a still, single Deviation viewport before locating a note.'
+  if (workspace === 'deviation' && (d.picking || d.animate || d.alignStatus === 'running')) return 'Finish the current operation before locating a note.'
+  if (workspace === 'deviation' && d.split) {
+    // The host's scan viewport remains mounted at left. Focusing it is safe;
+    // the linked reference follows the camera, never the note target or CAD.
+    // The separate right viewport must not inherit a guessed scan annotation.
+    if (d.nominalBusy || d.mapStatus === 'running' || d.referenceStatus === 'running') return 'Finish the current operation before locating a note.'
+    if (note.on[0]?.kind !== 'scan') return 'Only scan-side notes can be located in the split view.'
+  }
   return null
 }
 

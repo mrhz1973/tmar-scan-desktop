@@ -104,6 +104,17 @@ left panel and stage; it does not wrap or remount the viewport. The host renders
 has no contribution. Duplicate IDs are refused; the registration returns cleanup
 for tests. This is not a hot-loading or sandboxing interface.
 
+`src/viewer/comparisonView.ts` exposes the built-in comparison viewport to
+display-only layers. Look up the host by its owning `SceneManager` and subscribe
+to attachment/replacement with `subscribeComparisonViews`; React consumers may
+use `useSyncExternalStore`. The reference mesh and its geometry/material are
+borrowed. `addDisplayLayer` runs after the comparison camera and section update,
+invalidates that renderer, and disposes the layer on removal or host shutdown.
+The host remains registered while the split is hidden, so consumers choose the
+main or comparison viewport according to current layout state. Detach happens
+before host disposal, and stale cleanup cannot unregister a newer host. There
+are no comparison-side picking or note-attachment hooks in this contract.
+
 The reverse plugin also exposes `app/noteWorkspaces.ts` for explicit workspace
 placement adapters. An adapter cannot replace Reverse engineer or another
 registered workspace. Each dependent plugin must document its picking and

@@ -1,0 +1,41 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Only the built-in comparison opts in; plugin split workspaces keep their layout. */
+.viewslot.split.compare-resizable > .viewport {
+  flex: 0 0 var(--compare-left-width);
+}
+.viewslot.split.compare-resizable > .comparehalf {
+  border-left: none;
+}
+.viewslot.compare-resizable > .splitcap {
+  max-width: max(0px, calc(var(--compare-left-width) - 20px));
+}
+.stage.split.compare-resizable .devlegend {
+  right: calc(100% - var(--compare-left-width) + 14px);
+}
+.split-view-divider {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 12px;
+  width: 12px;
+  align-items: center;
+  justify-content: center;
+  background: var(--well);
+  color: var(--dim);
+  border-inline: 1px solid var(--line-strong);
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
+}
+.split-view-divider[hidden] { display: none; }
+.split-view-divider:hover, .split-view-divider:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-d);
+  outline: 2px solid var(--accent-d);
+  outline-offset: -2px;
+}
+.split-view-divider[aria-disabled='true'] { cursor: default; }
+.compare-resizing, .compare-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}

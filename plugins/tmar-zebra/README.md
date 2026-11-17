@@ -15,10 +15,37 @@ User-supplied screenshot, November 2, 2026: **Reverse engineer**, imported
 The displayed target is a mesh, not a CAD BRep proven by its filename.
 [Full example, provenance and limits](../../docs/tmar-zebra-examples.md).
 
-Future work: [split view with local notes](../../docs/tmar-review-backlog.md#zebra-split-002)
-and [additional real-part gallery views](../../docs/tmar-review-backlog.md#zebra-gallery-003).
-The [current result review](../../docs/tmar-review-backlog.md#zebra-review-001)
-remains open. Split-view note placement is not delivered by this documentation.
+A **split-view candidate** is under review in
+`feat/web-zebra-split-20261113`: Surface Deviation's existing linked split
+supports Zebra on either the left **Scan** or the right **Reference**. Enabling
+Zebra starts on Scan; use **Analyze** to switch targets. One target is striped
+at a time, with shared direction, width and color. Switching targets restores
+the other model's underlying shading. Closing the split keeps Reference selected
+on the main viewport; reopening routes it back to the same right canvas.
+
+Notes are placed on the left scan only, using the existing records and project
+saves; the right reference cannot receive scan notes. Go to note centers a saved
+scan-side note and Return restores the previous linked camera pose in both
+viewports. Hidden or section-clipped scan targets carry an explicit warning:
+their saved marker remains reachable without revealing the scan, changing the
+cutting plane or editing the note. Synthetic Chrome checks protect note fields
+and archived model payloads. Reference-anchored notes, simultaneous Zebra with
+independent per-pane stripe settings and alternative layouts remain future work.
+**This candidate is not published in Stable or Dev.** See
+[ZEBRA-SPLIT-002](../../docs/tmar-review-backlog.md#zebra-split-002).
+
+The built-in scan/reference comparison now has a vertical drag handle. Arrow
+keys adjust the scan share by two percentage points (Shift: ten); Home/End
+reach the readable limits, and Enter or a double-click resets equal panes.
+Escape, lost pointer capture, window blur or closing the split cancel an
+unfinished drag. The fraction is a browser-local layout preference, not model
+or project data. Limited desktop space clamps both panes without overwriting
+the preferred ratio, which returns when the window grows. No scene is remounted
+and no scan/reference alignment changes merely because a pane is resized.
+
+Further work includes [real-part gallery views](../../docs/tmar-review-backlog.md#zebra-gallery-003);
+the [current Zebra result review](../../docs/tmar-review-backlog.md#zebra-review-001)
+remains open and requires operator acceptance.
 
 ## Use
 
@@ -72,14 +99,19 @@ In single-view **Surface Deviation**, Zebra also supports **Reference (STEP / me
 STEP supplies face-boundary metadata; a mesh-only reference does not. Hide the scan
 when inspecting the reference alone. Zebra temporarily covers comparison colors:
 turn it off to read the map. Notes in this workspace still attach to a visible scan,
-not the reference. Split view, picking/alignment and deformation animation are guarded.
+not the reference. In the split candidate, choose Scan or Reference for Zebra.
+Each pane's transparency, triangle wireframe and backface controls retain their
+underlying state while the opaque Zebra overlay is active; turn Zebra off to
+read that appearance or the comparison colors. Reference-side notes,
+picking/alignment and deformation animation remain guarded.
 [Validation and limits](../../docs/tmar-cad-edges-validation.md).
 
 ## Checks
 
 ```bash
-npx vitest run plugins/tmar-zebra/tests/zebra.test.ts
+npx vitest run plugins/tmar-zebra/tests/zebra.test.ts tests/comparisonView.test.ts tests/compareSceneDisplay.test.ts
 node plugins/tmar-zebra/scripts/e2e-zebra.mjs
+node plugins/tmar-zebra/scripts/e2e-zebra-split.mjs
 node plugins/tmar-zebra/scripts/check-reflection.mjs
 node scripts/check-plugin-boundary.mjs
 node scripts/check-units.mjs
