@@ -23,6 +23,7 @@ import { useDeviation } from '../state/deviationStore'
 import { usePrefs } from '../state/prefsStore'
 import { useStore } from '../state/store'
 import { CompareScene } from '../viewer/CompareScene'
+import { attachComparisonView } from '../viewer/comparisonView'
 import { SplitViewDivider } from './SplitViewDivider'
 import { schemeById } from '../viewer/navSchemes'
 import type { SceneManager } from '../viewer/SceneManager'
@@ -72,9 +73,13 @@ export function CompareView({
     // And cut where the scan's half is cut by the section view.
     compare.followSection(() => scene.sectionClip())
     compareRef.current = compare
+    // Publish only after the mesh and its camera/section sources are ready.
+    // Hidden halves stay alive; consumers route by the current split state.
+    const detach = attachComparisonView(scene, compare)
     return () => {
+      detach()
       compare.dispose()
-      compareRef.current = null
+      if (compareRef.current === compare) compareRef.current = null
     }
   }, [geometry, scene])
 

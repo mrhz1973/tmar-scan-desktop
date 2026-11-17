@@ -14,6 +14,7 @@
 
 import * as THREE from 'three'
 import { CameraLink, type LinkedView } from './cameraLink'
+import type { ComparisonDisplayHost, ComparisonDisplayLayer } from './comparisonView'
 import type { ControlScheme } from './navSchemes'
 import { OrthoViewport, type Projection } from './orthoViewport'
 import { applyFinish, setSurfaceColor, type ViewTheme } from './viewThemes'
@@ -26,7 +27,7 @@ import {
   wireUniforms,
 } from './surfaceModes'
 
-export class CompareScene {
+export class CompareScene implements ComparisonDisplayHost {
   private viewport: OrthoViewport
   private material: THREE.MeshStandardMaterial
   private mesh: THREE.Mesh
@@ -48,6 +49,8 @@ export class CompareScene {
   private capGeometry = new THREE.PlaneGeometry(1, 1)
   private theme: ViewTheme
   private seeThrough = false
+  private displayLayers = new Set<ComparisonDisplayLayer>()
+  private disposed = false
 
   constructor(container: HTMLDivElement, geometry: THREE.BufferGeometry, theme: ViewTheme) {
     this.viewport = new OrthoViewport(container, {
@@ -63,6 +66,7 @@ export class CompareScene {
       onTick: () => {
         this.link?.tick()
         this.followCut()
+        for (const layer of this.displayLayers) layer.tick?.()
       },
     })
     this.theme = theme
@@ -98,6 +102,30 @@ export class CompareScene {
     // It also leaves this half a clip sphere of its own, which is what its near
     // and far planes are rebuilt from every frame.
     this.viewport.frameCamera(geometry.boundingBox!, null)
+  }
+
+  referenceMesh(): THREE.Mesh | null {
+    return this.disposed ? null : this.mesh
+  }
+
+  invalidate(): void {
+    if (!this.disposed) this.viewport.invalidate()
+  }
+
+  /** Visual overlays borrow this half's mesh and run in this half's frame
+   *  loop. Neither removing a layer nor disposing the host owns that geometry. */
+  addDisplayLayer(layer: ComparisonDisplayLayer): () => void {
+    if (this.disposed) {
+      layer.dispose()
+      return () => {}
+    }
+    this.displayLayers.add(layer)
+    this.invalidate()
+    return () => {
+      if (!this.displayLayers.delete(layer)) return
+      layer.dispose()
+      this.invalidate()
+    }
   }
 
   /** Hold this half in the same pose as the scan's viewport, in both
@@ -217,6 +245,12 @@ export class CompareScene {
   }
 
   dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    for (const layer of this.displayLayers) {
+      this.displayLayers.delete(layer)
+      layer.dispose()
+    }
     this.link?.dispose()
     this.link = null
     this.cap?.dispose()

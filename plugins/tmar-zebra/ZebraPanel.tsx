@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import * as THREE from 'three'
 import { sceneOf } from '../../src/commands/host'
 import type { SceneManager } from '../../src/viewer/SceneManager'
+import { comparisonViewOf, subscribeComparisonViews } from '../../src/viewer/comparisonView'
 import { useStore } from '../../src/state/store'
 import { useShell } from '../../src/state/shellStore'
 import { useDeviation } from '../../src/state/deviationStore'
@@ -17,6 +18,9 @@ import { enableZebra, useZebraUi, ZebraIcon } from './ZebraQuickButton'
 import './zebraControls.css'
 import { pluginText as tmarText, useLanguage as useTmarLanguage } from '../../src/i18n'
 
+
+const currentComparisonView = () => comparisonViewOf(sceneOf())
+const noComparisonView = () => null
 
 export function ZebraDeviationPanel() {
   useTmarLanguage()
@@ -39,10 +43,13 @@ export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}
 
   const workspace = useShell(s=>s.workspace), onDeviation = workspace === 'deviation'
   const referenceName = useDeviation(s=>s.nominalName), showScan = useDeviation(s=>s.showScan)
-  const split = useDeviation(s=>s.split)
+  const split = useDeviation(s=>s.split && s.source === 'reference')
   const editingNote = useNotes(s=>s.editing)
   const enabled = useZebraUi((s) => s.enabled), uiTarget = useZebraUi((s) => s.target)
-  const target = inspection ? 'scan' : onDeviation && split ? 'scan' : uiTarget
+  const target = inspection ? 'scan' : onDeviation && split ? (uiTarget === 'reference' ? 'reference' : 'scan') : uiTarget
+  const comparison = useSyncExternalStore(subscribeComparisonViews, currentComparisonView, noComparisonView)
+  const inComparison = onDeviation && split && target === 'reference'
+  const referenceView = inComparison ? comparison : null
   const inspectionRef = useRef(inspection)
   inspectionRef.current = inspection
   const toggle = inspection?.toggle ?? enableZebra
@@ -68,27 +75,31 @@ export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}
   useEffect(() => {
     if (!enabled) return
     const scene = sceneOf()
-    if (!scene) { setUnavailable(true); return }
+    if (!scene || (inComparison && !referenceView)) {
+      setUnavailable(true)
+      setCount(0)
+      return
+    }
     setUnavailable(false)
     const host = scene.layerHost()
     const zebra = new ZebraLayer({
       bodies: () => onDeviation || inspectionRef.current ? new Map() : reSceneOf(scene).bodyMeshes,
-      reference: () => scene.referenceDisplay()?.mesh ?? null,
+      reference: () => referenceView ? referenceView.referenceMesh() : scene.referenceDisplay()?.mesh ?? null,
       scan: () => {
         if (inspectionRef.current) return inspectionRef.current.source(scene)
         const geometry = scene.scanGeometry()
         if (!geometry) return null
         return host.partGroup.children.find((item): item is THREE.Mesh => item instanceof THREE.Mesh && item.geometry === geometry) ?? null
       },
-      invalidate: () => host.invalidate(),
+      invalidate: () => referenceView ? referenceView.invalidate() : host.invalidate(),
       countChanged: setCount,
       deriveMissingNormals: !!inspectionRef.current,
     }, currentOptions.current)
     layer.current = zebra
-    const remove = scene.addLayer(zebra)
+    const remove = referenceView ? referenceView.addDisplayLayer(zebra) : scene.addLayer(zebra)
     zebra.tick()
     return () => { layer.current = null; remove() }
-  }, [enabled])
+  }, [enabled, onDeviation, inComparison, referenceView])
 
   useEffect(() => { layer.current?.setOptions(options) }, [options])
 
@@ -118,7 +129,7 @@ export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}
           {!onDeviation && !inspection && <option value="visible">{tmarText("Visible CAD bodies")}</option>}
           {!onDeviation && !inspection && <option value="selected">{tmarText("Selected CAD bodies")}</option>}
           <option value="scan">{tmarText(inspection?.label) ?? (tmarText("Scan"))}</option>
-          {onDeviation && <option value="reference" disabled={!referenceName || split}>{tmarText("Reference (STEP / mesh)")}</option>}
+          {onDeviation && <option value="reference" disabled={!referenceName}>{tmarText("Reference (STEP / mesh)")}</option>}
         </select>
       </label>
       <label className="field"><span>{tmarText("Stripe direction")}</span>
@@ -136,7 +147,7 @@ export function ZebraPanel({ inspection }: { inspection?: ZebraInspection } = {}
       <p className="hint" data-test="zebra-status" role="status">{unavailable ? tmarText("The 3D view is unavailable.") : count > 0 ? tmarText("Showing stripes on {0} visible {1}.", [count, count === 1 ? tmarText("object") : tmarText("objects")]) : target === 'selected' ? tmarText("Select visible CAD bodies in the body list.") : target === 'reference' ? tmarText("Load and show the reference in Surface Deviation. Hide the scan when it covers the reference.") : target === 'scan' ? tmarText("Show a scan with surface normals to analyze it.") : tmarText("Show a CAD body with surface normals to analyze it.")}</p>
       {inspection && <p className="hint" data-test="mesh-zebra-help">{tmarText(inspection.hint)}</p>}
       {inspection?.noteBlocked && <p className="hint" data-test="mesh-zebra-note-help">{tmarText(inspection.noteBlocked)}</p>}
-      {onDeviation && split && <p className="hint" data-test="zebra-split-help">{tmarText("In split view, Zebra shades the scan on the left; the reference on the right keeps normal shading. Notes attach only to the left scan.")}</p>}
+      {onDeviation && split && <p className="hint" data-test="zebra-split-help">{tmarText("In split view, choose Scan or Reference to show Zebra in that pane. Notes attach only to the left scan.")}</p>}
       {onDeviation && <p className="hint">{tmarText("Zebra temporarily replaces the selected object's shading, not its geometry or measurements. Turn it off to read the comparison colors. Notes remain scan-side in this workspace.")}</p>}
       <p className="hint">{tmarText("Rotate the view to inspect reflected bands. This is a visual aid, not a numerical continuity measurement. Shading follows the displayed mesh normals.")}</p>
     </>}

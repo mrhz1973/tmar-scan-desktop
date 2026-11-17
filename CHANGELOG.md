@@ -7,6 +7,18 @@ saves carry the same number as `appVersion`. How a release is cut is in
 
 ## Unreleased
 
+### TMAR HTML - Zebra on the split reference (18 November 2026)
+
+- Allow Analyze to choose the left Scan or right Reference in Surface Deviation's
+  linked split. One target uses Zebra at a time, with shared stripe settings.
+- Route visual layers through the owning comparison renderer, including section
+  updates, reference replacement and cleanup; reuse the existing Zebra shader.
+- Preserve both canvas instances across target changes and split hide/show.
+  Notes keep their scan anchors, and Zebra remains a temporary display setting.
+- Add focused host lifecycle and synthetic browser regression coverage; update
+  the Italian/English scope text and plugin extension documentation.
+- Isolated Web candidate; deployment and operator acceptance remain separate.
+
 ### TMAR HTML - independent split-pane display shortcuts (16 November 2026)
 
 - Add a labelled display bar to each scan/reference pane, with direct switches

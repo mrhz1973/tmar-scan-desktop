@@ -1435,5 +1435,5 @@
   "Hide": "Nascondi",
   "Finish the active operation before using Zebra analysis": "Concludi l'operazione attiva prima di utilizzare l'analisi Zebra.",
   "Zebra requires a still Deviation viewport. Finish the active operation before inspecting the surface.": "Zebra richiede una vista Scostamento ferma. Concludi l'operazione attiva prima di esaminare la superficie.",
-  "In split view, Zebra shades the scan on the left; the reference on the right keeps normal shading. Notes attach only to the left scan.": "Nella vista affiancata Zebra colora la scansione a sinistra; il riferimento a destra mantiene l'ombreggiatura normale. Le note si associano soltanto alla scansione di sinistra."
+  "In split view, choose Scan or Reference to show Zebra in that pane. Notes attach only to the left scan.": "Nella vista affiancata scegliere Scansione o Riferimento per mostrare Zebra nel rispettivo riquadro. Le note si associano soltanto alla scansione di sinistra."
 }

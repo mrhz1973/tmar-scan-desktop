@@ -61,10 +61,11 @@ try {
         return { x: Math.round(r.x + r.width * .2), y: Math.round(r.y + r.height * .2),
           width: Math.round(r.width * .6), height: Math.round(r.height * .55) }
       })
-      let png = await page.screenshot({ clip, encoding: 'base64' })
+      // Keep the visible crop: beyond-viewport capture can perturb split WebGL frames.
+      let png = await page.screenshot({ clip, encoding: 'base64', captureBeyondViewport: false })
       for (let attempt = 0; attempt < 8; attempt++) {
         await sleep(120)
-        const next = await page.screenshot({ clip, encoding: 'base64' })
+        const next = await page.screenshot({ clip, encoding: 'base64', captureBeyondViewport: false })
         if (await pixelDiff(page, png, next) < .05) return next
         png = next
       }
